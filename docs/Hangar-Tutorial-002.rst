@@ -46,11 +46,11 @@ Merging
 -------
 
 
-Stratagies
+Strategies
 ^^^^^^^^^^
 
 Methods
 ^^^^^^^
 
-Conflict Handeling
+Conflict Handling
 ^^^^^^^^^^^^^^^^^^
