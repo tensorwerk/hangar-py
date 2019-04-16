@@ -1,0 +1,111 @@
+########################
+# Version Configuration
+#######################
+hangar:
+  __version__: '0.0.0'
+
+  lmdb:
+    map_size: 10_000_000_000
+    meminit: false
+    subdir: false
+    lock: false
+    max_spare_txns: 2
+
+  seps:
+    key: ':'
+    list: ' '
+    commit: ' << '
+    slice: " * "
+    hash: ' $ '
+    reserved:  # currently no-ops
+      - ' | '
+      - ' <> '
+
+  locations:
+    hdf5:
+      local: '101'
+      remote: '001'
+    tiledb:
+      local: '102'
+      remote: '002'
+
+  repository:
+    hangar_dir_name: '__hangar' # folder name where data is placed
+    hangar_server_dir_name: '__hangar_server'
+    label_db_pth: 'hangar_labels.lmdb'
+    ref_db_pth: 'hangar_ref.lmdb'
+    stage_db_pth: 'hangar_stage.lmdb'
+    stage_hash_db_pth: 'hangar_stage_hash.lmdb'
+    hash_db_pth: 'hangar_hash.lmdb'
+    branch_db_pth: 'hangar_branch.lmdb'
+    checkout_db_pth: 'hangar_checkouts' # fills in with commit hash and ends .lmdb
+    store_data_dir: 'data_store'
+    stage_data_dir: 'data_stage'
+    remote_data_dir: 'remote_stage'
+    data_dir: 'data'
+
+  keys:
+    brch: 'branch:' # followed by key SEP
+    head: 'head'
+    remotes: 'remote:' # followed by key SEP
+    stgarr: 'a:' # followed by key SEP
+    stgmeta: 'l:' # followed by key SEP
+    schema: 's:' # followed by key SEP
+    hash: 'h:'
+    writer_lock: 'writerlock:' # followed by key SEP
+    writer_lock_sentinel: 'LOCK_AVAILABLE'
+
+
+  # where to store this?
+  # 1) hdf5 ->
+  # 2) yaml files -> easy to see in the clear
+  # 3) lmdb -> easy to check if they have been changed?
+  #
+  # ** pass as constructors to the create_dset option
+  # ** or pass a yaml file in this format (where the default options come from)
+  # to change these, we need a repack option (TODO)
+  # need to store in lmdb (for the purposes of cloning)
+  # TODO:
+  hdf5:
+    attributes:
+      keys:
+        hangar_version: 'HANGAR_VERSION'
+        schema_hash: 'schema_hash'
+        schema_instance: 'schema_instance'
+        schema_shape: 'schema_shape'
+        schema_dtype: 'schema_dtype_num'
+        next_location: 'next_dset'
+        next_instance: 'next_instance'
+        collection_max_size: 'max_size'
+        collection_total: 'num_collections'
+        collections_remaining: 'num_collections_remaining'
+        rdcc_nbytes: 'rdcc_nbytes'
+        rdcc_w0: 'rdcc_w0'
+        rdcc_nslots: 'rdcc_nslots'
+        shuffle: 'shuffle'
+        complib: 'compression'
+        fletcher32: 'fletcher32'
+        comp_opts: 'compression_opts'
+        chunk_shape: 'chunk_shape'
+
+    contents:
+      collection_size: 500
+      num_collections: 100
+
+    dataset:
+      chunking:
+        max_nbytes: 400_000  # recomended between 1Kb and 1MB
+        max_rdcc_nbytes: 100_000_000
+        rdcc_w0: 0.75
+
+      filters:
+        default:
+          shuffle: true
+          complib: 'blosc:lz4'
+          complevel: 5
+          fletcher32: true
+        backup:
+          shuffle: true
+          complib: 'lzf'
+          complevel: null
+          fletcher32: true

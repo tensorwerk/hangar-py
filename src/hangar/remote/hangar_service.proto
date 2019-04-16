@@ -1,0 +1,319 @@
+syntax = "proto3";
+
+package hangar;
+option optimize_for = SPEED;
+
+
+service HangarService {
+
+    rpc FetchBranchRecord (FetchBranchRecordRequest) returns (FetchBranchRecordReply) {}
+    rpc FetchData (stream FetchDataRequest) returns (stream FetchDataReply) {}
+    rpc FetchLabel (FetchLabelRequest) returns (FetchLabelReply) {}
+    rpc FetchCommit (FetchCommitRequest) returns (stream FetchCommitReply) {}
+    rpc FetchSchema (FetchSchemaRequest) returns (FetchSchemaReply) {}
+
+    rpc PushBranchRecord (PushBranchRecordRequest) returns (PushBranchRecordReply) {}
+    rpc PushData (stream PushDataRequest) returns (PushDataReply) {}
+    rpc PushLabel (PushLabelRequest) returns (PushLabelReply) {}
+    rpc PushCommit (stream PushCommitRequest) returns (PushCommitReply) {}
+    rpc PushSchema (PushSchemaRequest) returns (PushSchemaReply) {}
+
+    rpc FetchFindMissingCommits (FindMissingCommitsRequest) returns (FindMissingCommitsReply) {}
+    rpc FetchFindMissingHashRecords (stream FindMissingHashRecordsRequest) returns (stream FindMissingHashRecordsReply) {}
+    rpc FetchFindMissingLabels (stream FindMissingLabelsRequest) returns (stream FindMissingLabelsReply) {}
+    rpc FetchFindMissingSchemas (FindMissingSchemasRequest) returns (FindMissingSchemasReply) {}
+
+    rpc PushFindMissingCommits (FindMissingCommitsRequest) returns (FindMissingCommitsReply) {}
+    rpc PushFindMissingHashRecords (stream FindMissingHashRecordsRequest) returns (stream FindMissingHashRecordsReply) {}
+    rpc PushFindMissingLabels (stream FindMissingLabelsRequest) returns (stream FindMissingLabelsReply) {}
+    rpc PushFindMissingSchemas (FindMissingSchemasRequest) returns (FindMissingSchemasReply) {}
+
+}
+
+
+/*
+-------------------------------------------------------------------------------
+| Common Formats for Data and Records
+-------------------------------------------------------------------------------
+*/
+
+
+message ErrorProto {
+    // binary indicator of success. 1: success, 0: failed
+    int64 code = 1;
+    // string response indicating success. 'OK': success, 'ERROR': failed
+    string message = 2;
+  }
+
+
+message BranchRecord {
+    // name of the branch
+    string name = 1;
+    // branch head commit hash
+    string commit = 2;
+}
+
+message HashRecord {
+    // specific hash algorithm used to calculate the digest
+    string type = 1;
+    // (hex)digest of the hash record
+    string digest = 2;
+}
+
+message CommitRecord {
+    // parent hash(s) of the commit in same format as local store
+    bytes parent = 1;
+    // compressed record reference contents of the commit
+    bytes ref = 2;
+    // metadata attached to the commit record (username, email, message, time, etc.)
+    bytes spec = 3;
+}
+
+
+message LabelData {
+    // (hex)digest of the label data
+    string digest = 1;
+    // label data to be sent
+    bytes blob = 2;
+    // total size of bytes
+    int64 total_byte_size = 3;
+}
+
+
+message SchemaRecord {
+    // hash of the schema def
+    string digest = 1;
+    // encoded schema val to be sent
+    bytes blob = 2;
+}
+
+
+/*
+-------------------------------------------------------------------------------
+| Fetching Data and Records
+-------------------------------------------------------------------------------
+*/
+
+
+message FetchBranchRecordRequest {
+    // name of the branch to fetch
+    BranchRecord rec = 1;
+}
+message FetchBranchRecordReply {
+    // record result of the branch
+    BranchRecord rec = 1;
+    // success or not
+    ErrorProto error = 2;
+}
+
+
+message FetchDataRequest {
+    bytes raw_data = 1;
+    // total size of the split tensorprotos
+    int64 comp_nbytes = 2;
+    // total size of the uncompressed raw data
+    int64 uncomp_nbytes = 3;
+    // // hash of the data schema
+    // string schema_hash = 4;
+    ErrorProto error = 4;
+
+}
+message FetchDataReply {
+    // HashRecord rec = 1;
+    // data container for the tensor
+    bytes raw_data = 1;
+    // total size of the split tensorprotos
+    int64 comp_nbytes = 2;
+    // total size of the uncompressed raw data
+    int64 uncomp_nbytes = 3;
+    // success or not
+    ErrorProto error = 4;
+    // // hash of the data schema
+    // string schema_hash = 5;
+}
+
+
+message FetchLabelRequest {
+    // (hex)digest of the label data
+    HashRecord rec = 1;
+}
+message FetchLabelReply {
+    HashRecord rec = 1;
+    // label data to be sent
+    bytes blob = 2;
+    // success or not
+    ErrorProto error = 3;
+}
+
+
+message FetchCommitRequest {
+    // (hex)digest of the commit to fetch references to
+    string commit = 1;
+}
+message FetchCommitReply {
+    // (hex)digest hash of the commit record
+    string commit = 1;
+    // total size of bytes
+    int64 total_byte_size = 2;
+    // data
+    CommitRecord record = 3;
+    // success or not
+    ErrorProto error = 4;
+}
+
+
+message FetchSchemaRequest {
+    // schema record spec with hash specified
+    SchemaRecord rec = 1;
+}
+message FetchSchemaReply {
+    // schema record spec
+    SchemaRecord rec = 1;
+    // success or not
+    ErrorProto error = 2;
+}
+
+
+/*
+-------------------------------------------------------------------------------
+| Pushing Data and Records
+-------------------------------------------------------------------------------
+*/
+
+
+message PushBranchRecordRequest {
+    // branch record to push
+    BranchRecord rec = 1;
+}
+message PushBranchRecordReply {
+    // success or not
+    ErrorProto error = 1;
+}
+
+message PushDataRequest {
+    // HashRecord rec = 1;
+    // data container for the tensor
+    bytes raw_data = 1;
+    // total size of the split tensorprotos
+    int64 comp_nbytes = 2;
+    // total size of the uncompressed raw data
+    int64 uncomp_nbytes = 3;
+    // // hash of the data schema
+    // string schema_hash = 4;
+    ErrorProto error = 4;
+
+}
+message PushDataReply {
+    // success or not
+    ErrorProto error = 1;
+}
+
+message PushLabelRequest {
+    HashRecord rec = 1;
+    // label data to be sent
+    bytes blob = 2;
+}
+message PushLabelReply {
+    // success or not
+    ErrorProto error = 1;
+}
+
+message PushCommitRequest {
+    // (hex)digest hash of the commit record
+    string commit = 1;
+    // total size of bytes
+    int64 total_byte_size = 2;
+    // data
+    CommitRecord record = 3;
+}
+message PushCommitReply {
+    // success or not
+    ErrorProto error = 1;
+}
+
+message PushSchemaRequest {
+    SchemaRecord rec = 1;
+}
+message PushSchemaReply {
+    // SchemaRecord rec = 1;
+    ErrorProto error = 1;
+}
+
+
+
+/*
+-------------------------------------------------------------------------------
+| Fetch Finding outdated records
+-------------------------------------------------------------------------------
+*/
+
+message FindMissingCommitsRequest {
+    // list of commits existing on one side
+    repeated string commits = 1;
+    // branch to query
+    BranchRecord branch = 2;
+}
+message FindMissingCommitsReply {
+    // list of commits existing on one side but not the other in requested branch.
+    repeated string commits = 1;
+    // branch to query
+    BranchRecord branch = 2;
+    // success or not
+    ErrorProto error = 3;
+}
+
+
+message FindMissingHashRecordsRequest {
+    // commit hash to check hash records for
+    string commit = 1;
+    // all hashes existing on a side
+    bytes hashs = 2;
+    // total byte size
+    int64 total_byte_size = 3;
+}
+message FindMissingHashRecordsReply {
+    // commit hash specified
+    string commit = 1;
+    // all hashes existing on a side
+    bytes hashs = 2;
+    // number of hashes total
+    int64 total_byte_size = 3;
+    // success or not
+    ErrorProto error = 4;
+}
+
+
+message FindMissingLabelsRequest {
+    // commit hash to check label hash records for
+    string commit = 1;
+    // all label hashes existing on the client
+    bytes hashs = 2;
+    // total byte size
+    int64 total_byte_size = 3;
+}
+message FindMissingLabelsReply {
+    // commit hash specified
+    string commit = 1;
+    // all label hashs existing in the specified commit which do not exist on client
+    bytes hashs = 2;
+    // total byte size
+    int64 total_byte_size = 3;
+    // success or not
+    ErrorProto error = 4;
+}
+
+
+message FindMissingSchemasRequest {
+    // commit hash specified
+    string commit = 1;
+    // schema records on that side
+    repeated string schema_digests = 2;
+}
+message FindMissingSchemasReply {
+    // commit hash specified
+    string commit = 1;
+    // schema records on that side
+    repeated string schema_digests = 2;
+    // success or not
+    ErrorProto error = 3;
+}
