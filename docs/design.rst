@@ -19,8 +19,8 @@ not against it.
 
 Upon coming to terms with this face, we are actually presented with a problem
 once we realize that we live in the real world, and real world is ugly.
-Computers crash, processess get killed, and people do * *interesting* * things.
-Because of this, It is a foundational design priniciple for us to **guarrenttee
+Computers crash, processes get killed, and people do * *interesting* * things.
+Because of this, It is a foundational design principle for us to **guarantee
 that once Hangar says data has been successfully added to the repository, it is
 actually persisted.** This essentially means that any process which interacts
 with data records on disk must be stateless. If (for example) we were to keep a
@@ -37,7 +37,7 @@ disk.
 
 .. note::
 
-  The atomicity of interactions is completly hidden from a normal user; they
+  The atomicity of interactions is completely hidden from a normal user; they
   shouldn't have to care about this or even know this exists. However, this
   is also why using the context-manager style dataset interaction scheme can
   result in ~2x times speedup on writes/reads. We can just pass on most of the
@@ -50,8 +50,8 @@ Data Is Large, We Don't Waste Space
 ===================================
 
 From the very beginning we knew that while it would be easy to just store all
-data in every commit as independent arrays on disk, such a nieve implementation
-would just absolutly eat up disk space for any repository with a non-trivial
+data in every commit as independent arrays on disk, such a naive implementation
+would just absolutely eat up disk space for any repository with a non-trivial
 history. Hangar commits should be fast and use minimal disk space, duplicating
 data just doesn't make sense for such a system. And so we decided on implementing
 a content addressable data store backend.
@@ -60,16 +60,16 @@ When a user requests to add data to a hangar repository, one of the first
 operations which occur is to generate a hash of the array contents. If the hash
 does not match a piece of data already placed in the hangar repository, the data
 is sent to the appropriate storage backend methods. On success, the backend
-sends back some arbitrary specification which can be used to retrive that same
+sends back some arbitrary specification which can be used to retrieve that same
 piece of data from that particular backend. The record backend then stores a
 key/value pair of (`hash`, `backend_specification`).
 
 .. note::
 
-  The record backend stores hash information in a seperate location from the
-  commit references (which assocate a `(datasetname, sample name/id)` to a
-  `(sample uuid, sample_hash)`). This let's us seperate the historical repository
-  information from a particular computer's location of a data pice. All we need in
+  The record backend stores hash information in a separate location from the
+  commit references (which associate a `(datasetname, sample name/id)` to a
+  `(sample uuid, sample_hash)`). This let's us separate the historical repository
+  information from a particular computer's location of a data piece. All we need in
   the public history is to know that some data with a particular hash is
   associated with a commit. No one but the system which actually needs to access
   the data needs to know where it can be found.
@@ -110,13 +110,13 @@ why Hangar can do what it can; we don't attempt to treat data as anything other
 then a series of bytes on disk!
 
 The fact that *Hangar does not care about what your data represents* is a
-fundumental underpinning of how the system works under the hood. It is the
+fundamental underpinning of how the system works under the hood. It is the
 *designed and intended behavior* of Hangar to dump arrays to disk in what would
-seem like completly arbitrary buffers/locations to an outside observer. And for
+seem like completely arbitrary buffers/locations to an outside observer. And for
 the most part, they would be essentially correct in their observation that data
 samples on disk are in strange locations.
 
-While there is almost no organization or heirarcy for the actual data samples
+While there is almost no organization or hierarchy for the actual data samples
 when they are stored on disk, that is not to say that they are stored without
 care! We may not care about global trends, but we do care a great deal about the
 byte order/layout, sequentiality, chunking/compression and validations
@@ -124,10 +124,10 @@ operations which are applied across the bytes which make up a data sample.
 
 In other words, we optimize for utility and performance on the backend, not so
 that a human can understand the file format without a computer! After the array
-has ben saved to disk, all we care about is that bookeeper can record some
+has been saved to disk, all we care about is that bookkeeper can record some
 unique information about where some piece of content is, and how we can read it.
 **None of that information is stored alongside the data itself - Remember:
-numers are just numbers - they don't have any concept of what they are**.
+numbers are just numbers - they don't have any concept of what they are**.
 
 
 Records != Numbers
@@ -138,7 +138,7 @@ the specifications of records in the repository history.*
 
 Now, let's unpack this for a bit. We know from`Numbers == Numbers`_ that data is
 saved to disk in some arbitrary locations with some arbitrary backend. We also
-know from `Data Is Large, We Don't Waste Space`_ that the permenant repository
+know from `Data Is Large, We Don't Waste Space`_ that the permanent repository
 information only contains a record which links a sample name to a uuid and a
 hash. We also assert that there is also a mapping of hash to storage backend
 specification kept somewhere (doesn't matter what that mapping is for the
@@ -147,7 +147,7 @@ placed in the repository, we don't actually need to interact with it to
 understand the accounting of what was added when!
 
 In order to make a commit, we just pack up all the records which existed in the
-staging area, create a hash of the records (incuding the hash of any parent
+staging area, create a hash of the records (including the hash of any parent
 commits), and then store the commit hash mapping alongside details such as the
 commit user/email and commit message, and a compressed version of the full
 commit records as they existed at that point in time.
@@ -211,16 +211,16 @@ Though it may be a bit obvious to state, it is of critical importance to realize
 that it is only because we store the full contents of the repository staging
 area as it existed in the instant just prior to a commit, that the integrity of
 full repository history can be verified from a single commit's contents and
-expected hash value. Moreso, any single commit has only a topical relationship
+expected hash value. More so, any single commit has only a topical relationship
 to a commit at any other point in time. It is only our imposition of a commit's
-ancestery tree which actualizes any subsequent insights or interactivity
+ancestry tree which actualizes any subsequent insights or interactivity
 
 While the general process of topological ordering: create branch, checkout
 branch, commit a few times, and merge, follows the `git` model fairly well at a
 conceptual level, there are some important
 differences we want to highlight due to their implementation differences:
 
-1) Multiple commits can simulateously checked out in "read-only" mode on a
+1) Multiple commits can simultaneously checked out in "read-only" mode on a
    single machine. Checking out a commit for reading does not touch the staging
    area status.
 2) Only one process can interact with the a write-enabled checkout at a time.
@@ -248,12 +248,12 @@ no parent. The record key/value pairs resemble the following:
 .. warning::
 
   Much like git, odd things can happen before the `'initial commit'` is made. We
-  recomend creating the initial commit as quickly as possible to prevent
+  recommend creating the initial commit as quickly as possible to prevent
   undefined behavior during repository setup. In the future, we may decide to
-  create the "initial commit" automitcally upon repository initializtation.
+  create the "initial commit" automatically upon repository initialization.
 
 
-Once the initial commit is made, a permenant commit record in made which
+Once the initial commit is made, a permanent commit record in made which
 specifies the records (not shown below) and the parent commit. The branch head
 pointer is then updated to point to that commit as it's base.
 
@@ -270,11 +270,11 @@ Branches can be created as cheaply a single line of text can be written, and
 they simply require a "root" commit hash (or a branch name, in which case the
 branch's current HEAD commit will be used as the root HEAD). Likewise a branch
 can be merged with just a single write operation (once the merge logic has
-completed - a process which is explained sperately from this section; just
+completed - a process which is explained separately from this section; just
 trust that it happens for now).
 
 A more complex example which creates 4 different branches and merges them in a
-complicated order can be seen below. Pleaes note that the `` << `` symbol is
+complicated order can be seen below. Please note that the `` << `` symbol is
 used to indicate a merge commit where `X << Y` reads: ``'merging dev branch Y
 into master branch X'``.
 
@@ -303,7 +303,7 @@ into master branch X'``.
 
 
 Because the raw commit hash logs can be quite dense to parse, a graphical
-logging utility is encluded as part of the repository. Running the
+logging utility is included as part of the repository. Running the
 `Repository.log()` method will pretty print a graph representation of the commit
 history:
 
