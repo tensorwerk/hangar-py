@@ -67,15 +67,9 @@ Installation
 
 Hangar is in early alpha development release!
 
-Pip package to be released shortly!
-
 ::
 
-    python setup.py
-
-.. ::
-
-..     pip install hangar
+    pip install hangar
 
 Documentation
 =============
