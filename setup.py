@@ -24,7 +24,7 @@ def read(*names, **kwargs):
 setup(
     name='hangar',
     version='0.0.0',
-    license='MIT license',
+    license='Apache 2.0',
     description='Hangar is version control for tensor data. Commit, branch, merge, revert, and collaborate in the data-defined software era.',
     long_description='%s\n%s' % (
         re.compile('^.. start-badges.*^.. end-badges', re.M | re.S).sub('', read('README.rst')),
