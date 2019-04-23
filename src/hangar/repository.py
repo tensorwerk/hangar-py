@@ -3,6 +3,7 @@ from typing import Optional
 import logging
 
 from tqdm.auto import tqdm
+import grpc
 
 from . import config, diff
 from .checkout import ReaderCheckout, WriterCheckout
@@ -286,7 +287,8 @@ class Repository(object):
         self._client.channel.close()
         return fetch_branch_name
 
-    def push(self, remote_name: str, branch_name: str) -> bool:
+    def push(self, remote_name: str, branch_name: str, *,
+             username: str = '', password: str = '') -> bool:
         '''push changes made on a local repository to a remote repository.
 
         This method is symantically identical to a ``git push`` operation.
@@ -306,57 +308,78 @@ class Repository(object):
         branch_name : str
             Name of the branch to push to the remote. If the branch name does
             not exist on the remote, the it will be created
+        auth_username : str, optional, kwarg-only
+            credentials to use for authentication if repository push restrictions
+            are enabled, by default ''.
+        auth_password : str, optional, kwarg-only
+            credentials to use for authentication if repository push restrictions
+            are enabled, by default ''.
 
         Returns
         -------
         bool
             True if the operation succeeded, Otherwise False
         '''
-        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
-        self._client = HangarClient(envs=self._env, address=address)
+        try:
+            address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
+            self._client = HangarClient(envs=self._env, address=address,
+                                        auth_username=username, auth_password=password)
 
-        c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
-        c_bhistory = summarize.list_history(
-            refenv=self._env.refenv,
-            branchenv=self._env.branchenv,
-            branch_name=branch_name)
+            c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
+            c_bhistory = summarize.list_history(
+                refenv=self._env.refenv,
+                branchenv=self._env.branchenv,
+                branch_name=branch_name)
 
-        s_branch = self._client.fetch_branch_record(branch_name)
-        if s_branch.error.code == 0:
-            s_bcommit = s_branch.rec.commit
-            if s_bcommit == c_bcommit:
-                logger.warning(f'server head: {s_bcommit} == client head: {c_bcommit}. No-op')
-                return False
-            elif (s_bcommit not in c_bhistory['order']) and (s_bcommit != ''):
-                logger.warning(f'REJECTED: server branch has commits not present on client')
-                return False
+            s_branch = self._client.fetch_branch_record(branch_name)
+            if s_branch.error.code == 0:
+                s_bcommit = s_branch.rec.commit
+                if s_bcommit == c_bcommit:
+                    logger.warning(f'server head: {s_bcommit} == client head: {c_bcommit}. No-op')
+                    return False
+                elif (s_bcommit not in c_bhistory['order']) and (s_bcommit != ''):
+                    logger.warning(f'REJECTED: server branch has commits not present on client')
+                    return False
 
-        m_all_schemas, m_all_data, m_all_labels = [], [], []
-        res = self._client.push_find_missing_commits(branch_name)
-        m_commits = res.commits
-        for commit in m_commits:
-            try:
-                schema_res = self._client.push_find_missing_schemas(commit)
-                missing_schemas = schema_res.schema_digests
-                m_all_schemas.extend(missing_schemas)
-            except AttributeError:
-                pass
-            missing_hashes = self._client.push_find_missing_hash_records(commit)
-            m_all_data.extend(missing_hashes)
-            missing_labels = self._client.push_find_missing_labels(commit)
-            m_all_labels.extend(missing_labels)
+            m_all_schemas, m_all_data, m_all_labels = [], [], []
+            res = self._client.push_find_missing_commits(branch_name)
+            m_commits = res.commits
+            for commit in m_commits:
+                try:
+                    schema_res = self._client.push_find_missing_schemas(commit)
+                    missing_schemas = schema_res.schema_digests
+                    m_all_schemas.extend(missing_schemas)
+                except AttributeError:
+                    pass
+                missing_hashes = self._client.push_find_missing_hash_records(commit)
+                m_all_data.extend(missing_hashes)
+                missing_labels = self._client.push_find_missing_labels(commit)
+                m_all_labels.extend(missing_labels)
 
-        m_schemas, m_data, m_labels = set(m_all_schemas), set(m_all_data), set(m_all_labels)
-        for schema in tqdm(m_schemas, desc='Push Schema:'):
-            self._client.push_schema(schema)
-        self._client.push_data(m_data)
-        for label in tqdm(m_labels, desc='Push Labels:'):
-            self._client.push_label(label)
-        for commit in tqdm(m_commits, desc='Push Commits:'):
-            self._client.push_commit_record(commit)
+            m_schemas, m_data, m_labels = set(m_all_schemas), set(m_all_data), set(m_all_labels)
+            for schema in tqdm(m_schemas, desc='Push Schema:'):
+                self._client.push_schema(schema)
+            self._client.push_data(m_data)
+            for label in tqdm(m_labels, desc='Push Labels:'):
+                self._client.push_label(label)
+            for commit in tqdm(m_commits, desc='Push Commits:'):
+                self._client.push_commit_record(commit)
 
-        self._client.push_branch_record('master')
-        self._client.channel.close()
+            self._client.push_branch_record('master')
+
+        except grpc.RpcError as rpc_error:
+            if rpc_error.code() == grpc.StatusCode.PERMISSION_DENIED:
+                # For expected case (not authorized). raise a standard python error
+                # instead of making users catch at grpc one.
+                msg = f'{rpc_error.code()}: {rpc_error.details()}'
+                logger.error(msg)
+                raise PermissionError(msg)
+            else:
+                raise
+
+        finally:
+            self._client.channel.close()
+
         return True
 
     def add_remote(self, remote_name: str, remote_address: str) -> bool:

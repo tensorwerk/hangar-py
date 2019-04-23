@@ -16,6 +16,7 @@ import numpy as np
 from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
+from .request_header_validator_interceptor import RequestHeaderValidatorInterceptor
 from .. import config
 from ..context import Environments
 from ..context import TxnRegister
@@ -32,9 +33,8 @@ blosc.set_nthreads(blosc.detect_number_of_cores() - 2)
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
     def __init__(self, repo_path, overwrite=False):
-        path = pjoin(repo_path, config.get('hangar.repository.hangar_server_dir_name'))
-        self.env = Environments(repo_path=path)
 
+        self.env = Environments(repo_path=repo_path)
         try:
             self.env._init_repo(
                 user_name='SERVER_USER',
@@ -43,9 +43,29 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         except OSError:
             pass
 
+        src_path = pjoin(os.path.dirname(__file__), 'config_server.yml')
+        config.ensure_file(src_path, destination=repo_path, comment=False)
+        config.refresh(paths=[repo_path])
+
         self.txnregister = TxnRegister()
         self.repo_path = self.env.repo_path
         self.data_dir = pjoin(self.repo_path, config.get('hangar.repository.data_dir'))
+
+    # -------------------- Client Config --------------------------------------
+
+    def GetClientConfig(self, request, context):
+
+        push_max_stream_nbytes = str(config.get('remote.client.app.push_max_stream_nbytes'))
+        enable_compression = config.get('remote.client.options.enable_compression')
+        enable_compression = str(1) if enable_compression is True else str(0)
+        optimization_target = config.get('remote.client.options.optimization_target')
+
+        err = hangar_service_pb2.ErrorProto(code=0, message='OK')
+        reply = hangar_service_pb2.GetClientConfigReply(error=err)
+        reply.config['push_max_stream_nbytes'] = push_max_stream_nbytes
+        reply.config['enable_compression'] = enable_compression
+        reply.config['optimization_target'] = optimization_target
+        return reply
 
     # -------------------- Branch Record --------------------------------------
 
@@ -212,6 +232,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         buf = io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
         hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
+        fetch_max_stream_nbytes = config.get('remote.server.app.fetch_max_stream_nbytes')
         try:
             for digest in unpacker:
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
@@ -238,7 +259,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
                 # only send a group of tensors <= Max Size so that the server does not
                 # run out of RAM for large repos
-                if totalSize >= 500_000_000:
+                if totalSize >= fetch_max_stream_nbytes:
                     err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                     cIter = chunks.tensorChunkedIterator(
                         io_buffer=buf,
@@ -359,7 +380,6 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
     def PushLabel(self, request, context):
         digest = request.rec.digest
-        digest_type = request.rec.type
 
         uncompBlob = blosc.decompress(request.blob)
         recieved_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
@@ -565,22 +585,44 @@ def serve(hangar_path, overwrite=False):
         e: critical error from one of the workers.
     '''
 
+    # ------------------- Configure Server ------------------------------------
+
+    src_path = pjoin(os.path.dirname(__file__), 'config_server.yml')
+    dest_path = pjoin(hangar_path, config.get('hangar.repository.hangar_server_dir_name'))
+    config.ensure_file(src_path, destination=dest_path, comment=False)
+    config.refresh(paths=[dest_path])
+
+    enable_compression = config.get('remote.server.grpc.options.enable_compression')
+    optimization_target = config.get('remote.server.grpc.options.optimization_target')
+    channel_address = config.get('remote.server.grpc.channel_address')
+    max_thread_pool_workers = config.get('remote.server.grpc.max_thread_pool_workers')
+    max_concurrent_rpcs = config.get('remote.server.grpc.max_concurrent_rpcs')
+
+    admin_restrict_push = config.get('remote.server.admin.restrict_push')
+    admin_username = config.get('remote.server.admin.username')
+    admin_password = config.get('remote.server.admin.password')
+    msg = 'PERMISSION ERROR: PUSH OPERATIONS RESTRICTED FOR CALLER'
+    code = grpc.StatusCode.PERMISSION_DENIED
+    interc = RequestHeaderValidatorInterceptor(
+        admin_restrict_push, admin_username, admin_password, code, msg)
+
     # ---------------- Start the thread pool for the grpc server --------------
 
     grpc_thread_pool = futures.ThreadPoolExecutor(
-        max_workers=50,
+        max_workers=max_thread_pool_workers,
         thread_name_prefix='grpc_thread_pool')
     server = grpc.server(
         thread_pool=grpc_thread_pool,
-        maximum_concurrent_rpcs=10,
-        options=[('grpc.default_compression_algorithm', False),
-                 ('grpc.optimization_target', 'throughput')])
+        maximum_concurrent_rpcs=max_concurrent_rpcs,
+        options=[('grpc.default_compression_algorithm', enable_compression),
+                 ('grpc.optimization_target', optimization_target)],
+        interceptors=(interc,))
 
     # ------------------- Start the GRPC server -------------------------------
 
-    hangserv = HangarServer(hangar_path, overwrite)
+    hangserv = HangarServer(dest_path, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
-    server.add_insecure_port('[::]:50051')
+    server.add_insecure_port(channel_address)
     server.start()
 
     print('started')
