@@ -243,17 +243,10 @@ class Repository(object):
 
                 m_data = set(m_all_data)
                 if first is True:
-                    fetch_bar = tqdm(
-                        desc='Fetch Data:',
-                        leave=True,
-                        unit_scale=True,
-                        unit_divisor=1024,
-                        unit='B',
-                        bar_format='{n_fmt} / ?')
-                    save_bar = tqdm(
-                        desc='Saving Data:',
-                        leave=True,
-                        total=len(m_data))
+                    fetch_bar = tqdm(desc='Fetch Data:', leave=True,
+                                     unit_scale=True, unit_divisor=1024, unit='B',
+                                     bar_format='{n_fmt} / ?')
+                    save_bar = tqdm(desc='Saving Data:', leave=True, total=len(m_data))
                     first = False
 
                 ret = self._client.fetch_data(m_data, fs, fetch_bar, save_bar)
@@ -359,7 +352,8 @@ class Repository(object):
             m_schemas, m_data, m_labels = set(m_all_schemas), set(m_all_data), set(m_all_labels)
             for schema in tqdm(m_schemas, desc='Push Schema:'):
                 self._client.push_schema(schema)
-            self._client.push_data(m_data)
+            if len(m_data) > 0:
+                self._client.push_data(m_data)
             for label in tqdm(m_labels, desc='Push Labels:'):
                 self._client.push_label(label)
             for commit in tqdm(m_commits, desc='Push Commits:'):
