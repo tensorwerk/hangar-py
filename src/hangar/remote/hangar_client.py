@@ -14,6 +14,7 @@ from tqdm.auto import tqdm
 from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
+from .header_manipulator_client_interceptor import header_adder_interceptor
 from .. import config
 from ..context import Environments
 from ..context import TxnRegister
@@ -38,17 +39,43 @@ class HangarClient(object):
         repostory state.
     address : str
         IP:PORT where the hangar server can be reached.
+    auth_username : str, optional, kwarg-only
+        credentials to use for authentication.
+    auth_password : str, optional, kwarg-only, by default ''.
+        credentials to use for authentication, by default ''.
     '''
 
-    def __init__(self, envs: Environments, address: str):
+    def __init__(self,
+                 envs: Environments, address: str, *,
+                 auth_username: str = '', auth_password: str = ''):
+
         self.env = envs
         self.fs = FileHandles()
         self.fs.open(self.env.repo_path, 'r')
+
+        self.header_adder_int = header_adder_interceptor(auth_username, auth_password)
+        self.cfg = {}
         self.address = address
-        self.channel = grpc.insecure_channel(
+        self.temp_channel = grpc.insecure_channel(self.address)
+        self.channel = grpc.intercept_channel(self.temp_channel, self.header_adder_int)
+        self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
+        self._setup_client_channel_config()
+
+    def _setup_client_channel_config(self):
+        request = hangar_service_pb2.GetClientConfigRequest()
+        response = self.stub.GetClientConfig(request)
+
+        self.cfg['push_max_stream_nbytes'] = int(response.config['push_max_stream_nbytes'])
+        self.cfg['enable_compression'] = bool(int(response.config['enable_compression']))
+        self.cfg['optimization_target'] = response.config['optimization_target']
+
+        self.temp_channel.close()
+        self.channel.close()
+        self.temp_channel = grpc.insecure_channel(
             self.address,
-            options=[('grpc.default_compression_algorithm', False),
-                     ('grpc.optimization_target', 'throughput')])
+            options=[('grpc.default_compression_algorithm', self.cfg['enable_compression']),
+                     ('grpc.optimization_target', self.cfg['optimization_target'])])
+        self.channel = grpc.intercept_channel(self.temp_channel, self.header_adder_int)
         self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
 
     def push_branch_record(self, name):
@@ -262,7 +289,7 @@ class HangarClient(object):
 
                 # only send a group of tensors <= Max Size so that the server does not
                 # run out of RAM for large repos
-                if totalSize >= 100_000_000:
+                if totalSize >= self.cfg['push_max_stream_nbytes']:
                     cIter = chunks.tensorChunkedIterator(
                         io_buffer=buf,
                         uncomp_nbytes=totalSize,

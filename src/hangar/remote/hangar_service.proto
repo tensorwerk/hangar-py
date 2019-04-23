@@ -6,6 +6,8 @@ option optimize_for = SPEED;
 
 service HangarService {
 
+    rpc GetClientConfig (GetClientConfigRequest) returns (GetClientConfigReply) {}
+
     rpc FetchBranchRecord (FetchBranchRecordRequest) returns (FetchBranchRecordReply) {}
     rpc FetchData (stream FetchDataRequest) returns (stream FetchDataReply) {}
     rpc FetchLabel (FetchLabelRequest) returns (FetchLabelReply) {}
@@ -85,6 +87,22 @@ message SchemaRecord {
     string digest = 1;
     // encoded schema val to be sent
     bytes blob = 2;
+}
+
+
+/*
+-------------------------------------------------------------------------------
+| Client Config from Server
+-------------------------------------------------------------------------------
+*/
+
+message GetClientConfigRequest {}
+
+message GetClientConfigReply {
+    // dictionary style map of the config options
+    map<string, string> config = 1;
+    // success or not
+    ErrorProto error = 2;
 }
 
 
