@@ -2,6 +2,7 @@ graft docs
 graft src
 graft ci
 graft tests
+graft examples
 
 include .bumpversion.cfg
 include .coveragerc
@@ -11,6 +12,7 @@ include .editorconfig
 include AUTHORS.rst
 include CHANGELOG.rst
 include CONTRIBUTING.rst
+include CODE_OF_CONDUCT.rst
 include LICENSE
 include README.rst
 
