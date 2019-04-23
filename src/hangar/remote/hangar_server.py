@@ -232,9 +232,12 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     tensor.shape,
                     tensor.dtype.num,
                     tensor.tobytes()))
-                totalSize += len(p)
+                buf.seek(totalSize)
                 buf.write(p)
+                totalSize += len(p)
 
+                # only send a group of tensors <= Max Size so that the server does not
+                # run out of RAM for large repos
                 if totalSize >= 100_000_000:
                     err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                     cIter = chunks.tensorChunkedIterator(
@@ -243,26 +246,30 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                         pb2_request=hangar_service_pb2.FetchDataReply,
                         err=err)
                     yield from cIter
+                    time.sleep(0.1)
                     msg = 'HANGAR REQUESTED RETRY: developer enforced limit on returned '\
                           'raw data size to prevent memory overload of user system.'
                     context.set_details(msg)
                     context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
                     err = hangar_service_pb2.ErrorProto(code=1, message=msg)
-                    yield hangar_service_pb2.FetchDataReply()
+                    yield hangar_service_pb2.FetchDataReply(error=err, raw_data=b'')
                     raise StopIteration()
 
+        except StopIteration:
+            totalSize = 0
+
         finally:
+            # finish sending all remaining tensors if max size hash not been hit.
+            if totalSize > 0:
+                err = hangar_service_pb2.ErrorProto(code=0, message='OK')
+                cIter = chunks.tensorChunkedIterator(
+                    io_buffer=buf,
+                    uncomp_nbytes=totalSize,
+                    pb2_request=hangar_service_pb2.FetchDataReply,
+                    err=err)
+                yield from cIter
+            buf.close()
             self.txnregister.abort_reader_txn(self.env.hashenv)
-
-        if totalSize > 0:
-            err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-            cIter = chunks.tensorChunkedIterator(
-                io_buffer=buf,
-                uncomp_nbytes=totalSize,
-                pb2_request=hangar_service_pb2.FetchDataReply,
-                err=err)
-
-        yield from cIter
 
     def PushData(self, request_iterator, context):
         for idx, request in enumerate(request_iterator):

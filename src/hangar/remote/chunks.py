@@ -42,9 +42,9 @@ def clientCommitChunkedIterator(commit, parentVal, specVal, refVal):
     commit_proto = hangar_service_pb2.CommitRecord()
     commit_proto.parent = parentVal
     commit_proto.spec = specVal
-    totalByteSize = len(refVal)
+    byteSize = len(refVal)
     chunkIterator = chunk_bytes(refVal)
-    request = hangar_service_pb2.PushCommitRequest(commit=commit, total_byte_size=totalByteSize)
+    request = hangar_service_pb2.PushCommitRequest(commit=commit, total_byte_size=byteSize)
     for refChunk in chunkIterator:
         commit_proto.ref = refChunk
         request.record.CopyFrom(commit_proto)
@@ -55,11 +55,7 @@ def tensorChunkedIterator(io_buffer, uncomp_nbytes, pb2_request, *, err=None):
 
     io_buffer.seek(0)
     compBytes = blosc.compress(
-        io_buffer.getbuffer(),
-        typesize=8,
-        cname='lz4',
-        clevel=9,
-        shuffle=blosc.SHUFFLE)
+        io_buffer.getbuffer(), clevel=9, cname='blosclz', typesize=1, shuffle=blosc.SHUFFLE)
 
     request = pb2_request(
         comp_nbytes=len(compBytes),
@@ -73,34 +69,30 @@ def tensorChunkedIterator(io_buffer, uncomp_nbytes, pb2_request, *, err=None):
 
 def missingHashIterator(commit, hashes, err, pb2_func):
     hash_bytes = msgpack.packb(hashes)
-    comp_bytes = blosc.compress(hash_bytes, cname='lz4', clevel=7, typesize=8)
+    comp_bytes = blosc.compress(
+        hash_bytes, cname='blosclz', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
 
     rpc_method = pb2_func(
         commit=commit,
         total_byte_size=len(comp_bytes),
         error=err)
 
-    offset = 0
     chunkIterator = chunk_bytes(comp_bytes)
     for bchunk in chunkIterator:
-        size = len(bchunk)
         rpc_method.hashs = bchunk
-        offset += size
         yield rpc_method
 
 
 def missingHashRequestIterator(commit, hashes, pb2_func):
     hash_bytes = msgpack.packb(hashes)
-    comp_bytes = blosc.compress(hash_bytes, cname='lz4', clevel=7, typesize=8)
+    comp_bytes = blosc.compress(
+        hash_bytes, cname='blosclz', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
 
     rpc_method = pb2_func(
         commit=commit,
         total_byte_size=len(comp_bytes))
 
-    offset = 0
     chunkIterator = chunk_bytes(comp_bytes)
     for bchunk in chunkIterator:
-        size = len(bchunk)
         rpc_method.hashs = bchunk
-        offset += size
         yield rpc_method

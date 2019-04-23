@@ -231,16 +231,35 @@ class Repository(object):
         m_schemas, m_labels = set(m_all_schemas), set(m_all_labels)
         for schema in tqdm(m_schemas, desc='Fetch Schemas:'):
             self._client.fetch_schema(schema)
+
         with self._client.fs as fs:
-            fbar, savebar = 0, 0
-            ret = 'AGAIN'
+            ret, first = 'AGAIN', True
             while ret == 'AGAIN':
                 m_all_data = []
                 for commit in m_commits:
                     missing_hashes = self._client.fetch_find_missing_hash_records(commit)
                     m_all_data.extend(missing_hashes)
+
                 m_data = set(m_all_data)
-                ret, fbar, savebar = self._client.fetch_data(m_data, fs, fbar, savebar)
+                if first is True:
+                    fetch_bar = tqdm(
+                        desc='Fetch Data:',
+                        leave=True,
+                        unit_scale=True,
+                        unit_divisor=1024,
+                        unit='B',
+                        bar_format='{n_fmt} / ?')
+                    save_bar = tqdm(
+                        desc='Saving Data:',
+                        leave=True,
+                        total=len(m_data))
+                    first = False
+
+                ret = self._client.fetch_data(m_data, fs, fetch_bar, save_bar)
+
+        fetch_bar.close()
+        save_bar.close()
+
         for label in tqdm(m_labels, desc='Fetch Labels'):
             self._client.fetch_label(label)
         for commit in tqdm(m_commits, desc='Fetch Commits'):

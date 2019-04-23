@@ -160,7 +160,7 @@ class HangarClient(object):
             print(f'Error: no schema with hash: {schema_hash} exists')
             return False
 
-    def fetch_data(self, digests, fs, fetch_bar_init, save_bar_init):
+    def fetch_data(self, digests, fs, fetch_bar, save_bar):
 
         buf = io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
@@ -182,27 +182,17 @@ class HangarClient(object):
                 if idx == 0:
                     uncomp_nbytes = reply.uncomp_nbytes
                     comp_nbytes = reply.comp_nbytes
-                    pbar = tqdm(
-                        initial=fetch_bar_init,
-                        position=0,
-                        unit_scale=True,
-                        unit_divisor=1024,
-                        unit='B',
-                        total=comp_nbytes + fetch_bar_init,
-                        desc='Fetch Data:',
-                        leave=False)
-                    fetch_bar_init += comp_nbytes
                     dBytes, offset = bytearray(comp_nbytes), 0
+
                 size = len(reply.raw_data)
-                dBytes[offset: offset + size] = reply.raw_data
-                offset += size
-                pbar.update(size)
+                if size > 0:
+                    dBytes[offset: offset + size] = reply.raw_data
+                    offset += size
+                    fetch_bar.update(size)
+
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
                 ret = 'AGAIN'  # Sentinal indicating not all data was retrieved
-        finally:
-            pbar.clear()
-            pbar.close()
 
         uncompBytes = blosc.decompress(dBytes)
         if uncomp_nbytes != len(uncompBytes):
@@ -213,11 +203,6 @@ class HangarClient(object):
         unpacker = msgpack.Unpacker(
             buff, use_list=True, raw=False, max_buffer_size=1_000_000_000)
 
-        tbar = tqdm(position=2,
-                    initial=save_bar_init,
-                    total=len(digests),
-                    desc='Saving Data:',
-                    leave=False)
         hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
         try:
             for data in unpacker:
@@ -240,14 +225,11 @@ class HangarClient(object):
                     hdf5_dataset_idx=hdf_idx,
                     data_shape=tensor.shape)
                 hashTxn.put(hashKey, hashVal)
-                save_bar_init += 1
-                tbar.update(1)
+                save_bar.update(1)
         finally:
             TxnRegister().commit_writer_txn(self.env.hashenv)
-            tbar.close()
-            tbar.clear()
 
-        return ret, fetch_bar_init, save_bar_init
+        return ret
 
     def push_data(self, digests):
 
@@ -278,6 +260,8 @@ class HangarClient(object):
                 totalSize += len(p)
                 buf.write(p)
 
+                # only send a group of tensors <= Max Size so that the server does not
+                # run out of RAM for large repos
                 if totalSize >= 100_000_000:
                     cIter = chunks.tensorChunkedIterator(
                         io_buffer=buf,
@@ -288,14 +272,16 @@ class HangarClient(object):
                     buf.close()
                     buf = io.BytesIO()
         finally:
+            # finish sending all remaining tensors if max size hash not been hit.
+            if totalSize > 0:
+                cIter = chunks.tensorChunkedIterator(
+                    io_buffer=buf,
+                    uncomp_nbytes=totalSize,
+                    pb2_request=hangar_service_pb2.PushDataRequest)
+                response = self.stub.PushData(cIter)
+                buf.close()
             TxnRegister().abort_reader_txn(self.env.hashenv)
 
-        if totalSize > 0:
-            cIter = chunks.tensorChunkedIterator(
-                io_buffer=buf,
-                uncomp_nbytes=totalSize,
-                pb2_request=hangar_service_pb2.PushDataRequest)
-            response = self.stub.PushData(cIter)
         return response
 
     def fetch_label(self, digest):
