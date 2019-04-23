@@ -114,8 +114,8 @@ class TxnRegister(metaclass=TxnRegisterSingleton):
         if ancestors == 0:
             msg = f'hash ancestors are zero but commit called on {lmdbenv}'
             err = RuntimeError(msg)
-            logger.error()
-            raise RuntimeError()
+            logger.error(msg)
+            raise err
         elif ancestors == 1:
             self.WriterTxn[lmdbenv].commit()
             self.WriterTxn.__delitem__(lmdbenv)
