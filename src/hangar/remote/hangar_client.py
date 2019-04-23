@@ -262,7 +262,7 @@ class HangarClient(object):
 
                 # only send a group of tensors <= Max Size so that the server does not
                 # run out of RAM for large repos
-                if totalSize >= 100_000_000:
+                if totalSize >= 500_000_000:
                     cIter = chunks.tensorChunkedIterator(
                         io_buffer=buf,
                         uncomp_nbytes=totalSize,

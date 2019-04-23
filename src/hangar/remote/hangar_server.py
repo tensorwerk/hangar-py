@@ -238,7 +238,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
                 # only send a group of tensors <= Max Size so that the server does not
                 # run out of RAM for large repos
-                if totalSize >= 100_000_000:
+                if totalSize >= 500_000_000:
                     err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                     cIter = chunks.tensorChunkedIterator(
                         io_buffer=buf,
@@ -391,7 +391,6 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
     def FetchFindMissingCommits(self, request, context):
         c_branch_name = request.branch.name
-        # c_head_commit = request.branch.commit
         c_ordered_commits = request.commits
 
         try:

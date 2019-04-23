@@ -1,0 +1,18 @@
+remote:
+  server:
+    grpc:
+      chennel_address: '[::]:50051'
+      max_thread_pool_workers: 50
+      max_concurrent_rpcs: 50
+      options:
+        enable_compression: True
+        optimization_target: 'blend'        # 'latency', 'blend', or 'throughput'
+    app:
+      fetch_max_stream_nbytes: 500_000_000  # Bytes
+
+  client:
+    options:
+      enable_compression: True
+      optimization_target: 'blend'          # 'latency', 'blend', or 'throughput'
+    app:
+      push_max_stream_nbytes: 500_000_000   # Bytes
