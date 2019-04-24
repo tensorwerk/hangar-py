@@ -3,7 +3,8 @@ import re
 from collections import namedtuple
 from itertools import cycle
 from time import sleep
-from time import time_ns
+from time import perf_counter
+from random import randint
 
 import blosc
 import msgpack
@@ -24,15 +25,18 @@ COMMITSEP = config.get('hangar.seps.commit')
 HASHSEP = config.get('hangar.seps.hash')
 REMOTES = config.get('hangar.keys.remotes')
 
-NAME_CYCLER = cycle(range(9_999))
+cycle_list = [str(c).rjust(4, '0') for c in range(9_999)]
+NAME_CYCLER = cycle(cycle_list)
+RANDOM_NAME_SEED = str(randint(0, 999_999_999)).rjust(0, '0')
 
 
 def generate_sample_name():
-    c = next(NAME_CYCLER)
-    if c == 0:
-        sleep(0.01)
+    ncycle = next(NAME_CYCLER)
+    if ncycle == '0000':
+        sleep(0.001)
 
-    name = f'{str(time_ns()).rjust(20, "0")}{str(c).rjust(4, "0")}'
+    sec, subsec = str(perf_counter()).split('.')
+    name = f'{RANDOM_NAME_SEED}{sec.rjust(6, "0")}{subsec.ljust(9, "0")}{ncycle}'
     return name
 
 
