@@ -10,6 +10,7 @@ from .context import TxnRegister
 from .hdf5_store import FileHandles
 from .records import parsing
 from .records.queries import RecordQuery
+from .utils import is_ascii
 
 uuid_node = getnode()
 
@@ -407,7 +408,7 @@ class DatasetDataWriter(DatasetDataReader):
                 self._dataTxn.put(dsetDataCountKey, newDsetDataCountVal)
         finally:
             if not self._is_conman:
-                self.TxnRegister.commit_writer_txn(self._dataenv)
+                self._TxnRegister.commit_writer_txn(self._dataenv)
 
         return True
 
@@ -697,9 +698,9 @@ class Datasets(object):
             instance object of the initialized dataset.
 
         '''
-        if not (name.isalnum or name.isascii):
+        if not (name.isalnum() and is_ascii(name)):
             print(f'dataset name provided: {name} is not allowed. Must only contain '
-                  f'alpha-numeric ascii characters with no whitespace characters.')
+                  'alpha-numeric ascii characters with no whitespace characters.')
             return False
 
         # ------------- Checks for argument validity --------------------------
