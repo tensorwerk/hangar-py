@@ -318,3 +318,12 @@ def parse_timedelta(s, default='seconds'):
     if int(result) == result:
         result = int(result)
     return result
+
+
+def is_ascii(str_data):
+    # because python3.6 doesn't have str.isascii
+    try:
+        str_data.encode('ascii')
+    except UnicodeEncodeError:
+        return False
+    return True
