@@ -1,9 +1,11 @@
 import hashlib
 import os
-from uuid import getnode
+from typing import Optional
 from uuid import uuid1
+import logging
 
 import numpy as np
+import lmdb
 
 from . import config
 from .context import TxnRegister
@@ -11,7 +13,7 @@ from .hdf5_store import FileHandles
 from .records import parsing
 from .records.queries import RecordQuery
 
-uuid_node = getnode()
+logger = logging.getLogger(__name__)
 
 
 class DatasetDataReader(object):
@@ -50,21 +52,21 @@ class DatasetDataReader(object):
     '''
 
     def __init__(self,
-                 repo_pth,
-                 dset_name,
-                 default_schema_hash,
-                 schema_uuid,
-                 samplesAreNamed,
-                 isVar,
-                 varMaxShape,
-                 varDtypeNum,
-                 dataenv,
-                 hashenv,
-                 mode,
+                 repo_pth: str,
+                 dset_name: str,
+                 default_schema_hash: str,
+                 schema_uuid: str,
+                 samplesAreNamed: bool,
+                 isVar: bool,
+                 varMaxShape: list,
+                 varDtypeNum: int,
+                 dataenv: lmdb.Environment,
+                 hashenv: lmdb.Environment,
+                 mode: str,
                  **kwargs):
 
         self._path = repo_pth
-        self._dset_name = dset_name
+        self._dsetn = dset_name
         self._dataenv = dataenv
         self._hashenv = hashenv
         self._default_schema_hash = default_schema_hash
@@ -82,8 +84,8 @@ class DatasetDataReader(object):
 
         self._fs.open(self._path, self._mode)
 
-        self._hashTxn = None
-        self._dataTxn = None
+        self._hashTxn: Optional[lmdb.Transaction] = None
+        self._dataTxn: Optional[lmdb.Transaction] = None
         self._is_conman = False
 
     def __enter__(self):
@@ -104,14 +106,14 @@ class DatasetDataReader(object):
         return self.keys()
 
     def __len__(self):
-        return len(self._Query.dataset_data_names(self._dset_name))
+        return len(self._Query.dataset_data_names(self._dsetn))
 
     def __contains__(self, key):
         if not self._is_conman:
             self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
 
         try:
-            ref_key = parsing.data_record_db_key_from_raw_key(self._dset_name, key)
+            ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, key)
             data_ref = self._dataTxn.get(ref_key, default=False)
             keyExists = bool(data_ref)
         finally:
@@ -122,7 +124,7 @@ class DatasetDataReader(object):
 
     def _repr_pretty_(self, p, cycle):
         res = f'\n Hangar {self.__class__.__name__} \
-                \n    Dataset Name     : {self._dset_name}\
+                \n    Dataset Name     : {self._dsetn}\
                 \n    Schema UUID      : {self._schema_uuid}\
                 \n    Schema Hash      : {self._default_schema_hash}\
                 \n    Variable Shape   : {bool(int(self._schema_variable))}\
@@ -136,7 +138,7 @@ class DatasetDataReader(object):
     def __repr__(self):
         res = f'{self.__class__}('\
               f'repo_pth={self._path}, '\
-              f'dset_name={self._dset_name}, '\
+              f'dset_name={self._dsetn}, '\
               f'default_schema_hash={self._default_schema_hash}, '\
               f'schema_uuid={self._schema_uuid}, '\
               f'isVar={self._schema_variable}, '\
@@ -153,26 +155,26 @@ class DatasetDataReader(object):
     def keys(self):
         '''generator which yields the names of every sample in the dataset
         '''
-        data_names = self._Query.dataset_data_names(self._dset_name)
+        data_names = self._Query.dataset_data_names(self._dsetn)
         for name in data_names:
             yield name
 
     def values(self):
         '''generator which yields the tensor data for every sample in the dataset
         '''
-        data_names = self._Query.dataset_data_names(self._dset_name)
+        data_names = self._Query.dataset_data_names(self._dsetn)
         for name in data_names:
             yield self.get(name)
 
     def items(self):
         '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
         '''
-        data_names = self._Query.dataset_data_names(self._dset_name)
+        data_names = self._Query.dataset_data_names(self._dsetn)
         for name in data_names:
             yield (name, self.get(name))
 
     def get(self, name):
-        '''retrieve a data sample with the given sample name
+        '''Retrieve a dataset data sample with the provided sample name
 
         Parameters
         ----------
@@ -182,30 +184,38 @@ class DatasetDataReader(object):
         Returns
         -------
         np.array
-            tensor data stored in the dataset.
-        '''
-        tmpconman = False if self._is_conman else True
-        if tmpconman:
-            self.__enter__()
+            tensor data stored in the dataset archived with provided name
 
-        ref_key = parsing.data_record_db_key_from_raw_key(self._dset_name, name)
-        data_ref = self._dataTxn.get(ref_key, default=False)
-        if not data_ref:
-            print(f'Error: dataset name: {self._dset_name} does not contain data with name: {name}')
+        Raises
+        ------
+        KeyError
+            if the dataset does not contain data with the provided name
+        '''
+        try:
+            tmpconman = False if self._is_conman else True
+            if tmpconman:
+                self.__enter__()
+
+            ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
+            data_ref = self._dataTxn.get(ref_key, default=False)
+            if data_ref is False:
+                raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
+
+            dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
+            hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
+            hash_ref = self._hashTxn.get(hashKey)
+            hashVal = parsing.hash_data_raw_val_from_db_val(hash_ref)
+            # This is a tight enough loop where keyword args can impact performance
+            data = self._fs.read_data(hashVal, self._mode, self._schema_dtype_num)
+
+        except KeyError as e:
+            logger.error(e, exc_info=True)
+            raise e
+
+        finally:
             if tmpconman:
                 self.__exit__()
-            return False
 
-        dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
-        hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
-        hash_ref = self._hashTxn.get(hashKey)
-        hashVal = parsing.hash_data_raw_val_from_db_val(hash_ref)
-
-        # Note: This is a tight enough loop where keyword args can have negative
-        # performance impacts...
-        data = self._fs.read_data(hashVal, self._mode, self._schema_dtype_num)
-        if tmpconman:
-            self.__exit__()
         return data
 
 
@@ -257,64 +267,102 @@ class DatasetDataWriter(DatasetDataReader):
         return self.remove(key)
 
     def add(self, data, name=None, **kwargs):
-        '''Store a piece of data in the dataset
+        '''Store a piece of data in a dataset
 
         Parameters
         ----------
         data : np.array
-            array to store as a sample in the dataset.
-        name : str
-            name to assign to the sample is dataset accepts named samples
+            data to store as a sample in the dataset
+        name : str, optional
+            name to assign to the same (assuming the dataset accepts named samples), by default None
 
         Returns
         -------
-        bool
-            if the operation was successful.
+        str
+            sample name of the stored data (assuming the operation was successful)
+
+        Raises
+        ------
+        ValueError
+            If no `name` arg was provided for dataset requiring named samples.
+        ValueError
+            If input data tensor rank exceeds specified rank of dataset samples.
+        ValueError
+            For variable shape datasets, if a dimension size of the input data
+            tensor exceeds specified max dimension size of the dataset samples.
+        ValueError
+            For fixed shape datasets, if input data dimensions do not exactally match
+            specified dataset dimensions.
+        TypeError
+            If the datatype of the input data does not match the specifed data type of
+            the dataset
+        LookupError
+            If a data sample with the same name and hash value already exists in the
+            dataset.
         '''
-        if self._samples_are_named:
-            if not (isinstance(name, str)):
-                print('Error: dataset requires named samples')
-                return False
-        else:
-            try:
-                name = kwargs['bulk_add_name']
-            except KeyError:
-                name = parsing.generate_sample_name()
 
-        if self._schema_variable is True:
-            if data.ndim != len(self._schema_max_shape):
-                print(f'Error: rank of input tensor exceed rank of initialized tensor')
-                return False
-            for dataDimSize, schemaDimSize in zip(data.shape, self._schema_max_shape):
-                if dataDimSize > schemaDimSize:
-                    print('Error: dimensions of input data exceed max dimensions of dataset')
-                    return False
-        else:
-            if data.shape != self._schema_max_shape:
-                print('Error: shape of input tensor does not match shape of dataset schema.')
-                return False
-
-        if data.dtype.num != self._schema_dtype_num:
-            print('Error: data type of dataset and input data do not match')
-            return False
-
-        tmpconman = False if self._is_conman else True
-        if tmpconman:
-            self.__enter__()
+        # ------------------------ argument type checking ---------------------
 
         try:
-            # full_hash = xxh64_hexdigest(data)
+            if self._samples_are_named:
+                if not (isinstance(name, str)):
+                    msg = f'HANGAR VALUE ERROR:: no `name` argument provided while '\
+                          f' adding sample to dset: {self._dsetn} requiring named samples.'
+                    raise ValueError(msg)
+            else:
+                try:
+                    name = kwargs['bulk_add_name']
+                except KeyError:
+                    name = parsing.generate_sample_name()
+
+            if self._schema_variable is True:
+                if data.ndim != len(self._schema_max_shape):
+                    msg = f'HANGAR VALUE ERROR:: rank of input tensor: {data.ndim} exceeds '\
+                          f'rank of dataset: {self._dsetn} specified max rank: '\
+                          f'{len(self._schema_max_shape)}'
+                    raise ValueError(msg)
+                for dataDimSize, schemaDimSize in zip(data.shape, self._schema_max_shape):
+                    if dataDimSize > schemaDimSize:
+                        msg = f'HANGAR VALUE ERROR:: dimensions of input data: {data.shape} '\
+                              f'exceed variable max dims of dset: {self._dsetn} specified '\
+                              f'max dimensions: {self._schema_max_shape}. DIM SIZE: '\
+                              f'{dataDimSize} > {schemaDimSize}'
+                        raise ValueError(msg)
+            else:
+                if data.shape != self._schema_max_shape:
+                    msg = f'HANGAR VALUE ERROR:: shape of input data: {data.shape} != fixed '\
+                          f'dims of dset: {self._dsetn} specified dimss: {self._schema_max_shape}'
+                    raise ValueError(msg)
+
+            if data.dtype.num != self._schema_dtype_num:
+                msg = f'HANGAR TYPE ERROR:: data type of input data: {data.dtype} != type of '\
+                      f'dataset: {self._dsetn} with specified type: '\
+                      f'{np.typeDict[self._schema_dtype_num]}.'
+                raise TypeError(msg)
+
+        except (ValueError, TypeError) as e:
+            logger.error(e, exc_info=True)
+            raise e
+
+        # --------------------- add data to storage backend -------------------
+
+        try:
+            tmpconman = False if self._is_conman else True
+            if tmpconman:
+                self.__enter__()
+
             full_hash = hashlib.blake2b(data.tobytes(), digest_size=20).hexdigest()
             hashKey = parsing.hash_data_db_key_from_raw_key(full_hash)
 
             # check if data record already exists
-            dataRecKey = parsing.data_record_db_key_from_raw_key(self._dset_name, name)
+            dataRecKey = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
             existingDataRecVal = self._dataTxn.get(dataRecKey, default=False)
             if existingDataRecVal:
                 existingDataRec = parsing.data_record_raw_val_from_db_val(existingDataRecVal)
                 if full_hash == existingDataRec.data_hash:
-                    print(f'dataset: {self._dset_name} already contains identical object: {name}')
-                    return False
+                    msg = f'HANGAR KEY EXISTS ERROR:: dataset: {self._dsetn} already contains '\
+                          f'identical object named: {name} with same hash value: {full_hash}'
+                    raise LookupError(msg)
 
             # write new data if data hash does not exist
             existingHashVal = self._hashTxn.get(hashKey, default=False)
@@ -329,11 +377,15 @@ class DatasetDataWriter(DatasetDataReader):
             self._dataTxn.put(dataRecKey, dataRecVal)
 
             if existingDataRecVal is False:
-                dsetCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dset_name)
+                dsetCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
                 dsetCountVal = self._dataTxn.get(dsetCountKey, default='0'.encode())
                 newDsetCount = parsing.dataset_record_count_raw_val_from_db_val(dsetCountVal) + 1
                 newDsetCountVal = parsing.dataset_record_count_db_val_from_raw_val(newDsetCount)
                 self._dataTxn.put(dsetCountKey, newDsetCountVal)
+
+        except LookupError as e:
+            logger.error(e, exc_info=True)
+            raise e
 
         finally:
             if tmpconman:
@@ -344,13 +396,15 @@ class DatasetDataWriter(DatasetDataReader):
     def remove(self, name):
         '''Remove a sample with the provided name from the dataset.
 
-        **Assurance: This operation will NEVER actually remove any data from
-        disk**. If you commit a tensor at any point in time, **it will always
-        remain accessable by checking out a previous commit** when the tensor
-        was present. This is just a way to tell Hangar that you don't want some
-        piece of data to clutter up the current version of the repository.
-
         .. Note::
+
+            This operation will NEVER actually remove any data from disk. If
+            you commit a tensor at any point in time, **it will always remain
+            accessable by checking out a previous commit** when the tensor was
+            present. This is just a way to tell Hangar that you don't want some
+            piece of data to clutter up the current version of the repository.
+
+        .. Warning::
 
             Though this may change in a future release, in the current version of
             Hangar, we cannot recover references to data which was added to the
@@ -363,33 +417,37 @@ class DatasetDataWriter(DatasetDataReader):
         Parameters
         ----------
         name : str
-            name of the sample to remove
+            name of the sample to remove.
 
         Returns
         -------
         str
-            if the operation was successful
+            If the operation was successful, name of the data sample deleted.
+
+        Raises
+        ------
+        KeyError
+            If a sample with the provided name does not exist in the dataset.
         '''
         if not self._is_conman:
             self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
 
-        dataKey = parsing.data_record_db_key_from_raw_key(self._dset_name, name)
+        dataKey = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
         try:
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
-                print(f'no data by the name: {name} in staging dset: {self._dset_name}')
-                return False
+                msg = f'HANGAR KEY ERROR:: no sample: {name} exists in dset: {self._dsetn}'
+                raise KeyError(msg)
 
-            dsetDataCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dset_name)
+            dsetDataCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
             dsetDataCountVal = self._dataTxn.get(dsetDataCountKey)
             newDsetDataCount = parsing.dataset_record_count_raw_val_from_db_val(dsetDataCountVal) - 1
 
             # if this is the last data piece existing in a dataset, remove the dataset
             if newDsetDataCount == 0:
-                dsetSchemaKey = parsing.dataset_record_schema_db_key_from_raw_key(self._dset_name)
+                dsetSchemaKey = parsing.dataset_record_schema_db_key_from_raw_key(self._dsetn)
                 self._dataTxn.delete(dsetDataCountKey)
                 self._dataTxn.delete(dsetSchemaKey)
-
                 totalNumDsetsKey = parsing.dataset_total_count_db_key()
                 totalNumDsetsVal = self._dataTxn.get(totalNumDsetsKey)
                 newTotalNumDsets = parsing.dataset_total_count_raw_val_from_db_val(totalNumDsetsVal) - 1
@@ -400,16 +458,20 @@ class DatasetDataWriter(DatasetDataReader):
                 else:
                     newTotalNumDsetsVal = parsing.dataset_total_count_db_val_from_raw_val(newTotalNumDsets)
                     self._dataTxn.put(newTotalNumDsetsVal)
-
             # otherwise just decrement the dataset record count
             else:
                 newDsetDataCountVal = parsing.dataset_record_count_db_val_from_raw_val(newDsetDataCount)
                 self._dataTxn.put(dsetDataCountKey, newDsetDataCountVal)
+
+        except KeyError as e:
+            logger.error(e, exc_info=True)
+            raise e
+
         finally:
             if not self._is_conman:
                 self.TxnRegister.commit_writer_txn(self._dataenv)
 
-        return True
+        return name
 
 
 '''
@@ -726,7 +788,7 @@ class Datasets(object):
 
         # ------------------- Locks and status checks -------------------------
 
-        dset_uuid = uuid1(node=uuid_node).hex
+        dset_uuid = uuid1().hex
         if name in self._datasets:
             print(f'Error: dataset exists with name: {name} use another name.')
             return False
