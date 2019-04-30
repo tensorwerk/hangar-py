@@ -512,7 +512,7 @@ class DatasetDataWriter(DatasetDataReader):
 
         finally:
             if not self._is_conman:
-                self.TxnRegister.commit_writer_txn(self._dataenv)
+                self._TxnRegister.commit_writer_txn(self._dataenv)
 
         return name
 
