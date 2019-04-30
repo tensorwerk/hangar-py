@@ -294,6 +294,8 @@ class DatasetDataWriter(DatasetDataReader):
             For fixed shape datasets, if input data dimensions do not exactally match
             specified dataset dimensions.
         TypeError
+            If type of `data` argument is not an instance of np.ndarray.
+        TypeError
             If the datatype of the input data does not match the specifed data type of
             the dataset
         LookupError
@@ -304,6 +306,10 @@ class DatasetDataWriter(DatasetDataReader):
         # ------------------------ argument type checking ---------------------
 
         try:
+            if not isinstance(data, np.ndarray):
+                msg = f'HANGAR TYPE ERROR:: `data` argument type: {type(data)} != `np.ndarray`'
+                raise TypeError(msg)
+
             if self._samples_are_named:
                 if not (isinstance(name, str)):
                     msg = f'HANGAR VALUE ERROR:: no `name` argument provided while '\
@@ -367,8 +373,10 @@ class DatasetDataWriter(DatasetDataReader):
             # write new data if data hash does not exist
             existingHashVal = self._hashTxn.get(hashKey, default=False)
             if existingHashVal is False:
-                hdf_instance, hdf_dset, hdf_idx = self._fs.add_tensor_data(data, self._default_schema_hash)
-                hashVal = parsing.hash_data_db_val_from_raw_val(self._default_schema_hash, hdf_instance, hdf_dset, hdf_idx, data.shape)
+                hdf_instance, hdf_dset, hdf_idx = self._fs.add_tensor_data(
+                    data, self._default_schema_hash)
+                hashVal = parsing.hash_data_db_val_from_raw_val(
+                    self._default_schema_hash, hdf_instance, hdf_dset, hdf_idx, data.shape)
                 self._hashTxn.put(hashKey, hashVal)
                 self._stageHashTxn.put(hashKey, hashVal)
 
@@ -574,7 +582,7 @@ class Datasets(object):
             If the dataset was checked out with write-enabled, return writer object,
             otherwise return read only object.
         '''
-        return self._datasets[key]
+        return self.get(key)
 
     def __setitem__(self, key, value):
         '''Specifically prevent use dict style setting for dataset objects.
@@ -583,16 +591,14 @@ class Datasets(object):
 
         Raises
         ------
-        AttributeError
+        PermissionError
             This operation is not allowed under any circumstance
 
         '''
-        try:
-            msg = f'HANGAR NOT ALLOWED ERROR:: To add a dataset use `init_dataset` method.'
-            raise PermissionError(msg)
-        except PermissionError as e:
-            logger.error(e)
-            raise
+        msg = f'HANGAR NOT ALLOWED ERROR:: To add a dataset use `init_dataset` method.'
+        e = PermissionError(msg)
+        logger.error(e, exc_info=False)
+        raise e
 
     def __contains__(self, key):
         return True if key in self._datasets else False
@@ -609,14 +615,16 @@ class Datasets(object):
 
         Raises
         ------
-        AttributeError
+        PermissionError
             If this is a read-only checkout, no operation is permitted.
         '''
-        try:
+        if self._mode == 'r':
+            msg = 'HANGAR NOT ALLOWED ERROR:: Cannot remove a dataset in read-only checkout'
+            e = PermissionError(msg)
+            logger.error(e, exc_info=False)
+            raise e
+        else:
             self.remove_dset(key)
-        except AttributeError as e:
-            err = 'Cannot remove a dataset in read-only checkout'
-            raise e(err)
 
     def __len__(self):
         return len(self._datasets)
@@ -659,8 +667,7 @@ class Datasets(object):
     def get(self, name):
         '''Returns a dataset access object.
 
-        This can be used in lieu of the dictionary style access. the
-        functionality is equivalent.
+        This can be used in lieu of the dictionary style access.
 
         Parameters
         ----------
@@ -672,8 +679,18 @@ class Datasets(object):
         object
             DatasetData accessor (set to read or write mode as appropriate)
 
+        Raises
+        ------
+        KeyError
+            If no dataset with the given name exists in the checkout
         '''
-        return self._datasets[name]
+        try:
+            return self._datasets[name]
+        except KeyError:
+            msg = f'HANGAR KEY ERROR:: No dataset exists with name: {name}'
+            e = KeyError(msg)
+            logger.error(e, exc_info=False)
+            raise e
 
 # ------------------------ Writer-Enabled Methods Only ------------------------------
 
@@ -776,6 +793,8 @@ class Datasets(object):
         ValueError
             If provided prototype shape (or `shape` argument) not <= `max_shape`
             value if `variable_shape=True`.
+        ValueError
+            If rank of maximum tensor shape > 31.
         '''
 
         # ------------- Checks for argument validity --------------------------
@@ -795,6 +814,7 @@ class Datasets(object):
 
         if prototype is not None:
             style = 'prototype'
+            tenShape = prototype.shape
         elif (shape is not None) and (dtype is not None):
             tenShape = tuple(shape) if isinstance(shape, list) else shape
             prototype = np.zeros(tenShape, dtype=dtype)
@@ -816,6 +836,14 @@ class Datasets(object):
                 raise e
             prototype = np.zeros(maxShape, dtype=prototype.dtype)
             style = f'{style} + variable_shape'
+        else:
+            maxShape = tenShape
+
+        if len(maxShape) > 31:
+            msg = f'HANGAR VALUE ERROR:: maximum tensor rank must be <= 31. specified: {len(maxShape)}'
+            e = ValueError(msg)
+            logger.error(e, exc_info=False)
+            raise e
 
         msg = f'Dataset Specification:: '\
               f'Name: `{name}`, '\

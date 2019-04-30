@@ -225,13 +225,19 @@ class WriterCheckout(object):
         -------
         string
             The commit hash of the new commit
-        False
-            If no changes could be made
+
+        Raises
+        ------
+        RuntimeError
+            If no changes have been made in the staging area, no commit occurs.
         '''
+        logger.info(f'Commit operation requested with writer lock: {self.__writer_lock}')
         self.__acquire_writer_lock()
         if staging_area_status(self._stageenv, self._refenv, self._branchenv) == 'CLEAN':
-            logger.info('No changes made to the repository. Cannot commit')
-            return False
+            msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. Cannot commit.'
+            e = RuntimeError(msg)
+            logger.error(e, exc_info=False)
+            raise e
 
         for dsetHandle in self.datasets.values():
             try:
@@ -249,6 +255,7 @@ class WriterCheckout(object):
 
         hashs.clear_stage_hash_records(self._stagehashenv)
         self.__setup()
+        logger.info(f'Comit completed. Commit hash: {commit_hash}')
         return commit_hash
 
     def reset_staging_area(self):
@@ -260,15 +267,21 @@ class WriterCheckout(object):
 
         Returns
         -------
-        bool
-            if the operation was successful
-        '''
-        logger.info(f'Hard reset of staging area requested with writer_lock: {self.__writer_lock}')
+        string
+            commit hash of the head which the staging area is reset to.
 
+        Raises
+        ------
+        RuntimeError
+            If no changes have been made to the staging area, no reset is necessary.
+        '''
+        logger.info(f'Hard reset requested with writer_lock: {self.__writer_lock}')
         self.__acquire_writer_lock()
         if staging_area_status(self._stageenv, self._refenv, self._branchenv) == 'CLEAN':
-            logger.info('No changes made to the repository. No reset is necessary.')
-            return False
+            msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. No reset necessary.'
+            e = RuntimeError(msg)
+            logger.error(e, exc_info=False)
+            raise e
 
         for dsetHandle in self.datasets.values():
             try:
@@ -285,10 +298,9 @@ class WriterCheckout(object):
             refenv=self._refenv,
             stageenv=self._stageenv,
             commit_hash=head_commit)
-
-        logger.info(f'Hard reset completed')
+        logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
         self.__setup()
-        return True
+        return head_commit
 
     def close(self):
         '''Close all handles to the writer checkout and release the writer lock.

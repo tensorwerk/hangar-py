@@ -1,11 +1,12 @@
 import logging
+import logging.config
 import logging.handlers
 import os
 
 import yaml
 
 
-def setup_logging(cfg_path='config_logging.yaml', cfg_level=logging.INFO, env_key='HANGAR_LOG_CFG'):
+def setup_logging(cfg_path='config_logging.yml', cfg_level=logging.INFO, env_key='HANGAR_LOG_CFG'):
     '''setup logging configuration for a hangar project
 
     the location of the log file can be modified by setting path or the
@@ -24,7 +25,7 @@ def setup_logging(cfg_path='config_logging.yaml', cfg_level=logging.INFO, env_ke
         file. (the default is 'HANGAR_LOG_CFG')
 
     '''
-    path = cfg_path
+    path = os.path.join(os.path.dirname(__file__), cfg_path)
     value = os.getenv(env_key, None)
     if value:
         path = value
