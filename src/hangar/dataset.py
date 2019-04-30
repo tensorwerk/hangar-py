@@ -12,6 +12,7 @@ from .context import TxnRegister
 from .hdf5_store import FileHandles
 from .records import parsing
 from .records.queries import RecordQuery
+from .utils import is_ascii_alnum
 
 logger = logging.getLogger(__name__)
 
@@ -260,10 +261,40 @@ class DatasetDataWriter(DatasetDataReader):
         self._fs.__exit__(*exc)
 
     def __setitem__(self, key, value):
+        '''Store a piece of data in a dataset. Convenince method to :meth:``add``.
+
+        .. seealso:: :meth:``add``
+
+        Parameters
+        ----------
+        key : str
+            name of the sample to add to the dataset
+        value : np.array
+            tensor data to add as the sample
+
+        Returns
+        -------
+        str
+            sample name of the stored data (assuming operation was successful)
+        '''
         self.add(value, key)
         return key
 
     def __delitem__(self, key):
+        '''Remove a sample from the dataset. Convenence method to :meth:``remove``.
+
+        .. seealso:: :meth:``remove``
+
+        Parameters
+        ----------
+        key : str
+            Name of the sample to remove from the dataset
+
+        Returns
+        -------
+        str
+            Name of the sample removed from the dataset (assuming operation successful)
+        '''
         return self.remove(key)
 
     def add(self, data, name=None, **kwargs):
@@ -312,8 +343,12 @@ class DatasetDataWriter(DatasetDataReader):
 
             if self._samples_are_named:
                 if not (isinstance(name, str)):
-                    msg = f'HANGAR VALUE ERROR:: no `name` argument provided while '\
+                    msg = f'HANGAR VALUE ERROR:: string type not provided to `name` argument while '\
                           f' adding sample to dset: {self._dsetn} requiring named samples.'
+                    raise ValueError(msg)
+                elif not is_ascii_alnum(name):
+                    msg = f'HANGAR VALUE ERROR:: name: {name} is invalid. Must only contain '\
+                          f'alpha-numeric ascii characters (no whitespace).'
                     raise ValueError(msg)
             else:
                 try:
@@ -783,8 +818,8 @@ class Datasets(object):
 
         Raises
         ------
-        SyntaxError
-            If provided name contains any non ascii, alpha-numeric characters.
+        ValueError
+            If provided name contains any non ascii, non alpha-numeric characters.
         SyntaxError
             If required `shape` and `dtype` arguments are not provided in absense of
             `prototype` argument.
@@ -799,10 +834,10 @@ class Datasets(object):
 
         # ------------- Checks for argument validity --------------------------
 
-        if not (name.isalnum or name.isascii):
-            msg = f'HANGAR SYNTAX ERROR:: dataset name provided: `{name}` is not allowed. '\
+        if not is_ascii_alnum(name):
+            msg = f'HANGAR VALUE ERROR:: dataset name provided: `{name}` is not allowed. '\
                   f'Must only contain alpha-numeric ascii with no whitespace characters.'
-            e = SyntaxError(msg)
+            e = ValueError(msg)
             logger.error(e, exc_info=False)
             raise e
 

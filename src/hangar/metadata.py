@@ -4,6 +4,7 @@ import logging
 from .context import TxnRegister
 from .records import parsing
 from .records.queries import RecordQuery
+from .utils import is_ascii_alnum, is_ascii
 
 logger = logging.getLogger(__name__)
 
@@ -224,11 +225,11 @@ class MetadataWriter(MetadataReader):
             If an identical key/value pair exists in the checkout
         '''
         try:
-            if (not key.isascii()) or (not key.isalnum()):
+            if not is_ascii_alnum(key):
                 msg = f'HANGAR SYNTAX ERROR:: metadata key: `{key}` not allowed. '\
                       f'Must only contain alpha-numeric ascii (no whitespace) characters.'
                 raise SyntaxError(msg)
-            if not value.isascii():
+            if not is_ascii(value):
                 msg = f'HANGAR SYNTAX ERROR:: metadata value: `{value}` not allowed. '\
                       f'Must only contain ascii characters.'
                 raise SyntaxError(msg)
