@@ -211,7 +211,7 @@ class Environments(metaclass=EnvironmentsSingleton):
         if not os.path.isdir(self.repo_path):
             msg = f'HANGAR RUNTIME WARNING: no repository exists at {self.repo_path}, '\
                   f'please use `init_repo` function'
-            logger.warn(msg)
+            logger.warning(msg)
             return False
 
         config.refresh(paths=[self.repo_path])

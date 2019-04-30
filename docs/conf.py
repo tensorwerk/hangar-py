@@ -61,3 +61,6 @@ html_short_title = '%s-%s' % (project, version)
 napoleon_use_ivar = True
 napoleon_use_rtype = True
 napoleon_use_param = True
+
+add_module_names = False
+doctest_test_doctest_blocks = None

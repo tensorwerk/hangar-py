@@ -54,18 +54,18 @@ class TestDataWithFixedSizedDataset:
 
     def test_add_data(self, w_checkout, array5by7):
         dset = w_checkout.datasets['_dset']
-        # TODO shouldn't this raise keyerror
-        dset['somerandomkey']
+        with pytest.raises(KeyError):
+            dset['somerandomkey']
 
         # should raise an issue about intiger being used as key
-        dset[1] = array5by7
+        with pytest.raises(ValueError):
+            dset[1] = array5by7
 
     def test_add_with_wrong_argument_order(self, w_checkout, array5by7):
         # TODO: perhaps use it with written repo fixture
         dset = w_checkout.datasets['_dset']
-
-        # TODO: shouldn't it throw some error
-        dset.add('1', array5by7)
+        with pytest.raises(TypeError):
+            dset.add('1', array5by7)
 
     def test_multiple_data_single_commit(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
@@ -78,7 +78,7 @@ class TestDataWithFixedSizedDataset:
         dset = co.datasets['_dset']
         assert len(dset) == 2
         assert list(dset.keys()) == ['1', '2']
-        assert (dset['1'] == array5by7).all()
+        assert np.allclose(dset['1'], array5by7)
 
     def multiple_data_multiple_commit(self, written_repo, array5by7):
         # TODO: enable once #5 is fixed
@@ -104,14 +104,11 @@ class TestDataWithFixedSizedDataset:
         co.datasets['_dset'].add(array5by7, '1')
         co.close()
         with pytest.raises(PermissionError):
-            # TODO: this raise an excpetion
-            # AttributeError: 'WriterCheckout' object has no
-            #     attribute '_WriterCheckout__writer_lock'
             co.commit()
         co = written_repo.checkout()
         dset = co.datasets['_dset']
-        # TODO: Shouldn't it be something else
-        assert dset['1'] is False
+        with pytest.raises(KeyError):
+            shouldNotExist = dset['1']
 
     def remove_data(self, written_repo, array5by7):
         # TODO: test failing
@@ -164,7 +161,8 @@ class TestDataWithFixedSizedDataset:
         assert (co.datasets['dset1']['arr'] == randomsizedarray).all()
         assert (co.datasets['dset2']['arr'] == randomsizedarray).all()
 
-    def prototype_and_shape(self, repo, randomsizedarray):
+    @pytest.mark.skip(reason='enable once #5 is fixed')
+    def test_prototype_and_shape(self, repo, randomsizedarray):
         # TODO: enable once #5 is fixed
         co = repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
@@ -183,15 +181,16 @@ class TestDataWithFixedSizedDataset:
 
     def test_samples_without_name(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        dset = co.datasets.init_dataset(
-            'dset', prototype=randomsizedarray)
-        # TODO: It should raise error
-        dset.add(randomsizedarray)
+        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray)
+        with pytest.raises(ValueError):
+            dset.add(randomsizedarray)
+
         dset_no_name = co.datasets.init_dataset(
-            'dset_no_name', prototype=randomsizedarray,
+            'dset_no_name',
+            prototype=randomsizedarray,
             samples_are_named=False)
         dset_no_name.add(randomsizedarray)
-        assert (next(dset_no_name.values()) == randomsizedarray).all()
+        assert np.allclose(next(dset_no_name.values()), randomsizedarray)
         co.close()
 
     def test_different_data_types_and_shapes(self, repo):
@@ -203,12 +202,14 @@ class TestDataWithFixedSizedDataset:
         arr = np.random.random(shape).astype(dtype)
         dset = co.datasets.init_dataset('dset', shape=shape, dtype=dtype)
         dset['1'] = arr
+
         newarr = np.random.random(shape).astype(another_dtype)
-        # TODO: shouldn't it raise an excpetion
-        dset['2'] = newarr
+        with pytest.raises(TypeError):
+            dset['2'] = newarr
+
         newarr = np.random.random(another_shape).astype(dtype)
-        # TODO: should raise an error
-        dset['3'] = newarr
+        with pytest.raises(ValueError):
+            dset['3'] = newarr
 
     def test_bulk_add_names(self):
         pass
