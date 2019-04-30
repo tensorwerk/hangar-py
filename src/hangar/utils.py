@@ -4,6 +4,51 @@ from datetime import timedelta
 from numbers import Number
 
 
+def is_ascii_alnum(str_data: str):
+    '''Checks if string contains only alpha-numeric ascii chars (no whitespace)
+
+    Necessary because python 3.6 does not have a str.isascii() method.
+
+    Parameters
+    ----------
+    str_data : str
+        string to check if it contains only ascii characters
+
+    Returns
+    -------
+    bool
+        True if only ascii characters in the string, else False.
+    '''
+    try:
+        str_data.encode('ascii')
+        asciiStrIsAlnum = False if any(c.isspace() for c in str_data) else True
+        return asciiStrIsAlnum
+    except UnicodeEncodeError:
+        return False
+
+
+def is_ascii(str_data: str):
+    '''Checks if string contains only ascii chars.
+
+    Necessary because python 3.6 does not have a str.isascii() method.
+
+    Parameters
+    ----------
+    str_data : str
+        string to check if it contains only ascii characters
+
+    Returns
+    -------
+    bool
+        True if only ascii characters in the string, else False.
+    '''
+    try:
+        str_data.encode('ascii')
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def find_next_prime(N):
     '''Find next prime >= N
 

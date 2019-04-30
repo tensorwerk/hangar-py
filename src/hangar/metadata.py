@@ -1,8 +1,12 @@
 import hashlib
+import logging
 
 from .context import TxnRegister
 from .records import parsing
 from .records.queries import RecordQuery
+from .utils import is_ascii_alnum, is_ascii
+
+logger = logging.getLogger(__name__)
 
 
 class MetadataReader(object):
@@ -56,6 +60,13 @@ class MetadataReader(object):
     def __getitem__(self, key):
         return self.get(key)
 
+    def __contains__(self, key):
+        names = self._Query.metadata_names()
+        if key in names:
+            return True
+        else:
+            return False
+
     def __iter__(self):
         raise NotImplementedError()
 
@@ -66,16 +77,22 @@ class MetadataReader(object):
         return res
 
     def keys(self):
+        '''generator returning all metadata key names in the checkout
+        '''
         names = self._Query.metadata_names()
         for name in names:
             yield name
 
     def values(self):
+        '''generator returning all metadata values in the checkout
+        '''
         names = self._Query.metadata_names()
         for name in names:
             yield self.get(name)
 
     def items(self):
+        '''generator returning all key/value pairs in the checkout.
+        '''
         names = self._Query.metadata_names()
         for name in names:
             yield (name, self.get(name))
@@ -85,8 +102,8 @@ class MetadataReader(object):
 
         Parameters
         ----------
-        key : string, alphanumeric ascii characters only.
-            The name of the metadata pice to retrieve.
+        key : string
+            The name of the metadata piece to retrieve.
 
         Returns
         -------
@@ -95,12 +112,9 @@ class MetadataReader(object):
 
         Raises
         ------
-        ValueError
-            If key contains non-alphanumeric or non-ascii characters.
+        KeyError
+            If no metadata exists in the checkout with the provided key.
         '''
-        if (not key.isascii()) or (not key.isalnum()):
-            raise ValueError(f'key: "{key}" cannot contain non-alphanumeric non-ascii characters.')
-
         if not self.__is_conman:
             self._labelTxn = TxnRegister().begin_reader_txn(self._labelenv)
             self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
@@ -108,14 +122,19 @@ class MetadataReader(object):
         try:
             refKey = parsing.metadata_record_db_key_from_raw_key(key)
             hashVal = self._dataTxn.get(refKey, default=False)
-            if not hashVal:
-                print(f'No metadata with key: {key} exists')
-                return False
+            if hashVal is False:
+                msg = f'HANGAR KEY ERROR:: No metadata key: `{key}` exists in checkout'
+                raise KeyError(msg)
 
             hash_spec = parsing.metadata_record_raw_val_from_db_val(hashVal)
             metaKey = parsing.hash_meta_db_key_from_raw_key(hash_spec)
             metaVal = self._labelTxn.get(metaKey)
             meta_value = parsing.hash_meta_raw_val_from_db_val(metaVal)
+
+        except KeyError as e:
+            logger.error(e, exc_info=False)
+            raise
+
         finally:
             if not self.__is_conman:
                 self._labelTxn = TxnRegister().abort_reader_txn(self._labelenv)
@@ -173,12 +192,6 @@ class MetadataWriter(MetadataReader):
     def __delitem__(self, key):
         return self.remove(key)
 
-    def __missing__(self):
-        raise NotImplementedError()
-
-    def __contains__(self, key):
-        raise NotImplementedError()
-
     def __repr__(self):
         res = f'\n Hangar Metadata\
                 \n     Number of Keys : {len(self._Query.metadata_names())}\
@@ -198,18 +211,31 @@ class MetadataWriter(MetadataReader):
 
         Returns
         -------
-        False
-            If the operation was successful
-        string
+        str
             The name of the metadata key written to the database if the
             operation succeeded.
+
+        Raises
+        ------
+        SyntaxError
+            If the `key` contains any whitespace or non alpha-numeric characters.
+        SyntaxError
+            If the `value` contains any non ascii characters.
+        LookupError
+            If an identical key/value pair exists in the checkout
         '''
-        if (not key.isascii()) or (not key.isalnum()):
-            err = f'key: "{key}" cannot contain non-alphanumeric non-ascii characters.'
-            raise ValueError(err)
-        elif not value.isascii():
-            err = f'Value: "{value}" cannot contain non-ascii characters.'
-            raise ValueError(err)
+        try:
+            if not is_ascii_alnum(key):
+                msg = f'HANGAR SYNTAX ERROR:: metadata key: `{key}` not allowed. '\
+                      f'Must only contain alpha-numeric ascii (no whitespace) characters.'
+                raise SyntaxError(msg)
+            if not is_ascii(value):
+                msg = f'HANGAR SYNTAX ERROR:: metadata value: `{value}` not allowed. '\
+                      f'Must only contain ascii characters.'
+                raise SyntaxError(msg)
+        except SyntaxError as e:
+            logger.error(e, exc_info=False)
+            raise
 
         if not self.__is_conman:
             self._labelTxn = TxnRegister().begin_writer_txn(self._labelenv)
@@ -217,7 +243,6 @@ class MetadataWriter(MetadataReader):
 
         try:
             val_hash = hashlib.blake2b(value.encode(), digest_size=20).hexdigest()
-
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             metaRecVal = parsing.metadata_record_db_val_from_raw_val(val_hash)
             metaHashKey = parsing.hash_meta_db_key_from_raw_key(val_hash)
@@ -226,8 +251,9 @@ class MetadataWriter(MetadataReader):
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
                 if metaRecVal == existingMetaRecVal:
-                    print('metadata record with same name and value exists. no-op.')
-                    return False
+                    msg = f'HANGAR KEY EXISTS ERROR:: metadata already contains key: `{key}` '\
+                          f'with value: `{value}` & hash: {val_hash}'
+                    raise LookupError(msg)
             else:
                 # increment metadata record count
                 metaCountKey = parsing.metadata_count_db_key()
@@ -235,9 +261,12 @@ class MetadataWriter(MetadataReader):
                 meta_count = parsing.metadata_count_raw_val_from_db_val(metaCountVal) + 1
                 newMetaCountVal = parsing.metadata_count_db_val_from_raw_val(meta_count)
                 self._dataTxn.put(metaCountKey, newMetaCountVal)
-
             self._labelTxn.put(metaHashKey, metaHashVal, overwrite=False)
             self._dataTxn.put(metaRecKey, metaRecVal)
+
+        except LookupError as e:
+            logger.error(e, exc_info=False)
+            raise
 
         finally:
             if not self.__is_conman:
@@ -251,27 +280,28 @@ class MetadataWriter(MetadataReader):
 
         Parameters
         ----------
-        key : string
+        key : str
             Metadata name to remove.
 
         Returns
         -------
-        bool
-            If the operation was successful or not.
-        '''
-        if (not key.isascii()) or (not key.isalnum()):
-            err = f'key: "{key}" cannot contain non-alphanumeric non-ascii characters.'
-            raise ValueError(err)
+        str
+            name of the metadata key/value pair removed, if the operation was successful.
 
+        Raises
+        ------
+        KeyError
+            If the checkout does not contain metadata with the provided key.
+        '''
         if not self.__is_conman:
             self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
 
         try:
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             delete_succeeded = self._dataTxn.delete(metaRecKey)
-            if not delete_succeeded:
-                print(f'No metadata with name: {key} stored. no-op')
-                return False
+            if delete_succeeded is False:
+                msg = f'HANGAR KEY ERROR:: No metadata exists with key: {key}'
+                raise KeyError(msg)
 
             metaRecCountKey = parsing.metadata_count_db_key()
             metaRecCountVal = self._dataTxn.get(metaRecCountKey)
@@ -283,7 +313,11 @@ class MetadataWriter(MetadataReader):
                 newMetaRecCountVal = parsing.metadata_count_db_val_from_raw_val(meta_count)
                 self._dataTxn.put(metaRecCountKey, newMetaRecCountVal)
 
+        except KeyError as e:
+            logger.error(e)
+            raise
+
         finally:
             if not self.__is_conman:
                 self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
-        return True
+        return key

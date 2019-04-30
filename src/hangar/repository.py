@@ -1,6 +1,8 @@
 import os
 from typing import Optional
 import logging
+from . import config_logging
+config_logging.setup_logging()
 
 from tqdm.auto import tqdm
 import grpc

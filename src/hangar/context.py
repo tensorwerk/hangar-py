@@ -10,6 +10,7 @@ import lmdb
 import yaml
 
 from . import config
+from .diagnostics.ecosystem import get_versions
 
 logger = logging.getLogger(__name__)
 
@@ -208,8 +209,9 @@ class Environments(metaclass=EnvironmentsSingleton):
 
         '''
         if not os.path.isdir(self.repo_path):
-            err = f'no repository exists at {self.repo_path}, please use `init_repo` function'
-            print(err)
+            msg = f'HANGAR RUNTIME WARNING: no repository exists at {self.repo_path}, '\
+                  f'please use `init_repo` function'
+            logger.warn(msg)
             return False
 
         config.refresh(paths=[self.repo_path])
@@ -250,7 +252,7 @@ class Environments(metaclass=EnvironmentsSingleton):
         os.makedirs(pjoin(self.repo_path, config.get('hangar.repository.stage_data_dir')))
         os.makedirs(pjoin(self.repo_path, config.get('hangar.repository.remote_data_dir')))
         os.makedirs(pjoin(self.repo_path, config.get('hangar.repository.data_dir')))
-        logger.info(f'directory initialized at: {self.repo_path}')
+        logger.info(f'Hangar Repo initialized at: {self.repo_path}')
 
         config.ensure_file(
             source=pjoin(dirname(__file__), 'config_hangar.yml'), destination=self.repo_path)
@@ -267,6 +269,8 @@ class Environments(metaclass=EnvironmentsSingleton):
             yaml.safe_dump(userConf, f, default_flow_style=False)
 
         config.refresh(paths=[self.repo_path])
+        logger.debug(f'{get_versions()}')
+
         self._open_environments()
         heads.create_branch(self.branchenv, 'master', '')
         heads.set_staging_branch_head(self.branchenv, 'master')
