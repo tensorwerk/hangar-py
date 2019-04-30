@@ -79,7 +79,7 @@ class DatasetDataReader(object):
         self._index_expr_factory.maketuple = False
         self._schema_dtype_num = varDtypeNum
         self._mode = mode
-        self._fs = FileHandles()
+        self._fs = FileHandles(repo_path=repo_pth)
         self._Query = RecordQuery(self._dataenv)
         self._TxnRegister = TxnRegister()
 
@@ -925,7 +925,8 @@ class Datasets(object):
         STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
         stage_dir = os.path.join(self._repo_pth, STAGE_DATA_DIR, f'hdf_{schema_hash}')
         if not os.path.isdir(stage_dir):
-            f_handle = FileHandles().create_schema(self._repo_pth, schema_hash, prototype)
+            f_handle = FileHandles(repo_path=self._repo_pth).create_schema(
+                self._repo_pth, schema_hash, prototype)
             f_handle.close()
 
         # -------- set vals in lmdb only after schema is sure to exist --------
