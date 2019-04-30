@@ -7,7 +7,6 @@ import numpy as np
 from hangar import Repository
 import hangar
 
-
 @pytest.fixture(autouse=True)
 def reset_singletons():
     '''
@@ -28,8 +27,7 @@ def managed_tmpdir(tmp_path):
 @pytest.fixture()
 def repo(managed_tmpdir):
     repo_obj = Repository(path=managed_tmpdir)
-    repo_obj.init(
-        user_name='tester', user_email='foo@test.bar', remove_old=True)
+    repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     yield repo_obj
 
 
