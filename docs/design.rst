@@ -1,3 +1,5 @@
+.. _ref-hangar-under-the-hood:
+
 =====================
 Hangar Under The Hood
 =====================
