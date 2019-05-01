@@ -13,7 +13,7 @@ from .context import Environments
 from .diagnostics import graphing
 from .records import heads, parsing, summarize, commiting
 from .remote.hangar_client import HangarClient
-
+from .utils import is_valid_directory_path
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +35,14 @@ class Repository(object):
     '''
 
     def __init__(self, path):
-        path = os.path.join(path, config.get('hangar.repository.hangar_dir_name'))
-        path = os.path.expanduser(path)
-        self._env = Environments(repo_path=path)
+
+        try:
+            usr_path = is_valid_directory_path(path)
+        except (TypeError, OSError, PermissionError) as e:
+            logger.error(e, exc_info=False)
+            raise
+        repo_pth = os.path.join(usr_path, config.get('hangar.repository.hangar_dir_name'))
+        self._env = Environments(repo_path=repo_pth)
         self._repo_path = self._env.repo_path
         self._client: Optional[HangarClient] = None
 

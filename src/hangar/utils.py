@@ -133,6 +133,49 @@ def folder_size(repo_path, *, recurse_directories=False):
     return total
 
 
+def is_valid_directory_path(path: str) -> str:
+    '''Check if path is directory which user has write permission to.
+
+    Parameters
+    ----------
+    path : str
+        path to some location on disk
+
+    Returns
+    -------
+    str
+        If successful, the path with any user constructions expanded
+        (ie. `~/somedir` -> `/home/foo/somedir`)
+
+    Raises
+    ------
+    TypeError
+        If the provided path argument is not a pathlike object
+    OSError
+        If the path does not exist, or is not a directory on disk
+    PermissionError
+        If the user does not have write access to the specified path
+    '''
+    try:
+        usr_path = os.path.expanduser(path)
+        isDir = os.path.isdir(usr_path)
+        isWriteable = os.access(usr_path, os.W_OK)
+    except TypeError:
+        msg = f'HANGAR TYPE ERROR:: `path` arg: {path} of type: {type(path)} '\
+                f'is not valid path specifier'
+        raise TypeError(msg)
+
+    if not isDir:
+        msg = f'HANGAR VALUE ERROR:: `path` arg: {path} is not a directory.'
+        raise OSError(msg)
+    elif not isWriteable:
+        msg = f'HANGAR PERMISSION ERROR:: user does not have permission to write '\
+                f'to directory `path` arg: {path}'
+        raise PermissionError(msg)
+
+    return usr_path
+
+
 '''
 Methods following this notice have been taken & modified from the Dask Distributed project
 url: https://github.com/dask/distributed
