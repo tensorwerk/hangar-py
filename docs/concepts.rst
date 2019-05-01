@@ -218,6 +218,7 @@ plans to potentially support more as needs arise):
 2) `Memmapped Arrays <https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html>`_
 3) `TileDb <https://tiledb.io/>`_ (in development)
 
+
 Open Source Software Style Collaboration in Dataset Curation
 ============================================================
 
@@ -240,8 +241,7 @@ rely on proprietary information to stay ahead of their competitors, and because
 this information is so difficult (and expensive) to generate, it's completly
 reaonable that they should be the ones to benefit from all that work.
 
-A Thought Experiment
-^^^^^^^^^^^^^^^^^^^^
+    **A Thought Experiment**
 
     Imagine that `Git` and `GitHub` didn't take over the world. Imagine that the
     `Diff` and `Patch` Unix tools never existed. Instead, imagine we were to live in
@@ -260,19 +260,21 @@ A Thought Experiment
     Doesn't this hypothetical sound quite a bit like the state of open source data
     collaboration in todays world?
 
-The impetus for developing a tool like Hangar is the belief that if it is simple for
-anyone with domain knowledge to collaborativly curate datasets containing information
-they care about, people will. Open source software development benefits everyone, Open
-source dataset curation can do the same.
+The impetus for developing a tool like Hangar is the belief that if it is
+simple for anyone with domain knowledge to collaborativly curate datasets
+containing information they care about, then they will.* Open source software
+development benefits everyone, we believe open source dataset curation can do
+the same.
 
 How To Overcome The "Size" Problem
 ----------------------------------
 
-Even if the greatest tool imaginable existed to branch and merge datasets, it
-would face one massive problem which would make it of limited use: *The size of
-data can very easily exceeds what can fit on (most) contributors laptops or
-personal workstations*. This section explains how Hangar can handle working with
-datasets which are prohibitivly large to download or store on a single machine.
+Even if the greatest tool imaginable existed to version, branch, and merge
+datasets, it would face one massive problem which if it didn't solve would kill
+the project: *The size of data can very easily exceeds what can fit on (most)
+contributors laptops or personal workstations*. This section explains how Hangar
+can handle working with datasets which are prohibitivly large to download or
+store on a single machine.
 
 As mentioned in `High Performance From Simplicity`_, under the hood Hangar deals
 with "Data" and "Bookeeping" completly seperatly. We've previously covered what
@@ -282,7 +284,8 @@ everything about the repository. By everything, we do mean that the Bookeeping
 records describe everything: all commits, parents, branches, datasets, samples,
 data descriptors, schemas, commit message, etc. Though complete, these records
 are fairly small (tens of MB in size for decently sized repositories with decent
-history), and are highly compressed for fast transfer between a Hangar client/server.
+history), and are highly compressed for fast transfer between a Hangar
+client/server.
 
     **A brief technical interlude**
 
@@ -296,33 +299,138 @@ history), and are highly compressed for fast transfer between a Hangar client/se
     the following example may provide some insight into the implications of this
     property:
 
-        If you `clone` some hangar repository, Bookeeping says that "some number of data
-        piece exist" and they should retrieved from the server. However, the bookeeping
-        records transfered in a `fetch` / `push` / `clone` operation do not include information
-        about where that piece of data existed on the client (or server) computer. Two
-        synced repositories can use completly different backends to store the data, in
-        completly different locations, and it does not matter - Hangar only guarrentees
-        that when collaborators ask for a data sample in some checkout, that they will
-        be provided with identical arrays, not that they will come from the same place
-        or be stored in the same way. Only when data is actually retrieved is the
-        "locating information" set for that repository instance.
+        If you `clone` some hangar repository, Bookeeping says that "some number
+        of data piece exist" and they should retrieved from the server. However,
+        the bookeeping records transfered in a `fetch` / `push` / `clone`
+        operation do not include information about where that piece of data
+        existed on the client (or server) computer. Two synced repositories can
+        use completly different backends to store the data, in completly
+        different locations, and it does not matter - Hangar only guarrentees
+        that when collaborators ask for a data sample in some checkout, that
+        they will be provided with identical arrays, not that they will come
+        from the same place or be stored in the same way. Only when data is
+        actually retrieved is the "locating information" set for that repository
+        instance.
 
-Because Hangar makes no assumptions about how/where it should retrieve some piece of data,
-or even an assumption that it exists on the local machine, and because records are small
-and completly describe history, once a machine has the Bookeeping, it can decide what data
-it actually wants to materialize on it's local disk! These `partial fetch`/`partial clone`
-operations can materialize any desired data, wheather it be for a few records at the head branch,
-for all data in a commit, or for the entire historical data. A future release will even include
-the ability to stream data directly to a hangar checkout and materialize the data in memory
-without having to save it to disk at all!
+Because Hangar makes no assumptions about how/where it should retrieve some
+piece of data, or even an assumption that it exists on the local machine, and
+because records are small and completly describe history, once a machine has the
+Bookeeping, it can decide what data it actually wants to materialize on it's
+local disk! These `partial fetch`/`partial clone` operations can materialize any
+desired data, wheather it be for a few records at the head branch, for all data
+in a commit, or for the entire historical data. A future release will even
+include the ability to stream data directly to a hangar checkout and materialize
+the data in memory without having to save it to disk at all!
 
-More importantly: **Since Bookeeping describes all history, merging can be performed
-between branches which may contain partial (or even no) actual data**. Aka. You don't need
-data on disk to merge changes into it. It's an odd concept which will be explained more
-in depth in the future.
+More importantly: **Since Bookeeping describes all history, merging can be
+performed between branches which may contain partial (or even no) actual data**.
+Aka. You don't need data on disk to merge changes into it. It's an odd concept
+which will be explained more in depth in the future.
 
-* Note: The features described in this section are in active development for a
-future release. This is an exciting feature which we hope to do much more with;
-Time is our main constraint right now. Hangar is a young project, and is rapidly
-evolving. Current progress can be tracked in the `GitHub Repository
-<https://github.com/tensorwerk/hangar-py>`_*
+.. note::
+
+    The features described in this section are in active development for a
+    future release. This is an exciting feature which we hope to do much more
+    with; Time is our main constraint right now. Hangar is a young project, and
+    is rapidly evolving. Current progress can be tracked in the `GitHub
+    Repository <https://github.com/tensorwerk/hangar-py>`_
+
+What Does it Mean to "Merge" Data?
+----------------------------------
+
+We'll start this section, once again, with a comparison to source code version
+control systems. When dealing with source code text, merging is performed in
+order to take a set of changes made to a document, and logically insert the
+changes into some other version of the document. The goal is to generate a new
+version of the document with all changes made to it in a fashion which conforms
+to the "change author's" intentions. Simply put: the new version is valid and
+what is expected by the authors.
+
+This concept of what it means to merge text does not generally map well to
+changes made in a dataset we'll explore why through this section, but look back
+to the philosophy of Data outlined in `How Hangar Thinks About Data`_ for
+inspiration as we begin. Remember, in the Hangar design a Sample is the smallest
+array which contains useful information. As any smaller selection of the sample
+array is meaningless, Hangar does not support subarray-slicing or per-index
+updates *when writing* data. (subarray-slice queries are permitted for read
+operations, though regular use is discouraged and may indicate that your samples
+are larger than they should be).
+
+Diffing Hangar Checkouts
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+To understand merge logic, we first need to understand diffing, and the actors
+operations which can occur.
+
+:Addition:
+
+    An operation which creates a dataset, sample, or some metadata which
+    did not previously exist in the relevant branch history.
+
+:Removal:
+
+    An operation which removes some dataset, a sample, or some metadata which
+    existed in the parent of the commit under consideration. (Note: removing a
+    dataset also removes all samples contained in it)
+
+:Mutation:
+
+    An operation which sets: data to a sample, the value of some metadata key,
+    or a dataset schema, to a different value than what it had previously been
+    created with (Note: a dataset schema mutation is observed when a dataset is
+    removed, and a new dataset with the same name is created with a different
+    dtype/shape, all in the same commit)
+
+Diffing additions and removals between branches is trivial, and performs
+exactally as one would expect from a text diff. Where things diverge from text
+is when we consider
+mutations.
+
+Say we have some sample in commit A, a branch is created, the sample is updated,
+and commit C is created. At the same time, someone else checks out branch whose
+HEAD is at commit A, and commits a change to the sample as well. If these
+changes are identical, they are compatible, but what if they are not? In the
+following example, we diff and merge each element of the sample array like we
+would text:
+
+::
+                                                   Merge ??
+      commit A          commit B            Does combining mean anything?
+
+    [[0, 1, 2],        [[0, 1, 2],               [[1, 1, 1],
+     [0, 1, 2], ----->  [2, 2, 2], ------------>  [2, 2, 2],
+     [0, 1, 2]]         [3, 3, 3]]      /         [3, 3, 3]]
+          \                            /
+           \            commit C      /
+            \                        /
+             \          [[1, 1, 1], /
+              ------->   [0, 1, 2],
+                         [0, 1, 2]]
+
+We see that a result can be generated, and can agree if this was a piece of
+text, the result would be correct. Don't be fooled, this is an abomination and
+utterly wrong/meaningless. Remember we said earlier ``"the result of a merge
+should conform to the intentions of each author"``. This merge result conforms to
+neither author's intention. The value of an array element is not isolated, every
+value affects how the entire sample is understood. The values at Commit B or
+commit C may be fine on their own, but if two samples are mutated independently
+with non-identical updates, it is a conflict that needs to be handeled by the
+authors.
+
+This is the actual behavior of Hangar.
+
+::
+      commit A          commit B
+
+    [[0, 1, 2],        [[0, 1, 2],
+     [0, 1, 2], ----->  [2, 2, 2], ----- MERGE CONFLICT
+     [0, 1, 2]]         [3, 3, 3]]      /
+          \                            /
+           \            commit C      /
+            \                        /
+             \          [[1, 1, 1], /
+              ------->   [0, 1, 2],
+                         [0, 1, 2]]
+
+    * Datasets: Adding / Removing / Mutating (ie. changing dtype or shape)
+    * Samples: Adding / Removing / Mutating (replacing contents of named sample with a different array)
