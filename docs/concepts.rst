@@ -1,12 +1,13 @@
-====================
+####################
 Hangar Core Concepts
-====================
+####################
 
 This document provides a high level overview of the problems hangar is designed
 to solve and introduces the core concepts for begining to use Hangar.
 
+***************
 What Is Hangar?
-===============
+***************
 
 At it's core hangar is designed to solve many of the same problems faced by
 traditional code version control system (ie. ``Git``), just adapted for
@@ -29,8 +30,9 @@ has resulted in these phenomenlly useful tools. Now that a new era of
 analogous version control systems which are designed to handle numerical data at
 large scale... Welcome to Hangar!
 
+***********
 Inspiration
-===========
+***********
 
 The design of hangar was heavily influenced by the `Git <https://git-scm.org>`_
 source-code version control system. As a Hangar user, many of the fundumental
@@ -67,8 +69,9 @@ We will show how hangar solves these questions in a high-level guide below.
 For a deep dive into the Hangar internals, we invite you to check out the
 :ref:`ref-hangar-under-the-hood` page.
 
+****************************
 How Hangar Thinks About Data
-============================
+****************************
 
 From this point forward, **when we talk about "Data" we are actually talking
 about n-dimensional arrays of numeric information. To Hangar, "Data" is just a
@@ -79,7 +82,7 @@ it gets, and this simplicity is what enables us to be unconstrained as we build
 abstractions and utilities to operate on it.
 
 Abstraction 1: What is a Repository?
-------------------------------------
+====================================
 
 A "Repository" consists of an historically ordered mapping of "Commits" over time
 by various "Committers" across any number of "Branches".
@@ -93,7 +96,7 @@ largely be ignored for the rest of this post.
 History exists at the Repository level, Information exists at the Commit level.
 
 Abstraction 2: What is a Dataset?
----------------------------------
+=================================
 
 Let's get philosophical and talk about what a "Dataset" is. The word "Dataset"
 invokes some some meaning to humans; A dataset may a canonical name (like
@@ -114,7 +117,7 @@ pieces. To define a "Dataset" in Hangar, we need only provide:
 * a shape
 
 Abstraction 3: What Makes up a Dataset?
----------------------------------------
+=======================================
 
 The invividual pieces of information ("Data") which are grouped together in a
 "Dataset" are called "Samples" in the Hangar vernacular. According to the
@@ -139,11 +142,12 @@ might be an hours worth of price data points (or less, or more!) The point is
 that when you think about what a sample is, it should typically be the smallest
 atomic unit of useful information.
 
+******************************************
 Implications of the Hangar Data Philosophy
-==========================================
+******************************************
 
 The Domain-Specific File Format Problem
----------------------------------------
+=======================================
 
 Though it may first seem counterintuitive at first, there is an incredible
 amount of freedom (and power) that is gained when "you" (the user) start to
@@ -153,7 +157,7 @@ data are just mathematical operations; math does not operate on a specific file
 type, math operates on numbers.
 
 Human & Computational Cost
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
 
 It seems strange that organizations & projects commonly rely on storing data on
 disk in some domain-specific - or custom built - binary format (ie. a `.jpg`
@@ -176,7 +180,7 @@ shape and datatype (unless you ask for a particular subarray-slice), already
 initialized in memory and ready to compute on instantly.
 
 High Performance From Simplicity
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------
 
 Because Hangar is designed to deal (almost exclusively) with numerical arrays,
 we are able to "stand on the shoulders of giants" once again by utilizing many
@@ -215,10 +219,10 @@ plans to potentially support more as needs arise):
 3) `TileDb <https://tiledb.io/>`_ (in development)
 
 Open Source Software Style Collaboration in Dataset Curation
-------------------------------------------------------------
+============================================================
 
 Specialized Domain Knowledge is A Scarce Resource
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------------------------------
 
 A common side effect of the `The Domain-Specific File Format Problem`_ is that
 anyone who wants to work with an organization's/project's data needs to not only
@@ -236,7 +240,8 @@ rely on proprietary information to stay ahead of their competitors, and because
 this information is so difficult (and expensive) to generate, it's completly
 reaonable that they should be the ones to benefit from all that work.
 
-**A Thought Experiment**
+A Thought Experiment
+^^^^^^^^^^^^^^^^^^^^
 
     Imagine that `Git` and `GitHub` didn't take over the world. Imagine that the
     `Diff` and `Patch` Unix tools never existed. Instead, imagine we were to live in
@@ -261,7 +266,7 @@ they care about, people will. Open source software development benefits everyone
 source dataset curation can do the same.
 
 How To Overcome The "Size" Problem
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------
 
 Even if the greatest tool imaginable existed to branch and merge datasets, it
 would face one massive problem which would make it of limited use: *The size of
@@ -275,39 +280,49 @@ exactally we mean by Data in `How Hangar Thinks About Data`_, so we'll briefly
 cover the second major component of Hangar here. In short "Bookeeping" describes
 everything about the repository. By everything, we do mean that the Bookeeping
 records describe everything: all commits, parents, branches, datasets, samples,
-data descriptors, schemas, commit message, etc.
+data descriptors, schemas, commit message, etc. Though complete, these records
+are fairly small (tens of MB in size for decently sized repositories with decent
+history), and are highly compressed for fast transfer between a Hangar client/server.
 
-There is one very important (and rather complex) property which gives Hangar
-Bookeeping massive power: **Existence of some data piece is always known to
-Hangar and stored immutably once committed. However, the access patern, backend,
-and locating information for this data piece may (and over time, will) be unique
-in every hangar repository instance**.
+    **A brief technical interlude**
 
-Though the details of how this works is well beyond the scope of this document,
-the following example may provide some insight into the implications of this
-property:
+    There is one very important (and rather complex) property which gives Hangar
+    Bookeeping massive power: **Existence of some data piece is always known to
+    Hangar and stored immutably once committed. However, the access patern, backend,
+    and locating information for this data piece may (and over time, will) be unique
+    in every hangar repository instance**.
 
-    If you `clone` some hangar repository, Bookeeping says that "some number of data
-    piece exist" and they should retrieved from the server. However, the bookeeping
-    records transfered in a `fetch` / `push` / `clone` operation do not include information
-    about where that piece of data existed on the client (or server) computer. Two
-    synced repositories can use completly different backends to store the data, in
-    completly different locations, and it does not matter - Hangar only guarrentees
-    that when collaborators ask for a data sample in some checkout, that they will
-    be provided with identical arrays, not that they will come from the same place
-    or be stored in the same way. Only when data is actually retrieved is the
-    "locating information" set for that repository instance.
+    Though the details of how this works is well beyond the scope of this document,
+    the following example may provide some insight into the implications of this
+    property:
 
-The
+        If you `clone` some hangar repository, Bookeeping says that "some number of data
+        piece exist" and they should retrieved from the server. However, the bookeeping
+        records transfered in a `fetch` / `push` / `clone` operation do not include information
+        about where that piece of data existed on the client (or server) computer. Two
+        synced repositories can use completly different backends to store the data, in
+        completly different locations, and it does not matter - Hangar only guarrentees
+        that when collaborators ask for a data sample in some checkout, that they will
+        be provided with identical arrays, not that they will come from the same place
+        or be stored in the same way. Only when data is actually retrieved is the
+        "locating information" set for that repository instance.
 
-While the methods through which records point to backends and retrieval
-locations is much b
+Because Hangar makes no assumptions about how/where it should retrieve some piece of data,
+or even an assumption that it exists on the local machine, and because records are small
+and completly describe history, once a machine has the Bookeeping, it can decide what data
+it actually wants to materialize on it's local disk! These `partial fetch`/`partial clone`
+operations can materialize any desired data, wheather it be for a few records at the head branch,
+for all data in a commit, or for the entire historical data. A future release will even include
+the ability to stream data directly to a hangar checkout and materialize the data in memory
+without having to save it to disk at all!
 
-When you ``$ hangar clone foo-repository``
-the every record which hangar uses to describe the contents of the repository are retrieved
-in just the repository: every commit, dataset, sample, commit message, data hash, etc.
+More importantly: **Since Bookeeping describes all history, merging can be performed
+between branches which may contain partial (or even no) actual data**. Aka. You don't need
+data on disk to merge changes into it. It's an odd concept which will be explained more
+in depth in the future.
 
-
-* Note: The features described in this section are in active development for a future release.
-Hangar is a young project, and is rapidly evolving. Current progress can be tracked in the
-`GitHub Repository <https://github.com/tensorwerk/hangar-py>`_*
+* Note: The features described in this section are in active development for a
+future release. This is an exciting feature which we hope to do much more with;
+Time is our main constraint right now. Hangar is a young project, and is rapidly
+evolving. Current progress can be tracked in the `GitHub Repository
+<https://github.com/tensorwerk/hangar-py>`_*
