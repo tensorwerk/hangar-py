@@ -81,7 +81,22 @@ it gets, and this simplicity is what enables us to be unconstrained as we build
 abstractions and utilities to operate on it.
 
 
-Abstraction 1: What is a Dataset?
+Abstraction 1: What is a Repository?
+------------------------------------
+
+A "Repository" consists of an historically ordered mapping of "Commits" over time
+by various "Committers" across any number of "Branches".
+Though there are many conceptual similarities in what a Git repo and a Hangar Repository
+achieve, Hangar is designed with the express purpose of dealing with numeric data.
+As such, when you read/write to/from a Repository, the main way of interaction with
+information will be through (an arbitrary number of) Datasets in each Commit. A simple
+key/value store is also included to store metadata, but as it is a minor point is will
+largely be ignored for the rest of this post.
+
+History exists at the Repository level, Information exists at the Commit level.
+
+
+Abstraction 2: What is a Dataset?
 ---------------------------------
 
 Let's get philosophical and talk about what a "Dataset" is. The word "Dataset"
@@ -103,5 +118,25 @@ pieces. To define a "Dataset" in Hangar, we need only provide:
 * a shape
 
 
-Abstraction 2: What Makes up a Dataset?
+Abstraction 3: What Makes up a Dataset?
 ---------------------------------------
+
+The invividual pieces of information ("Data") which are grouped together in a "Dataset"
+are called "Samples" in the Hangar vernacular. According to the specification set by
+our definition of a Dataset, all samples must be numeric arrays with each having:
+
+1) Same type as defined in the Dataset specification
+2) A shape with each dimension size <= the shape (``max shape``) set in the dataset.
+
+Additionally, samples in a dataset can either be named, or unnamed (depending on
+how you interpret what the information contained in the Dataset actually represents).
+
+Effective use of Hangar relies on having an understanding of what exactally a
+"Sample" is in a particular Dataset. The most effective way to find out is to
+ask: "What is the smallest piece of data which has a useful meaning to 'me' (or
+'my' downstream processes". In the MNIST dataset, this would be a single digit
+image (a 28x28 array); for a medical dataset it might be an entire (512x320x320)
+MRI volume scan for a particular patient; while for the NASDAQ Stock Ticker it
+might be an hours worth of price data points (or less, or more!) The point is
+that when you think about what a sample is, it should typically be the smallest
+atomic unit of useful information.
