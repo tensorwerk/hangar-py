@@ -381,9 +381,12 @@ operations which can occur.
     removed, and a new dataset with the same name is created with a different
     dtype/shape, all in the same commit)
 
-Diffing additions and removals between branches is trivial, and performs
-exactally as one would expect from a text diff. Where things diverge from text
-is when we consider
+Merging Changes
+^^^^^^^^^^^^^^^
+
+Merging diffs soley consisting of additions and removals between branches is
+trivial, and performs exactally as one would expect from a text diff. Where
+things diverge from text is when we consider how we will merge diffs containing
 mutations.
 
 Say we have some sample in commit A, a branch is created, the sample is updated,
@@ -431,6 +434,3 @@ This is the actual behavior of Hangar.
              \          [[1, 1, 1], /
               ------->   [0, 1, 2],
                          [0, 1, 2]]
-
-    * Datasets: Adding / Removing / Mutating (ie. changing dtype or shape)
-    * Samples: Adding / Removing / Mutating (replacing contents of named sample with a different array)
