@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 class FileHandlesSingleton(type):
     _instances = {}
-
     def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(FileHandlesSingleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
+        repo_pth = kwargs['repo_path']
+        if repo_pth not in cls._instances:
+            cls._instances[repo_pth] = super(FileHandlesSingleton, cls).__call__(*args, **kwargs)
+        return cls._instances[repo_pth]
 
 
 '''
@@ -37,7 +37,8 @@ class FileHandles(metaclass=FileHandlesSingleton):
     write to the same dataset schema.
     '''
 
-    def __init__(self):
+    def __init__(self, repo_path):
+        self.repo_path = repo_path
         self.rHands = {}
         self.wHands = {}
         self.hMaxSize = {}

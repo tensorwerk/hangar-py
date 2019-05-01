@@ -50,7 +50,7 @@ class HangarClient(object):
                  auth_username: str = '', auth_password: str = ''):
 
         self.env = envs
-        self.fs = FileHandles()
+        self.fs = FileHandles(repo_path=self.env.repo_path)
         self.fs.open(self.env.repo_path, 'r')
 
         self.header_adder_int = header_adder_interceptor(auth_username, auth_password)
