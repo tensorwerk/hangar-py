@@ -101,7 +101,7 @@ the interface to working with all of the data on disk!
 Before data can be added to a repository, a dataset must be initialized.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-We're going to first load up a the mnist pickled dataset so it can be added to
+We're going to first load up a the MNIST pickled dataset so it can be added to
 the repo!
 
 .. code:: python

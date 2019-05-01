@@ -3,7 +3,7 @@ Hangar Core Concepts
 ####################
 
 This document provides a high level overview of the problems hangar is designed
-to solve and introduces the core concepts for begining to use Hangar.
+to solve and introduces the core concepts for beginning to use Hangar.
 
 ***************
 What Is Hangar?
@@ -20,12 +20,12 @@ numerical data:
 * Ability to only retrieve a small portion of the data (as needed) while still
   maintaining complete historical record
 * Ability to push and pull changes directly to collaborators or a central server
-  (ie a truley distributed version control system)
+  (ie a truly distributed version control system)
 
 The ability of version control systems to perform these tasks for codebases is
 largely taken for granted by almost every developer today; However, we are
 in-fact standing on the shoulders of giants, with decades of engineering which
-has resulted in these phenomenlly useful tools. Now that a new era of
+has resulted in these phenomenally useful tools. Now that a new era of
 "Data-Defined software" is taking hold, we find there is a strong need for
 analogous version control systems which are designed to handle numerical data at
 large scale... Welcome to Hangar!
@@ -35,7 +35,7 @@ Inspiration
 ***********
 
 The design of hangar was heavily influenced by the `Git <https://git-scm.org>`_
-source-code version control system. As a Hangar user, many of the fundumental
+source-code version control system. As a Hangar user, many of the fundamental
 building blocks and commands can be thought of as interchangeable:
 
 * checkout
@@ -52,14 +52,14 @@ experience which should be familiar in many ways to Hangar users; a goal of the
 project is to enable many of the same VCS workflows developers use for code
 while working with their data!
 
-There are, however, many fundumental differences in how humans/programs
+There are, however, many fundamental differences in how humans/programs
 interpret and use text in source files vs. numerical data which raise many
 questions Hangar needs to uniquely solve:
 
 * How do we connect some piece of "Data" with a meaning in the real world?
 * How do we diff and merge large collections of data samples?
 * How can we resolve conflicts?
-* How do we make data access (reading and writing) convienent for both
+* How do we make data access (reading and writing) convenient for both
   user-driven exploratory analyses and high performance production systems
   operating without supervision?
 * How can we enable people to work on huge datasets in a local (laptop grade)
@@ -119,7 +119,7 @@ pieces. To define a "Dataset" in Hangar, we need only provide:
 Abstraction 3: What Makes up a Dataset?
 =======================================
 
-The invividual pieces of information ("Data") which are grouped together in a
+The individual pieces of information ("Data") which are grouped together in a
 "Dataset" are called "Samples" in the Hangar vernacular. According to the
 specification set by our definition of a Dataset, all samples must be numeric
 arrays with each having:
@@ -132,7 +132,7 @@ Additionally, samples in a dataset can either be named, or unnamed (depending on
 how you interpret what the information contained in the Dataset actually
 represents).
 
-Effective use of Hangar relies on having an understanding of what exactally a
+Effective use of Hangar relies on having an understanding of what exactly a
 "Sample" is in a particular Dataset. The most effective way to find out is to
 ask: "What is the smallest piece of data which has a useful meaning to 'me' (or
 'my' downstream processes". In the MNIST dataset, this would be a single digit
@@ -160,16 +160,16 @@ Human & Computational Cost
 --------------------------
 
 It seems strange that organizations & projects commonly rely on storing data on
-disk in some domain-specific - or custom built - binary format (ie. a `.jpg`
-image, `.nii` neuroimaging informatics study, `.cvs` tabular data, etc.), and
-just deal with the hastle of maintaining all the infrastructure around reading,
+disk in some domain-specific - or custom built - binary format (ie. a ``.jpg``
+image, ``.nii`` neuroimaging informatics study, ``.cvs`` tabular data, etc.), and
+just deal with the hassle of maintaining all the infrastructure around reading,
 writing, transforming, and preprocessing these files into useable numerical data
 every time they want to interact with their Datasets. Even disregarding the
 computational cost/overhead of preprocessing & transforming the data on every
 read/write, these schemes require significant amounts of human capital
 (developer time) to be spent on building, testing, and upkeep/maintenance; all
-while adding significant complexity for users. Oh, and they also have a stragely
-high inclination to degenerate into horrible complexity which essentialy becomes
+while adding significant complexity for users. Oh, and they also have a strangely
+high inclination to degenerate into horrible complexity which essentially becomes
 "magic" after the original creators move on.
 
 The Hangar system is quite different in this regards. First, **we trust that you
@@ -190,24 +190,24 @@ over the past few decades.
 
 In a sense, the backend of Hangar servers two functions:
 
-1) Bookeeping: recording information about about datasets, samples, commits, etc.
+1) Bookkeeping: recording information about about datasets, samples, commits, etc.
 2) Data Storage: highly optimized interfaces which store and retrieve data from
    from disk through it's backend utility.
 
-The details are explained much more thorougly in :ref:`ref-hangar-under-the-hood`.
+The details are explained much more thoroughly in :ref:`ref-hangar-under-the-hood`.
 
 Because Hangar only considers data to be numbers, the choice of backend to store
-data is (in a sense) completly arbitrary so long as `Data In == Data Out`.
+data is (in a sense) completely arbitrary so long as ``Data In == Data Out``.
 **This fact has massive implications for the system**; instead of being tied to
 a single backend (each of which will have significant performance tradeoffs for
-arrays of particular datatypes, shapes, and access patterns), we simulatneously
+arrays of particular datatypes, shapes, and access patterns), we simultaneously
 store different data pieces in the backend which is most suited to it. A great
 deal of care has been taken to optimize parameters in the backend interface
 which affecting performance and compression of data samples.
 
 The choice of backend to store a piece of data is selected automatically from
 heuristics based on the dataset specification, system details, and context of
-the storage service internal to Hangar. **As a user, this is completly
+the storage service internal to Hangar. **As a user, this is completely
 transparent to you** in all steps of interacting with the repository. It does
 not require (or even accept) user specified configuration.
 
@@ -230,21 +230,21 @@ anyone who wants to work with an organization's/project's data needs to not only
 have some domain expertise (so they can do useful things with the data), but
 they also need to have a non-trivial understanding of the projects dataset, file
 format, and access conventions / transformation pipelines. *In a world where
-highly specialized talent is already scarce, this phenonenom shrinks the pool of
-available collatorators dramatically.*
+highly specialized talent is already scarce, this phenomenon shrinks the pool of
+available collaborators dramatically.*
 
 Given this situation, it's understandable why when most organizations spend
-massive amounts of money and time to build a team, collect & anotate data, and
+massive amounts of money and time to build a team, collect & annotate data, and
 build an infrastructure around that information, they hold it for their private
-use with little reagards for how the world could use it together. Buisnesses
+use with little regards for how the world could use it together. Businesses
 rely on proprietary information to stay ahead of their competitors, and because
-this information is so difficult (and expensive) to generate, it's completly
-reaonable that they should be the ones to benefit from all that work.
+this information is so difficult (and expensive) to generate, it's completely
+reasonable that they should be the ones to benefit from all that work.
 
     **A Thought Experiment**
 
-    Imagine that `Git` and `GitHub` didn't take over the world. Imagine that the
-    `Diff` and `Patch` Unix tools never existed. Instead, imagine we were to live in
+    Imagine that ``Git`` and ``GitHub`` didn't take over the world. Imagine that the
+    ``Diff`` and ``Patch`` Unix tools never existed. Instead, imagine we were to live in
     a world where every software project had very different version control systems
     (largely homeade by non VCS experts, & not validated by a community over many
     years of use). Even worse, most of these tools don't allow users to easily
@@ -261,7 +261,7 @@ reaonable that they should be the ones to benefit from all that work.
     collaboration in todays world?
 
 The impetus for developing a tool like Hangar is the belief that if it is
-simple for anyone with domain knowledge to collaborativly curate datasets
+simple for anyone with domain knowledge to collaboratively curate datasets
 containing information they care about, then they will.* Open source software
 development benefits everyone, we believe open source dataset curation can do
 the same.
@@ -273,14 +273,14 @@ Even if the greatest tool imaginable existed to version, branch, and merge
 datasets, it would face one massive problem which if it didn't solve would kill
 the project: *The size of data can very easily exceeds what can fit on (most)
 contributors laptops or personal workstations*. This section explains how Hangar
-can handle working with datasets which are prohibitivly large to download or
+can handle working with datasets which are prohibitively large to download or
 store on a single machine.
 
 As mentioned in `High Performance From Simplicity`_, under the hood Hangar deals
-with "Data" and "Bookeeping" completly seperatly. We've previously covered what
-exactally we mean by Data in `How Hangar Thinks About Data`_, so we'll briefly
-cover the second major component of Hangar here. In short "Bookeeping" describes
-everything about the repository. By everything, we do mean that the Bookeeping
+with "Data" and "Bookkeeping" completely separately. We've previously covered what
+exactly we mean by Data in `How Hangar Thinks About Data`_, so we'll briefly
+cover the second major component of Hangar here. In short "Bookkeeping" describes
+everything about the repository. By everything, we do mean that the Bookkeeping
 records describe everything: all commits, parents, branches, datasets, samples,
 data descriptors, schemas, commit message, etc. Though complete, these records
 are fairly small (tens of MB in size for decently sized repositories with decent
@@ -299,9 +299,9 @@ client/server.
     the following example may provide some insight into the implications of this
     property:
 
-        If you `clone` some hangar repository, Bookeeping says that "some number
+        If you ``clone`` some hangar repository, Bookeeping says that "some number
         of data piece exist" and they should retrieved from the server. However,
-        the bookeeping records transfered in a `fetch` / `push` / `clone`
+        the bookeeping records transfered in a ``fetch`` / ``push`` / ``clone``
         operation do not include information about where that piece of data
         existed on the client (or server) computer. Two synced repositories can
         use completly different backends to store the data, in completly
@@ -314,15 +314,16 @@ client/server.
 
 Because Hangar makes no assumptions about how/where it should retrieve some
 piece of data, or even an assumption that it exists on the local machine, and
-because records are small and completly describe history, once a machine has the
-Bookeeping, it can decide what data it actually wants to materialize on it's
-local disk! These `partial fetch`/`partial clone` operations can materialize any
-desired data, wheather it be for a few records at the head branch, for all data
-in a commit, or for the entire historical data. A future release will even
-include the ability to stream data directly to a hangar checkout and materialize
-the data in memory without having to save it to disk at all!
+because records are small and completely describe history, once a machine has the
+Bookkeeping, it can decide what data it actually wants to materialize on it's
+local disk! These ``partial fetch`` / ``partial clone`` operations can
+materialize any desired data, whether it be for a few records at the head
+branch, for all data in a commit, or for the entire historical data. A future
+release will even include the ability to stream data directly to a hangar
+checkout and materialize the data in memory without having to save it to disk at
+all!
 
-More importantly: **Since Bookeeping describes all history, merging can be
+More importantly: **Since Bookkeeping describes all history, merging can be
 performed between branches which may contain partial (or even no) actual data**.
 Aka. You don't need data on disk to merge changes into it. It's an odd concept
 which will be explained more in depth in the future.
@@ -384,8 +385,8 @@ operations which can occur.
 Merging Changes
 ^^^^^^^^^^^^^^^
 
-Merging diffs soley consisting of additions and removals between branches is
-trivial, and performs exactally as one would expect from a text diff. Where
+Merging diffs solely consisting of additions and removals between branches is
+trivial, and performs exactly as one would expect from a text diff. Where
 things diverge from text is when we consider how we will merge diffs containing
 mutations.
 
@@ -397,6 +398,7 @@ following example, we diff and merge each element of the sample array like we
 would text:
 
 ::
+
                                                    Merge ??
       commit A          commit B            Does combining mean anything?
 
@@ -417,12 +419,13 @@ should conform to the intentions of each author"``. This merge result conforms t
 neither author's intention. The value of an array element is not isolated, every
 value affects how the entire sample is understood. The values at Commit B or
 commit C may be fine on their own, but if two samples are mutated independently
-with non-identical updates, it is a conflict that needs to be handeled by the
+with non-identical updates, it is a conflict that needs to be handled by the
 authors.
 
 This is the actual behavior of Hangar.
 
 ::
+
       commit A          commit B
 
     [[0, 1, 2],        [[0, 1, 2],
@@ -434,3 +437,12 @@ This is the actual behavior of Hangar.
              \          [[1, 1, 1], /
               ------->   [0, 1, 2],
                          [0, 1, 2]]
+
+
+************
+What's Next?
+************
+
+* Get started using Hangar today: :ref:`ref_installation`.
+* Read the tutorials: :ref:`ref-tutorial`.
+* Dive into the details: :ref:`ref-hangar-under-the-hood`.
