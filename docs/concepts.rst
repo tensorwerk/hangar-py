@@ -121,15 +121,18 @@ pieces. To define a "Dataset" in Hangar, we need only provide:
 Abstraction 3: What Makes up a Dataset?
 ---------------------------------------
 
-The invividual pieces of information ("Data") which are grouped together in a "Dataset"
-are called "Samples" in the Hangar vernacular. According to the specification set by
-our definition of a Dataset, all samples must be numeric arrays with each having:
+The invividual pieces of information ("Data") which are grouped together in a
+"Dataset" are called "Samples" in the Hangar vernacular. According to the
+specification set by our definition of a Dataset, all samples must be numeric
+arrays with each having:
 
 1) Same type as defined in the Dataset specification
-2) A shape with each dimension size <= the shape (``max shape``) set in the dataset.
+2) A shape with each dimension size <= the shape (``max shape``) set in the
+   dataset.
 
 Additionally, samples in a dataset can either be named, or unnamed (depending on
-how you interpret what the information contained in the Dataset actually represents).
+how you interpret what the information contained in the Dataset actually
+represents).
 
 Effective use of Hangar relies on having an understanding of what exactally a
 "Sample" is in a particular Dataset. The most effective way to find out is to
@@ -140,3 +143,79 @@ MRI volume scan for a particular patient; while for the NASDAQ Stock Ticker it
 might be an hours worth of price data points (or less, or more!) The point is
 that when you think about what a sample is, it should typically be the smallest
 atomic unit of useful information.
+
+
+Implications of the Hangar Data Philosophy
+==========================================
+
+The Domain-Specific File Format Problem
+---------------------------------------
+
+Though it may first seem counterintuitive at first, there is an incredible
+amount of freedom (and power) that is gained when "you" (the user) start to
+decouple some information container from the data which it actually holds. At
+the end of the day, the algorithms and systems you use to produce insight from
+data are just mathematical operations; math does not operate on a specific file
+type, math operates on numbers.
+
+Human & Computational Cost
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+It seems strange that organizations & projects commonly rely on storing data on
+disk in some domain-specific - or custom built - binary format (ie. a `.jpg`
+image, `.nii` neuroimaging informatics study, `.cvs` tabular data, etc.), and
+just deal with the hastle of maintaining all the infrastructure around reading,
+writing, transforming, and preprocessing these files into useable numerical data
+every time they want to interact with their Datasets. Even disregarding the
+computational cost/overhead of preprocessing & transforming the data on every
+read/write, these schemes require significant amounts of human capital
+(developer time) to be spent on building, testing, and upkeep/maintenance; all
+while adding significant complexity for users. Oh, and they also have a stragely
+high inclination to degenerate into horrible complexity which essentialy becomes
+"magic" after the original creators move on.
+
+The Hangar system is quite different in this regards. First, **we trust that you
+know what your data is and what it should be best represented as**. When writing
+to a Hangar repository, you process the data into n-dimensional arrays once.
+Then when you retrieve it you are provided with the same array, in the same
+shape and datatype (unless you ask for a particular subarray-slice), already
+initialized in memory and ready to compute on instantly.
+
+Performance & Data Durability
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Because Hangar is designed to deal (almost exclusively) with numerical arrays,
+we are able to "stand on the shoulders of giants" once again by utilizing many
+of the well validated, highly optimized, and community validated numerical array
+data management utilities developed by the High Performance Computing community
+over the past few decades.
+
+In a sense, the backend of Hangar servers two functions:
+
+1) Bookeeping: recording information about about datasets, samples, commits, etc.
+2) Data Storage: highly optimized interfaces which store and retrieve data from
+   from disk through it's backend utility.
+
+The details are explained much more thorougly in :ref:`ref-hangar-under-the-hood`.
+
+Because Hangar only considers data to be numbers, the choice of backend to store
+data is (in a sense) completly arbitrary so long as `Data In == Data Out`.
+**This fact has massive implications for the system**; instead of being tied to
+a single backend (each of which will have significant performance tradeoffs for
+arrays of particular datatypes, shapes, and access patterns), we simulatneously
+store different data pieces in the backend which is most suited to it. A great
+deal of care has been taken to optimize parameters in the backend interface
+which affecting performance and compression of data samples.
+
+The choice of backend to store a piece of data is selected automatically from
+heuristics based on the dataset specification, system details, and context of
+the storage service internal to Hangar. **As a user, this is completly
+transparent to you** in all steps of interacting with the repository. It does
+not require (or even accept) user specified configuration.
+
+At the time of writing, Hangar has the following backends implemented (with
+plans to potentially support more as needs arise):
+
+1) `HDF5 <https://www.hdfgroup.org/solutions/hdf5/>`_
+2) `Memmapped Arrays <https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html>`_
+3) `TileDb <https://tiledb.io/>`_ (in development)
