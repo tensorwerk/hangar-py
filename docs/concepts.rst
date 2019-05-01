@@ -236,7 +236,7 @@ rely on proprietary information to stay ahead of their competitors, and because
 this information is so difficult (and expensive) to generate, it's completly
 reaonable that they should be the ones to benefit from all that work.
 
-**A Though Experiment**
+**A Thought Experiment**
 
     Imagine that `Git` and `GitHub` didn't take over the world. Imagine that the
     `Diff` and `Patch` Unix tools never existed. Instead, imagine we were to live in
@@ -254,3 +254,60 @@ reaonable that they should be the ones to benefit from all that work.
 
     Doesn't this hypothetical sound quite a bit like the state of open source data
     collaboration in todays world?
+
+The impetus for developing a tool like Hangar is the belief that if it is simple for
+anyone with domain knowledge to collaborativly curate datasets containing information
+they care about, people will. Open source software development benefits everyone, Open
+source dataset curation can do the same.
+
+How To Overcome The "Size" Problem
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Even if the greatest tool imaginable existed to branch and merge datasets, it
+would face one massive problem which would make it of limited use: *The size of
+data can very easily exceeds what can fit on (most) contributors laptops or
+personal workstations*. This section explains how Hangar can handle working with
+datasets which are prohibitivly large to download or store on a single machine.
+
+As mentioned in `High Performance From Simplicity`_, under the hood Hangar deals
+with "Data" and "Bookeeping" completly seperatly. We've previously covered what
+exactally we mean by Data in `How Hangar Thinks About Data`_, so we'll briefly
+cover the second major component of Hangar here. In short "Bookeeping" describes
+everything about the repository. By everything, we do mean that the Bookeeping
+records describe everything: all commits, parents, branches, datasets, samples,
+data descriptors, schemas, commit message, etc.
+
+There is one very important (and rather complex) property which gives Hangar
+Bookeeping massive power: **Existence of some data piece is always known to
+Hangar and stored immutably once committed. However, the access patern, backend,
+and locating information for this data piece may (and over time, will) be unique
+in every hangar repository instance**.
+
+Though the details of how this works is well beyond the scope of this document,
+the following example may provide some insight into the implications of this
+property:
+
+    If you `clone` some hangar repository, Bookeeping says that "some number of data
+    piece exist" and they should retrieved from the server. However, the bookeeping
+    records transfered in a `fetch` / `push` / `clone` operation do not include information
+    about where that piece of data existed on the client (or server) computer. Two
+    synced repositories can use completly different backends to store the data, in
+    completly different locations, and it does not matter - Hangar only guarrentees
+    that when collaborators ask for a data sample in some checkout, that they will
+    be provided with identical arrays, not that they will come from the same place
+    or be stored in the same way. Only when data is actually retrieved is the
+    "locating information" set for that repository instance.
+
+The
+
+While the methods through which records point to backends and retrieval
+locations is much b
+
+When you ``$ hangar clone foo-repository``
+the every record which hangar uses to describe the contents of the repository are retrieved
+in just the repository: every commit, dataset, sample, commit message, data hash, etc.
+
+
+* Note: The features described in this section are in active development for a future release.
+Hangar is a young project, and is rapidly evolving. Current progress can be tracked in the
+`GitHub Repository <https://github.com/tensorwerk/hangar-py>`_*
