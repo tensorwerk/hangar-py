@@ -1,3 +1,5 @@
+.. _ref-hangar-under-the-hood:
+
 =====================
 Hangar Under The Hood
 =====================
@@ -41,7 +43,7 @@ disk.
   shouldn't have to care about this or even know this exists. However, this
   is also why using the context-manager style dataset interaction scheme can
   result in ~2x times speedup on writes/reads. We can just pass on most of the
-  work to the python contextlib package instead of having to begin and
+  work to the python ``contextlib`` package instead of having to begin and
   commit/abort (depending on interaction mode) transactions with every call to
   an `add` or `get` method.
 
@@ -89,7 +91,7 @@ The Basics of Collaboration: Branching and Merging
 ==================================================
 
 Up to this point, we haven't actually discussed much about how data and records
-are treated on disk. We'll leave an entire walkthrough of the bakend record
+are treated on disk. We'll leave an entire walkthrough of the backend record
 structure for another tutorial, but let's introduce the basics here, and see how
 we enable the types of branching and merging operations you might be used to
 with source code (at largely the same speed!).
