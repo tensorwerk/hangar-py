@@ -29,7 +29,6 @@ has resulted in these phenomenlly useful tools. Now that a new era of
 analogous version control systems which are designed to handle numerical data at
 large scale... Welcome to Hangar!
 
-
 Inspiration
 ===========
 
@@ -68,7 +67,6 @@ We will show how hangar solves these questions in a high-level guide below.
 For a deep dive into the Hangar internals, we invite you to check out the
 :ref:`ref-hangar-under-the-hood` page.
 
-
 How Hangar Thinks About Data
 ============================
 
@@ -79,7 +77,6 @@ file type, it does not have a file-extension, it does not mean anything to
 Hangar itself - it is just numbers. This theory of "Data" is nearly as simple as
 it gets, and this simplicity is what enables us to be unconstrained as we build
 abstractions and utilities to operate on it.
-
 
 Abstraction 1: What is a Repository?
 ------------------------------------
@@ -94,7 +91,6 @@ key/value store is also included to store metadata, but as it is a minor point i
 largely be ignored for the rest of this post.
 
 History exists at the Repository level, Information exists at the Commit level.
-
 
 Abstraction 2: What is a Dataset?
 ---------------------------------
@@ -116,7 +112,6 @@ pieces. To define a "Dataset" in Hangar, we need only provide:
 * a name
 * a type
 * a shape
-
 
 Abstraction 3: What Makes up a Dataset?
 ---------------------------------------
@@ -143,7 +138,6 @@ MRI volume scan for a particular patient; while for the NASDAQ Stock Ticker it
 might be an hours worth of price data points (or less, or more!) The point is
 that when you think about what a sample is, it should typically be the smallest
 atomic unit of useful information.
-
 
 Implications of the Hangar Data Philosophy
 ==========================================
@@ -181,8 +175,8 @@ Then when you retrieve it you are provided with the same array, in the same
 shape and datatype (unless you ask for a particular subarray-slice), already
 initialized in memory and ready to compute on instantly.
 
-Performance & Data Durability
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+High Performance From Simplicity
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Because Hangar is designed to deal (almost exclusively) with numerical arrays,
 we are able to "stand on the shoulders of giants" once again by utilizing many
@@ -219,3 +213,44 @@ plans to potentially support more as needs arise):
 1) `HDF5 <https://www.hdfgroup.org/solutions/hdf5/>`_
 2) `Memmapped Arrays <https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html>`_
 3) `TileDb <https://tiledb.io/>`_ (in development)
+
+Open Source Software Style Collaboration in Dataset Curation
+------------------------------------------------------------
+
+Specialized Domain Knowledge is A Scarce Resource
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A common side effect of the `The Domain-Specific File Format Problem`_ is that
+anyone who wants to work with an organization's/project's data needs to not only
+have some domain expertise (so they can do useful things with the data), but
+they also need to have a non-trivial understanding of the projects dataset, file
+format, and access conventions / transformation pipelines. *In a world where
+highly specialized talent is already scarce, this phenonenom shrinks the pool of
+available collatorators dramatically.*
+
+Given this situation, it's understandable why when most organizations spend
+massive amounts of money and time to build a team, collect & anotate data, and
+build an infrastructure around that information, they hold it for their private
+use with little reagards for how the world could use it together. Buisnesses
+rely on proprietary information to stay ahead of their competitors, and because
+this information is so difficult (and expensive) to generate, it's completly
+reaonable that they should be the ones to benefit from all that work.
+
+**A Though Experiment**
+
+    Imagine that `Git` and `GitHub` didn't take over the world. Imagine that the
+    `Diff` and `Patch` Unix tools never existed. Instead, imagine we were to live in
+    a world where every software project had very different version control systems
+    (largely homeade by non VCS experts, & not validated by a community over many
+    years of use). Even worse, most of these tools don't allow users to easily
+    branch, make changes, and automatically merge them back. It shouldn't be
+    difficult to imagine how dramatically such a world would contrast to ours today.
+    Open source software as we know it would hardly exist, and any efforts would
+    probably be massively fragmented across the web (if there would even be a 'web'
+    that we would recognize in this strange world).
+
+    Without a way to collaborate in the open, open source software would largely not
+    exist, and we would all be worse off for it.
+
+    Doesn't this hypothetical sound quite a bit like the state of open source data
+    collaboration in todays world?
