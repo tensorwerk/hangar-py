@@ -23,6 +23,8 @@ class TestCheckout:
         assert (r1_checkout.datasets['dset']['1'] == array5by7).all()
         assert (r1_checkout.datasets['dset']['1'] ==
                 r2_checkout.datasets['dset']['1']).all()
+        r1_checkout.close()
+        r2_checkout.close()
         w_checkout.close()
 
     def test_write_with_r_checkout(self, written_repo, array5by7):
@@ -33,6 +35,7 @@ class TestCheckout:
                 name='dset', shape=(5, 7), dtype=np.float64)
             co.datasets['_dset']['1'] = array5by7
             co.datasets['_dset'].add('1', array5by7)
+        co.close()
 
     def test_write_after_repo_deletion(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
