@@ -231,7 +231,7 @@ class WriterCheckout(object):
         RuntimeError
             If no changes have been made in the staging area, no commit occurs.
         '''
-        logger.info(f'Commit operation requested with writer lock: {self.__writer_lock}')
+        logger.info(f'Commit operation requested with message: {commit_message}')
         self.__acquire_writer_lock()
         if staging_area_status(self._stageenv, self._refenv, self._branchenv) == 'CLEAN':
             msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. Cannot commit.'
