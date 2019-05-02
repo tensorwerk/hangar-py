@@ -255,7 +255,7 @@ class WriterCheckout(object):
 
         hashs.clear_stage_hash_records(self._stagehashenv)
         self.__setup()
-        logger.info(f'Comit completed. Commit hash: {commit_hash}')
+        logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
 
     def reset_staging_area(self):

@@ -4,10 +4,14 @@ import numpy as np
 
 class TestDataset(object):
 
+    def test_invalid_dsetname(self, repo, randomsizedarray):
+        co = repo.checkout(write=True)
+        with pytest.raises(ValueError):
+            co.datasets.init_dataset(name='invalid name', prototype=randomsizedarray)
+
     def test_read_only_mode(self, written_repo):
         import hangar
         co = written_repo.checkout()
-        # TODO: how to check whether it is read only mode
         assert isinstance(co, hangar.checkout.ReaderCheckout)
         assert co.datasets.init_dataset is None
         assert co.datasets.remove_dset is None
@@ -25,30 +29,31 @@ class TestDataset(object):
         co.commit()
         co.close()
         co = written_repo.checkout(write=True)
-        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
-        assert len(co.datasets) == 1
+        assert len(co.datasets) == 0
         co.close()
-        # TODO: removing all datasets removes indexing. test that as well
 
-    def init_again(self, repo, randomsizedarray):
+    def test_init_again(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.datasets.init_dataset('dset', prototype=randomsizedarray)
-        with pytest.raises(ValueError):
+        with pytest.raises(LookupError):
             co.datasets.init_dataset('dset', prototype=randomsizedarray)
         co.close()
 
-    def dataset_with_more_dimension(self, repo):
+    def test_dataset_with_more_dimension(self, repo):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
         # TODO: shouldn't it be some other error
+        # the error comes because of the zero in shape tuple
+        # makes chunk_nbytes to become zero
         with pytest.raises(ZeroDivisionError):
             co.datasets.init_dataset('dset', shape=shape, dtype=np.int)
         shape = [1] * 31
-        dset = co.datasets.init_dataset('dset', shape=shape, dtype=np.int)
+        dset = co.datasets.init_dataset('dset1', shape=shape, dtype=np.int)
         assert len(dset._schema_max_shape) == 31
         shape = [1] * 32
         with pytest.raises(ValueError):
-            co.datasets.init_dataset('dset', shape=shape, dtype=np.int)
+            # maximum tensor rank must be <= 31
+            co.datasets.init_dataset('dset2', shape=shape, dtype=np.int)
         co.close()
 
 
@@ -63,7 +68,6 @@ class TestDataWithFixedSizedDataset(object):
             dset[1] = array5by7
 
     def test_add_with_wrong_argument_order(self, w_checkout, array5by7):
-        # TODO: perhaps use it with written repo fixture
         dset = w_checkout.datasets['_dset']
         with pytest.raises(TypeError):
             dset.add('1', array5by7)
@@ -82,7 +86,7 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(dset['1'], array5by7)
         co.close()
 
-    def multiple_data_multiple_commit(self, written_repo, array5by7):
+    def test_multiple_data_multiple_commit(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].add(array5by7, '1')
         co.commit()
@@ -113,7 +117,7 @@ class TestDataWithFixedSizedDataset(object):
             dset['1']
         co.close()
 
-    def remove_data(self, written_repo, array5by7):
+    def test_remove_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
@@ -125,11 +129,12 @@ class TestDataWithFixedSizedDataset(object):
         co.commit()
         co.close()
         co = written_repo.checkout()
-        assert co.datasets['_dset']['1'] is False
+        with pytest.raises(KeyError):
+            co.datasets['_dset']['1']
         assert np.allclose(co.datasets['_dset']['2'], new_array)
         co.close()
 
-    def remove_all_data(self, written_repo, array5by7):
+    def test_remove_all_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
@@ -138,19 +143,25 @@ class TestDataWithFixedSizedDataset(object):
         co.close()
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].remove('1')
-        # TODO: deleting all elementes supposed to delete dset - Not happening
-        # TODO: adding another element and deleting it again raises
-        # AttributeError: 'NoneType' object has no attribute 'decode'
+        # TODO: removing all datasets removes indexing. test that later
         co.datasets['_dset'].remove('2')
-        # TODO > check
-        # INFO:hangar.checkout:No changes made to the repository. Cannot commit
         co.commit()
         co.close()
         co = written_repo.checkout()
-        assert co.datasets['_dset'] is False
+        with pytest.raises(KeyError):
+            # removal of all data removes the dataset
+            co.datasets['_dset']
         co.close()
+        # recreating same and verifying
+        co = written_repo.checkout(write=True)
+        co.datasets.init_dataset('_dset', prototype=array5by7)
+        co.datasets['_dset']['1'] = array5by7
+        co.commit()
+        co.close()
+        co = written_repo.checkout()
+        assert np.allclose(co.datasets['_dset']['1'], array5by7)
 
-    def multiple_datasets_single_commit(self, written_repo, randomsizedarray):
+    def test_multiple_datasets_single_commit(self, written_repo, randomsizedarray):
         co = written_repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
         dset2 = co.datasets.init_dataset('dset2', prototype=randomsizedarray)
@@ -164,14 +175,14 @@ class TestDataWithFixedSizedDataset(object):
         co.close()
 
     def test_prototype_and_shape(self, repo, randomsizedarray):
-        # TODO: enable once #5 is fixed
         co = repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
         dset2 = co.datasets.init_dataset(
             'dset2',
             shape=randomsizedarray.shape,
             dtype=randomsizedarray.dtype)
-        newarray = np.random.random(randomsizedarray.shape).astype(dtype=randomsizedarray.dtype)
+        newarray = np.random.random(
+            randomsizedarray.shape).astype(dtype=randomsizedarray.dtype)
         dset1['arr1'] = newarray
         dset2['arr'] = newarray
         co.commit()
@@ -216,6 +227,7 @@ class TestDataWithFixedSizedDataset(object):
 
     @pytest.mark.skip(reason='not implemented')
     def test_bulk_add_names(self):
+        # TODO: What's the use case for this?
         pass
 
 
