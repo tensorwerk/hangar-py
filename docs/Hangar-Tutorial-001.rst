@@ -1,5 +1,6 @@
+*******************************************
 Creating A Repository And Working With Data
-===========================================
+*******************************************
 
 This tutorial will review the first steps of working with a hangar
 repository.
@@ -17,7 +18,7 @@ examples will show off how to work with much more complex data.
    >>> from tqdm import tqdm
 
 Creating & Interacting with a Hangar Repository
------------------------------------------------
+===============================================
 
 Hangar is designed to “just make sense” in every operation you have to perform.
 As such, there is a single interface which all interaction begins with: the
@@ -27,7 +28,7 @@ Weather a hangar repository exists at the path you specify or not, just tell
 hangar where it should live!
 
 Initializing a repository
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------
 
 The first time you want to work with a new repository, the ``init()`` method
 must be called. This is where you provide hangar with your name and email
@@ -47,7 +48,7 @@ you do want to create the underlying data files hangar uses on disk.
 
 
 Checking out the repo for writing
----------------------------------
+=================================
 
 A repository can be checked out in two modes:
 
@@ -64,7 +65,7 @@ A repository can be checked out in two modes:
    >>> co = repo.checkout(write=True)
 
 Lots of useful information is in the ipython ``__repr__``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------------------------------
 
 If you're ever in doubt about what the state of the object your working
 on is, just call it's reps, and the most relevant information will be
@@ -79,7 +80,7 @@ sent to your screen!
 
 
 A checkout allows access to ``datasets`` and ``metadata``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+=========================================================
 
 The `dataset` and `metadata` attributes of a checkout provide
 the interface to working with all of the data on disk!
@@ -99,7 +100,7 @@ the interface to working with all of the data on disk!
 
 
 Before data can be added to a repository, a dataset must be initialized.
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------------------------------------------
 
 We're going to first load up a the MNIST pickled dataset so it can be added to
 the repo!
@@ -147,7 +148,7 @@ Let's try it out here:
 
 
 Interaction
------------
+===========
 
 When a dataset is initialized, a dataset accessor object will be returned,
 however, depending on your use case, this may or may not be the most convenient
@@ -180,7 +181,7 @@ dataset keys will autocomplete for you).
 the full dictionary style mapping interface is implemented
 
 Adding Data
-^^^^^^^^^^^
+-----------
 
 To add data to a named dataset, we can use dict-style setting, or the
 ``.add`` method.
@@ -192,7 +193,7 @@ To add data to a named dataset, we can use dict-style setting, or the
    >>> train_dset['51'] = trimgs[51]
 
 How many samples are in the dataset?
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------
 
 .. code:: python
 
@@ -201,7 +202,7 @@ How many samples are in the dataset?
 
 
 containment testing
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 .. code:: python
 
@@ -212,7 +213,7 @@ containment testing
 
 
 Dictionary Style Retrieval for known keys
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------------------------
 
 .. code:: python
 
@@ -237,7 +238,7 @@ Dictionary Style Retrieval for known keys
 
 
 Dict style iteration supported out of the box
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------------
 
 .. code:: python
 
@@ -255,7 +256,7 @@ Dict style iteration supported out of the box
 
 
 Performance
------------
+===========
 
 Once you’ve completed an interactive exploration, be sure to use the context
 manager form of the ``.add`` and ``.get`` methods!
@@ -309,7 +310,7 @@ for the purposes of interactive use that the "Naked" form is valubal to the
 average user!
 
 Committing Changes
-------------------
+==================
 
 Once you have made a set of changes you wan’t to commit, just simply
 call the ``commit()`` method (and pass in a message)!
@@ -329,7 +330,7 @@ tutorials)
 
 
 Don’t Forget to Close the Write-Enabled Checkout
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------------------
 
 We mentioned in `Checking out the repo for writing`_ that when a `write-enabled`
 checkout is created, it places a lock on writers until it is closed. If for
@@ -350,7 +351,7 @@ Luckily, preventing this issue from occurring is as simple as calling `close()`!
 
 
 But, if you did forget...
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------
 
 you will receive a ``PermissionError`` next time you open a checkout!
 
@@ -384,7 +385,7 @@ When in doubt, refer to the docstrings:
 
 
 Inspecting State
-----------------
+================
 
 After your first commit, the summary and log methods will begin to work,
 and you can either print the stream to the console (as shown below), or

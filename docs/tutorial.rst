@@ -1,9 +1,12 @@
 .. _ref-tutorial:
 
-================
+###############
 Hangar Tutorial
-================
+###############
 
-.. include:: ./Hangar-Tutorial-001.rst
+.. toctree::
+   :maxdepth: 2
+   :titlesonly:
 
-.. include:: ./Hangar-Tutorial-002.rst
+   Hangar-Tutorial-001
+   Hangar-Tutorial-002
