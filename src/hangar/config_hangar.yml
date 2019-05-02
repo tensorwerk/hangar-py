@@ -5,7 +5,7 @@ hangar:
   __version__: '0.0.0'
 
   lmdb:
-    map_size: 50_000_000
+    map_size: 10_000_000_000
     meminit: false
     subdir: false
     lock: false

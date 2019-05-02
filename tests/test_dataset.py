@@ -2,11 +2,13 @@ import pytest
 import numpy as np
 
 
-class TestDataset:
+class TestDataset(object):
 
     def test_read_only_mode(self, written_repo):
+        import hangar
         co = written_repo.checkout()
         # TODO: how to check whether it is read only mode
+        assert isinstance(co, hangar.checkout.ReaderCheckout)
         assert co.datasets.init_dataset is None
         assert co.datasets.remove_dset is None
         assert len(co.datasets['_dset']) == 0
@@ -31,7 +33,6 @@ class TestDataset:
     def init_again(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.datasets.init_dataset('dset', prototype=randomsizedarray)
-        # TODO: shouldn't it raise an exception instead of printing
         with pytest.raises(ValueError):
             co.datasets.init_dataset('dset', prototype=randomsizedarray)
         co.close()
@@ -46,20 +47,18 @@ class TestDataset:
         dset = co.datasets.init_dataset('dset', shape=shape, dtype=np.int)
         assert len(dset._schema_max_shape) == 31
         shape = [1] * 32
-        # TODO: shouldn't it raise a valueerror instead of printing
         with pytest.raises(ValueError):
             co.datasets.init_dataset('dset', shape=shape, dtype=np.int)
         co.close()
 
 
-class TestDataWithFixedSizedDataset:
+class TestDataWithFixedSizedDataset(object):
 
     def test_add_data(self, w_checkout, array5by7):
         dset = w_checkout.datasets['_dset']
         with pytest.raises(KeyError):
             dset['somerandomkey']
 
-        # should raise an issue about intiger being used as key
         with pytest.raises(ValueError):
             dset[1] = array5by7
 
@@ -84,7 +83,6 @@ class TestDataWithFixedSizedDataset:
         co.close()
 
     def multiple_data_multiple_commit(self, written_repo, array5by7):
-        # TODO: enable once #5 is fixed
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].add(array5by7, '1')
         co.commit()
@@ -98,9 +96,9 @@ class TestDataWithFixedSizedDataset:
         co.close()
         co = written_repo.checkout()
         dset = co.datasets['_dset']
-        assert (dset['1'] == array5by7).all()
-        assert (dset['2'] == new_array).all()
-        assert (dset['3'] == new_new_array).all()
+        assert np.allclose(dset['1'], array5by7)
+        assert np.allclose(dset['2'], new_array)
+        assert np.allclose(dset['3'], new_new_array)
         co.close()
 
     def test_added_but_not_commited(self, written_repo, array5by7):
@@ -112,12 +110,10 @@ class TestDataWithFixedSizedDataset:
         co = written_repo.checkout()
         dset = co.datasets['_dset']
         with pytest.raises(KeyError):
-            shouldNotExist = dset['1']
+            dset['1']
         co.close()
 
     def remove_data(self, written_repo, array5by7):
-        # TODO: test failing
-        # 'DatasetDataWriter' object has no attribute 'TxnRegister'
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
@@ -130,7 +126,7 @@ class TestDataWithFixedSizedDataset:
         co.close()
         co = written_repo.checkout()
         assert co.datasets['_dset']['1'] is False
-        assert (co.datasets['_dset']['2'] == new_array).all()
+        assert np.allclose(co.datasets['_dset']['2'], new_array)
         co.close()
 
     def remove_all_data(self, written_repo, array5by7):
@@ -155,7 +151,6 @@ class TestDataWithFixedSizedDataset:
         co.close()
 
     def multiple_datasets_single_commit(self, written_repo, randomsizedarray):
-        # TODO: enable once #5 is fixed
         co = written_repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
         dset2 = co.datasets.init_dataset('dset2', prototype=randomsizedarray)
@@ -164,27 +159,26 @@ class TestDataWithFixedSizedDataset:
         co.commit()
         co.close()
         co = written_repo.checkout()
-        assert (co.datasets['dset1']['arr'] == randomsizedarray).all()
-        assert (co.datasets['dset2']['arr'] == randomsizedarray).all()
+        assert np.allclose(co.datasets['dset1']['arr'], randomsizedarray)
+        assert np.allclose(co.datasets['dset2']['arr'], randomsizedarray)
         co.close()
 
-    @pytest.mark.skip(reason='enable once #5 is fixed')
     def test_prototype_and_shape(self, repo, randomsizedarray):
         # TODO: enable once #5 is fixed
         co = repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
         dset2 = co.datasets.init_dataset(
-            'dset2', shape=randomsizedarray.shape,
+            'dset2',
+            shape=randomsizedarray.shape,
             dtype=randomsizedarray.dtype)
-        newarray = np.random.random(
-            randomsizedarray.shape).astype(dtype=randomsizedarray.dtype)
+        newarray = np.random.random(randomsizedarray.shape).astype(dtype=randomsizedarray.dtype)
         dset1['arr1'] = newarray
         dset2['arr'] = newarray
         co.commit()
         co.close()
         co = repo.checkout()
-        assert (co.datasets['dset1']['arr'] == newarray).all()
-        assert (co.datasets['dset2']['arr'] == newarray).all()
+        assert np.allclose(co.datasets['dset1']['arr1'], newarray)
+        assert np.allclose(co.datasets['dset2']['arr'], newarray)
         co.close()
 
     def test_samples_without_name(self, repo, randomsizedarray):
@@ -220,9 +214,11 @@ class TestDataWithFixedSizedDataset:
             dset['3'] = newarr
         co.close()
 
+    @pytest.mark.skip(reason='not implemented')
     def test_bulk_add_names(self):
         pass
 
 
-class TestVariableSizedDataset:
+@pytest.mark.skip(reason='not implemented')
+class TestVariableSizedDataset(object):
     pass

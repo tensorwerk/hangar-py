@@ -3,7 +3,7 @@ import pytest
 import shutil
 
 
-class TestCheckout:
+class TestCheckout(object):
 
     def test_two_write_checkouts(self, repo):
         w1_checkout = repo.checkout(write=True)
@@ -14,25 +14,21 @@ class TestCheckout:
     def test_two_read_checkouts(self, repo, array5by7):
         w_checkout = repo.checkout(write=True)
         dataset_name = 'dset'
-        r_ds = w_checkout.datasets.init_dataset(
-            name=dataset_name, prototype=array5by7)
+        r_ds = w_checkout.datasets.init_dataset(name=dataset_name, prototype=array5by7)
         r_ds['1'] = array5by7
         w_checkout.commit('init')
         r1_checkout = repo.checkout()
         r2_checkout = repo.checkout()
-        assert (r1_checkout.datasets['dset']['1'] == array5by7).all()
-        assert (r1_checkout.datasets['dset']['1'] ==
-                r2_checkout.datasets['dset']['1']).all()
+        assert np.allclose(r1_checkout.datasets['dset']['1'], array5by7)
+        assert np.allclose(r1_checkout.datasets['dset']['1'], r2_checkout.datasets['dset']['1'])
         r1_checkout.close()
         r2_checkout.close()
         w_checkout.close()
 
     def test_write_with_r_checkout(self, written_repo, array5by7):
         co = written_repo.checkout()
-        # TODO: shouldn't it raises something else
         with pytest.raises(TypeError):
-            co.datasets.init_dataset(
-                name='dset', shape=(5, 7), dtype=np.float64)
+            co.datasets.init_dataset(name='dset', shape=(5, 7), dtype=np.float64)
             co.datasets['_dset']['1'] = array5by7
             co.datasets['_dset'].add('1', array5by7)
         co.close()
@@ -40,7 +36,6 @@ class TestCheckout:
     def test_write_after_repo_deletion(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         shutil.rmtree(written_repo._repo_path)
-        # todo: shouldn't it be something else
         with pytest.raises(OSError):
             co.datasets.init_dataset('dset', prototype=array5by7)
         dset = co.datasets['_dset']
@@ -51,7 +46,8 @@ class TestCheckout:
         co.close()
 
 
-class TestBranching:
+@pytest.mark.skip(reason='not implemented')
+class TestBranching(object):
 
     def test_merge(self):
         pass
@@ -72,5 +68,6 @@ class TestBranching:
         pass
 
 
-class TestTimeTravel:
+@pytest.mark.skip(reason='not implemented')
+class TestTimeTravel(object):
     pass
