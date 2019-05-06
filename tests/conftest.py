@@ -56,7 +56,7 @@ def managed_tmpdir(tmp_path):
 
 
 @pytest.fixture()
-def repo(managed_tmpdir):
+def repo(managed_tmpdir) -> Repository:
     repo_obj = Repository(path=managed_tmpdir)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     yield repo_obj

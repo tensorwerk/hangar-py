@@ -63,6 +63,9 @@ class MetadataReader(object):
         self._labelTxn = TxnRegister().abort_reader_txn(self._labelenv)
         self._dataTxn = TxnRegister().abort_reader_txn(self._dataenv)
 
+    def __len__(self):
+        return len(self._Query.metadata_names())
+
     def __getitem__(self, key):
         return self.get(key)
 

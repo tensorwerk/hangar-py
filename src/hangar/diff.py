@@ -111,6 +111,41 @@ def staging_area_status(stageenv, refenv, branchenv):
 # --------------------------- Diff Methods ------------------------------------
 
 
+def diff_branches(branchenv, refenv, master_branch, dev_branch):
+    '''Find diff of two branch heads formatted as if dev was to merge into master.
+
+    Parameters
+    ----------
+    branchenv : lmdb.Environment
+        db where the branch head references are stored
+    refenv : lmdb.Environment
+        db where the commit references are stored
+    master_branch : str
+        name of the master branch
+    dev_branch : str
+        name of the dev branch
+
+    Returns
+    -------
+    dict
+        dict describing additions, removals, mutations, and no-change pieces
+        for metadata, datasets, and samples in the diff.
+    '''
+    branchDiff = _determine_ancestors(
+        branchenv=branchenv,
+        refenv=refenv,
+        merge_master=master_branch,
+        merge_dev=dev_branch)
+
+    a_cont = commiting.get_commit_ref_contents(refenv, branchDiff.ancestorHEAD)
+    m_cont = commiting.get_commit_ref_contents(refenv, branchDiff.masterHEAD)
+    d_cont = commiting.get_commit_ref_contents(refenv, branchDiff.devHEAD)
+
+    ancestorToDevDiffer = CommitDiffer(a_cont, m_cont, d_cont)
+    res = ancestorToDevDiffer.all_changes(include_master=False)
+    return res
+
+
 def diff_commits(refenv, masterHEAD, devHEAD):
     '''Return the diff of two commits
 
@@ -1119,7 +1154,6 @@ class CommitDiffer(object):
         return out
 
     def sample_changes(self):
-
         out = {
             'additions': {},
             'removals': {},
@@ -1128,10 +1162,11 @@ class CommitDiffer(object):
         }
         for dsetn, branchspec in self.sampdiff.items():
             for branchKey, sampDiffObj in branchspec.items():
-                out['additions'][branchKey] = {dsetn: {}}
-                out['removals'][branchKey] = {dsetn: {}}
-                out['unchanged'][branchKey] = {dsetn: {}}
-                out['mutations'][branchKey] = {dsetn: {}}
+                if branchKey not in out['additions']:
+                    out['additions'][branchKey] = {dsetn: {}}
+                    out['removals'][branchKey] = {dsetn: {}}
+                    out['unchanged'][branchKey] = {dsetn: {}}
+                    out['mutations'][branchKey] = {dsetn: {}}
                 sampChanges = sampDiffObj.diff_out()
                 for oppKey, vals in sampChanges.items():
                     out[oppKey][branchKey][dsetn] = vals

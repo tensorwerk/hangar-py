@@ -615,13 +615,11 @@ class Repository(object):
             list of all changes in the repository between the two branches
             (adds/changes/removes)
         '''
-        masterHEAD = heads.get_branch_head_commit(
-            branchenv=self._env.branchenv, branch_name=master_branch)
-        devHEAD = heads.get_branch_head_commit(
-            branchenv=self._env.branchenv, branch_name=dev_branch)
-
-        dif = diff.diff_commits(
-            refenv=self._env.refenv, masterHEAD=masterHEAD, devHEAD=devHEAD)
+        dif = diff.diff_branches(
+            branchenv=self._env.branchenv,
+            refenv=self._env.refenv,
+            master_branch=master_branch,
+            dev_branch=dev_branch)
         return dif
 
     def diff_staged_changes(self):
@@ -660,8 +658,8 @@ class Repository(object):
 
         Returns
         -------
-        bool
-            if the operation was successful.
+        str
+            name of the branch which was created
         '''
         if not is_ascii_alnum(branch_name):
             msg = (f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` is not allowed. '
