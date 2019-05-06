@@ -11,7 +11,6 @@ from ..utils import ignoring
 required_packages = [('hangar', lambda p: p.__version__),
                      ('click', lambda p: p.__version__),
                      ('msgpack', lambda p: '.'.join([str(v) for v in p.version])),
-                     ('dictdiffer', lambda p: p.__version__),
                      ('lmdb', lambda p: p.__version__),
                      ('h5py', lambda p: p.__version__),
                      ('numpy', lambda p: p.__version__),

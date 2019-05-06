@@ -1,7 +1,6 @@
 import logging
 from collections import namedtuple
-
-import dictdiffer
+import copy
 
 from .context import TxnRegister
 from .records import commiting
@@ -132,8 +131,9 @@ def diff_commits(refenv, masterHEAD, devHEAD):
     m_contents = commiting.get_commit_ref_contents(refenv, masterHEAD)
     d_contents = commiting.get_commit_ref_contents(refenv, devHEAD)
 
-    ancestorToDevDiff = dictdiffer.diff(m_contents, d_contents)
-    return list(ancestorToDevDiff)
+    ancestorToDevDiffer = CommitDiffer(m_contents, d_contents, m_contents)
+    res = ancestorToDevDiffer.all_changes(include_dev=False)
+    return res
 
 
 def diff_staged_changes(refenv, stageenv, branchenv):
@@ -161,8 +161,9 @@ def diff_staged_changes(refenv, stageenv, branchenv):
         base_refs = commiting.get_commit_ref_contents(refenv, head_commit)
 
     stage_refs = RecordQuery(stageenv).all_records()
-    stageToHeadDiff = dictdiffer.diff(base_refs, stage_refs)
-    return list(stageToHeadDiff)
+    stageToHeadDiffer = CommitDiffer(base_refs, stage_refs, base_refs)
+    res = stageToHeadDiffer.all_changes(include_dev=False)
+    return res
 
 
 '''
@@ -411,6 +412,41 @@ def _overwrite_stageenv(stageenv, sorted_tuple_output):
         TxnRegister().commit_writer_txn(stageenv)
 
 
+def _evaluate_conflicts(differ) -> dict:
+    '''Evaluate and collect all possible conflicts in a repo differ instance
+
+    Parameters
+    ----------
+    differ : CommitDiffer
+        instance initialized with branch commit contents.
+
+    Returns
+    -------
+    dict
+        containing conflict info in `dset`, `meta`, `sample` and `counflict_found`
+        boolean field.
+    '''
+
+    dset_confs = differ.dataset_conflicts()
+    meta_confs = differ.meta_conflicts()
+    sample_confs = differ.sample_conflicts()
+
+    conflictFound = False
+    for dsetn, confval in sample_confs.items():
+        if confval['conflict'] is True:
+            conflictFound = True
+    if (dset_confs['conflict'] is True) or (meta_confs['conflict'] is True):
+        conflictFound = True
+
+    confs = {
+        'dset': dset_confs,
+        'meta': meta_confs,
+        'sample': sample_confs,
+        'conflict_found': conflictFound,
+    }
+    return confs
+
+
 def _compute_merge_results(refenv, ancestorHEAD, masterHEAD, devHEAD):
     '''Compute the diff of a 3-way merge and patch historical contents to get new state
 
@@ -435,13 +471,73 @@ def _compute_merge_results(refenv, ancestorHEAD, masterHEAD, devHEAD):
         nested dict specifying datasets and metadata record specs of the new
         merge commit.
     '''
-    a_contents = commiting.get_commit_ref_contents(refenv, ancestorHEAD)
-    m_contents = commiting.get_commit_ref_contents(refenv, masterHEAD)
-    d_contents = commiting.get_commit_ref_contents(refenv, devHEAD)
+    a_cont = commiting.get_commit_ref_contents(refenv, ancestorHEAD)
+    m_cont = commiting.get_commit_ref_contents(refenv, masterHEAD)
+    d_cont = commiting.get_commit_ref_contents(refenv, devHEAD)
 
-    ancestorToDevDiff = dictdiffer.diff(a_contents, d_contents)
-    patchedMergeContents = dictdiffer.patch(ancestorToDevDiff, m_contents)
-    return patchedMergeContents
+    cmtDiffer = CommitDiffer(a_cont, m_cont, d_cont)
+    confs = _evaluate_conflicts(cmtDiffer)
+    if confs['conflict_found'] is True:
+        msg = f'HANGAR VALUE ERROR:: Merge ABORTED with conflict: {confs}'
+        raise ValueError(msg)
+
+    all_dsets = cmtDiffer.dataset_changes()
+    mas = all_dsets['additions']['master']  # master add dset
+    das = all_dsets['additions']['dev']     # dev add dset
+    mas.update(das)                   # combined
+    mrs = all_dsets['removals']['master']   # master remove dset
+    drs = all_dsets['removals']['dev']      # dev remove dset
+    crs = mrs.union(drs)                    # combined
+    mms = all_dsets['mutations']['master']  # master mutate dset
+    dms = all_dsets['mutations']['dev']     # dev mutate dset
+    mms.update(dms)                   # combined
+
+    merge_cont = copy.deepcopy(a_cont)
+    for dsetn in crs:
+        merge_cont['datasets'].__delitem__(dsetn)
+    for dsetn, schema in mms.items():
+        merge_cont['datasets'].__delitem__(dsetn)
+        merge_cont['datasets'][dsetn] = {'schema': schema, 'data': {}}
+    for dsetn, schemaval in mas.items():
+        merge_cont['datasets'][dsetn] = {'schema': schemaval, 'data': {}}
+
+    for dsetn in cmtDiffer.sampdiff:
+        for sampDif in cmtDiffer.sampdiff[dsetn].values():
+            for remkey in sampDif.removals:
+                try:
+                    merge_cont['datasets'][dsetn]['data'].__delitem__(remkey)
+                except KeyError:
+                    pass
+            for mutkey in sampDif.mutations:
+                try:
+                    merge_cont['datasets'][dsetn]['data'][mutkey] = sampDif.d_data[mutkey]
+                except KeyError:
+                    pass
+            for addkey in sampDif.additions:
+                try:
+                    merge_cont['datasets'][dsetn]['data'][addkey] = sampDif.d_data[addkey]
+                except KeyError:
+                    pass
+
+    metadif = cmtDiffer.meta_changes()
+    metaremovals = metadif['removals']
+    metamutations = metadif['mutations']
+    metaadditions = metadif['additions']
+
+    for metaspec in metaremovals.values():
+        for k in metaspec:
+            try:
+                merge_cont['metadata'].__delitem__(k)
+            except KeyError:
+                pass
+    for metaspec in metamutations.values():
+        for k, v in metaspec.items():
+            merge_cont['metadata'][k] = v
+    for metaspec in metaadditions.values():
+        for k, v in metaspec.items():
+            merge_cont['metadata'][k] = v
+
+    return merge_cont
 
 
 def _merge_dict_to_lmdb_tuples(patchedRecs):
@@ -509,3 +605,568 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
 
     sortedEntries = sorted(entries, key=lambda x: x[0])
     return sortedEntries
+
+
+# -----------------------------------------------------------------------------
+
+
+MetaRecord = namedtuple('MetaRecord', field_names=['meta_key', 'meta_hash'])
+
+SamplesDataRecord = namedtuple(
+    'SamplesDataRecord', field_names=['dset_name', 'data_name', 'data_hash'])
+
+DatasetSchemaRecord = namedtuple('DatasetSchemaRecord',
+                                 field_names=[
+                                     'dset_name', 'schema_hash',
+                                     'schema_dtype', 'schema_is_var',
+                                     'schema_max_shape', 'schema_is_named'
+                                 ])
+
+
+def meta_record_dict_to_nt(record_dict: dict) -> set:
+    records = set()
+    for k, v in record_dict.items():
+        records.add(MetaRecord(meta_key=k, meta_hash=v))
+    return records
+
+
+class MetadataDiffer(object):
+
+    def __init__(self, ancestor_meta: dict, dev_meta: dict):
+
+        self.a_meta = ancestor_meta
+        self.d_meta = dev_meta
+        self.a_meta_keys = set(ancestor_meta.keys())
+        self.d_meta_keys = set(dev_meta.keys())
+
+        self.additions = None
+        self.removals = None
+        self.unchanged = None
+        self.mutations = None
+
+        self.run()
+
+    def run(self):
+        self.additions = self.d_meta_keys.difference(self.a_meta_keys)
+        self.removals = self.a_meta_keys.difference(self.d_meta_keys)
+
+        a_unchanged_kv, d_unchanged_kv = {}, {}
+        potential_unchanged = self.a_meta_keys.intersection(self.d_meta_keys)
+        for k in potential_unchanged:
+            a_unchanged_kv[k] = self.a_meta[k]
+            d_unchanged_kv[k] = self.d_meta[k]
+        arecords = meta_record_dict_to_nt(a_unchanged_kv)
+        drecords = meta_record_dict_to_nt(d_unchanged_kv)
+
+        self.mutations = set([m.meta_key for m in arecords.difference(drecords)])
+        self.unchanged = potential_unchanged.difference(self.mutations)
+
+
+def samples_record_dict_to_nt(record_dict: dict) -> set:
+    records = set()
+    for k, v in record_dict.items():
+        rec = SamplesDataRecord(
+            dset_name=k.dset_name,
+            data_name=k.data_name,
+            data_hash=v.data_hash
+        )
+        records.add(rec)
+    return records
+
+
+class SampleDiffer(object):
+
+    def __init__(self, dset_name: str, ancestor_data: dict, dev_data: dict):
+
+        self.dset_name = dset_name
+        self.a_data = ancestor_data
+        self.d_data = dev_data
+
+        self.additions = None
+        self.removals = None
+        self.unchanged = None
+        self.mutations = None
+
+        self.run()
+
+    def run(self):
+        a_keys = set(self.a_data.keys())
+        d_keys = set(self.d_data.keys())
+        self.additions = d_keys.difference(a_keys)
+        self.removals = a_keys.difference(d_keys)
+
+        a_unchanged_kv, d_unchanged_kv = {}, {}
+        potential_unchanged = a_keys.intersection(d_keys)
+        for k in potential_unchanged:
+            a_unchanged_kv[k] = self.a_data[k]
+            d_unchanged_kv[k] = self.d_data[k]
+        arecords = samples_record_dict_to_nt(a_unchanged_kv)
+        drecords = samples_record_dict_to_nt(d_unchanged_kv)
+        muts = arecords.difference(drecords)
+
+        self.mutations = set()
+        for m in muts:
+            rec = parsing.RawDataRecordKey(dset_name=m.dset_name, data_name=m.data_name)
+            self.mutations.add(rec)
+        self.unchanged = potential_unchanged.difference(self.mutations)
+
+    def diff_out(self):
+        out = {
+            'additions': self.additions,
+            'removals': self.removals,
+            'mutations': self.mutations,
+            'unchanged': self.unchanged,
+        }
+        return out
+
+
+def schema_record_dict_to_nt(record_dict: dict) -> set:
+    records = set()
+    for k, v in record_dict.items():
+        rec = DatasetSchemaRecord(
+            dset_name=k,
+            schema_hash=v.schema_hash,
+            schema_dtype=v.schema_dtype,
+            schema_is_var=v.schema_is_var,
+            schema_max_shape=tuple(v.schema_max_shape),
+            schema_is_named=v.schema_is_named
+        )
+        records.add(rec)
+    return records
+
+
+class DatasetDiffer(object):
+
+    def __init__(self, ancestor_dsets: dict, dev_dsets: dict):
+
+        self.a_dssch = self._isolate_dset_schemas(ancestor_dsets)
+        self.d_dssch = self._isolate_dset_schemas(dev_dsets)
+
+        self.additions = None
+        self.removals = None
+        self.unchanged = None
+        self.mutations = None
+
+        self.run()
+
+    def _isolate_dset_schemas(self, dataset_specs: dict) -> dict:
+        schemas_dict = {}
+        for k, v in dataset_specs.items():
+            schemas_dict[k] = v['schema']
+        return schemas_dict
+
+    def run(self):
+        a_keys = set(self.a_dssch.keys())
+        d_keys = set(self.d_dssch.keys())
+        self.additions = d_keys.difference(a_keys)
+        self.removals = a_keys.difference(d_keys)
+
+        a_unchanged_kv, d_unchanged_kv = {}, {}
+        potential_unchanged = a_keys.intersection(d_keys)
+        for k in potential_unchanged:
+            a_unchanged_kv[k] = self.a_dssch[k]
+            d_unchanged_kv[k] = self.d_dssch[k]
+        arecords = schema_record_dict_to_nt(a_unchanged_kv)
+        drecords = schema_record_dict_to_nt(d_unchanged_kv)
+        self.mutations = set([m.dset_name for m in arecords.difference(drecords)])
+
+        self.unchanged = potential_unchanged.difference(self.mutations)
+
+
+class CommitDiffer(object):
+
+    def __init__(self, ancestor_contents: dict, master_contents: dict, dev_contents: dict):
+
+        self.acont = ancestor_contents
+        self.mcont = master_contents
+        self.dcont = dev_contents
+
+        self.am_sdiff: DatasetDiffer = None
+        self.ad_sdiff: DatasetDiffer = None
+        self.am_mdiff: MetadataDiffer = None
+        self.ad_mdiff: MetadataDiffer = None
+        self.sampdiff = {}
+
+        self.run()
+
+    def run(self):
+
+        self.meta_diff()
+        self.dataset_diff()
+        self.sample_diff()
+
+# ----------------------------------------------------------------
+# Metadata
+# ----------------------------------------------------------------
+
+    def meta_diff(self):
+
+        self.am_mdiff = MetadataDiffer(
+            ancestor_meta=self.acont['metadata'],
+            dev_meta=self.mcont['metadata'])
+        self.ad_mdiff = MetadataDiffer(
+            ancestor_meta=self.acont['metadata'],
+            dev_meta=self.dcont['metadata'])
+
+    def meta_conflicts(self):
+
+        # addition conflicts
+        meta_conflicts_t1 = []  # added in master & dev with different values
+        for meta_key in self.am_mdiff.additions:
+            if meta_key in self.ad_meta_diff.additions:
+                m_hash = self.am_mdiff.d_meta[meta_key]
+                d_hash = self.ad_mdiff.d_meta[meta_key]
+                if m_hash != d_hash:
+                    meta_conflicts_t1.append(meta_key)
+
+        # removal conflicts
+        meta_conflicts_t21 = []  # removed in master, mutated in dev
+        meta_conflicts_t22 = []  # removed in dev, mutated in master
+        for meta_key in self.am_mdiff.removals:
+            if meta_key in self.ad_meta_diff.mutations:
+                meta_conflicts_t21.append(meta_key)
+        for meta_key in self.ad_mdiff.removals:
+            if meta_key in self.am_meta_diff.mutations:
+                meta_conflicts_t22.append(meta_key)
+
+        # mutation conflicts
+        meta_conflicts_t311 = []  # mutated in master & dev to different values
+        meta_conflicts_t312 = []  # mutated in master, removed in dev
+        meta_conflicts_t322 = []  # mutated in dev, removed in master
+        for meta_key in self.am_mdiff.mutations:
+            if meta_key in self.ad_meta_diff.mutations:
+                m_hash = self.am_mdiff.d_meta[meta_key]
+                d_hash = self.ad_mdiff.d_meta[meta_key]
+                if m_hash != d_hash:
+                    meta_conflicts_t311.append(meta_key)
+            elif meta_key in self.ad_meta_diff.removals:
+                meta_conflicts_t312.append(meta_key)
+
+        for meta_key in self.ad_mdiff.mutations:
+            if meta_key in self.am_meta_diff.removals:
+                meta_conflicts_t322.append(meta_key)
+
+        out = {
+            't1': meta_conflicts_t1,
+            't21': meta_conflicts_t21,
+            't22': meta_conflicts_t22,
+            't311': meta_conflicts_t311,
+            't312': meta_conflicts_t312,
+            't322': meta_conflicts_t322
+        }
+        conflictFound = False
+        for v in out.values():
+            if len(v) != 0:
+                conflictFound = True
+                break
+        out['conflict'] = conflictFound
+        return out
+
+    def _meta_additions(self):
+        out = {
+            'master': {key: self.am_mdiff.d_meta[key] for key in self.am_mdiff.additions},
+            'dev': {key: self.ad_mdiff.d_meta[key] for key in self.ad_mdiff.additions},
+        }
+        return out
+
+    def _meta_removals(self):
+        out = {
+            'master': self.am_mdiff.removals,
+            'dev': self.ad_mdiff.removals,
+        }
+        return out
+
+    def _meta_unchanged(self):
+        out = {
+            'master': {key: self.am_mdiff.a_meta[key] for key in self.am_mdiff.unchanged},
+            'dev': {key: self.ad_mdiff.a_meta[key] for key in self.ad_mdiff.unchanged},
+        }
+        return out
+
+    def _meta_mutations(self):
+        out = {
+            'master': {key: self.am_mdiff.d_meta[key] for key in self.am_mdiff.mutations},
+            'dev': {key: self.ad_mdiff.d_meta[key] for key in self.ad_mdiff.mutations},
+        }
+        return out
+
+    def meta_changes(self):
+        out = {}
+        out['additions'] = self._meta_additions()
+        out['removals'] = self._meta_removals()
+        out['unchanged'] = self._meta_unchanged()
+        out['mutations'] = self._meta_mutations()
+        return out
+
+    # ----------------------------------------------------------------
+    # Datasets
+    # ----------------------------------------------------------------
+
+    def dataset_diff(self):
+
+        self.am_sdiff = DatasetDiffer(
+            ancestor_dsets=self.acont['datasets'],
+            dev_dsets=self.mcont['datasets'])
+
+        self.ad_sdiff = DatasetDiffer(
+            ancestor_dsets=self.acont['datasets'],
+            dev_dsets=self.dcont['datasets'])
+
+    def dataset_conflicts(self):
+
+        # addition conflicts
+        dset_conflicts_t1 = []  # added in master & dev with different values
+        for dsetn in self.am_sdiff.additions:
+            if dsetn in self.ad_sdiff.additions:
+                m_srec = schema_record_dict_to_nt(self.am_sdiff.d_dssch[dsetn])
+                d_srec = schema_record_dict_to_nt(self.ad_sdiff.d_dssch[dsetn])
+                if m_srec != d_srec:
+                    dset_conflicts_t1.append(dsetn)
+
+        # removal conflicts
+        dset_conflicts_t21 = []  # removed in master, mutated in dev
+        dset_conflicts_t22 = []  # removed in dev, mutated in master
+        for dsetn in self.am_sdiff.removals:
+            if dsetn in self.ad_sdiff.mutations:
+                dset_conflicts_t21.append(dsetn)
+        for dsetn in self.ad_sdiff.removals:
+            if dsetn in self.am_sdiff.mutations:
+                dset_conflicts_t22.append(dsetn)
+
+        # mutation conflicts
+        dset_conflicts_t311 = []  # mutated in master & dev to different values
+        dset_conflicts_t312 = []  # mutated in master, removed in dev
+        dset_conflicts_t322 = []  # mutated in dev, removed in master
+        for dsetn in self.am_sdiff.mutations:
+            if dsetn in self.ad_sdiff.mutations:
+                m_srec = schema_record_dict_to_nt(self.am_sdiff.d_dssch[dsetn])
+                d_srec = schema_record_dict_to_nt(self.ad_sdiff.d_dssch[dsetn])
+                if m_srec != d_srec:
+                    dset_conflicts_t311.append(dsetn)
+            elif dsetn in self.ad_sdiff.removals:
+                dset_conflicts_t312.append(dsetn)
+
+        for dsetn in self.ad_sdiff.mutations:
+            if dsetn in self.am_sdiff.removals:
+                dset_conflicts_t322.append(dsetn)
+
+        out = {
+            't1': dset_conflicts_t1,
+            't21': dset_conflicts_t21,
+            't22': dset_conflicts_t22,
+            't311': dset_conflicts_t311,
+            't312': dset_conflicts_t312,
+            't322': dset_conflicts_t322
+        }
+        conflictFound = False
+        for v in out.values():
+            if len(v) != 0:
+                conflictFound = True
+                break
+        out['conflict'] = conflictFound
+        return out
+
+    def _dataset_additions(self):
+        out = {
+            'master': {dsetn: self.am_sdiff.d_dssch[dsetn] for dsetn in self.am_sdiff.additions},
+            'dev': {dsetn: self.ad_sdiff.d_dssch[dsetn] for dsetn in self.ad_sdiff.additions},
+        }
+        return out
+
+    def _dataset_removals(self):
+        out = {
+            'master': self.am_sdiff.removals,
+            'dev': self.ad_sdiff.removals,
+        }
+        return out
+
+    def _dataset_unchanged(self):
+        out = {
+            'master': {dsetn: self.am_sdiff.a_dssch[dsetn] for dsetn in self.am_sdiff.unchanged},
+            'dev': {dsetn: self.ad_sdiff.a_dssch[dsetn] for dsetn in self.ad_sdiff.unchanged},
+        }
+        return out
+
+    def _dataset_mutations(self):
+        out = {
+            'master': {dsetn: self.am_sdiff.d_dssch[dsetn] for dsetn in self.am_sdiff.mutations},
+            'dev': {dsetn: self.ad_sdiff.d_dssch[dsetn] for dsetn in self.ad_sdiff.mutations},
+        }
+        return out
+
+    def dataset_changes(self):
+        out = {}
+        out['additions'] = self._dataset_additions()
+        out['removals'] = self._dataset_removals()
+        out['unchanged'] = self._dataset_unchanged()
+        out['mutations'] = self._dataset_mutations()
+        return out
+
+    # ----------------------------------------------------------------
+    # Samples
+    # ----------------------------------------------------------------
+
+    def sample_diff(self):
+
+        m_dsets = self.am_sdiff.unchanged.union(
+            self.am_sdiff.additions).union(
+            self.am_sdiff.mutations)
+        for dset_name in m_dsets:
+            try:
+                self.sampdiff[dset_name]
+            except KeyError:
+                self.sampdiff[dset_name] = {}
+            try:
+                a_dset_data = self.acont['datasets'][dset_name]['data']
+            except KeyError:
+                a_dset_data = {}
+
+            m_dset_data = self.mcont['datasets'][dset_name]['data']
+            self.sampdiff[dset_name]['master'] = SampleDiffer(
+                dset_name=dset_name,
+                ancestor_data=a_dset_data,
+                dev_data=m_dset_data)
+
+        d_dsets = self.ad_sdiff.unchanged.union(
+            self.ad_sdiff.additions).union(
+            self.ad_sdiff.mutations)
+        for dset_name in d_dsets:
+            try:
+                self.sampdiff[dset_name]
+            except KeyError:
+                self.sampdiff[dset_name] = {}
+            try:
+                a_dset_data = self.acont['datasets'][dset_name]['data']
+            except KeyError:
+                a_dset_data = {}
+            d_dset_data = self.dcont['datasets'][dset_name]['data']
+            self.sampdiff[dset_name]['dev'] = SampleDiffer(
+                dset_name=dset_name,
+                ancestor_data=a_dset_data,
+                dev_data=d_dset_data)
+
+    def sample_conflicts(self):
+
+        out = {}
+        for dsetn, sample_diff in self.sampdiff.items():
+            if 'master' in sample_diff:
+                mdiff = sample_diff['master']
+            else:
+                if dsetn in self.acont['datasets']:
+                    mdiff = SampleDiffer(dsetn, self.acont['datasets'][dsetn]['data'], {})
+                else:
+                    mdiff = SampleDiffer(dsetn, {}, {})
+
+            if 'dev' in sample_diff:
+                ddiff = sample_diff['dev']
+            else:
+                if dsetn in self.acont['datasets']:
+                    ddiff = SampleDiffer(dsetn, self.acont['datasets'][dsetn]['data'], {})
+                else:
+                    ddiff = SampleDiffer(dsetn, {}, {})
+
+            # addition conflicts
+            samp_conflicts_t1 = []  # added in master & dev with different values
+            for samp in mdiff.additions:
+                if samp in ddiff.additions:
+                    m_rec = mdiff.d_data[samp]
+                    d_rec = ddiff.d_data[samp]
+                    if m_rec != d_rec:
+                        samp_conflicts_t1.append(samp)
+
+            # removal conflicts
+            samp_conflicts_t21 = []  # removed in master, mutated in dev
+            samp_conflicts_t22 = []  # removed in dev, mutated in master
+            for samp in mdiff.removals:
+                if samp in ddiff.mutations:
+                    samp_conflicts_t21.append(samp)
+            for samp in ddiff.removals:
+                if samp in mdiff.mutations:
+                    samp_conflicts_t22.append(samp)
+
+            # mutation conflicts
+            samp_conflicts_t311 = []  # mutated in master & dev to different values
+            samp_conflicts_t312 = []  # mutated in master, removed in dev
+            samp_conflicts_t322 = []  # mutated in dev, removed in master
+            for samp in mdiff.mutations:
+                if samp in ddiff.mutations:
+                    m_rec = mdiff.d_data[samp]
+                    d_rec = ddiff.d_data[samp]
+                    if m_rec != d_rec:
+                        samp_conflicts_t311.append(samp)
+                elif samp in ddiff.removals:
+                    samp_conflicts_t312.append(samp)
+
+            for samp in ddiff.mutations:
+                if samp in mdiff.removals:
+                    samp_conflicts_t322.append(samp)
+
+            out[dsetn] = {
+                't1': samp_conflicts_t1,
+                't21': samp_conflicts_t21,
+                't22': samp_conflicts_t22,
+                't311': samp_conflicts_t311,
+                't312': samp_conflicts_t312,
+                't322': samp_conflicts_t322
+            }
+            conflictFound = False
+            for v in out[dsetn].values():
+                if len(v) != 0:
+                    conflictFound = True
+                    break
+            out[dsetn]['conflict'] = conflictFound
+
+        return out
+
+    def sample_changes(self):
+
+        out = {
+            'additions': {},
+            'removals': {},
+            'unchanged': {},
+            'mutations': {},
+        }
+        for dsetn, branchspec in self.sampdiff.items():
+            for branchKey, sampDiffObj in branchspec.items():
+                out['additions'][branchKey] = {dsetn: {}}
+                out['removals'][branchKey] = {dsetn: {}}
+                out['unchanged'][branchKey] = {dsetn: {}}
+                out['mutations'][branchKey] = {dsetn: {}}
+                sampChanges = sampDiffObj.diff_out()
+                for oppKey, vals in sampChanges.items():
+                    out[oppKey][branchKey][dsetn] = vals
+
+        return out
+
+    def all_changes(self, include_master: bool = True, include_dev: bool = True) -> dict:
+
+        meta = self.meta_changes()
+        dset_schemas = self.dataset_changes()
+        samples = self.sample_changes()
+
+        ometa, odsets, osamples = {}, {}, {}
+        if not include_master:
+            for k, v in meta.items():
+                ometa[k] = v['dev']
+            for k, v in dset_schemas.items():
+                odsets[k] = v['dev']
+            for k, v in samples.items():
+                osamples[k] = v['dev']
+        elif not include_dev:
+            for k, v in meta.items():
+                ometa[k] = v['master']
+            for k, v in dset_schemas.items():
+                odsets[k] = v['master']
+            for k, v in samples.items():
+                osamples[k] = v['master']
+        else:
+            ometa = meta
+            odsets = dset_schemas
+            osamples = samples
+
+        res = {
+            'metadata': ometa,
+            'datasets': odsets,
+            'samples': osamples,
+        }
+        return res

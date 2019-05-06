@@ -64,7 +64,6 @@ setup(
     python_requires='>= 3.6.0',
     install_requires=[
         'click',
-        'dictdiffer',
         'lmdb==0.94',
         'h5py==2.9.0',
         'numpy',
