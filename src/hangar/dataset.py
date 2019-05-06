@@ -740,10 +740,43 @@ class Datasets(object):
         for dskey in list(self._datasets):
             self._datasets[dskey].__exit__(*exc)
 
-    def add(self, dset_data_map: dict) -> str:
-        '''Multi add data with same key to unnamed datasets
+    def add(self, mapping: dict) -> str:
+        '''Add related samples to un-named datasets with the same generated key.
 
-        TODO: MORE DOCS
+        If you have multiple datasets in a checkout whose samples are related to
+        eachother in some manner, there are two ways of associating samples
+        together:
+
+        1) using named datasets and setting each tensor in each dataset to the
+           same sample "name" using un-named datasets.
+        2) using this "add" method. which accepts a dictionary of "dataset
+           names" as keys, and "tensors" (ie. individual samples) as values.
+
+        When method (2) - this method - is used, the internally generated sample
+        ids will be set to the same value for the samples in each dataset. That
+        way a user can iterate over the dataset key's in one sample, and use
+        those same keys to get the other releated tensor samples in another
+        dataset.
+
+        Parameters
+        ----------
+        mapping: dict
+            Dict mapping (any number of) dataset names to tensor data (samples)
+            which to add. The datasets must exist, and must be set to accept
+            samples which are not named by the user
+
+        Returns
+        -------
+        str
+            generated id (key) which each sample is stored under in their
+            corresponding dataset. This is the same for all samples specified in
+            the input dictionary.
+
+
+        Raises
+        ------
+        KeyError
+            If no dataset with the given name exists in the checkout
         '''
         if not self._is_conman:
             for dskey in list(self._datasets):
