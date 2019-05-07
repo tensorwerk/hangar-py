@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 import logging
 from . import config_logging
 config_logging.setup_logging()
@@ -44,7 +43,7 @@ class Repository(object):
         repo_pth = os.path.join(usr_path, config.get('hangar.repository.hangar_dir_name'))
         self._env = Environments(repo_path=repo_pth)
         self._repo_path = self._env.repo_path
-        self._client: Optional[HangarClient] = None
+        self._client: HangarClient = None
 
     def _repr_pretty_(self, p, cycle):
         '''provide a pretty-printed repr for ipython based user interaction.
@@ -459,7 +458,13 @@ class Repository(object):
         return pth
 
     def log(self, branch_name=None, commit_hash=None, *, return_contents=False):
-        '''Alias for lmdb_utils.list_history() call
+        '''Displays a pretty printed commit log graph to the terminal.
+
+        .. note::
+
+            For programatic access, the return_contents value can be set to true
+            which will retrieve relevant commit specifications as dictionary
+            elements.
 
         Parameters
         ----------
@@ -468,6 +473,9 @@ class Repository(object):
             = None)
         commit_hash : str
             The commit hash to start the log process from. (Default value = None)
+        return_contents : bool, optional, kwarg only
+            If true, return the commit graph specifications in a dictionary
+            suitable for programatic access/evalutation.
 
         Returns
         -------
@@ -491,7 +499,11 @@ class Repository(object):
                 order=res['order'])
 
     def summary(self, *, branch_name='', commit='', return_contents=False):
-        '''Alias for lmdb_utils.summary() call
+        '''Print a summary of the repository contents to the terminal
+
+        .. note::
+
+            Programatic access is provided by the return_contents argument.
 
         Parameters
         ----------

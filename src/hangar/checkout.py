@@ -46,19 +46,25 @@ class ReaderCheckout(object):
         self._labelenv = labelenv
         self._dataenv = dataenv
         self._hashenv = hashenv
-        self.metadata = MetadataReader(dataenv=self._dataenv, labelenv=self._labelenv)
-        self.datasets = Datasets._from_commit(
+        self._metadata = MetadataReader(dataenv=self._dataenv, labelenv=self._labelenv)
+        self._datasets = Datasets._from_commit(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             cmtrefenv=self._dataenv)
 
     def _repr_pretty_(self, p, cycle):
+        '''pretty repr for printing in jupyter notebooks
+        '''
+        self.__verify_checkout_alive()
         res = f'\n Hangar {self.__class__.__name__}\
                 \n     Writer       : False\
-                \n     Commit Hash  : {self._commit_hash}\n'
+                \n     Commit Hash  : {self._commit_hash}\
+                \n     Num Datasets : {len(self._datasets)}\
+                \n     Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
     def __repr__(self):
+        self.__verify_checkout_alive()
         res = f'{self.__class__}('\
               f'base_path={self._repo_path} '\
               f'labelenv={self._labelenv} '\
@@ -66,6 +72,64 @@ class ReaderCheckout(object):
               f'hashenv={self._hashenv} '\
               f'commit={self._commit_hash})'
         return res
+
+    def __verify_checkout_alive(self):
+        '''Validates that the checkout object has not been closed
+
+        Raises
+        ------
+        PermissionError
+            if the checkout was previously close
+        '''
+        try:
+            assert hasattr(self, '_metadata')
+            assert hasattr(self, '_datasets')
+        except AssertionError:
+            err = f'Unable to operate on past checkout objects which have been '\
+                  f'closed. No operation occured. Please use a new checkout.'
+            raise PermissionError(err) from None
+
+    @property
+    def datasets(self):
+        '''Provides access to dataset interaction object.
+
+        Returns
+        -------
+        weakref.proxy
+            weakref proxy to the datasets object which behaves exactally like a
+            datasets accessor class but which can be invalidated when the writer
+            lock is released.
+        '''
+        self.__verify_checkout_alive()
+        wr = weakref.proxy(self._datasets)
+        return wr
+
+    @property
+    def metadata(self):
+        '''Provides access to metadata interaction object.
+
+        Returns
+        -------
+        weakref.proxy
+            weakref proxy to the metadata object which behaves exactally like a
+            metadata class but which can be invalidated when the writer lock is
+            released.
+        '''
+        self.__verify_checkout_alive()
+        wr = weakref.proxy(self._metadata)
+        return wr
+
+    @property
+    def commit_hash(self):
+        '''Commit hash this read-only checkout's data is read from.
+
+        Returns
+        -------
+        string
+            commit hash of the checkout
+        '''
+        self.__verify_checkout_alive()
+        return self._commit_hash
 
     def close(self):
         '''Gracefully close the reader checkout object.
@@ -75,8 +139,12 @@ class ReaderCheckout(object):
         system resources, which may improve performance for repositories with
         multiple simultaneous read checkouts.
         '''
-        for dsetHandle in self.datasets.values():
+        self.__verify_checkout_alive()
+        for dsetHandle in self._datasets.values():
             dsetHandle._close()
+        del self._datasets
+        del self._metadata
+        gc.collect()
 
 
 # --------------- Write enabled checkout ---------------------------------------

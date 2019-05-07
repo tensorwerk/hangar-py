@@ -48,6 +48,122 @@ class TestCheckout(object):
             co.commit()
         co.close()
 
+    def test_writer_dset_obj_not_accessible_after_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        dsets = co.datasets
+        dset = co.datasets['_dset']
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            dsets.__dict__
+        with pytest.raises(ReferenceError):
+            shouldFail = dsets['_dset']
+        with pytest.raises(ReferenceError):
+            dset.__dict__
+
+    def test_writer_dset_obj_not_accessible_after_commit_and_close(self, written_repo, array5by7):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        dsets = co.datasets
+        dset = co.datasets['_dset']
+        dset['1'] = array5by7
+        co.commit('hey there')
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            dsets.__dict__
+        with pytest.raises(ReferenceError):
+            shouldFail = dsets['_dset']
+        with pytest.raises(ReferenceError):
+            dset.__dict__
+        with pytest.raises(ReferenceError):
+            shouldFail = dset['1']
+
+    def test_reader_dset_obj_not_accessible_after_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=False)
+        dsets = co.datasets
+        dset = co.datasets['_dset']
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            dsets.__dict__
+        with pytest.raises(ReferenceError):
+            shouldFail = dsets['_dset']
+        with pytest.raises(ReferenceError):
+            dset.__dict__
+
+    def test_writer_metadata_obj_not_accessible_after_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        md = co.metadata
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            md.__dict__
+
+    def test_writer_metadata_obj_not_accessible_after_commit_and_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        md = co.metadata
+        md['hello'] = 'world'
+        co.commit('test commit')
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            md.__dict__
+        with pytest.raises(ReferenceError):
+            shouldFail = md['hello']
+
+    def test_reader_metadata_obj_not_accessible_after_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=False)
+        md = co.metadata
+        co.close()
+        with pytest.raises(ReferenceError):
+            md.__dict__
+
+    def test_close_read_does_not_invalidate_write_checkout(self, written_repo, array5by7):
+        repo = written_repo
+        r_co = repo.checkout(write=False)
+        w_co = repo.checkout(write=True)
+        r_co.close()
+
+        with pytest.raises(PermissionError):
+            shouldFail = r_co.datasets
+
+        dset = w_co.datasets['_dset']
+        dset['1'] = array5by7
+        assert np.allclose(w_co.datasets['_dset']['1'], array5by7)
+        w_co.commit('hello commit')
+        w_co.close()
+
+        with pytest.raises(ReferenceError):
+            dset.__dict__
+
+    def test_close_write_does_not_invalidate_read_checkout(self, written_repo, array5by7):
+        repo = written_repo
+        r_co = repo.checkout(write=False)
+        w_co = repo.checkout(write=True)
+
+        dset = w_co.datasets['_dset']
+        dset['1'] = array5by7
+        assert np.allclose(w_co.datasets['_dset']['1'], array5by7)
+        w_co.commit('hello commit')
+        w_co.close()
+
+        with pytest.raises(ReferenceError):
+            dset.__dict__
+
+        assert '_dset' in r_co.datasets
+        assert len(r_co.metadata) == 0
+
+        r_co.close()
+        with pytest.raises(PermissionError):
+            shouldFail = r_co.datasets
+
+
 
 @pytest.mark.skip(reason='not implemented')
 class TestBranching(object):
