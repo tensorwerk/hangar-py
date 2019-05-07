@@ -11,21 +11,21 @@ environment:
     #   PYTHON_HOME: C:\Python36
     #   PYTHON_VERSION: '3.6'
     #   PYTHON_ARCH: '32'
-    - TOXENV: 'py36-cover,report'
-      TOXPYTHON: C:\Python36-x64\python.exe
-      PYTHON_HOME: C:\Python36-x64
-      PYTHON_VERSION: '3.6'
-      PYTHON_ARCH: '64'
+    # - TOXENV: 'py36-cover,report'
+    #   TOXPYTHON: C:\Python36-x64\python.exe
+    #   PYTHON_HOME: C:\Python36-x64
+    #   PYTHON_VERSION: '3.6'
+    #   PYTHON_ARCH: '64'
     - TOXENV: 'py36-nocov'
       TOXPYTHON: C:\Python36-x64\python.exe
       PYTHON_HOME: C:\Python36-x64
       PYTHON_VERSION: '3.6'
       PYTHON_ARCH: '64'
-    - TOXENV: 'py37-cover,report'
-      TOXPYTHON: C:\Python37-x64\python.exe
-      PYTHON_HOME: C:\Python37-x64
-      PYTHON_VERSION: '3.7'
-      PYTHON_ARCH: '64'
+    # - TOXENV: 'py37-cover,report'
+    #   TOXPYTHON: C:\Python37-x64\python.exe
+    #   PYTHON_HOME: C:\Python37-x64
+    #   PYTHON_VERSION: '3.7'
+    #   PYTHON_ARCH: '64'
     - TOXENV: 'py37-nocov'
       TOXPYTHON: C:\Python37-x64\python.exe
       PYTHON_HOME: C:\Python37-x64
@@ -34,6 +34,10 @@ environment:
 init:
   - ps: echo $env:TOXENV
   - ps: ls C:\Python*
+  - ps: Remove-Item -Recurse -Force C:\cygwin
+  - ps: Remove-Item -Recurse -Force C:\cygwin64
+  - ps: Remove-Item -Recurse -Force C:\Qt
+  - ps: Remove-Item -Recurse -Force C:\mingw-w64
 install:
   - python -u ci\appveyor-bootstrap.py
   - '%PYTHON_HOME%\Scripts\virtualenv --version'

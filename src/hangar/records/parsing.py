@@ -28,6 +28,7 @@ REMOTES = config.get('hangar.keys.remotes')
 cycle_list = [str(c).rjust(4, '0') for c in range(9_999)]
 NAME_CYCLER = cycle(cycle_list)
 RANDOM_NAME_SEED = str(randint(0, 999_999_999)).rjust(0, '0')
+perf_counter()  # call to init monotonic start point
 
 
 def generate_sample_name():

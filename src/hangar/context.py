@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import platform
 import tempfile
 from collections import Counter
 from os.path import dirname
@@ -305,10 +306,24 @@ class Environments(metaclass=EnvironmentsSingleton):
             commit_hash = heads.get_branch_head_commit(self.branchenv, head_branch)
             txt = f'\n Warning: Neither BRANCH or COMMIT specified.'\
                   f'\n * Checking out writing HEAD BRANCH: {head_branch} at COMMIT: {commit_hash}'
-        print(txt)
+        logger.info(txt)
+
+        # On UNIX-like system, an open process still retains ability to interact
+        # with disk space allocated to a file when it is removed from disk.
+        # Windows does not, and will not allow file to be removed if a process
+        # is interacting with it. While the CM form is cleaner, this hack allows
+        # similar usage on Windows platforms.
 
         LMDB_CONFIG = config.get('hangar.lmdb')
-        with tempfile.TemporaryDirectory() as tempD:
+        if platform.system() != 'Windows':
+            with tempfile.TemporaryDirectory() as tempD:
+                tmpDF = os.path.join(tempD, f'{commit_hash}.lmdb')
+                logger.debug(f'checkout creating temp in CM: {tmpDF}')
+                tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+                commiting.unpack_commit_ref(self.refenv, tmpDB, commit_hash)
+                self.cmtenv[commit_hash] = tmpDB
+        else:
+            tempD = tempfile.mkdtemp()
             tmpDF = os.path.join(tempD, f'{commit_hash}.lmdb')
             logger.debug(f'checkout creating temp: {tmpDF}')
             tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
@@ -347,4 +362,9 @@ class Environments(metaclass=EnvironmentsSingleton):
         self.labelenv.close()
         self.stagehashenv.close()
         for env in self.cmtenv.values():
-            env.close()
+            if platform.system() == 'Windows':
+                envpth = env.path()
+                env.close()
+                os.remove(envpth)
+            else:
+                env.close()
