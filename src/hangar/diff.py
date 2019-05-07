@@ -696,6 +696,27 @@ class MetadataDiffer(object):
         self.mutations = set([m.meta_key for m in arecords.difference(drecords)])
         self.unchanged = potential_unchanged.difference(self.mutations)
 
+    def diff_out(self):
+        out = {
+            'additions': self.additions,
+            'removals': self.removals,
+            'mutations': self.mutations,
+            'unchanged': self.unchanged,
+        }
+        return out
+
+    def kv_diff_out(self):
+        out = {
+            'additions': {k: self.d_meta[k] for k in self.additions},
+            'removals': {k: self.a_meta[k] for k in self.removals},
+            'mutations': {k: self.d_meta[k] for k in self.mutations},
+            'unchanged': {k: self.a_meta[k] for k in self.unchanged},
+        }
+        return out
+
+
+# ----------------------
+
 
 def samples_record_dict_to_nt(record_dict: dict) -> set:
     records = set()
@@ -754,6 +775,17 @@ class SampleDiffer(object):
         }
         return out
 
+    def kv_diff_out(self):
+        out = {
+            'additions': {k: self.d_data[k] for k in self.additions},
+            'removals': {k: self.a_data[k] for k in self.removals},
+            'mutations': {k: self.d_data[k] for k in self.mutations},
+            'unchanged': {k: self.a_data[k] for k in self.unchanged},
+        }
+        return out
+
+# -------------------------------
+
 
 def schema_record_dict_to_nt(record_dict: dict) -> set:
     records = set()
@@ -807,20 +839,39 @@ class DatasetDiffer(object):
 
         self.unchanged = potential_unchanged.difference(self.mutations)
 
+    def diff_out(self):
+        out = {
+            'additions': self.additions,
+            'removals': self.removals,
+            'mutations': self.mutations,
+            'unchanged': self.unchanged,
+        }
+        return out
+
+    def kv_diff_out(self):
+        out = {
+            'additions': {k: self.d_dssch[k] for k in self.additions},
+            'removals': {k: self.a_dssch[k] for k in self.removals},
+            'mutations': {k: self.d_dssch[k] for k in self.mutations},
+            'unchanged': {k: self.a_dssch[k] for k in self.unchanged},
+        }
+        return out
+
 
 class CommitDiffer(object):
 
     def __init__(self, ancestor_contents: dict, master_contents: dict, dev_contents: dict):
 
-        self.acont = ancestor_contents
-        self.mcont = master_contents
-        self.dcont = dev_contents
+        self.acont = ancestor_contents  # ancestor contents
+        self.mcont = master_contents    # master contents
+        self.dcont = dev_contents       # dev contents
 
-        self.am_sdiff: DatasetDiffer = None
-        self.ad_sdiff: DatasetDiffer = None
-        self.am_mdiff: MetadataDiffer = None
-        self.ad_mdiff: MetadataDiffer = None
-        self.sampdiff = {}
+        self.am_dset_diff: DatasetDiffer = None   # ancestor -> master dset diff
+        self.ad_dset_diff: DatasetDiffer = None   # ancestor -> dev dset diff
+        self.am_meta_diff: MetadataDiffer = None  # ancestor -> master metadata diff
+        self.ad_meta_diff: MetadataDiffer = None  # ancestor -> dev metadata diff
+        self.am_samp_diff = {}
+        self.ad_samp_diff = {}
 
         self.run()
 
@@ -836,10 +887,10 @@ class CommitDiffer(object):
 
     def meta_diff(self):
 
-        self.am_mdiff = MetadataDiffer(
+        self.am_meta_diff = MetadataDiffer(
             ancestor_meta=self.acont['metadata'],
             dev_meta=self.mcont['metadata'])
-        self.ad_mdiff = MetadataDiffer(
+        self.ad_meta_diff = MetadataDiffer(
             ancestor_meta=self.acont['metadata'],
             dev_meta=self.dcont['metadata'])
 
@@ -847,37 +898,37 @@ class CommitDiffer(object):
 
         # addition conflicts
         meta_conflicts_t1 = []  # added in master & dev with different values
-        for meta_key in self.am_mdiff.additions:
-            if meta_key in self.ad_meta_diff.additions:
-                m_hash = self.am_mdiff.d_meta[meta_key]
-                d_hash = self.ad_mdiff.d_meta[meta_key]
-                if m_hash != d_hash:
-                    meta_conflicts_t1.append(meta_key)
+        addition_keys = self.am_meta_diff.additions.intersection(self.ad_meta_diff.additions)
+        for meta_key in addition_keys:
+            m_hash = self.am_meta_diff.d_meta[meta_key]
+            d_hash = self.ad_meta_diff.d_meta[meta_key]
+            if m_hash != d_hash:
+                meta_conflicts_t1.append(meta_key)
 
         # removal conflicts
         meta_conflicts_t21 = []  # removed in master, mutated in dev
         meta_conflicts_t22 = []  # removed in dev, mutated in master
-        for meta_key in self.am_mdiff.removals:
-            if meta_key in self.ad_meta_diff.mutations:
-                meta_conflicts_t21.append(meta_key)
-        for meta_key in self.ad_mdiff.removals:
-            if meta_key in self.am_meta_diff.mutations:
-                meta_conflicts_t22.append(meta_key)
+
+        am_removal_keys = self.am_meta_diff.removals.intersection(self.ad_meta_diff.mutations)
+        meta_conflicts_t21.extend(am_removal_keys)
+
+        ad_removal_keys = self.ad_meta_diff.removals.intersection(self.am_meta_diff.mutations)
+        meta_conflicts_t22.extend(ad_removal_keys)
 
         # mutation conflicts
         meta_conflicts_t311 = []  # mutated in master & dev to different values
         meta_conflicts_t312 = []  # mutated in master, removed in dev
         meta_conflicts_t322 = []  # mutated in dev, removed in master
-        for meta_key in self.am_mdiff.mutations:
+        for meta_key in self.am_meta_diff.mutations:
             if meta_key in self.ad_meta_diff.mutations:
-                m_hash = self.am_mdiff.d_meta[meta_key]
-                d_hash = self.ad_mdiff.d_meta[meta_key]
+                m_hash = self.am_meta_diff.d_meta[meta_key]
+                d_hash = self.ad_meta_diff.d_meta[meta_key]
                 if m_hash != d_hash:
                     meta_conflicts_t311.append(meta_key)
             elif meta_key in self.ad_meta_diff.removals:
                 meta_conflicts_t312.append(meta_key)
 
-        for meta_key in self.ad_mdiff.mutations:
+        for meta_key in self.ad_meta_diff.mutations:
             if meta_key in self.am_meta_diff.removals:
                 meta_conflicts_t322.append(meta_key)
 
@@ -897,40 +948,11 @@ class CommitDiffer(object):
         out['conflict'] = conflictFound
         return out
 
-    def _meta_additions(self):
-        out = {
-            'master': {key: self.am_mdiff.d_meta[key] for key in self.am_mdiff.additions},
-            'dev': {key: self.ad_mdiff.d_meta[key] for key in self.ad_mdiff.additions},
-        }
-        return out
-
-    def _meta_removals(self):
-        out = {
-            'master': self.am_mdiff.removals,
-            'dev': self.ad_mdiff.removals,
-        }
-        return out
-
-    def _meta_unchanged(self):
-        out = {
-            'master': {key: self.am_mdiff.a_meta[key] for key in self.am_mdiff.unchanged},
-            'dev': {key: self.ad_mdiff.a_meta[key] for key in self.ad_mdiff.unchanged},
-        }
-        return out
-
-    def _meta_mutations(self):
-        out = {
-            'master': {key: self.am_mdiff.d_meta[key] for key in self.am_mdiff.mutations},
-            'dev': {key: self.ad_mdiff.d_meta[key] for key in self.ad_mdiff.mutations},
-        }
-        return out
-
     def meta_changes(self):
-        out = {}
-        out['additions'] = self._meta_additions()
-        out['removals'] = self._meta_removals()
-        out['unchanged'] = self._meta_unchanged()
-        out['mutations'] = self._meta_mutations()
+        out = {
+            'master': self.am_meta_diff.kv_diff_out(),
+            'dev': self.ad_meta_diff.kv_diff_out(),
+        }
         return out
 
     # ----------------------------------------------------------------
@@ -939,11 +961,11 @@ class CommitDiffer(object):
 
     def dataset_diff(self):
 
-        self.am_sdiff = DatasetDiffer(
+        self.am_dset_diff = DatasetDiffer(
             ancestor_dsets=self.acont['datasets'],
             dev_dsets=self.mcont['datasets'])
 
-        self.ad_sdiff = DatasetDiffer(
+        self.ad_dset_diff = DatasetDiffer(
             ancestor_dsets=self.acont['datasets'],
             dev_dsets=self.dcont['datasets'])
 
@@ -951,38 +973,38 @@ class CommitDiffer(object):
 
         # addition conflicts
         dset_conflicts_t1 = []  # added in master & dev with different values
-        for dsetn in self.am_sdiff.additions:
-            if dsetn in self.ad_sdiff.additions:
-                m_srec = schema_record_dict_to_nt(self.am_sdiff.d_dssch[dsetn])
-                d_srec = schema_record_dict_to_nt(self.ad_sdiff.d_dssch[dsetn])
+        for dsetn in self.am_dset_diff.additions:
+            if dsetn in self.ad_dset_diff.additions:
+                m_srec = schema_record_dict_to_nt(self.am_dset_diff.d_dssch[dsetn])
+                d_srec = schema_record_dict_to_nt(self.ad_dset_diff.d_dssch[dsetn])
                 if m_srec != d_srec:
                     dset_conflicts_t1.append(dsetn)
 
         # removal conflicts
         dset_conflicts_t21 = []  # removed in master, mutated in dev
         dset_conflicts_t22 = []  # removed in dev, mutated in master
-        for dsetn in self.am_sdiff.removals:
-            if dsetn in self.ad_sdiff.mutations:
+        for dsetn in self.am_dset_diff.removals:
+            if dsetn in self.ad_dset_diff.mutations:
                 dset_conflicts_t21.append(dsetn)
-        for dsetn in self.ad_sdiff.removals:
-            if dsetn in self.am_sdiff.mutations:
+        for dsetn in self.ad_dset_diff.removals:
+            if dsetn in self.am_dset_diff.mutations:
                 dset_conflicts_t22.append(dsetn)
 
         # mutation conflicts
         dset_conflicts_t311 = []  # mutated in master & dev to different values
         dset_conflicts_t312 = []  # mutated in master, removed in dev
         dset_conflicts_t322 = []  # mutated in dev, removed in master
-        for dsetn in self.am_sdiff.mutations:
-            if dsetn in self.ad_sdiff.mutations:
-                m_srec = schema_record_dict_to_nt(self.am_sdiff.d_dssch[dsetn])
-                d_srec = schema_record_dict_to_nt(self.ad_sdiff.d_dssch[dsetn])
+        for dsetn in self.am_dset_diff.mutations:
+            if dsetn in self.ad_dset_diff.mutations:
+                m_srec = schema_record_dict_to_nt(self.am_dset_diff.d_dssch[dsetn])
+                d_srec = schema_record_dict_to_nt(self.ad_dset_diff.d_dssch[dsetn])
                 if m_srec != d_srec:
                     dset_conflicts_t311.append(dsetn)
-            elif dsetn in self.ad_sdiff.removals:
+            elif dsetn in self.ad_dset_diff.removals:
                 dset_conflicts_t312.append(dsetn)
 
-        for dsetn in self.ad_sdiff.mutations:
-            if dsetn in self.am_sdiff.removals:
+        for dsetn in self.ad_dset_diff.mutations:
+            if dsetn in self.am_dset_diff.removals:
                 dset_conflicts_t322.append(dsetn)
 
         out = {
@@ -1001,40 +1023,11 @@ class CommitDiffer(object):
         out['conflict'] = conflictFound
         return out
 
-    def _dataset_additions(self):
-        out = {
-            'master': {dsetn: self.am_sdiff.d_dssch[dsetn] for dsetn in self.am_sdiff.additions},
-            'dev': {dsetn: self.ad_sdiff.d_dssch[dsetn] for dsetn in self.ad_sdiff.additions},
-        }
-        return out
-
-    def _dataset_removals(self):
-        out = {
-            'master': self.am_sdiff.removals,
-            'dev': self.ad_sdiff.removals,
-        }
-        return out
-
-    def _dataset_unchanged(self):
-        out = {
-            'master': {dsetn: self.am_sdiff.a_dssch[dsetn] for dsetn in self.am_sdiff.unchanged},
-            'dev': {dsetn: self.ad_sdiff.a_dssch[dsetn] for dsetn in self.ad_sdiff.unchanged},
-        }
-        return out
-
-    def _dataset_mutations(self):
-        out = {
-            'master': {dsetn: self.am_sdiff.d_dssch[dsetn] for dsetn in self.am_sdiff.mutations},
-            'dev': {dsetn: self.ad_sdiff.d_dssch[dsetn] for dsetn in self.ad_sdiff.mutations},
-        }
-        return out
-
     def dataset_changes(self):
-        out = {}
-        out['additions'] = self._dataset_additions()
-        out['removals'] = self._dataset_removals()
-        out['unchanged'] = self._dataset_unchanged()
-        out['mutations'] = self._dataset_mutations()
+        out = {
+            'master': self.am_dset_diff.kv_diff_out(),
+            'dev': self.ad_dset_diff.kv_diff_out(),
+        }
         return out
 
     # ----------------------------------------------------------------
@@ -1043,62 +1036,56 @@ class CommitDiffer(object):
 
     def sample_diff(self):
 
-        m_dsets = self.am_sdiff.unchanged.union(
-            self.am_sdiff.additions).union(
-            self.am_sdiff.mutations)
+        # ------------ ancestor -> master changes --------------------
+
+        m_dsets = self.am_dset_diff.unchanged.union(self.am_dset_diff.additions).union(self.am_dset_diff.mutations)
         for dset_name in m_dsets:
-            try:
-                self.sampdiff[dset_name]
-            except KeyError:
-                self.sampdiff[dset_name] = {}
-            try:
-                a_dset_data = self.acont['datasets'][dset_name]['data']
-            except KeyError:
-                a_dset_data = {}
-
             m_dset_data = self.mcont['datasets'][dset_name]['data']
-            self.sampdiff[dset_name]['master'] = SampleDiffer(
-                dset_name=dset_name,
-                ancestor_data=a_dset_data,
-                dev_data=m_dset_data)
-
-        d_dsets = self.ad_sdiff.unchanged.union(
-            self.ad_sdiff.additions).union(
-            self.ad_sdiff.mutations)
-        for dset_name in d_dsets:
-            try:
-                self.sampdiff[dset_name]
-            except KeyError:
-                self.sampdiff[dset_name] = {}
-            try:
+            if dset_name in self.acont['datasets']:
                 a_dset_data = self.acont['datasets'][dset_name]['data']
-            except KeyError:
+            else:
                 a_dset_data = {}
+            self.am_samp_diff[dset_name] = SampleDiffer(
+                dset_name=dset_name, ancestor_data=a_dset_data, dev_data=m_dset_data)
+
+        for dset_name in self.am_dset_diff.removals:
+            a_dset_data = self.acont['datasets'][dset_name]['data']
+            m_dset_data = {}
+            self.am_samp_diff[dset_name] = SampleDiffer(
+                dset_name=dset_name, ancestor_data=a_dset_data, dev_data=m_dset_data)
+
+        # ------------ ancestor -> dev changes --------------------
+
+        d_dsets = self.ad_dset_diff.unchanged.union(self.ad_dset_diff.additions).union(self.ad_dset_diff.mutations)
+        for dset_name in d_dsets:
             d_dset_data = self.dcont['datasets'][dset_name]['data']
-            self.sampdiff[dset_name]['dev'] = SampleDiffer(
-                dset_name=dset_name,
-                ancestor_data=a_dset_data,
-                dev_data=d_dset_data)
+            if dset_name in self.acont['datasets']:
+                a_dset_data = self.acont['datasets'][dset_name]['data']
+            else:
+                a_dset_data = {}
+            self.ad_samp_diff[dset_name] = SampleDiffer(
+                dset_name=dset_name, ancestor_data=a_dset_data, dev_data=d_dset_data)
+
+        for dset_name in self.ad_dset_diff.removals:
+            a_dset_data = self.acont['datasets'][dset_name]['data']
+            d_dset_data = {}
+            self.ad_samp_diff[dset_name] = SampleDiffer(
+                dset_name=dset_name, ancestor_data=a_dset_data, dev_data=d_dset_data)
 
     def sample_conflicts(self):
 
         out = {}
-        for dsetn, sample_diff in self.sampdiff.items():
-            if 'master' in sample_diff:
-                mdiff = sample_diff['master']
+        all_dset_names = set(self.ad_samp_diff.keys()).union(set(self.am_samp_diff.keys()))
+        for dsetn in all_dset_names:
+            if dsetn in self.am_samp_diff:
+                mdiff = self.am_samp_diff[dsetn]
             else:
-                if dsetn in self.acont['datasets']:
-                    mdiff = SampleDiffer(dsetn, self.acont['datasets'][dsetn]['data'], {})
-                else:
-                    mdiff = SampleDiffer(dsetn, {}, {})
+                mdiff = SampleDiffer(dsetn, {}, {})
 
-            if 'dev' in sample_diff:
-                ddiff = sample_diff['dev']
+            if dsetn in self.ad_samp_diff:
+                ddiff = self.ad_samp_diff[dsetn]
             else:
-                if dsetn in self.acont['datasets']:
-                    ddiff = SampleDiffer(dsetn, self.acont['datasets'][dsetn]['data'], {})
-                else:
-                    ddiff = SampleDiffer(dsetn, {}, {})
+                ddiff = SampleDiffer(dsetn, {}, {})
 
             # addition conflicts
             samp_conflicts_t1 = []  # added in master & dev with different values
@@ -1155,53 +1142,29 @@ class CommitDiffer(object):
 
     def sample_changes(self):
         out = {
-            'additions': {},
-            'removals': {},
-            'unchanged': {},
-            'mutations': {},
+            'master': {dsetn: self.am_samp_diff[dsetn].kv_diff_out() for dsetn in self.am_samp_diff},
+            'dev': {dsetn: self.ad_samp_diff[dsetn].kv_diff_out() for dsetn in self.ad_samp_diff},
         }
-        for dsetn, branchspec in self.sampdiff.items():
-            for branchKey, sampDiffObj in branchspec.items():
-                if branchKey not in out['additions']:
-                    out['additions'][branchKey] = {dsetn: {}}
-                    out['removals'][branchKey] = {dsetn: {}}
-                    out['unchanged'][branchKey] = {dsetn: {}}
-                    out['mutations'][branchKey] = {dsetn: {}}
-                sampChanges = sampDiffObj.diff_out()
-                for oppKey, vals in sampChanges.items():
-                    out[oppKey][branchKey][dsetn] = vals
-
         return out
 
     def all_changes(self, include_master: bool = True, include_dev: bool = True) -> dict:
 
         meta = self.meta_changes()
-        dset_schemas = self.dataset_changes()
+        dsets = self.dataset_changes()
         samples = self.sample_changes()
 
-        ometa, odsets, osamples = {}, {}, {}
         if not include_master:
-            for k, v in meta.items():
-                ometa[k] = v['dev']
-            for k, v in dset_schemas.items():
-                odsets[k] = v['dev']
-            for k, v in samples.items():
-                osamples[k] = v['dev']
+            meta.__delitem__('master')
+            dsets.__delitem__('master')
+            samples.__delitem__('master')
         elif not include_dev:
-            for k, v in meta.items():
-                ometa[k] = v['master']
-            for k, v in dset_schemas.items():
-                odsets[k] = v['master']
-            for k, v in samples.items():
-                osamples[k] = v['master']
-        else:
-            ometa = meta
-            odsets = dset_schemas
-            osamples = samples
+            meta.__delitem__('dev')
+            dsets.__delitem__('dev')
+            samples.__delitem__('dev')
 
         res = {
-            'metadata': ometa,
-            'datasets': odsets,
-            'samples': osamples,
+            'metadata': meta,
+            'datasets': dsets,
+            'samples': samples,
         }
         return res
