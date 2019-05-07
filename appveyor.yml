@@ -34,6 +34,7 @@ environment:
 init:
   - ps: echo $env:TOXENV
   - ps: ls C:\Python*
+  - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
 install:
   - python -u ci\appveyor-bootstrap.py
   - '%PYTHON_HOME%\Scripts\virtualenv --version'
