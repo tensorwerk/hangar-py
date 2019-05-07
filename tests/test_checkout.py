@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import shutil
+import platform
 
 
 class TestCheckout(object):
@@ -33,6 +34,8 @@ class TestCheckout(object):
             co.datasets['_dset'].add('1', array5by7)
         co.close()
 
+    @pytest.mark.skipif(platform.system() == 'Windows',
+        reason='Files cannot be removed when process is using them on windows systems')
     def test_write_after_repo_deletion(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         shutil.rmtree(written_repo._repo_path)
