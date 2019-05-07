@@ -13,12 +13,21 @@ def reset_singletons():
     cleanup all singleton instances anyway before each test, to ensure
     no leaked state between tests.
     '''
-    try:
-        for env in hangar.context.EnvironmentsSingleton._instances.values():
-            # need to close handles to prevent file lock issues in windows
+    for env in hangar.context.EnvironmentsSingleton._instances.values():
+        # need to close handles to prevent file lock issues in windows
+        try:
             env._close_environments()
-    except Exception:
-        pass
+        except Exception:
+            pass
+    for fd in hangar.hdf5_store.FileHandlesSingleton._instances.values():
+        try:
+            fd.close(mode='a')
+        except Exception:
+            pass
+        try:
+            fd.close(mode='r')
+        except Exception:
+            pass
     hangar.context.TxnRegisterSingleton._instances = {}
     hangar.context.EnvironmentsSingleton._instances = {}
     hangar.hdf5_store.FileHandlesSingleton._instances = {}
@@ -27,12 +36,21 @@ def reset_singletons():
 @pytest.fixture()
 def managed_tmpdir(tmp_path):
     yield tmp_path
-    try:
-        for env in hangar.context.EnvironmentsSingleton._instances.values():
-            # need to close handles to prevent file lock issues in windows
+    for env in hangar.context.EnvironmentsSingleton._instances.values():
+        # need to close handles to prevent file lock issues in windows
+        try:
             env._close_environments()
-    except Exception:
-        pass
+        except Exception:
+            pass
+    for fd in hangar.hdf5_store.FileHandlesSingleton._instances.values():
+        try:
+            fd.close(mode='a')
+        except Exception:
+            pass
+        try:
+            fd.close(mode='r')
+        except Exception:
+            pass
     shutil.rmtree(tmp_path)
 
 
