@@ -8,7 +8,7 @@ from hangar import Repository
 import hangar
 
 @pytest.fixture(autouse=True)
-def reset_singletons():
+def reset_singletons(monkeypatch):
     '''
     cleanup all singleton instances anyway before each test, to ensure
     no leaked state between tests.
