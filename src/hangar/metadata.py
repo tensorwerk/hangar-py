@@ -67,12 +67,15 @@ class MetadataReader(object):
         else:
             return False
 
+    def __len__(self):
+        return len(self._Query.metadata_names())
+
     def __iter__(self):
-        raise NotImplementedError()
+        return self.keys()
 
     def __repr__(self):
         res = f'\n Hangar Metadata\
-                \n     Number of Keys : {len(self._Query.metadata_names())}\
+                \n     Number of Keys : {len(self)}\
                 \n     Access Mode    : r\n'
         return res
 
@@ -194,7 +197,7 @@ class MetadataWriter(MetadataReader):
 
     def __repr__(self):
         res = f'\n Hangar Metadata\
-                \n     Number of Keys : {len(self._Query.metadata_names())}\
+                \n     Number of Keys : {len(self)}\
                 \n     Access Mode    : a\n'
         return res
 

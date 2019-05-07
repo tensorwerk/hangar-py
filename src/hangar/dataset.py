@@ -3,6 +3,8 @@ import os
 from typing import Optional
 from uuid import uuid1
 import logging
+import weakref
+import gc
 
 import numpy as np
 import lmdb
@@ -720,7 +722,8 @@ class Datasets(object):
             If no dataset with the given name exists in the checkout
         '''
         try:
-            return self._datasets[name]
+            wr = weakref.proxy(self._datasets[name])
+            return wr
         except KeyError:
             msg = f'HANGAR KEY ERROR:: No dataset exists with name: {name}'
             e = KeyError(msg)
@@ -995,7 +998,7 @@ class Datasets(object):
             mode='a')
 
         logger.info(f'Dataset Initialized: `{name}`')
-        return self._datasets[name]
+        return self.get(name)
 
     def remove_dset(self, dset_name):
         '''remove the dataset and all data contained within it from the repository.

@@ -1,6 +1,8 @@
 import logging
 from os.path import join as pjoin
 from uuid import uuid4
+import weakref
+import gc
 
 from . import config
 from .dataset import Datasets
@@ -122,7 +124,7 @@ class WriterCheckout(object):
     def __init__(self, repo_pth, branch_name, labelenv, hashenv, refenv,
                  stageenv, branchenv, stagehashenv, mode='a'):
         self._branch_name = branch_name
-        self.__writer_lock = str(uuid4())
+        self._writer_lock = str(uuid4())
         self._repo_path = repo_pth
         self._repo_stage_path = pjoin(self._repo_path, STAGE_DATA_DIR)
         self._repo_store_path = pjoin(self._repo_path, STORE_DATA_DIR)
@@ -132,15 +134,19 @@ class WriterCheckout(object):
         self._refenv = refenv
         self._branchenv = branchenv
         self._stagehashenv = stagehashenv
-        self.datasets = None
-        self.metadata = None
+        self._datasets: Datasets = None
+        self._metadata: MetadataWriter = None
         self.__setup()
 
     def _repr_pretty_(self, p, cycle):
+        '''pretty repr for printing in jupyter notebooks
+        '''
         self.__acquire_writer_lock()
         res = f'\n Hangar {self.__class__.__name__}\
                 \n     Writer       : True\
-                \n     Base Branch  : {self._branch_name}\n'
+                \n     Base Branch  : {self._branch_name}\
+                \n     Num Datasets : {len(self._datasets)}\
+                \n     Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -155,28 +161,87 @@ class WriterCheckout(object):
               f'branchenv={self._branchenv})\n'
         return res
 
+    @property
+    def datasets(self):
+        '''Provides access to dataset interaction object.
+
+        Returns
+        -------
+        weakref.proxy
+            weakref proxy to the datasets object which behaves exactally like a
+            datasets accessor class but which can be invalidated when the writer
+            lock is released.
+        '''
+        self.__acquire_writer_lock()
+        wr = weakref.proxy(self._datasets)
+        return wr
+
+    @property
+    def metadata(self):
+        '''Provides access to metadata interaction object.
+
+        Returns
+        -------
+        weakref.proxy
+            weakref proxy to the metadata object which behaves exactally like a
+            metadata class but which can be invalidated when the writer lock is
+            released.
+        '''
+        self.__acquire_writer_lock()
+        wr = weakref.proxy(self._metadata)
+        return wr
+
+    @property
+    def branch_name(self):
+        '''Branch this write enabled checkout's staging area was based on.
+
+        Returns
+        -------
+        string
+            name of the branch whose commit HEAD changes are staged from.
+        '''
+        self.__acquire_writer_lock()
+        return self._branch_name
+
     def __acquire_writer_lock(self):
         '''Ensures that this class instance holds the writer lock in the database.
         '''
         try:
-            self.__writer_lock
+            self._writer_lock
         except AttributeError:
-            self.datasets = None
-            self.metadata = None
+            try:
+                del self._datasets
+                del self._metadata
+                gc.collect()
+            except AttributeError:
+                pass
             err = f'Unable to operate on past checkout objects which have been '\
                   f'closed. No operation occured. Please use a new checkout.'
-            logger.error(err, exc_info=1)
-            raise PermissionError(err)
+            logger.error(err, exc_info=0)
+            raise PermissionError(err) from None
 
         try:
-            heads.acquire_writer_lock(self._branchenv, self.__writer_lock)
+            heads.acquire_writer_lock(self._branchenv, self._writer_lock)
         except PermissionError as e:
-            self.datasets = None
-            self.metadata = None
-            logger.error(e, exc_info=1)
-            raise e
+            try:
+                del self._datasets
+                del self._metadata
+                gc.collect()
+            except AttributeError:
+                pass
+            logger.error(e, exc_info=0)
+            raise e from None
 
     def __setup(self):
+        '''setup the staging area appropriatly for a write enabled checkout.
+
+        Raises
+        ------
+        ValueError
+            if there are changes previously made in the staging area which were
+            based on one branch's HEAD, but a different branch was specified to
+            be used for the base of this checkout.
+        '''
         self.__acquire_writer_lock()
         staged_status = staging_area_status(self._stageenv, self._refenv, self._branchenv)
         current_head = heads.get_staging_branch_head(self._branchenv)
@@ -204,8 +269,8 @@ class WriterCheckout(object):
                     branchenv=self._branchenv,
                     branch_name=self._branch_name)
 
-        self.metadata = MetadataWriter(dataenv=self._stageenv, labelenv=self._labelenv)
-        self.datasets = Datasets._from_staging_area(
+        self._metadata = MetadataWriter(dataenv=self._stageenv, labelenv=self._labelenv)
+        self._datasets = Datasets._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -231,15 +296,16 @@ class WriterCheckout(object):
         RuntimeError
             If no changes have been made in the staging area, no commit occurs.
         '''
-        logger.info(f'Commit operation requested with message: {commit_message}')
         self.__acquire_writer_lock()
+        logger.info(f'Commit operation requested with message: {commit_message}')
+
         if staging_area_status(self._stageenv, self._refenv, self._branchenv) == 'CLEAN':
             msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. Cannot commit.'
             e = RuntimeError(msg)
             logger.error(e, exc_info=False)
             raise e
 
-        for dsetHandle in self.datasets.values():
+        for dsetHandle in self._datasets.values():
             try:
                 dsetHandle._close()
             except KeyError:
@@ -275,15 +341,16 @@ class WriterCheckout(object):
         RuntimeError
             If no changes have been made to the staging area, no reset is necessary.
         '''
-        logger.info(f'Hard reset requested with writer_lock: {self.__writer_lock}')
         self.__acquire_writer_lock()
+        logger.info(f'Hard reset requested with writer_lock: {self._writer_lock}')
+
         if staging_area_status(self._stageenv, self._refenv, self._branchenv) == 'CLEAN':
             msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. No reset necessary.'
             e = RuntimeError(msg)
             logger.error(e, exc_info=False)
             raise e
 
-        for dsetHandle in self.datasets.values():
+        for dsetHandle in self._datasets.values():
             try:
                 dsetHandle._close()
             except KeyError:
@@ -298,6 +365,7 @@ class WriterCheckout(object):
             refenv=self._refenv,
             stageenv=self._stageenv,
             commit_hash=head_commit)
+
         logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
         self.__setup()
         return head_commit
@@ -309,12 +377,15 @@ class WriterCheckout(object):
         result in a lock being placed on the repository which will not allow any
         writes until it has been manually cleared.
         '''
-        heads.release_writer_lock(self._branchenv, self.__writer_lock)
-        for dsetHandle in self.datasets.values():
+        self.__acquire_writer_lock()
+        heads.release_writer_lock(self._branchenv, self._writer_lock)
+        for dsetHandle in self._datasets.values():
             try:
                 dsetHandle._close()
             except KeyError:
                 pass
-        self.__dict__.__delitem__(f'_{self.__class__.__name__}__writer_lock')
+        del self._datasets
+        del self._metadata
+        del self._writer_lock
+        gc.collect()
         logger.info(f'writer checkout of {self._branch_name} closed')
-        # self.close_lmdb_environments()
