@@ -783,13 +783,13 @@ class Datasets(object):
                 self._datasets[dskey] = self._datasets[dskey].__enter__()
 
         try:
-            assert all([k in self._datasets for k in dset_data_map.keys()])
+            assert all([k in self._datasets for k in mapping.keys()])
             data_name = parsing.generate_sample_name()
-            for k, v in dset_data_map.items():
+            for k, v in mapping.items():
                 self._datasets[k].add(v, bulk_add_name=data_name)
 
         except AssertionError:
-            msg = f'HANGAR KEY ERROR:: one of keys: {dset_data_map.keys()} not in '\
+            msg = f'HANGAR KEY ERROR:: one of keys: {mapping.keys()} not in '\
                   f'datasets: {self._datasets.keys()}'
             logger.error(msg)
             raise KeyError(msg)
