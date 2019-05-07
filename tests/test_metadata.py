@@ -70,9 +70,3 @@ class TestMetadata(object):
             assert co.metadata[f'k_{i}'] == v
         for i in range(limit):
             assert f'k_{i}' in co.metadata
-
-    def test_context_manager(self, repo):
-        co = repo.checkout(write=True)
-        # TODO: what are the usecases for this context manager
-        with co.metadata as m:
-            m.add('a', 'b')
