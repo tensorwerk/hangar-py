@@ -1,3 +1,5 @@
+.. _ref-concepts:
+
 ####################
 Hangar Core Concepts
 ####################
@@ -73,6 +75,9 @@ For a deep dive into the Hangar internals, we invite you to check out the
 How Hangar Thinks About Data
 ****************************
 
+Abstraction 0: What is Data?
+============================
+
 From this point forward, **when we talk about "Data" we are actually talking
 about n-dimensional arrays of numeric information. To Hangar, "Data" is just a
 collection of numbers being passed into and out of it.** Data does not have a
@@ -81,21 +86,8 @@ Hangar itself - it is just numbers. This theory of "Data" is nearly as simple as
 it gets, and this simplicity is what enables us to be unconstrained as we build
 abstractions and utilities to operate on it.
 
-Abstraction 1: What is a Repository?
-====================================
 
-A "Repository" consists of an historically ordered mapping of "Commits" over time
-by various "Committers" across any number of "Branches".
-Though there are many conceptual similarities in what a Git repo and a Hangar Repository
-achieve, Hangar is designed with the express purpose of dealing with numeric data.
-As such, when you read/write to/from a Repository, the main way of interaction with
-information will be through (an arbitrary number of) Datasets in each Commit. A simple
-key/value store is also included to store metadata, but as it is a minor point is will
-largely be ignored for the rest of this post.
-
-History exists at the Repository level, Information exists at the Commit level.
-
-Abstraction 2: What is a Dataset?
+Abstraction 1: What is a Dataset?
 =================================
 
 Let's get philosophical and talk about what a "Dataset" is. The word "Dataset"
@@ -116,7 +108,7 @@ pieces. To define a "Dataset" in Hangar, we need only provide:
 * a type
 * a shape
 
-Abstraction 3: What Makes up a Dataset?
+Abstraction 2: What Makes up a Dataset?
 =======================================
 
 The individual pieces of information ("Data") which are grouped together in a
@@ -124,9 +116,9 @@ The individual pieces of information ("Data") which are grouped together in a
 specification set by our definition of a Dataset, all samples must be numeric
 arrays with each having:
 
-1) Same type as defined in the Dataset specification
+1) Same data type (standard ``Numpy`` data types are supported).
 2) A shape with each dimension size <= the shape (``max shape``) set in the
-   dataset.
+   dataset specification (more on this later).
 
 Additionally, samples in a dataset can either be named, or unnamed (depending on
 how you interpret what the information contained in the Dataset actually
@@ -141,6 +133,36 @@ MRI volume scan for a particular patient; while for the NASDAQ Stock Ticker it
 might be an hours worth of price data points (or less, or more!) The point is
 that when you think about what a sample is, it should typically be the smallest
 atomic unit of useful information.
+
+.. note::
+
+    The technical crowd among the readers should note:
+
+    * Hangar preserves all sample data bit-exactally.
+    * Dense arrays are fully supported, Sparse array support is currently
+      under development and will be released soon.
+    * Integrity checks are built in by default (explained in more detail in
+      :ref:`ref-hangar-under-the-hood`.) using cryptographically secure
+      algorithms.
+    * Hangar is very much a young project, until pennetration tests and
+      security reviews are performed, we will refrain from stating that hangar
+      is fully "cryptographically secure". Security experts are welcome to
+      contact us privately at `hangar.info@tensorwerk.com
+      <hangar.info@tensorwerk.com>`__ to disclose any security issues.
+
+Abstraction 3: What is a Repository?
+====================================
+
+A "Repository" consists of an historically ordered mapping of "Commits" over
+time by various "Committers" across any number of "Branches". Though there are
+many conceptual similarities in what a Git repo and a Hangar Repository achieve,
+Hangar is designed with the express purpose of dealing with numeric data. As
+such, when you read/write to/from a Repository, the main way of interaction with
+information will be through (an arbitrary number of) Datasets in each Commit. A
+simple key/value store is also included to store metadata, but as it is a minor
+point is will largely be ignored for the rest of this post.
+
+History exists at the Repository level, Information exists at the Commit level.
 
 ******************************************
 Implications of the Hangar Data Philosophy
@@ -188,11 +210,11 @@ of the well validated, highly optimized, and community validated numerical array
 data management utilities developed by the High Performance Computing community
 over the past few decades.
 
-In a sense, the backend of Hangar servers two functions:
+In a sense, the backend of Hangar serves two functions:
 
 1) Bookkeeping: recording information about about datasets, samples, commits, etc.
 2) Data Storage: highly optimized interfaces which store and retrieve data from
-   from disk through it's backend utility.
+   from disk through its backend utility.
 
 The details are explained much more thoroughly in :ref:`ref-hangar-under-the-hood`.
 

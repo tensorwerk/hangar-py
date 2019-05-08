@@ -25,7 +25,7 @@ Overview
 
 .. |appveyor| image:: https://ci.appveyor.com/api/projects/status/github/tensorwerk/hangar-py?branch=master&svg=true
     :alt: AppVeyor Build Status
-    :target: https://ci.appveyor.com/project/tensorwerk/hangar-py
+    :target: https://ci.appveyor.com/project/rlizzo/hangar-py
 
 .. |version| image:: https://img.shields.io/pypi/v/hangar.svg
     :alt: PyPI Package latest release
