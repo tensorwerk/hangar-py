@@ -13,7 +13,7 @@ from .context import Environments
 from .diagnostics import graphing
 from .records import heads, parsing, summarize, commiting
 from .remote.hangar_client import HangarClient
-from .utils import is_valid_directory_path
+from .utils import is_valid_directory_path, is_ascii_alnum
 
 logger = logging.getLogger(__name__)
 
@@ -651,6 +651,12 @@ class Repository(object):
         bool
             if the operation was successful.
         '''
+        if not is_ascii_alnum(branch_name):
+            msg = (f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` is not allowed. '
+                   'Must only contain alpha-numeric ascii with no whitespace characters.')
+            e = ValueError(msg)
+            logger.error(e, exc_info=False)
+            raise e
         didCreateBranch = heads.create_branch(
             branchenv=self._env.branchenv,
             branch_name=branch_name,
