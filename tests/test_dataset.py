@@ -89,7 +89,7 @@ class TestDataset(object):
 
     def test_dataset_with_empty_dimension(self, repo):
         co = repo.checkout(write=True)
-        arr = np.array(1)
+        arr = np.array(1, dtype=np.int64)
         dset = co.datasets.init_dataset('dset1', shape=(), dtype=np.int64)
         dset['1'] = arr
         co.commit()
@@ -100,7 +100,8 @@ class TestDataset(object):
         co = repo.checkout()
         dset1 = co.datasets['dset1']
         dset2 = co.datasets['dset2']
-        assert np.allclose(dset1['1'], dset2['1'], arr)
+        assert np.allclose(dset1['1'], arr)
+        assert np.allclose(dset2['1'], arr)
 
 
 class TestDataWithFixedSizedDataset(object):
