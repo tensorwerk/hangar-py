@@ -63,9 +63,8 @@ class TestMetadata(object):
             assert v == f'v_{i}'
         for i, k in enumerate(co.metadata.keys()):
             assert co.metadata[k] == f'v_{i}'
-        with pytest.raises(NotImplementedError):
-            for i, k in enumerate(co.metadata):
-                assert co.metadata[k] == f'v_{i}'
+        for i, k in enumerate(co.metadata):
+            assert co.metadata[k] == f'v_{i}'
         for i, v in enumerate(co.metadata.values()):
             assert co.metadata[f'k_{i}'] == v
         for i in range(limit):

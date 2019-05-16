@@ -682,12 +682,15 @@ class Datasets(object):
     def values(self):
         '''list all dataset object instances in the checkout
 
-        Returns
+        Yields
         -------
-        list of obj
-            list of dataset objects used to interact with the data
+        object
+            Generator of DatasetData accessor objects (set to read or write mode
+            as appropriate)
         '''
-        return self._datasets.values()
+        for dsetObj in self._datasets.values():
+            wr = weakref.proxy(dsetObj)
+            yield wr
 
     def items(self):
         '''generator providing access to dataset_name, :class:``Datasets``
@@ -699,7 +702,8 @@ class Datasets(object):
 
         '''
         for dsetN, dsetObj in self._datasets.items():
-            yield (dsetN, dsetObj)
+            wr = weakref.proxy(dsetObj)
+            yield (dsetN, wr)
 
     def get(self, name):
         '''Returns a dataset access object.

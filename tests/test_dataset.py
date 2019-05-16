@@ -23,6 +23,10 @@ class TestDataset(object):
 
         # getting the dataset with `get`
         dsetOld = co.datasets.get('_dset')
+        dsetOldPath = dsetOld._path
+        dsetOldDsetn = dsetOld._dsetn
+        dsetOldDefaultSchemaHash = dsetOld._default_schema_hash
+        dsetOldSchemaUUID = dsetOld._schema_uuid
 
         dsetOld.add(array5by7, '1')
         co.commit()
@@ -33,10 +37,10 @@ class TestDataset(object):
         dsetNew = co.datasets['_dset']
 
         assert np.allclose(dsetNew['1'], array5by7)
-        assert dsetOld._path == dsetNew._path
-        assert dsetOld._dsetn == dsetNew._dsetn
-        assert dsetOld._default_schema_hash == dsetNew._default_schema_hash
-        assert dsetOld._schema_uuid == dsetNew._schema_uuid
+        assert dsetOldPath == dsetNew._path
+        assert dsetOldDsetn == dsetNew._dsetn
+        assert dsetOldDefaultSchemaHash == dsetNew._default_schema_hash
+        assert dsetOldSchemaUUID == dsetNew._schema_uuid
 
     def test_remove_dataset(self, written_repo):
         co = written_repo.checkout(write=True)

@@ -62,6 +62,31 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             dset.__dict__
 
+    def test_writer_dset_obj_dataset_iter_values_not_accessible_after_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        oldObjs = []
+        for oldObj in co.datasets.values():
+            oldObjs.append(oldObj)
+        co.close()
+
+        for oldObj in oldObjs:
+            with pytest.raises(ReferenceError):
+                oldObj.__dict__
+
+    def test_writer_dset_obj_dataset_iter_items_not_accessible_after_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        oldObjs = {}
+        for oldName, oldObj in co.datasets.items():
+            oldObjs[oldName] = oldObj
+        co.close()
+
+        for name, obj in oldObjs.items():
+            assert isinstance(name, str)
+            with pytest.raises(ReferenceError):
+                obj.__dict__
+
     def test_writer_dset_obj_not_accessible_after_commit_and_close(self, written_repo, array5by7):
         repo = written_repo
         co = repo.checkout(write=True)
@@ -93,6 +118,31 @@ class TestCheckout(object):
             shouldFail = dsets['_dset']
         with pytest.raises(ReferenceError):
             dset.__dict__
+
+    def test_reader_dset_obj_dataset_iter_values_not_accessible_after_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=False)
+        oldObjs = []
+        for oldObj in co.datasets.values():
+            oldObjs.append(oldObj)
+        co.close()
+
+        for oldObj in oldObjs:
+            with pytest.raises(ReferenceError):
+                oldObj.__dict__
+
+    def test_reader_dset_obj_dataset_iter_items_not_accessible_after_close(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=False)
+        oldObjs = {}
+        for oldName, oldObj in co.datasets.items():
+            oldObjs[oldName] = oldObj
+        co.close()
+
+        for name, obj in oldObjs.items():
+            assert isinstance(name, str)
+            with pytest.raises(ReferenceError):
+                obj.__dict__
 
     def test_writer_metadata_obj_not_accessible_after_close(self, written_repo):
         repo = written_repo
