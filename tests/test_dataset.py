@@ -87,6 +87,22 @@ class TestDataset(object):
             co.datasets.init_dataset('dset2', shape=shape, dtype=np.int)
         co.close()
 
+    def test_dataset_with_empty_dimension(self, repo):
+        co = repo.checkout(write=True)
+        arr = np.array(1, dtype=np.int64)
+        dset = co.datasets.init_dataset('dset1', shape=(), dtype=np.int64)
+        dset['1'] = arr
+        co.commit()
+        dset = co.datasets.init_dataset('dset2', prototype=arr)
+        dset['1'] = arr
+        co.commit()
+        co.close()
+        co = repo.checkout()
+        dset1 = co.datasets['dset1']
+        dset2 = co.datasets['dset2']
+        assert np.allclose(dset1['1'], arr)
+        assert np.allclose(dset2['1'], arr)
+
 
 class TestDataWithFixedSizedDataset(object):
 
@@ -329,6 +345,24 @@ class TestDataWithFixedSizedDataset(object):
         with pytest.raises(ValueError):
             dset['3'] = newarr
         co.close()
+
+    def test_adding_same_data_again_with_same_name(self, repo, array5by7):
+        co = repo.checkout(write=True)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        dset['1'] = array5by7
+        with pytest.raises(LookupError):
+            # raises before commit
+            dset['1'] = array5by7
+        co.commit()
+        with pytest.raises(LookupError):
+            # raises after commit
+            dset['1'] = array5by7
+        co.close()
+        co = repo.checkout(write=True)
+        dset = co.datasets['dset']
+        with pytest.raises(LookupError):
+            # raises in another checkout
+            dset['1'] = array5by7
 
     def test_context_manager(self, repo, randomsizedarray):
         co = repo.checkout(write=True)

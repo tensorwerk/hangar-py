@@ -671,9 +671,12 @@ def hash_data_raw_val_from_db_val(db_val: bytes) -> DataHashVal:
 
     hdf5_vals, _, shape_vals = hdf5_dset_vals.rpartition(SLICESEP)
     hdf5_dataset, hdf5_dataset_idx = hdf5_vals.split(LISTSEP)
-
-    data_shape_val = [int(dim) for dim in shape_vals.split(' ')]
-    data_shape = tuple(data_shape_val)
+    if shape_vals == '':
+        # if the data is of empty shape -> ()
+        data_shape = ()
+    else:
+        data_shape_val = [int(dim) for dim in shape_vals.split(' ')]
+        data_shape = tuple(data_shape_val)
 
     raw_val = DataHashVal(
         hdf5_file_schema,
