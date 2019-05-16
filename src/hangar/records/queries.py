@@ -2,6 +2,8 @@ from . import parsing
 from .. import config
 from ..context import TxnRegister
 
+SEP = config.get('hangar.seps.key')
+
 
 '''
 Data record queries
@@ -110,10 +112,11 @@ class RecordQuery(object):
             with datatxn.cursor() as cursor:
                 # with datatxn.cursor() as cursor:
                 dataRecordsExist = cursor.set_range(startDatasetRecordCountRangeKey)
+                dataRecKeySubString = f'{startDatasetRecordCountRangeKey.decode()}{SEP}'.encode()
                 cursor.next()
                 while dataRecordsExist:
                     dataRecKey, dataRecVal = cursor.item()
-                    if dataRecKey.startswith(startDatasetRecordCountRangeKey):
+                    if dataRecKey.startswith(dataRecKeySubString):
                         data_records[dataRecKey] = dataRecVal
                         dataRecordsExist = cursor.next()
                         continue
