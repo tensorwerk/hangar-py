@@ -34,10 +34,6 @@ environment:
 init:
   - ps: echo $env:TOXENV
   - ps: ls C:\Python*
-  - ps: Remove-Item -Recurse -Force C:\cygwin
-  - ps: Remove-Item -Recurse -Force C:\cygwin64
-  - ps: Remove-Item -Recurse -Force C:\Qt
-  - ps: Remove-Item -Recurse -Force C:\mingw-w64
 install:
   - python -u ci\appveyor-bootstrap.py
   - '%PYTHON_HOME%\Scripts\virtualenv --version'
@@ -55,4 +51,4 @@ artifacts:
 
 ### To enable remote debugging uncomment this (also, see: http://www.appveyor.com/docs/how-to/rdp-to-build-worker):
 # on_finish:
-#   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+  # - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
