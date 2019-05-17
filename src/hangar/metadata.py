@@ -82,6 +82,9 @@ class MetadataReader(object):
                 \n     Access Mode    : r\n'
         return res
 
+    def __len__(self):
+        return len(self._Query.metadata_names())
+
     @property
     def iswriteable(self):
         '''Bool indicating if this metadata object is write-enabled. Read-only attribute.
