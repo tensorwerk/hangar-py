@@ -7,6 +7,7 @@ import numpy as np
 from hangar import Repository
 import hangar
 
+
 @pytest.fixture(autouse=True)
 def reset_singletons(monkeypatch):
     '''
