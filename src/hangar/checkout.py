@@ -1,6 +1,7 @@
 import logging
 from os.path import join as pjoin
 from uuid import uuid4
+from functools import update_wrapper
 
 import numpy as np
 
@@ -270,6 +271,20 @@ class WriterCheckout(object):
         '''
         self.__acquire_writer_lock()
         return self._branch_name
+
+    @property
+    def commit_hash(self):
+        '''Commit hash which the staging area of :ref:`branch_name` is based on.
+
+        Returns
+        -------
+        string
+            commit hash
+        '''
+        self.__acquire_writer_lock()
+        commit_hash = heads.get_branch_head_commit(
+            branchenv=self._branchenv, branch_name=self._branch_name)
+        return commit_hash
 
     def __acquire_writer_lock(self):
         '''Ensures that this class instance holds the writer lock in the database.

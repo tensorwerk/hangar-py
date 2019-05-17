@@ -134,8 +134,8 @@ class Repository(object):
                     commit=commit_hash)
                 return co
         except (RuntimeError, ValueError) as e:
-            logger.error(e, exc_info=1, extra=self._env.__dict__)
-            return None
+            logger.error(e, exc_info=False, extra=self._env.__dict__)
+            raise e from None
 
     def clone(self, user_name: str, user_email: str, remote_address: str,
               *, remove_old: bool = False) -> str:

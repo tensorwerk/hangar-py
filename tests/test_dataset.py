@@ -196,6 +196,7 @@ class TestDataWithFixedSizedDataset(object):
         co.datasets['_dset']['2'] = new_array
         co.commit()
         co.close()
+
         co = written_repo.checkout()
         dset = co.datasets['_dset']
         assert len(dset) == 2
@@ -210,11 +211,13 @@ class TestDataWithFixedSizedDataset(object):
         new_array = np.zeros_like(array5by7)
         co.datasets['_dset']['2'] = new_array
         co.close()
+
         new_new_array = new_array + 5
         co = written_repo.checkout(write=True)
         co.datasets['_dset']['3'] = new_new_array
         co.commit()
         co.close()
+
         co = written_repo.checkout()
         dset = co.datasets['_dset']
         assert np.allclose(dset['1'], array5by7)
@@ -226,8 +229,10 @@ class TestDataWithFixedSizedDataset(object):
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].add(array5by7, '1')
         co.close()
+
         with pytest.raises(PermissionError):
             co.commit()
+
         co = written_repo.checkout()
         dset = co.datasets['_dset']
         with pytest.raises(KeyError):
@@ -242,11 +247,13 @@ class TestDataWithFixedSizedDataset(object):
         co.datasets['_dset']['3'] = new_array + 5
         co.commit()
         co.close()
+
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].remove('1')
         del co.datasets['_dset']['3']
         co.commit()
         co.close()
+
         co = written_repo.checkout()
         with pytest.raises(KeyError):
             co.datasets['_dset']['1']
@@ -263,16 +270,19 @@ class TestDataWithFixedSizedDataset(object):
         co.datasets['_dset']['2'] = new_array
         co.commit()
         co.close()
+
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].remove('1')
         co.datasets['_dset'].remove('2')
         co.commit()
         co.close()
+
         co = written_repo.checkout()
         with pytest.raises(KeyError):
             # removal of all data removes the dataset
             co.datasets['_dset']
         co.close()
+
         # recreating same and verifying
         co = written_repo.checkout(write=True)
         co.datasets.init_dataset('_dset', prototype=array5by7)
@@ -281,10 +291,6 @@ class TestDataWithFixedSizedDataset(object):
         co.close()
         co = written_repo.checkout()
         assert np.allclose(co.datasets['_dset']['1'], array5by7)
-
-    @pytest.mark.skip(reason='not implemented')
-    def test_all_dataset_removal_removes_indexing_key(self):
-        pass
 
     def test_multiple_datasets_single_commit(self, written_repo, randomsizedarray):
         co = written_repo.checkout(write=True)
@@ -303,15 +309,13 @@ class TestDataWithFixedSizedDataset(object):
         co = repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
         dset2 = co.datasets.init_dataset(
-            'dset2',
-            shape=randomsizedarray.shape,
-            dtype=randomsizedarray.dtype)
-        newarray = np.random.random(
-            randomsizedarray.shape).astype(dtype=randomsizedarray.dtype)
+            'dset2', shape=randomsizedarray.shape, dtype=randomsizedarray.dtype)
+        newarray = np.random.random(randomsizedarray.shape).astype(randomsizedarray.dtype)
         dset1['arr1'] = newarray
         dset2['arr'] = newarray
         co.commit()
         co.close()
+
         co = repo.checkout()
         assert np.allclose(co.datasets['dset1']['arr1'], newarray)
         assert np.allclose(co.datasets['dset2']['arr'], newarray)
@@ -425,7 +429,6 @@ class TestDataWithFixedSizedDataset(object):
                     'dset_no_name2': randomsizedarray / 255,
                     'dummykey': randomsizedarray
                 })
-
         # making sure above addition did not add partial data
         with pytest.raises(RuntimeError):
             co.commit()
@@ -438,6 +441,7 @@ class TestDataWithFixedSizedDataset(object):
             })
         co.commit()
         co.close()
+
         co = repo.checkout()
         data1 = next(co.datasets['dset_no_name1'].values())
         data2 = next(co.datasets['dset_no_name2'].values())

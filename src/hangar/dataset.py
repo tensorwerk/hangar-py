@@ -153,6 +153,42 @@ class DatasetDataReader(object):
     def _close(self):
         self._fs.close(mode=self._mode)
 
+    @property
+    def name(self):
+        '''Name of the dataset. Read-Only attribute.
+        '''
+        return self._dsetn
+
+    @property
+    def dtype(self):
+        '''Datatype of the dataset schema. Read-only attribute.
+        '''
+        return np.typeDict[self._schema_dtype_num]
+
+    @property
+    def shape(self):
+        '''Shape (or `max_shape`) of the dataset sample tensors. Read-only attribute.
+        '''
+        return self._schema_max_shape
+
+    @property
+    def variable_shape(self):
+        '''Bool indicating if dataset schema is variable sized. Read-only attribute.
+        '''
+        return self._schema_variable
+
+    @property
+    def named_samples(self):
+        '''Bool indicating if samples are named. Read-only attribute.
+        '''
+        return self._samples_are_named
+
+    @property
+    def iswriteable(self):
+        '''Bool indicating if this dataset object is write-enabled. Read-only attribute.
+        '''
+        return False if self._mode == 'r' else True
+
     def keys(self):
         '''generator which yields the names of every sample in the dataset
         '''
@@ -237,7 +273,6 @@ class DatasetDataWriter(DatasetDataReader):
 
     def __init__(self, stagehashenv, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self._stagehashenv = stagehashenv
         self._setup_file_access()
 
@@ -567,7 +602,6 @@ class Datasets(object):
     def __setup(self):
         '''Do not allow users to use internal functions
         '''
-
         self._from_commit = None
         self._from_staging_area = None
         if self._mode == 'r':
@@ -670,6 +704,12 @@ class Datasets(object):
 
     def __iter__(self):
         return iter(self._datasets)
+
+    @property
+    def iswriteable(self):
+        '''Bool indicating if this dataset object is write-enabled. Read-only attribute.
+        '''
+        return False if self._mode == 'r' else True
 
     def keys(self):
         '''list all dataset keys (names) in the checkout

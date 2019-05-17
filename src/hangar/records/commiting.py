@@ -18,6 +18,32 @@ Reading commit specifications and parents.
 '''
 
 
+def check_commit_hash_in_history(refenv, commit_hash):
+    '''Check if a commit hash exists in the repository history
+
+    Parameters
+    ----------
+    refenv : lmdb.Environment
+        refenv where the commit history is stored
+    commit_hash : str
+        hash of the commit to check for existence
+
+    Returns
+    -------
+    bool
+        True if exists, otherwise False
+    '''
+    reftxn = TxnRegister().begin_reader_txn(refenv)
+    try:
+        commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+        commitParentVal = reftxn.get(commitParentKey, default=False)
+        isCommitInHistory = True if commitParentVal is not False else False
+    finally:
+        TxnRegister().abort_reader_txn(refenv)
+    return isCommitInHistory
+
+
+
 def get_commit_spec(refenv, commit_hash):
     '''Get the commit specifications of a particular hash.
 
@@ -32,15 +58,23 @@ def get_commit_spec(refenv, commit_hash):
     -------
     namedtuple
         named tuple with all the commit specs included
+
+    Raises
+    ------
+    ValueError
+        if no commit exists with the provided hash
     '''
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
         parentCommitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
-        parentCommitSpecVal = reftxn.get(parentCommitSpecKey)
-        parentCommitSpec = parsing.commit_spec_raw_val_from_db_val(parentCommitSpecVal)
+        parentCommitSpecVal = reftxn.get(parentCommitSpecKey, default=False)
     finally:
         TxnRegister().abort_reader_txn(refenv)
 
+    if parentCommitSpecVal is False:
+        raise ValueError(f'No commit exists with the hash: {commit_hash}')
+
+    parentCommitSpec = parsing.commit_spec_raw_val_from_db_val(parentCommitSpecVal)
     return parentCommitSpec
 
 
@@ -59,16 +93,24 @@ def get_commit_ancestors(refenv, commit_hash):
     namedtuple
         Namedtuple describing is_merge_commit, master_ancester, &
         child_ancestor (in the even of merge commit)
+
+    Raises
+    ------
+    ValueError
+        if no commit exists with the provided hash
     '''
 
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
         parentCommitKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
-        parentCommitVal = reftxn.get(parentCommitKey)
-        parentCommitAncestors = parsing.commit_parent_raw_val_from_db_val(parentCommitVal)
+        parentCommitVal = reftxn.get(parentCommitKey, default=False)
     finally:
         TxnRegister().abort_reader_txn(refenv)
 
+    if parentCommitVal is False:
+        raise ValueError(f'No commit exists with the hash: {commit_hash}')
+
+    parentCommitAncestors = parsing.commit_parent_raw_val_from_db_val(parentCommitVal)
     return parentCommitAncestors
 
 
@@ -151,6 +193,11 @@ def get_commit_ref(refenv, commit_hash):
     tuple
         tuple of tuples containing encoded key/value pairs of the data
         records
+
+    Raises
+    ------
+    ValueError
+        if no commit exists with the provided hash
     '''
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:

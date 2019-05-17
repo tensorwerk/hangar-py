@@ -28,9 +28,11 @@ def initial_read_checkout(managed_tmpdir):
 def test_initial_dataset(managed_tmpdir, randomsizedarray):
     repo = Repository(path=managed_tmpdir)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
-    r_checkout = repo.checkout()
-    # TODO: read only checkout of naked repo is None
-    assert r_checkout is None
+
+    with pytest.raises(ValueError):
+        # Read only checkout of repo without commits raises as expected
+        r_checkout = repo.checkout()
+
     w_checkout = repo.checkout(write=True)
     assert len(w_checkout.datasets) == 0
     with pytest.raises(KeyError):

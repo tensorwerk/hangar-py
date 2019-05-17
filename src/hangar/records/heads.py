@@ -195,11 +195,17 @@ def create_branch(branchenv, branch_name, base_commit):
     ------
     ValueError
         If the branch already exists, no-op and raise this.
-
+    RuntimeError
+        If the repository does not have atleast one commit on the `default`
+        (ie. `master`) branch.
     '''
     if base_commit is None:
         headBranch = get_staging_branch_head(branchenv)
         base_commit = get_branch_head_commit(branchenv, headBranch)
+        if (headBranch == 'master') and (base_commit == ''):
+            msg = 'Atleast one commit must be made in the repository on the `default` '\
+                  '(`master`) branch before new branches can be created'
+            raise RuntimeError(msg)
 
     branchHeadKey = parsing.repo_branch_head_db_key_from_raw_key(branch_name)
     branchHeadVal = parsing.repo_branch_head_db_val_from_raw_val(base_commit)

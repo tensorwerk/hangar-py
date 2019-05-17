@@ -33,6 +33,12 @@ def get_versions():
 def get_system_info():
     (sysname, nodename, release,
      version, machine, processor) = platform.uname()
+
+    try:
+        loc = locale.getlocale()
+    except ValueError:
+        loc = None
+
     host = [('python', f'{sys.version_info[:]}'),
             ('python-bits', f'{struct.calcsize("P") * 8}'),
             ('OS', f'{sysname}'),
@@ -42,7 +48,7 @@ def get_system_info():
             ('byteorder', f'{sys.byteorder}'),
             ('LC_ALL', f'{os.environ.get("LC_ALL", "None")}'),
             ('LANG', f'{os.environ.get("LANG", "None")}'),
-            ('LOCALE', f'{locale.getlocale()}'),
+            ('LOCALE', f'{loc}'),
             ('cpu-count', f'{os.cpu_count()}'),
             ]
 
