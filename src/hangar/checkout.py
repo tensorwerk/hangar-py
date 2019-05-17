@@ -1,7 +1,6 @@
 import logging
 from os.path import join as pjoin
 from uuid import uuid4
-import gc
 
 from . import config
 from .dataset import Datasets
@@ -144,7 +143,6 @@ class ReaderCheckout(object):
             dsetHandle._close()
         del self._datasets
         del self._metadata
-        gc.collect()
 
 
 # --------------- Write enabled checkout ---------------------------------------
@@ -280,7 +278,6 @@ class WriterCheckout(object):
             try:
                 del self._datasets
                 del self._metadata
-                gc.collect()
             except AttributeError:
                 pass
             err = f'Unable to operate on past checkout objects which have been '\
@@ -294,7 +291,6 @@ class WriterCheckout(object):
             try:
                 del self._datasets
                 del self._metadata
-                gc.collect()
             except AttributeError:
                 pass
             logger.error(e, exc_info=0)
@@ -455,5 +451,4 @@ class WriterCheckout(object):
         del self._datasets
         del self._metadata
         del self._writer_lock
-        gc.collect()
         logger.info(f'writer checkout of {self._branch_name} closed')
