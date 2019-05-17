@@ -364,7 +364,6 @@ class WriterCheckout(object):
         '''
         self.__acquire_writer_lock()
         logger.info(f'Commit operation requested with message: {commit_message}')
-
         if staging_area_status(self._stageenv, self._refenv, self._branchenv) == 'CLEAN':
             msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. Cannot commit.'
             e = RuntimeError(msg)
@@ -386,22 +385,27 @@ class WriterCheckout(object):
             repo_path=self._repo_path)
 
         hashs.clear_stage_hash_records(self._stagehashenv)
+        # reopen the hdf5 file handles so that we don't have to invalidate
+        # previous weakproxy references like if we just called `__setup`
+        for dsetH in self._datasets.values():
+            dsetH._setup_file_access()
 
-        for dsetHandle in self._datasets.values():
-            if dsetHandle._default_schema_hash not in dsetHandle._fs.wHands:
-                sample_array = np.zeros(dsetHandle.shape, dtype=dsetHandle.dtype)
-                dsetHandle._fs.create_schema(dsetHandle._path, dsetHandle._default_schema_hash, sample_array)
-            dsetHandle._fs.open(dsetHandle._path, dsetHandle._mode)
-        # self.__setup()
         logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
 
     def reset_staging_area(self):
         '''Perform a hard reset of the staging area to the last commit head.
 
+        After this operation is performed, the writer checkout will be
+        automatically closed in the typical fashion (any held references to
+        `dataset` or `metadata` objects will finalize and destruct as normal),
+        In order to perform any further operation, a new checkout needs to be
+        opened.
+
         .. warning::
 
-            This operation is irreversable. all records and data will be deleted.
+            This operation is IRREVERSIBLE. all records and data which are note
+            stored in a previous commit will be premenantly deleted.
 
         Returns
         -------
@@ -439,7 +443,7 @@ class WriterCheckout(object):
             commit_hash=head_commit)
 
         logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
-        self.__setup()
+        self.close()
         return head_commit
 
     def close(self):

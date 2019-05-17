@@ -1,5 +1,8 @@
 import hashlib
+from typing import Optional
 import logging
+
+import lmdb
 
 from .context import TxnRegister
 from .records import parsing
@@ -37,14 +40,17 @@ class MetadataReader(object):
         is allowed.
     '''
 
-    def __init__(self, dataenv, labelenv):
+    def __init__(self, dataenv: lmdb.Environment, labelenv: lmdb.Environment):
 
         self._dataenv = dataenv
         self._labelenv = labelenv
-        self._labelTxn = None
-        self._dataTxn = None
+        self._labelTxn: Optional[lmdb.Transaction] = None
+        self._dataTxn: Optional[lmdb.Transaction] = None
+
         self._Query = RecordQuery(self._dataenv)
-        self.__is_conman = False
+
+        self._is_writeable: bool = False
+        self.__is_conman: bool = False
 
     def __enter__(self):
         self.__is_conman = True
@@ -67,9 +73,6 @@ class MetadataReader(object):
         else:
             return False
 
-    def __len__(self):
-        return len(self._Query.metadata_names())
-
     def __iter__(self):
         return self.keys()
 
@@ -78,6 +81,12 @@ class MetadataReader(object):
                 \n     Number of Keys : {len(self)}\
                 \n     Access Mode    : r\n'
         return res
+
+    @property
+    def iswriteable(self):
+        '''Bool indicating if this metadata object is write-enabled. Read-only attribute.
+        '''
+        return self._is_writeable
 
     def keys(self):
         '''generator returning all metadata key names in the checkout
@@ -173,7 +182,7 @@ class MetadataWriter(MetadataReader):
         self._dataenv = None
         self._labelenv = None
         super().__init__(dataenv, labelenv)
-
+        self._is_writeable = True
         self._dataTxn = None
         self._labelTxn = None
         self.__is_conman = False

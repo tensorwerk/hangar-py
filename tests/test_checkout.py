@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 import shutil
 import platform
-from hangar.records import summarize
 
 
 class TestCheckout(object):
@@ -53,7 +52,7 @@ class TestCheckout(object):
         co.metadata.add('a', 'b')
         dset = co.datasets['_dset']
         dset['1'] = array5by7
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(OSError):
             co.commit()
         co.close()
 
@@ -244,6 +243,57 @@ class TestCheckout(object):
             co.datasets['dset']['1'] = array5by7
         with pytest.raises(PermissionError):
             co.metadata.add('a', 'b')
+
+    def test_operate_on_dataset_samples_after_commiting_but_not_closing_checkout(self, repo, array5by7):
+        co = repo.checkout(write=True)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        dset.add(array5by7, '1')
+        co.commit('hi')
+
+        dset.add(array5by7, '2')  # this raises ReferenceError since the reference to dset is gone
+        co.commit('hello 2')
+        assert np.allclose(dset['2'], array5by7)
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            dset.name
+
+    def test_operate_on_metadata_after_commiting_but_not_closing_checkout(self, repo, array5by7):
+        co = repo.checkout(write=True)
+        md = co.metadata
+        md['hello'] = 'world'
+        co.commit('hi')
+
+        md['foo'] = 'bar'
+        co.commit('hello 2')
+        assert md.get('hello') == 'world'
+        assert md['foo'] == 'bar'
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            md.get('foo')
+        with pytest.raises(ReferenceError):
+            md['hello']
+
+    def test_operate_on_datasets_after_commiting_but_not_closing_checkout(self, repo, array5by7):
+        co = repo.checkout(write=True)
+        dsets = co.datasets
+        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        dset.add(array5by7, '1')
+        co.commit('hi')
+
+        dset2 = co.datasets.init_dataset('arange', prototype=np.arange(50))
+        dset2['0'] = np.arange(50)
+        co.commit('hello 2')
+        assert np.allclose(dset2['0'], np.arange(50))
+        co.close()
+
+        with pytest.raises(PermissionError):
+            co.datasets
+        with pytest.raises(ReferenceError):
+            dsets.iswriteable
+        with pytest.raises(ReferenceError):
+            dset2.name
 
 
 class TestBranching:
