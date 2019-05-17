@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import shutil
 import platform
+from hangar.records import summarize
 
 
 class TestCheckout(object):
@@ -9,7 +10,7 @@ class TestCheckout(object):
     def test_two_write_checkouts(self, repo):
         w1_checkout = repo.checkout(write=True)
         with pytest.raises(PermissionError):
-            w2_checkout = repo.checkout(write=True)
+            repo.checkout(write=True)
         w1_checkout.close()
 
     def test_two_read_checkouts(self, repo, array5by7):
@@ -17,21 +18,29 @@ class TestCheckout(object):
         dataset_name = 'dset'
         r_ds = w_checkout.datasets.init_dataset(name=dataset_name, prototype=array5by7)
         r_ds['1'] = array5by7
+        w_checkout.metadata.add('init', 'array5by7 added')
         w_checkout.commit('init')
         r1_checkout = repo.checkout()
         r2_checkout = repo.checkout()
         assert np.allclose(r1_checkout.datasets['dset']['1'], array5by7)
-        assert np.allclose(r1_checkout.datasets['dset']['1'], r2_checkout.datasets['dset']['1'])
+        assert np.allclose(
+            r1_checkout.datasets['dset']['1'], r2_checkout.datasets['dset']['1'])
+        assert r1_checkout.metadata.get('init') == 'array5by7 added'
+        assert r2_checkout.metadata.get('init') == 'array5by7 added'
         r1_checkout.close()
         r2_checkout.close()
         w_checkout.close()
 
-    def test_write_with_r_checkout(self, written_repo, array5by7):
+    @pytest.mark.skip(reason='Need to Fix TODO')
+    def test_write_with_read_checkout(self, written_repo, array5by7):
         co = written_repo.checkout()
+        # TODO: This should raise more informative error message
+        # Now it's type error because `init_dataset` is None
         with pytest.raises(TypeError):
             co.datasets.init_dataset(name='dset', shape=(5, 7), dtype=np.float64)
-            co.datasets['_dset']['1'] = array5by7
-            co.datasets['_dset'].add('1', array5by7)
+        # TODO: This should be permission error
+        with pytest.raises(AttributeError):
+            co.metadata.add('a', 'b')
         co.close()
 
     @pytest.mark.skipif(platform.system() == 'Windows',
@@ -41,9 +50,9 @@ class TestCheckout(object):
         shutil.rmtree(written_repo._repo_path)
         with pytest.raises(OSError):
             co.datasets.init_dataset('dset', prototype=array5by7)
+        co.metadata.add('a', 'b')
         dset = co.datasets['_dset']
         dset['1'] = array5by7
-        # todo: shouldn't it be atleast same as above
         with pytest.raises(FileNotFoundError):
             co.commit()
         co.close()
@@ -213,28 +222,160 @@ class TestCheckout(object):
         with pytest.raises(PermissionError):
             shouldFail = r_co.datasets
 
+    def test_operate_on_dataset_after_closing_old_checkout(self, repo, array5by7):
+        co = repo.checkout(write=True)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        co.commit()
+        co.close()
+        co = repo.checkout(write=True)
+        with pytest.raises(ReferenceError):
+            dset.add(array5by7, '1')
+            co.commit()
+        co.close()
+        with pytest.raises(ReferenceError):
+            dset['1']
+
+    def test_operate_on_closed_checkout(self, repo, array5by7):
+        co = repo.checkout(write=True)
+        co.datasets.init_dataset('dset', prototype=array5by7)
+        co.commit()
+        co.close()
+        with pytest.raises(PermissionError):
+            co.datasets['dset']['1'] = array5by7
+        with pytest.raises(PermissionError):
+            co.metadata.add('a', 'b')
 
 
-@pytest.mark.skip(reason='not implemented')
-class TestBranching(object):
+class TestBranching:
 
-    def test_merge(self):
-        pass
+    def test_invalid_name(self, repo):
+        with pytest.raises(ValueError):
+            repo.create_branch('dummy branch')
 
-    def test_name_conflict(self):
-        pass
+    @pytest.mark.skip(reason='Need to Fix TODO')
+    def test_new_branch_from_new_repo(self, repo):
+        branch = repo.create_branch('testbranch')
+        # TODO: it doesnt raise value error to the user
+        # instead return false and print out the value error
+        # Ideally, it should let users create new branch
+        co = repo.checkout(write=True, branch_name=branch)
 
-    def test_delete_branch(self):
-        pass
+    def test_merge(self, written_repo, array5by7):
+        branch = written_repo.create_branch('testbranch')
+        assert type(branch) is str
+        co = written_repo.checkout(write=True, branch_name=branch)
+        assert co._branch_name == branch
+        co.datasets['_dset']['1'] = array5by7
+        co.metadata.add('a', 'b')
+        co.commit()
+        co.close()
+        written_repo.merge('test merge', 'master', branch)
+        co = written_repo.checkout()
+        assert (co.datasets['_dset']['1'] == array5by7).all()
+        assert co.metadata.get('a') == 'b'
 
-    def test_merge_multiple_checkouts(self):
-        pass
+    def test_merge_without_closing_previous_checkout(self, written_repo, array5by7):
+        branch = written_repo.create_branch('testbranch')
+        co = written_repo.checkout(write=True, branch_name=branch)
+        co.datasets['_dset']['1'] = array5by7
+        co.commit()
+        with pytest.raises(PermissionError):
+            written_repo.merge('test merge', 'master', branch)
 
-    def test_merge_diverged(self):
-        pass
+    def test_name_conflict(self, written_repo, array5by7):
+        written_repo.create_branch('testbranch')
+        with pytest.raises(ValueError):
+            written_repo.create_branch('testbranch')
 
-    def test_merge_diverged_conflict(self):
-        pass
+    def test_delete_branch(self, written_repo):
+        with pytest.raises(NotImplementedError):
+            # TODO should raise "branch doesn't exist error"
+            written_repo.remove_branch('testbranch')
+        written_repo.create_branch('testbranch')
+        with pytest.raises(NotImplementedError):
+            written_repo.remove_branch('testbranch')
+
+    def test_merge_multiple_checkouts_same_dset(self, written_repo, array5by7):
+        branch1 = written_repo.create_branch('testbranch1')
+        co = written_repo.checkout(write=True, branch_name=branch1)
+        co.datasets['_dset']['1'] = array5by7
+        co.metadata.add('a1', 'b1')
+        co.commit()
+        co.close()
+        branch2 = written_repo.create_branch('testbranch2')
+        co = written_repo.checkout(write=True, branch_name=branch2)
+        co.datasets['_dset']['2'] = array5by7
+        co.metadata.add('a2', 'b2')
+        co.commit()
+        co.close()
+        written_repo.merge('test merge 1', 'master', branch1)
+        written_repo.merge('test merge 2', 'master', branch2)
+        co = written_repo.checkout(branch_name='master')
+        assert len(co.datasets) == 1
+        assert len(co.datasets['_dset']) == 2
+        assert list(co.metadata.keys()) == ['a1', 'a2']
+
+    def test_merge_multiple_checkouts_multiple_dset(self, written_repo, array5by7):
+        branch1 = written_repo.create_branch('testbranch1')
+        co = written_repo.checkout(write=True, branch_name=branch1)
+        co.datasets['_dset']['1'] = array5by7
+        co.commit()
+        co.close()
+        branch2 = written_repo.create_branch('testbranch2')
+        co = written_repo.checkout(write=True, branch_name=branch2)
+        second_dset = co.datasets.init_dataset(name='second_dset', prototype=array5by7)
+        second_dset['1'] = array5by7
+        co.commit()
+        co.close()
+        written_repo.merge('test merge 1', 'master', branch1)
+        written_repo.merge('test merge 2', 'master', branch2)
+        co = written_repo.checkout(branch_name='master')
+        assert len(co.datasets) == 2
+        assert len(co.datasets['_dset']) == 1
+        assert len(co.datasets['second_dset']) == 1
+
+    def test_merge_diverged_conflict(self, written_repo, array5by7):
+        branch1 = written_repo.create_branch('testbranch1')
+        branch2 = written_repo.create_branch('testbranch2')
+        co = written_repo.checkout(write=True, branch_name=branch1)
+        co.datasets['_dset']['1'] = array5by7
+        co.metadata.add('a', 'b')
+        co.commit()
+        co.close()
+        co = written_repo.checkout(write=True, branch_name=branch2)
+        newarray = np.zeros_like(array5by7)
+        co.datasets['_dset']['1'] = newarray
+        co.metadata.add('a', 'c')
+        co.commit()
+        co.close()
+        written_repo.merge('commit message', 'master', branch1)
+        # TODO: This should raise a conflict coz of same key
+        written_repo.merge('commit message', 'master', branch2)
+        co = written_repo.checkout()
+        print(co.datasets['_dset']['1'])
+        print(co.metadata.get('a'))
+
+    @pytest.mark.skip(reason='Need to Fix TODO')
+    def test_new_branch_from_where(self, written_repo, array5by7):
+        branch1 = written_repo.create_branch('testbranch1')
+        branch2 = written_repo.create_branch('testbranch2')
+        co1 = written_repo.checkout(write=True, branch_name=branch1)
+        # TODO: better way to get history: could be part of checkout itself
+        h1 = summarize.list_history(co1._refenv, co1._branchenv, co1._branch_name)
+        co1.close()
+        co2 = written_repo.checkout(write=True, branch_name=branch2)
+        co2.datasets.init_dataset('dset2', prototype=array5by7)
+        co2.datasets['dset2']['2'] = array5by7
+        co2.commit()
+        co2.close()
+        h2 = summarize.list_history(co2._refenv, co2._branchenv, co2._branch_name)
+        branch3 = written_repo.create_branch('testbranch3')
+        co3 = written_repo.checkout(write=True, branch_name=branch3)
+        h3 = summarize.list_history(co3._refenv, co3._branchenv, co3._branch_name)
+        co3.close()
+        assert h2['head'] == h3['head']
+        assert h2['ancestors'][h2['head']] == h3['ancestors'][h3['head']]
+        assert h1['head'] in h2['ancestors'][h2['head']]
 
 
 @pytest.mark.skip(reason='not implemented')
