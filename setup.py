@@ -74,6 +74,7 @@ setup(
         'grpcio',
         'grpcio_tools',
         'tqdm',
+        'wrapt',
     ],
     extras_require={},
     entry_points={

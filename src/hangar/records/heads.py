@@ -73,8 +73,8 @@ def acquire_writer_lock(branchenv, writer_uuid):
 
     Raises
     ------
-    RuntimeError
-        If the lock can not be acquired, runtime error is thrown
+    PermissionError
+        If the lock can not be acquired
 
     '''
     writerLockKey = parsing.repo_writer_lock_db_key()

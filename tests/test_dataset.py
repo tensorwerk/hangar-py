@@ -23,6 +23,10 @@ class TestDataset(object):
 
         # getting the dataset with `get`
         dsetOld = co.datasets.get('_dset')
+        dsetOldPath = dsetOld._path
+        dsetOldDsetn = dsetOld._dsetn
+        dsetOldDefaultSchemaHash = dsetOld._default_schema_hash
+        dsetOldSchemaUUID = dsetOld._schema_uuid
 
         dsetOld.add(array5by7, '1')
         co.commit()
@@ -33,10 +37,10 @@ class TestDataset(object):
         dsetNew = co.datasets['_dset']
 
         assert np.allclose(dsetNew['1'], array5by7)
-        assert dsetOld._path == dsetNew._path
-        assert dsetOld._dsetn == dsetNew._dsetn
-        assert dsetOld._default_schema_hash == dsetNew._default_schema_hash
-        assert dsetOld._schema_uuid == dsetNew._schema_uuid
+        assert dsetOldPath == dsetNew._path
+        assert dsetOldDsetn == dsetNew._dsetn
+        assert dsetOldDefaultSchemaHash == dsetNew._default_schema_hash
+        assert dsetOldSchemaUUID == dsetNew._schema_uuid
 
     def test_remove_dataset(self, written_repo):
         co = written_repo.checkout(write=True)
@@ -354,7 +358,7 @@ class TestDataWithFixedSizedDataset(object):
             # raises before commit
             dset['1'] = array5by7
         co.commit()
-        with pytest.raises(LookupError):
+        with pytest.raises(ReferenceError):
             # raises after commit
             dset['1'] = array5by7
         co.close()
@@ -364,18 +368,43 @@ class TestDataWithFixedSizedDataset(object):
             # raises in another checkout
             dset['1'] = array5by7
 
-    def test_context_manager(self, repo, randomsizedarray):
+    def test_writer_context_manager_dataset_add_sample(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=randomsizedarray)
         with co.datasets['dset'] as dset:
             dset.add(randomsizedarray, '1')
+        co.commit()
+        co.close()
+        co = repo.checkout()
+        assert np.allclose(co.datasets['dset']['1'], randomsizedarray)
+
+    def test_writer_context_manager_metadata_add(self, repo):
+        co = repo.checkout(write=True)
         with co.metadata as metadata:
             metadata.add('key', 'val')
         co.commit()
         co.close()
         co = repo.checkout()
-        assert np.allclose(co.datasets['dset']['1'], randomsizedarray)
         assert co.metadata['key'] == 'val'
+
+    def test_dataset_context_manager_dset_sample_and_metadata_add(self, repo, randomsizedarray):
+        co = repo.checkout(write=True)
+        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray)
+        with co.datasets['dset'] as dset:
+            dset.add(randomsizedarray, '1')
+            co.metadata['hello'] = 'world'
+        with co.metadata as metadata:
+            newarr = randomsizedarray + 1
+            dset['2'] = newarr
+            metadata.add('key', 'val')
+        co.commit()
+        co.close()
+
+        co = repo.checkout()
+        assert np.allclose(co.datasets['dset']['1'], randomsizedarray)
+        assert np.allclose(co.datasets['dset'].get('2'), newarr)
+        assert co.metadata['key'] == 'val'
+        assert co.metadata.get('hello') == 'world'
 
     def test_bulk_add(self, repo, randomsizedarray):
         co = repo.checkout(write=True)

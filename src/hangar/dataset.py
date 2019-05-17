@@ -12,7 +12,7 @@ from .context import TxnRegister
 from .hdf5_store import FileHandles
 from .records import parsing
 from .records.queries import RecordQuery
-from .utils import is_ascii_alnum
+from .utils import is_ascii_alnum, cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -680,12 +680,15 @@ class Datasets(object):
     def values(self):
         '''list all dataset object instances in the checkout
 
-        Returns
+        Yields
         -------
-        list of obj
-            list of dataset objects used to interact with the data
+        object
+            Generator of DatasetData accessor objects (set to read or write mode
+            as appropriate)
         '''
-        return self._datasets.values()
+        for dsetObj in self._datasets.values():
+            wr = cm_weakref_obj_proxy(dsetObj)
+            yield wr
 
     def items(self):
         '''generator providing access to dataset_name, :class:``Datasets``
@@ -697,7 +700,8 @@ class Datasets(object):
 
         '''
         for dsetN, dsetObj in self._datasets.items():
-            yield (dsetN, dsetObj)
+            wr = cm_weakref_obj_proxy(dsetObj)
+            yield (dsetN, wr)
 
     def get(self, name):
         '''Returns a dataset access object.
@@ -711,8 +715,8 @@ class Datasets(object):
 
         Returns
         -------
-        object
-            DatasetData accessor (set to read or write mode as appropriate)
+        ObjectProxy
+            DatasetData accessor (set to read or write mode as appropriate) proxy
 
         Raises
         ------
@@ -720,7 +724,8 @@ class Datasets(object):
             If no dataset with the given name exists in the checkout
         '''
         try:
-            return self._datasets[name]
+            wr = cm_weakref_obj_proxy(self._datasets[name])
+            return wr
         except KeyError:
             msg = f'HANGAR KEY ERROR:: No dataset exists with name: {name}'
             e = KeyError(msg)
@@ -995,7 +1000,7 @@ class Datasets(object):
             mode='a')
 
         logger.info(f'Dataset Initialized: `{name}`')
-        return self._datasets[name]
+        return self.get(name)
 
     def remove_dset(self, dset_name):
         '''remove the dataset and all data contained within it from the repository.
