@@ -6,7 +6,7 @@ config_logging.setup_logging()
 from tqdm.auto import tqdm
 import grpc
 
-from . import config, diff
+from . import config, diff, merger
 from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
 from .diagnostics import graphing
@@ -536,7 +536,7 @@ class Repository(object):
         str
             status of the staging area. One of "DIRTY" or "CLEAN"
         '''
-        res = diff.staging_area_status(
+        res = merger.staging_area_status(
             stageenv=self._env.stageenv,
             refenv=self._env.refenv,
             branchenv=self._env.branchenv)
@@ -565,7 +565,7 @@ class Repository(object):
         str
             Hashof the commit which is written if possible.
         '''
-        commit_hash = diff.select_merge_algorithm(
+        commit_hash = merger.select_merge_algorithm(
             message=message,
             branchenv=self._env.branchenv,
             stageenv=self._env.stageenv,
@@ -593,7 +593,7 @@ class Repository(object):
             list of all changes in the repository between the two commits
             (adds/changes/removes)
         '''
-        dif = diff.diff_commits(
+        dif = merger.diff_commits(
             refenv=self._env.refenv,
             masterHEAD=master_commit,
             devHEAD=dev_commit)
@@ -615,7 +615,7 @@ class Repository(object):
             list of all changes in the repository between the two branches
             (adds/changes/removes)
         '''
-        dif = diff.diff_branches(
+        dif = merger.diff_branches(
             branchenv=self._env.branchenv,
             refenv=self._env.refenv,
             master_branch=master_branch,
@@ -631,7 +631,7 @@ class Repository(object):
             list of all changes in the repository between current stage area and
             the last branch head commit.
         '''
-        dif = diff.diff_staged_changes(
+        dif = merger.diff_staged_changes(
             refenv=self._env.refenv,
             stageenv=self._env.stageenv,
             branchenv=self._env.branchenv)

@@ -7,7 +7,7 @@ import numpy as np
 
 from . import config
 from .dataset import Datasets
-from .diff import staging_area_status
+from .merger import staging_area_status
 from .metadata import MetadataReader
 from .metadata import MetadataWriter
 from .records import commiting
