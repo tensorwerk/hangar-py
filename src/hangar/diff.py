@@ -1,3 +1,4 @@
+import logging
 from collections import namedtuple
 
 import dictdiffer
@@ -8,6 +9,8 @@ from .records import hashs
 from .records import heads
 from .records import parsing
 from .records.queries import RecordQuery
+
+logger = logging.getLogger(__name__)
 
 # ------------------- historical analysis methods --------------------------------
 
@@ -221,23 +224,19 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
         commit hash of the merge if this was a successful operation.
     '''
     # ensure the writer lock is held and that the staging area is in a 'CLEAN' state.
-    stageStatus = staging_area_status(
-        stageenv=stageenv,
-        refenv=refenv,
-        branchenv=branchenv)
-
-    if stageStatus != 'CLEAN':
-        raise RuntimeError(
-            'ERROR: Changes are currently pending in the staging area. To prevent'
-            'potential diverging histories, the staging area must exist in a clean state.'
-            'Please stash or commit any pending changes before performing a merge'
-            'operation.')
-
-    lockHeld = heads.acquire_writer_lock(branchenv=branchenv, writer_uuid='MERGE_PROCESS')
-    if lockHeld is False:
-        raise PermissionError(
-            'ERROR: The writer lock could not be acquired. Please close any pending write '
-            'operations and retry the merge operation.')
+    stgStatus = staging_area_status(stageenv=stageenv, refenv=refenv, branchenv=branchenv)
+    if stgStatus != 'CLEAN':
+        msg = 'HANGAR RUNTIME ERROR: Changes are currently pending in the staging area '\
+              'To avoid mangled histories, the staging area must exist in a clean state '\
+              'Please reset or commit any changes before the merge operation'
+        e = RuntimeError(msg)
+        logger.error(e, exc_info=False)
+        raise e from None
+    try:
+        heads.acquire_writer_lock(branchenv=branchenv, writer_uuid='MERGE_PROCESS')
+    except PermissionError as e:
+        logger.error(e, exc_info=False)
+        raise e from None
 
     try:
         branchDiff = _determine_ancestors(
@@ -247,13 +246,13 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
             merge_dev=dev_branch_name)
 
         if branchDiff.canFF is True:
-            print('Selected Fast-Forward Merge Stratagy')
+            logger.info('Selected Fast-Forward Merge Stratagy')
             success = _fast_forward_merge(
                 branchenv=branchenv,
                 master_branch=master_branch_name,
                 new_masterHEAD=branchDiff.devHEAD)
         else:
-            print('Selected 3-Way Merge Strategy')
+            logger.info('Selected 3-Way Merge Strategy')
             success = _three_way_merge(
                 message=message,
                 master_branch_name=master_branch_name,
@@ -300,11 +299,9 @@ def _fast_forward_merge(branchenv, master_branch, new_masterHEAD):
             branchenv=branchenv,
             branch_name=master_branch,
             commit_hash=new_masterHEAD)
-
     except ValueError as e:
-        print(e)
-        raise
-
+        logger.error(e, exc_info=False)
+        raise e from None
     return success
 
 
@@ -409,10 +406,7 @@ def _overwrite_stageenv(stageenv, sorted_tuple_output):
         with cmttxn.cursor() as cursor:
             cursor.first()
             cursor.putmulti(sorted_tuple_output, append=True)
-        try:
-            cursor.close()
-        except Exception:
-            print('could not close cursor')
+        cursor.close()
     finally:
         TxnRegister().commit_writer_txn(stageenv)
 
