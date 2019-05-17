@@ -2,6 +2,8 @@ import logging
 from os.path import join as pjoin
 from uuid import uuid4
 
+import numpy as np
+
 from . import config
 from .dataset import Datasets
 from .diff import staging_area_status
@@ -200,7 +202,7 @@ class WriterCheckout(object):
         self._refenv = refenv
         self._branchenv = branchenv
         self._stagehashenv = stagehashenv
-        self._datasets: Datasets = None
+        self._datasets: Datasets = {}
         self._metadata: MetadataWriter = None
         self.__setup()
 
@@ -384,7 +386,13 @@ class WriterCheckout(object):
             repo_path=self._repo_path)
 
         hashs.clear_stage_hash_records(self._stagehashenv)
-        self.__setup()
+
+        for dsetHandle in self._datasets.values():
+            if dsetHandle._default_schema_hash not in dsetHandle._fs.wHands:
+                sample_array = np.zeros(dsetHandle.shape, dtype=dsetHandle.dtype)
+                dsetHandle._fs.create_schema(dsetHandle._path, dsetHandle._default_schema_hash, sample_array)
+            dsetHandle._fs.open(dsetHandle._path, dsetHandle._mode)
+        # self.__setup()
         logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
 
