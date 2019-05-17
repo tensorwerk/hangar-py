@@ -1,7 +1,39 @@
 import os
+import weakref
+from functools import partial
 from contextlib import contextmanager
 from datetime import timedelta
 from numbers import Number
+
+import wrapt
+
+
+def cm_weakref_obj_proxy(obj):
+    '''Creates a weakproxy reference honoring optional use context managers.
+
+    This is required because (for some unknown reason) `weakproxy`
+    references will not actually pass through the `__enter__` attribute of
+    the reffered object's instance. As such, these are manual set to the
+    appropriate values on the `weakproxy` object. The final `weakproxy` is
+    in turn referenced by a object proxy so that all calls to the
+    methods/attributes are passed through uniformly.
+
+    Parameters
+    ----------
+    obj : class
+        object instance implementing the __enter__ and __exit__ methods which
+        should be passed through as a weakref proxy object
+
+    Returns
+    -------
+    ObjectProxy
+        object analogous to a plain weakproxy object.
+    '''
+    wr = weakref.proxy(obj)
+    setattr(wr, '__enter__', partial(obj.__class__.__enter__, wr))
+    setattr(wr, '__exit__', partial(obj.__class__.__exit__, wr))
+    obj_proxy = wrapt.ObjectProxy(wr)
+    return obj_proxy
 
 
 def is_ascii_alnum(str_data: str):

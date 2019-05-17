@@ -1,7 +1,6 @@
 import logging
 from os.path import join as pjoin
 from uuid import uuid4
-import weakref
 import gc
 
 from . import config
@@ -12,6 +11,7 @@ from .metadata import MetadataWriter
 from .records import commiting
 from .records import hashs
 from .records import heads
+from .utils import cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ class ReaderCheckout(object):
             lock is released.
         '''
         self.__verify_checkout_alive()
-        wr = weakref.proxy(self._datasets)
+        wr = cm_weakref_obj_proxy(self._datasets)
         return wr
 
     @property
@@ -116,7 +116,7 @@ class ReaderCheckout(object):
             released.
         '''
         self.__verify_checkout_alive()
-        wr = weakref.proxy(self._metadata)
+        wr = cm_weakref_obj_proxy(self._metadata)
         return wr
 
     @property
@@ -241,7 +241,7 @@ class WriterCheckout(object):
             lock is released.
         '''
         self.__acquire_writer_lock()
-        wr = weakref.proxy(self._datasets)
+        wr = cm_weakref_obj_proxy(self._datasets)
         return wr
 
     @property
@@ -256,7 +256,7 @@ class WriterCheckout(object):
             released.
         '''
         self.__acquire_writer_lock()
-        wr = weakref.proxy(self._metadata)
+        wr = cm_weakref_obj_proxy(self._metadata)
         return wr
 
     @property

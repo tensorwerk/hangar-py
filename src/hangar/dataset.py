@@ -3,8 +3,6 @@ import os
 from typing import Optional
 from uuid import uuid1
 import logging
-import weakref
-import gc
 
 import numpy as np
 import lmdb
@@ -14,7 +12,7 @@ from .context import TxnRegister
 from .hdf5_store import FileHandles
 from .records import parsing
 from .records.queries import RecordQuery
-from .utils import is_ascii_alnum
+from .utils import is_ascii_alnum, cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -689,7 +687,7 @@ class Datasets(object):
             as appropriate)
         '''
         for dsetObj in self._datasets.values():
-            wr = weakref.proxy(dsetObj)
+            wr = cm_weakref_obj_proxy(dsetObj)
             yield wr
 
     def items(self):
@@ -702,7 +700,7 @@ class Datasets(object):
 
         '''
         for dsetN, dsetObj in self._datasets.items():
-            wr = weakref.proxy(dsetObj)
+            wr = cm_weakref_obj_proxy(dsetObj)
             yield (dsetN, wr)
 
     def get(self, name):
@@ -717,8 +715,8 @@ class Datasets(object):
 
         Returns
         -------
-        object
-            DatasetData accessor (set to read or write mode as appropriate)
+        ObjectProxy
+            DatasetData accessor (set to read or write mode as appropriate) proxy
 
         Raises
         ------
@@ -726,7 +724,7 @@ class Datasets(object):
             If no dataset with the given name exists in the checkout
         '''
         try:
-            wr = weakref.proxy(self._datasets[name])
+            wr = cm_weakref_obj_proxy(self._datasets[name])
             return wr
         except KeyError:
             msg = f'HANGAR KEY ERROR:: No dataset exists with name: {name}'
