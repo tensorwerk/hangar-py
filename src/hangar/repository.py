@@ -131,6 +131,8 @@ class Repository(object):
                     labelenv=self._env.labelenv,
                     dataenv=self._env.cmtenv[commit_hash],
                     hashenv=self._env.hashenv,
+                    branchenv=self._env.branchenv,
+                    refenv=self._env.refenv,
                     commit=commit_hash)
                 return co
         except (RuntimeError, ValueError) as e:
@@ -528,20 +530,6 @@ class Repository(object):
         else:
             print(ppbuf.getvalue())
 
-    def status(self):
-        '''status of the staging area, dirty or clean
-
-        Returns
-        -------
-        str
-            status of the staging area. One of "DIRTY" or "CLEAN"
-        '''
-        res = merger.staging_area_status(
-            stageenv=self._env.stageenv,
-            refenv=self._env.refenv,
-            branchenv=self._env.branchenv)
-        return res
-
     def _details(self):
         '''DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
         '''
@@ -576,66 +564,6 @@ class Repository(object):
             repo_path=self._repo_path)
 
         return commit_hash
-
-    def diff_commit(self, master_commit, dev_commit):
-        '''Returns the diff of two commit hashes
-
-        Parameters
-        ----------
-        master_commit : str
-            commit hash to serve as the "master" branch
-        dev_commit : str
-            commit hash to serve as the "dev" branch
-
-        Returns
-        -------
-        list
-            list of all changes in the repository between the two commits
-            (adds/changes/removes)
-        '''
-        dif = merger.diff_commits(
-            refenv=self._env.refenv,
-            masterHEAD=master_commit,
-            devHEAD=dev_commit)
-        return dif
-
-    def diff_branch(self, master_branch, dev_branch):
-        '''Returns the diff of the head commits between a master and dev branch.
-
-        Parameters
-        ----------
-        master_branch : str
-            name of the master branch - must exist in the repository
-        dev_branch : str
-            name of the dev branch - must exist in the repository
-
-        Returns
-        -------
-        list
-            list of all changes in the repository between the two branches
-            (adds/changes/removes)
-        '''
-        dif = merger.diff_branches(
-            branchenv=self._env.branchenv,
-            refenv=self._env.refenv,
-            master_branch=master_branch,
-            dev_branch=dev_branch)
-        return dif
-
-    def diff_staged_changes(self):
-        '''Find the diff of all changes in the staging area
-
-        Returns
-        -------
-        list
-            list of all changes in the repository between current stage area and
-            the last branch head commit.
-        '''
-        dif = merger.diff_staged_changes(
-            refenv=self._env.refenv,
-            stageenv=self._env.stageenv,
-            branchenv=self._env.branchenv)
-        return dif
 
     def create_branch(self, branch_name, base_commit=None):
         '''create a branch with the provided name from a certain commit.

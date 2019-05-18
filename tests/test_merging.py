@@ -6,23 +6,23 @@ def repo_1_br_no_conf(repo):
 
     dummyData = np.arange(50)
 
-    co = repo.checkout(write=True, branch_name='master')
-    co.datasets.init_dataset(name='dummy', prototype=dummyData, samples_are_named=True)
+    co1 = repo.checkout(write=True, branch_name='master')
+    co1.datasets.init_dataset(name='dummy', prototype=dummyData, samples_are_named=True)
     for idx in range(10):
         dummyData[:] = idx
-        co.datasets['dummy'][str(idx)] = dummyData
-    co.metadata['hello'] = 'world'
-    co.commit('first commit adding dummy data and hello meta')
-    co.close()
+        co1.datasets['dummy'][str(idx)] = dummyData
+    co1.metadata['hello'] = 'world'
+    co1.commit('first commit adding dummy data and hello meta')
+    co1.close()
 
     repo.create_branch('testbranch')
-    co = repo.checkout(write=True, branch_name='testbranch')
+    co2 = repo.checkout(write=True, branch_name='testbranch')
     for idx in range(10, 20):
         dummyData[:] = idx
-        co.datasets['dummy'][str(idx)] = dummyData
-    co.metadata['foo'] = 'bar'
-    co.commit('first commit on test branch adding non-conflict data and meta')
-    co.close()
+        co2.datasets['dummy'][str(idx)] = dummyData
+    co2.metadata['foo'] = 'bar'
+    co2.commit('first commit on test branch adding non-conflict data and meta')
+    co2.close()
     return repo
 
 
@@ -32,12 +32,12 @@ def repo_2_br_no_conf(repo_1_br_no_conf):
     dummyData = np.arange(50)
 
     repo = repo_1_br_no_conf
-    co = repo.checkout(write=True, branch_name='master')
+    co1 = repo.checkout(write=True, branch_name='master')
     for idx in range(20, 30):
         dummyData[:] = idx
-        co.datasets['dummy'][str(idx)] = dummyData
-    co.commit('second commit on master adding non-conflict data')
-    co.close()
+        co1.datasets['dummy'][str(idx)] = dummyData
+    co1.commit('second commit on master adding non-conflict data')
+    co1.close()
     return repo
 
 

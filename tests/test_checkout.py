@@ -48,8 +48,8 @@ class TestCheckout(object):
         co.metadata.add('a', 'b')
         dset = co.datasets['_dset']
         dset['1'] = array5by7
-        with pytest.raises(OSError):
-            co.commit()
+        with pytest.raises(FileNotFoundError):
+            co.commit('this is a commit message')
         co.close()
 
     def test_writer_dset_obj_not_accessible_after_close(self, written_repo):
@@ -220,12 +220,12 @@ class TestCheckout(object):
     def test_operate_on_dataset_after_closing_old_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=array5by7)
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = repo.checkout(write=True)
         with pytest.raises(ReferenceError):
             dset.add(array5by7, '1')
-            co.commit()
+            co.commit('this is a commit message')
         co.close()
         with pytest.raises(ReferenceError):
             dset['1']
@@ -233,7 +233,7 @@ class TestCheckout(object):
     def test_operate_on_closed_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
         co.datasets.init_dataset('dset', prototype=array5by7)
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         with pytest.raises(PermissionError):
             co.datasets['dset']['1'] = array5by7
@@ -309,7 +309,7 @@ class TestBranching(object):
         assert co._branch_name == branch
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a', 'b')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         written_repo.merge('test merge', 'master', branch)
         co = written_repo.checkout()
@@ -320,7 +320,7 @@ class TestBranching(object):
         branch = written_repo.create_branch('testbranch')
         co = written_repo.checkout(write=True, branch_name=branch)
         co.datasets['_dset']['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         with pytest.raises(PermissionError):
             written_repo.merge('test merge', 'master', branch)
 
@@ -342,14 +342,14 @@ class TestBranching(object):
         co = written_repo.checkout(write=True, branch_name=branch1)
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a1', 'b1')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         branch2 = written_repo.create_branch('testbranch2')
         co = written_repo.checkout(write=True, branch_name=branch2)
         co.datasets['_dset']['2'] = array5by7
         co.metadata.add('a2', 'b2')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         written_repo.merge('test merge 1', 'master', branch1)
@@ -364,14 +364,14 @@ class TestBranching(object):
         branch1 = written_repo.create_branch('testbranch1')
         co = written_repo.checkout(write=True, branch_name=branch1)
         co.datasets['_dset']['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         branch2 = written_repo.create_branch('testbranch2')
         co = written_repo.checkout(write=True, branch_name=branch2)
         second_dset = co.datasets.init_dataset(name='second_dset', prototype=array5by7)
         second_dset['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         written_repo.merge('test merge 1', 'master', branch1)
@@ -389,14 +389,14 @@ class TestBranching(object):
         co = written_repo.checkout(write=True, branch_name=branch1)
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a', 'b')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout(write=True, branch_name=branch2)
         newarray = np.zeros_like(array5by7)
         co.datasets['_dset']['1'] = newarray
         co.metadata.add('a', 'c')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         written_repo.merge('commit message', 'master', branch1)
@@ -414,7 +414,7 @@ class TestBranching(object):
         co2 = written_repo.checkout(write=True, branch_name=branch2)
         co2.datasets.init_dataset('dset2', prototype=array5by7)
         co2.datasets['dset2']['2'] = array5by7
-        co2.commit()
+        co2.commit('this is a merge message')
         co2.close()
         h2 = written_repo.log(branch_name=branch2, return_contents=True)
 

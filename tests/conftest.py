@@ -66,7 +66,7 @@ def repo(managed_tmpdir) -> Repository:
 def written_repo(repo):
     co = repo.checkout(write=True)
     co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
-    co.commit()
+    co.commit('this is a commit message')
     co.close()
     yield repo
 
