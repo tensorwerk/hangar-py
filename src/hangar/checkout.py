@@ -545,7 +545,6 @@ class WriterCheckout(object):
             e = RuntimeError(msg)
             logger.error(e, exc_info=False)
             raise e
-
         for dsetHandle in self._datasets.values():
             try:
                 dsetHandle._close()

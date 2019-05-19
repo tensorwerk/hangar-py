@@ -128,7 +128,15 @@ class DatasetDataReader(object):
         int
             number of samples the dataset contains
         '''
-        return len(self._Query.dataset_data_names(self._dsetn))
+        if not self._is_conman:
+            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+        try:
+            DatasetRecordCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
+            dset_len = int(self._dataTxn.get(DatasetRecordCountKey))
+        finally:
+            if not self._is_conman:
+                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+        return dset_len
 
     def __contains__(self, key):
         '''Determine if a key is a valid sample name in the dataset

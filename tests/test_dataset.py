@@ -466,6 +466,20 @@ class TestDataWithFixedSizedDataset(object):
         assert d.named_samples is True
         assert d.iswriteable is False
 
+    def test_dataset_length(self, repo, array5by7):
+        co = repo.checkout(write=True)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        assert len(dset) == 0
+        dset.add(array5by7, '1')
+        assert len(dset) == 1
+        co.commit()
+        dset.add(array5by7, '2')
+        co.close()
+        # co = repo.checkout()
+        # dset = co.datasets['dset']
+        # print(len(dset))
+
+
 @pytest.mark.skip(reason='not implemented')
 class TestVariableSizedDataset(object):
     pass
