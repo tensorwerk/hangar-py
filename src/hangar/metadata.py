@@ -42,8 +42,8 @@ class MetadataReader(object):
 
     def __init__(self, dataenv: lmdb.Environment, labelenv: lmdb.Environment):
 
-        self._dataenv = dataenv
-        self._labelenv = labelenv
+        self._dataenv: lmdb.Environment = dataenv
+        self._labelenv: lmdb.Environment = labelenv
         self._labelTxn: Optional[lmdb.Transaction] = None
         self._dataTxn: Optional[lmdb.Transaction] = None
 
@@ -64,12 +64,45 @@ class MetadataReader(object):
         self._dataTxn = TxnRegister().abort_reader_txn(self._dataenv)
 
     def __len__(self):
+        '''Determine how many metadata key/value pairs are in the checkout
+
+        Returns
+        -------
+        int
+            number of metadata key/value pairs.
+        '''
         return len(self._Query.metadata_names())
 
     def __getitem__(self, key):
+        '''Retrieve a metadata sample with a key. Convenience method for dict style access.
+
+        .. seealso:: :meth:`get()`
+
+        Parameters
+        ----------
+        key : string
+            metadata key to retrieve from the dataset
+
+        Returns
+        -------
+        string
+            value of the metadata key/value pair stored in the checkout.
+        '''
         return self.get(key)
 
     def __contains__(self, key):
+        '''Determine if a key with the provided name is in the metadata
+
+        Parameters
+        ----------
+        key : string
+            key to check for containment testing
+
+        Returns
+        -------
+        bool
+            True if key exists, False otherwise
+        '''
         names = self._Query.metadata_names()
         if key in names:
             return True
@@ -79,14 +112,17 @@ class MetadataReader(object):
     def __iter__(self):
         return self.keys()
 
+    def _repr_pretty_(self, p, cycle):
+        res = f'\n Hangar Metadata\
+                \n     Writeable: {self.iswriteable}\
+                \n     Number of Keys: {len(self)}\n'
+        p.text(res)
+
     def __repr__(self):
         res = f'\n Hangar Metadata\
-                \n     Number of Keys : {len(self)}\
-                \n     Access Mode    : r\n'
+                \n     Writeable: {self.iswriteable}\
+                \n     Number of Keys: {len(self)}\n'
         return res
-
-    def __len__(self):
-        return len(self._Query.metadata_names())
 
     @property
     def iswriteable(self):
@@ -185,13 +221,9 @@ class MetadataWriter(MetadataReader):
 
     def __init__(self, dataenv, labelenv):
 
-        self._dataenv = None
-        self._labelenv = None
         super().__init__(dataenv, labelenv)
-        self._is_writeable = True
-        self._dataTxn = None
-        self._labelTxn = None
-        self.__is_conman = False
+        self.__is_conman: bool = False
+        self._is_writeable: bool = True
 
     def __enter__(self):
         self.__is_conman = True
@@ -205,16 +237,40 @@ class MetadataWriter(MetadataReader):
         self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
 
     def __setitem__(self, key, value):
+        '''Store a key/value pair as metadata. Convenince method to :meth:``add``.
+
+        .. seealso:: :meth:``add``
+
+        Parameters
+        ----------
+        key : string
+            name of the key to add as metadata
+        value : string
+            value to add as metadata
+
+        Returns
+        -------
+        str
+            key of the stored metadata sample (assuming operation was successful)
+        '''
         return self.add(key, value)
 
     def __delitem__(self, key):
-        return self.remove(key)
+        '''Remove a key/value pair from metadata. Convenence method to :meth:``remove``.
 
-    def __repr__(self):
-        res = f'\n Hangar Metadata\
-                \n     Number of Keys : {len(self)}\
-                \n     Access Mode    : a\n'
-        return res
+        .. seealso:: :meth:``remove``
+
+        Parameters
+        ----------
+        key : str
+            Name of the metadata piece to remove.
+
+        Returns
+        -------
+        str
+            Metadata key removed from the dataset (assuming operation successful)
+        '''
+        return self.remove(key)
 
     def add(self, key, value):
         '''Add a piece of metadata to the staging area of the next commit.

@@ -101,15 +101,48 @@ class DatasetDataReader(object):
         self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
     def __getitem__(self, key):
+        '''Retrieve a sample with a given key. Convenience method for dict style access.
+
+        .. seealso:: :meth:`get()`
+
+        Parameters
+        ----------
+        key : string
+            sample key to retrieve from the dataset
+
+        Returns
+        -------
+        np.array
+            sample array data corresponding to the provided key
+        '''
         return self.get(key)
 
     def __iter__(self):
         return self.keys()
 
     def __len__(self):
+        '''Check how many samples are present in a given dataset
+
+        Returns
+        -------
+        int
+            number of samples the dataset contains
+        '''
         return len(self._Query.dataset_data_names(self._dsetn))
 
     def __contains__(self, key):
+        '''Determine if a key is a valid sample name in the dataset
+
+        Parameters
+        ----------
+        key : string
+            name to check if it is a sample in the dataset
+
+        Returns
+        -------
+        bool
+            True if key exists, else False
+        '''
         if not self._is_conman:
             self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
 

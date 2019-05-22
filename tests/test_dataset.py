@@ -362,7 +362,7 @@ class TestDataWithFixedSizedDataset(object):
             # raises before commit
             dset['1'] = array5by7
         co.commit('this is a commit message')
-        with pytest.raises(ReferenceError):
+        with pytest.raises(LookupError):
             # raises after commit
             dset['1'] = array5by7
         co.close()

@@ -197,7 +197,6 @@ class WriterUserDiff(BaseUserDiff):
         '''
         return self._branch_name
 
-    @property
     def status(self):
         '''Determine if changes have been made in the staging area
 
@@ -208,8 +207,7 @@ class WriterUserDiff(BaseUserDiff):
         Returns
         -------
         str
-            CLEAN" if no changes have been made, otherwise "DIRTY"
-
+            "CLEAN" if no changes have been made, otherwise "DIRTY"
         '''
         head_commit = heads.get_branch_head_commit(self._branchenv, self._branch_name)
         if head_commit == '':

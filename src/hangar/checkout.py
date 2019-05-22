@@ -225,11 +225,7 @@ class WriterCheckout(object):
         self._stagehashenv = stagehashenv
         self._datasets: Datasets = {}
         self._metadata: MetadataWriter = None
-        self._differ = WriterUserDiff(
-            stageenv=self._stageenv,
-            refenv=self._refenv,
-            branchenv=self._branchenv,
-            branch_name=self._branch_name)
+        self._differ: WriterUserDiff = None
         self.__setup()
 
     def _repr_pretty_(self, p, cycle):
@@ -358,6 +354,13 @@ class WriterCheckout(object):
     def __setup(self):
         '''setup the staging area appropriatly for a write enabled checkout.
 
+        On setup, we cannot be sure what branch the staging area was previously
+        checked out on, and we cannot be sure if there are any `uncommitted
+        changes` in the staging area (ie. the staging area is `DIRTY`). The
+        setup methods here ensure that we can safetly make any changes to the
+        staging area without overwriting uncommitted changes, and then perform
+        the setup steps to checkout staging area state at that point in time.
+
         Raises
         ------
         ValueError
@@ -367,7 +370,12 @@ class WriterCheckout(object):
         '''
         self.__acquire_writer_lock()
         current_head = heads.get_staging_branch_head(self._branchenv)
-        if self._differ.status == 'DIRTY':
+        currentDiff = WriterUserDiff(
+            stageenv=self._stageenv,
+            refenv=self._refenv,
+            branchenv=self._branchenv,
+            branch_name=current_head)
+        if currentDiff.status() == 'DIRTY':
             if current_head != self._branch_name:
                 err = f'Unable to check out branch: {self._branch_name} for writing as '\
                       f'the staging area has uncommitted changes on branch: {current_head}. '\
@@ -399,6 +407,11 @@ class WriterCheckout(object):
             hashenv=self._hashenv,
             stageenv=self._stageenv,
             stagehashenv=self._stagehashenv)
+        self._differ = WriterUserDiff(
+            stageenv=self._stageenv,
+            refenv=self._refenv,
+            branchenv=self._branchenv,
+            branch_name=self._branch_name)
 
     def commit(self, commit_message):
         '''commit the changes made in the staging area.
@@ -422,7 +435,7 @@ class WriterCheckout(object):
         '''
         self.__acquire_writer_lock()
         logger.info(f'Commit operation requested with message: {commit_message}')
-        if self._differ.status == 'CLEAN':
+        if self._differ.status() == 'CLEAN':
             msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. Cannot commit.'
             e = RuntimeError(msg)
             logger.error(e, exc_info=False)
@@ -478,7 +491,7 @@ class WriterCheckout(object):
         self.__acquire_writer_lock()
         logger.info(f'Hard reset requested with writer_lock: {self._writer_lock}')
 
-        if self._differ.status == 'CLEAN':
+        if self._differ.status() == 'CLEAN':
             msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. No reset necessary.'
             e = RuntimeError(msg)
             logger.error(e, exc_info=False)

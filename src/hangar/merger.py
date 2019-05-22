@@ -1,7 +1,9 @@
 import logging
 
+import lmdb
+
 from .context import TxnRegister
-from .diff import ThreeWayCommitDiffer, WriterUserDiff
+from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
 from .records import commiting, hashs, heads, parsing
 
 logger = logging.getLogger(__name__)
@@ -65,9 +67,10 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
         commit hash of the merge if this was a successful operation.
     '''
     # ensure the writer lock is held and that the staging area is in a 'CLEAN' state.
+    current_head = heads.get_staging_branch_head(branchenv)
     writerDiffer = WriterUserDiff(
-        stageenv=stageenv, branchenv=branchenv, refenv=refenv, branch_name=dev_branch_name)
-    if writerDiffer.status != 'CLEAN':
+        stageenv=stageenv, branchenv=branchenv, refenv=refenv, branch_name=current_head)
+    if writerDiffer.status() != 'CLEAN':
         msg = 'HANGAR RUNTIME ERROR: Changes are currently pending in the staging area '\
               'To avoid mangled histories, the staging area must exist in a clean state '\
               'Please reset or commit any changes before the merge operation'
@@ -82,16 +85,24 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
         raise e from None
 
     try:
-        dHEAD = heads.get_branch_head_commit(branchenv, dev_branch_name)
-        branchHistory = writerDiffer._determine_ancestors(
-            mHEAD=writerDiffer.commit_hash, dHEAD=dHEAD)
+        mHEAD = heads.get_branch_head_commit(
+            branchenv=branchenv, branch_name=master_branch_name)
+        dHEAD = heads.get_branch_head_commit(
+            branchenv=branchenv, branch_name=dev_branch_name)
+        readerDiffer = ReaderUserDiff(
+            commit_hash=mHEAD, branchenv=branchenv, refenv=refenv)
+        branchHistory = readerDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
 
         if branchHistory.canFF is True:
             logger.info('Selected Fast-Forward Merge Stratagy')
             success = _fast_forward_merge(
                 branchenv=branchenv,
+                stageenv=stageenv,
+                refenv=refenv,
+                stagehashenv=stagehashenv,
                 master_branch=master_branch_name,
-                new_masterHEAD=branchHistory.devHEAD)
+                new_masterHEAD=branchHistory.devHEAD,
+                repo_path=repo_path)
         else:
             logger.info('Selected 3-Way Merge Strategy')
             success = _three_way_merge(
@@ -114,7 +125,14 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
 
 # ------------------ Fast Forward Merge Methods -------------------------------
 
-def _fast_forward_merge(branchenv, master_branch, new_masterHEAD):
+def _fast_forward_merge(
+        branchenv: lmdb.Environment,
+        stageenv: lmdb.Environment,
+        refenv: lmdb.Environment,
+        stagehashenv: lmdb.Environment,
+        master_branch: str,
+        new_masterHEAD: str,
+        repo_path: str):
     '''Update branch head pointer to perform a fast-forward merge.
 
     This method does not check that it is safe to do this operation, all
@@ -124,10 +142,18 @@ def _fast_forward_merge(branchenv, master_branch, new_masterHEAD):
     ----------
     branchenv : lmdb.Environment
         db with the branch head pointers
+    stageenv : lmdb.Environment
+        db where the staging area records are stored.
+    refenv : lmdb.Environment
+        db where the merge commit records are stored.
+    stagehashenv: lmdb.Environment
+        db where the staged hash records are stored
     master_branch : str
         name of the merge_master branch which should be updated
     new_masterHEAD : str
         commit hash to update the master_branch name to point to.
+    repo_path: str
+        path to the repository on disk.
 
     Returns
     -------
@@ -136,10 +162,14 @@ def _fast_forward_merge(branchenv, master_branch, new_masterHEAD):
         updated to.
     '''
     try:
+        commiting.replace_staging_area_with_commit(
+            refenv=refenv, stageenv=stageenv, commit_hash=new_masterHEAD)
         success = heads.set_branch_head_commit(
-            branchenv=branchenv,
-            branch_name=master_branch,
-            commit_hash=new_masterHEAD)
+            branchenv=branchenv, branch_name=master_branch, commit_hash=new_masterHEAD)
+        heads.set_staging_branch_head(branchenv=branchenv, branch_name=master_branch)
+        hashs.remove_unused_dataset_hdf_files(repo_path=repo_path, stagehashenv=stagehashenv)
+        hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
+
     except ValueError as e:
         logger.error(e, exc_info=False)
         raise e from None
@@ -205,6 +235,7 @@ def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
     mergeContents = _compute_merge_results(a_cont, m_cont, d_cont)
     formatedContents = _merge_dict_to_lmdb_tuples(mergeContents)
     hashs.remove_unused_dataset_hdf_files(repo_path, stagehashenv)
+    # TODO: Is this duplicating work in commiting.commit_records()??
     _overwrite_stageenv(stageenv, formatedContents)
 
     commit_hash = commiting.commit_records(

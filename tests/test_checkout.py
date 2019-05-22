@@ -48,7 +48,7 @@ class TestCheckout(object):
         co.metadata.add('a', 'b')
         dset = co.datasets['_dset']
         dset['1'] = array5by7
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(OSError):
             co.commit('this is a commit message')
         co.close()
 
