@@ -239,7 +239,11 @@ class DatasetDataWriter(DatasetDataReader):
         super().__init__(*args, **kwargs)
 
         self._stagehashenv = stagehashenv
+        self._setup_file_access()
 
+    def _setup_file_access(self):
+        '''Internal method used to open handles to the backing store.
+        '''
         if self._default_schema_hash not in self._fs.wHands:
             sample_array = np.zeros(self._schema_max_shape, dtype=np.typeDict[self._schema_dtype_num])
             self._fs.create_schema(self._path, self._default_schema_hash, sample_array)
@@ -783,11 +787,11 @@ class Datasets(object):
         KeyError
             If no dataset with the given name exists in the checkout
         '''
-        if not self._is_conman:
-            for dskey in list(self._datasets):
-                self._datasets[dskey] = self._datasets[dskey].__enter__()
-
         try:
+            tmpconman = False if self._is_conman else True
+            if tmpconman:
+                self.__enter__()
+
             assert all([k in self._datasets for k in mapping.keys()])
             data_name = parsing.generate_sample_name()
             for k, v in mapping.items():
@@ -797,12 +801,10 @@ class Datasets(object):
             msg = f'HANGAR KEY ERROR:: one of keys: {mapping.keys()} not in '\
                   f'datasets: {self._datasets.keys()}'
             logger.error(msg)
-            raise KeyError(msg)
-
+            raise KeyError(msg) from None
         finally:
-            if not self._is_conman:
-                for dskey in list(self._datasets):
-                    self._datasets[dskey].__exit__()
+            if tmpconman:
+                self.__exit__()
 
         return data_name
 
