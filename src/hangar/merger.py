@@ -350,6 +350,10 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
         else:
             m_dsetn_data_dict = m_cont['datasets'][dsetn]['data']
 
+        if dsetn not in d_cont['datasets']:
+            o_data_dict[dsetn] = m_cont['datasets'][dsetn]['data']
+            continue
+
         dset_sample_changes = {
             'master': sample_changes['master'][dsetn],
             'dev': sample_changes['dev'][dsetn],
