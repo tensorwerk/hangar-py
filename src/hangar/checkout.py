@@ -8,6 +8,7 @@ import numpy as np
 from . import config
 from .dataset import Datasets
 from .diff import ReaderUserDiff, WriterUserDiff
+from .merger import select_merge_algorithm
 from .metadata import MetadataReader
 from .metadata import MetadataWriter
 from .records import commiting
@@ -322,18 +323,77 @@ class WriterCheckout(object):
             branchenv=self._branchenv, branch_name=self._branch_name)
         return commit_hash
 
+    def merge(self, message: str, dev_branch: str) -> str:
+        '''Merge the currently checked out commit with the provided branch name.
+
+        If a fast-forward merge is possible, it will be performed, and the
+        commit message argument to this function will be ignored.
+
+        Parameters
+        ----------
+        message : str
+            commit message to attach to a three-way merge
+        dev_branch : str
+            name of the branch which should be merge into this branch (`master`)
+
+        Returns
+        -------
+        str
+            commit hash of the new commit for the `master` branch this checkout
+            was started from.
+        '''
+        self.__acquire_writer_lock()
+        commit_hash = select_merge_algorithm(
+            message=message,
+            branchenv=self._branchenv,
+            stageenv=self._stageenv,
+            refenv=self._refenv,
+            stagehashenv=self._stagehashenv,
+            master_branch_name=self._branch_name,
+            dev_branch_name=dev_branch,
+            repo_path=self._repo_path,
+            writer_uuid=self._writer_lock)
+
+        for dsetHandle in self._datasets.values():
+            try:
+                dsetHandle._close()
+            except KeyError:
+                pass
+
+        self._metadata = MetadataWriter(
+            dataenv=self._stageenv,
+            labelenv=self._labelenv)
+        self._datasets = Datasets._from_staging_area(
+            repo_pth=self._repo_path,
+            hashenv=self._hashenv,
+            stageenv=self._stageenv,
+            stagehashenv=self._stagehashenv)
+        self._differ = WriterUserDiff(
+            stageenv=self._stageenv,
+            refenv=self._refenv,
+            branchenv=self._branchenv,
+            branch_name=self._branch_name)
+
+        return commit_hash
+
     def __acquire_writer_lock(self):
         '''Ensures that this class instance holds the writer lock in the database.
         '''
         try:
             self._writer_lock
         except AttributeError:
-            try:                   del self._datasets
-            except AttributeError: pass
-            try:                   del self._metadata
-            except AttributeError: pass
-            try:                   del self._differ
-            except AttributeError: pass
+            try:
+                del self._datasets
+            except AttributeError:
+                pass
+            try:
+                del self._metadata
+            except AttributeError:
+                pass
+            try:
+                del self._differ
+            except AttributeError:
+                pass
             err = f'Unable to operate on past checkout objects which have been '\
                   f'closed. No operation occured. Please use a new checkout.'
             logger.error(err, exc_info=0)
@@ -342,12 +402,18 @@ class WriterCheckout(object):
         try:
             heads.acquire_writer_lock(self._branchenv, self._writer_lock)
         except PermissionError as e:
-            try:                   del self._datasets
-            except AttributeError: pass
-            try:                   del self._metadata
-            except AttributeError: pass
-            try:                   del self._differ
-            except AttributeError: pass
+            try:
+                del self._datasets
+            except AttributeError:
+                pass
+            try:
+                del self._metadata
+            except AttributeError:
+                pass
+            try:
+                del self._differ
+            except AttributeError:
+                pass
             logger.error(e, exc_info=0)
             raise e from None
 

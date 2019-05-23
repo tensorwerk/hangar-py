@@ -25,10 +25,10 @@ algorithm are implemented. All user facing API calls should be funnled through t
 '''
 
 
-def select_merge_algorithm(message, branchenv, stageenv, refenv,
-                           stagehashenv,
+def select_merge_algorithm(message,
+                           branchenv, stageenv, refenv, stagehashenv,
                            master_branch_name, dev_branch_name,
-                           repo_path):
+                           repo_path, *, writer_uuid='MERGE_PROCESS'):
     '''Entry point to perform a merge.
 
     Automatically selects algorithm and does the operation if no conflicts are
@@ -53,6 +53,11 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
         name of the branch to use as the feature branch
     repo_path: str
         path to the repository on disk
+    writer_uuid : str, optional, kwarg only
+        if the merge method is called from the repo level, the default writer
+        lock `MERGE_PROCESS` is used to ensure that a writer is active. If
+        called from within a write-enabled checkout, the writer lock is set to
+        the writer_uuid of the writer checkout so that the lock can be acquired.
 
     Raises
     ------
@@ -60,6 +65,8 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
         if the staging area is not `CLEAN` of other changes
     PermissionError
         if the writer lock is currently held
+    ValueError
+        if a conflict is found in a three way merge, no operation will be performed.
 
     Returns
     -------
@@ -80,7 +87,7 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
         raise e from None
 
     try:
-        heads.acquire_writer_lock(branchenv=branchenv, writer_uuid='MERGE_PROCESS')
+        heads.acquire_writer_lock(branchenv=branchenv, writer_uuid=writer_uuid)
     except PermissionError as e:
         logger.error(e, exc_info=False)
         raise e from None
@@ -115,22 +122,24 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
                 refenv=refenv,
                 stagehashenv=stagehashenv,
                 repo_path=repo_path)
+
+    except ValueError as e:
+        raise e
+
     finally:
-        heads.release_writer_lock(branchenv=branchenv, writer_uuid='MERGE_PROCESS')
+        if writer_uuid == 'MERGE_PROCESS':
+            heads.release_writer_lock(branchenv=branchenv, writer_uuid=writer_uuid)
 
     return success
 
 
 # ------------------ Fast Forward Merge Methods -------------------------------
 
-def _fast_forward_merge(
-        branchenv: lmdb.Environment,
-        stageenv: lmdb.Environment,
-        refenv: lmdb.Environment,
-        stagehashenv: lmdb.Environment,
-        master_branch: str,
-        new_masterHEAD: str,
-        repo_path: str):
+
+def _fast_forward_merge(branchenv: lmdb.Environment,
+                        stageenv: lmdb.Environment, refenv: lmdb.Environment,
+                        stagehashenv: lmdb.Environment, master_branch: str,
+                        new_masterHEAD: str, repo_path: str) -> str:
     '''Update branch head pointer to perform a fast-forward merge.
 
     This method does not check that it is safe to do this operation, all
@@ -216,24 +225,21 @@ def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
     str
         commit hash of the new merge commit if the operation was successful.
 
-    Notes
-    -----
-
-    The current implementation of the three-way merge essentially does the following:
-
-    1)  Unpacks a struct containing records as the existed in `master`, `dev`
-        and `ancestor` commits.
-    2)  Create "diff" of changes from `ancestor` -> `dev`.
-    3)  "Patch" `master` records with adds/removals/changes recorded in the "diff"
-    4)  If no hard conflicts result, delete staging area, replace with contents of
-        patch
-    5)  Compute new commit hash, and commit staging area records
+    Raises
+    ------
+    ValueError
+        If a conflict is found, the operation will abort before completing.
     '''
     aCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=ancestorHEAD)
     mCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=masterHEAD)
     dCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=devHEAD)
 
-    mergeContents = _compute_merge_results(a_cont=aCont, m_cont=mCont, d_cont=dCont)
+    try:
+        mergeContents = _compute_merge_results(a_cont=aCont, m_cont=mCont, d_cont=dCont)
+    except ValueError as e:
+        logger.error(e, exc_info=False)
+        raise e from None
+
     fmtCont = _merge_dict_to_lmdb_tuples(patchedRecs=mergeContents)
     hashs.remove_unused_dataset_hdf5(repo_path=repo_path, stagehashenv=stagehashenv)
     commiting.replace_staging_area_with_refs(stageenv=stageenv, sorted_content=fmtCont)
@@ -301,10 +307,6 @@ def _merge_changes(changes: dict, m_dict: dict) -> dict:
 def _compute_merge_results(a_cont, m_cont, d_cont):
     '''Compute the diff of a 3-way merge and patch historical contents to get new state
 
-    .. warning::
-
-        This method is not robust, and will require a require in the future.
-
     Parameters
     ----------
     a_cont : dict
@@ -319,6 +321,11 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     dict
         nested dict specifying datasets and metadata record specs of the new
         merge commit.
+
+    Raises
+    ------
+    ValueError
+        If a conflict is found, the operation is aborted
     '''
     # conflict checking
     cmtDiffer = ThreeWayCommitDiffer(a_cont, m_cont, d_cont)
