@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 
 import lmdb
 
@@ -407,6 +408,29 @@ def get_branch_names(branchenv):
         TxnRegister().abort_reader_txn(branchenv)
 
     return branchNames
+
+
+def commit_hash_to_branch_name_map(branchenv: lmdb.Environment) -> dict:
+    '''Determine branch names which map to commit hashs
+
+    Parameters
+    ----------
+    branchenv : lmdb.Environment
+        db where the branch references are stored
+
+    Returns
+    -------
+    dict
+        keys are commit hash strings, values are list of branch names (strings)
+        whose HEAD are at the key commit
+    '''
+    outMap = defaultdict(list)
+    branchNames = get_branch_names(branchenv=branchenv)
+    for branchName in branchNames:
+        branchHEAD = get_branch_head_commit(branchenv=branchenv, branch_name=branchName)
+        outMap[branchHEAD].append(branchName)
+
+    return outMap
 
 
 # ----------------------------- Remotes ---------------------------------------

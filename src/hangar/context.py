@@ -3,6 +3,7 @@ import os
 import shutil
 import platform
 import tempfile
+from typing import MutableMapping
 from collections import Counter
 from os.path import dirname
 from os.path import join as pjoin
@@ -34,8 +35,8 @@ class TxnRegister(metaclass=TxnRegisterSingleton):
     def __init__(self):
         self.WriterAncestors = Counter()
         self.ReaderAncestors = Counter()
-        self.WriterTxn = {}
-        self.ReaderTxn = {}
+        self.WriterTxn: MutableMapping[lmdb.Environment, lmdb.Transaction] = {}
+        self.ReaderTxn: MutableMapping[lmdb.Environment, lmdb.Transaction] = {}
 
     def begin_writer_txn(self, lmdbenv: lmdb.Environment,
                          buffer: bool = False) -> lmdb.Transaction:
@@ -184,17 +185,29 @@ class EnvironmentsSingleton(type):
 
 class Environments(metaclass=EnvironmentsSingleton):
 
-    def __init__(self, repo_path):
+    def __init__(self, repo_path: str):
 
-        self.repo_path = repo_path
-        self.refenv = None
-        self.hashenv = None
-        self.stageenv = None
-        self.branchenv = None
-        self.labelenv = None
-        self.stagehashenv = None
-        self.cmtenv = {}
+        self.repo_path: str = repo_path
+        self.refenv: lmdb.Environment = None
+        self.hashenv: lmdb.Environment = None
+        self.stageenv: lmdb.Environment = None
+        self.branchenv: lmdb.Environment = None
+        self.labelenv: lmdb.Environment = None
+        self.stagehashenv: lmdb.Environment = None
+        self.cmtenv: MutableMapping[str, lmdb.Environment] = {}
         self._startup()
+
+    @property
+    def repo_is_initialized(self):
+        '''Property to check if the repository is initialized, read-only attribute
+
+        Returns
+        -------
+        bool
+            True if repo environments are initialized, False otherwise
+        '''
+        environmentInitialized = isinstance(self.refenv, lmdb.Environment)
+        return environmentInitialized
 
     def _startup(self) -> bool:
         '''When first access to the Repo starts, attempt to open the lmdb.Environments.

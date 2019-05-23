@@ -29,13 +29,6 @@ def main():
     pass
 
 
-@main.command(help='show the status of the repository')
-def status():
-    P = os.getcwd()
-    repo = Repository(path=P)
-    click.echo(repo.status())
-
-
 @main.command(help='show a summary of the repository')
 @click.option('-b', nargs=1, required=False, help='name of the branch to show the head commit details of')
 @click.option('-c', nargs=1, required=False, help='commit hash to show the summary of')

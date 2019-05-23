@@ -40,9 +40,10 @@ class Repository(object):
         except (TypeError, OSError, PermissionError) as e:
             logger.error(e, exc_info=False)
             raise
+
         repo_pth = os.path.join(usr_path, config.get('hangar.repository.hangar_dir_name'))
-        self._env = Environments(repo_path=repo_pth)
-        self._repo_path = self._env.repo_path
+        self._env: Environments = Environments(repo_path=repo_pth)
+        self._repo_path: str = self._env.repo_path
         self._client: HangarClient = None
 
     def _repr_pretty_(self, p, cycle):
@@ -82,6 +83,43 @@ class Repository(object):
         res = f'{self.__class__}(path={self._repo_path})'
         return res
 
+    def __verify_repo_initialized(self):
+        '''Internal method to verify repo inititilized before operations occur
+
+        Raises
+        ------
+        RuntimeError
+            If the repository db environments have not been initialized at the
+            specified repo path.
+        '''
+        if not self._env.repo_is_initialized:
+            msg = f'HANGAR RUNTIME ERROR:: Repository at path: {self._repo_path} has not '\
+                  f'been initialized. Please run the `init_repo()` function'
+            raise RuntimeError(msg)
+
+    @property
+    def repo_path(self):
+        '''Return the path to the repository on disk, read-only attribute
+
+        Returns
+        -------
+        str
+            path to the specified repository, not including `__hangar` directory
+        '''
+        return os.path.dirname(self._repo_path)
+
+    @property
+    def writer_lock_held(self):
+        '''Check if the writer lock is currently marked as held. Read-only attribute.
+
+        Returns
+        -------
+        bool
+            True is writer-lock is held, False if writer-lock is free.
+        '''
+        self.__verify_repo_initialized()
+        return not heads.writer_lock_held(self._env.branchenv)
+
     def checkout(self, write=False, *, branch_name='master', commit=''):
         '''Checkout the repo at some point in time in either `read` or `write` mode.
 
@@ -110,6 +148,7 @@ class Repository(object):
             Checkout object which can be used to interact with the repository
             data
         '''
+        self.__verify_repo_initialized()
         try:
             if write is True:
                 co = WriterCheckout(
@@ -202,6 +241,7 @@ class Repository(object):
         str
             Name of the branch which stores the retrieved commits.
         '''
+        self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
         self._client = HangarClient(envs=self._env, address=address)
 
@@ -321,6 +361,7 @@ class Repository(object):
         bool
             True if the operation succeeded, Otherwise False
         '''
+        self.__verify_repo_initialized()
         try:
             address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
             self._client = HangarClient(envs=self._env, address=address,
@@ -401,6 +442,7 @@ class Repository(object):
             True if successful, False if a remote already exists with the
             provided name
         '''
+        self.__verify_repo_initialized()
         succ = heads.add_remote(
             branchenv=self._env.branchenv,
             name=remote_name,
@@ -425,6 +467,7 @@ class Repository(object):
         str
             The channel address which was removed at the given remote name
         '''
+        self.__verify_repo_initialized()
         try:
             rm_address = heads.remove_remote(
                 branchenv=self._env.branchenv, name=remote_name)
@@ -459,7 +502,8 @@ class Repository(object):
             user_name=user_name, user_email=user_email, remove_old=remove_old)
         return pth
 
-    def log(self, branch_name=None, commit_hash=None, *, return_contents=False):
+    def log(self, branch_name=None, commit_hash=None,
+            *, return_contents=False, show_time=False, show_user=False):
         '''Displays a pretty printed commit log graph to the terminal.
 
         .. note::
@@ -478,12 +522,18 @@ class Repository(object):
         return_contents : bool, optional, kwarg only
             If true, return the commit graph specifications in a dictionary
             suitable for programatic access/evalutation.
-
+        show_time : bool, optional, kwarg only
+            If true and return_contents is False, show the time of each commit
+            on the printed log graph
+        show_user : bool, optional, kwarg only
+            If true and return_contents is False, show the committer of each
+            commit on the printed log graph
         Returns
         -------
         dict
             Dict containing the commit ancestor graph, and all specifications.
         '''
+        self.__verify_repo_initialized()
         res = summarize.list_history(
             refenv=self._env.refenv,
             branchenv=self._env.branchenv,
@@ -493,12 +543,16 @@ class Repository(object):
         if return_contents:
             return res
         else:
+            branchMap = heads.commit_hash_to_branch_name_map(branchenv=self._env.branchenv)
             g = graphing.Graph()
             g.show_nodes(
                 dag=res['ancestors'],
                 spec=res['specs'],
+                branch=branchMap,
                 start=res['head'],
-                order=res['order'])
+                order=res['order'],
+                show_time=show_time,
+                show_user=show_user)
 
     def summary(self, *, branch_name='', commit='', return_contents=False):
         '''Print a summary of the repository contents to the terminal
@@ -524,6 +578,7 @@ class Repository(object):
         dict
             contents of the entire repository (if `return_contents=True`)
         '''
+        self.__verify_repo_initialized()
         ppbuf, res = summarize.summary(self._env, branch_name=branch_name, commit=commit)
         if return_contents is True:
             return res
@@ -553,6 +608,7 @@ class Repository(object):
         str
             Hashof the commit which is written if possible.
         '''
+        self.__verify_repo_initialized()
         commit_hash = merger.select_merge_algorithm(
             message=message,
             branchenv=self._env.branchenv,
@@ -589,6 +645,7 @@ class Repository(object):
         str
             name of the branch which was created
         '''
+        self.__verify_repo_initialized()
         if not is_ascii_alnum(branch_name):
             msg = (f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` is not allowed. '
                    'Must only contain alpha-numeric ascii with no whitespace characters.')
@@ -614,6 +671,7 @@ class Repository(object):
         list of str
             the branch names recorded in the repository
         '''
+        self.__verify_repo_initialized()
         branches = heads.get_branch_names(self._env.branchenv)
         return branches
 
@@ -641,6 +699,7 @@ class Repository(object):
         bool
             if the operation was successful.
         '''
+        self.__verify_repo_initialized()
         forceReleaseSentinal = parsing.repo_writer_lock_force_release_sentinal()
         success = heads.release_writer_lock(self._env.branchenv, forceReleaseSentinal)
         return success

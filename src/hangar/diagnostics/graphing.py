@@ -207,7 +207,8 @@ class Graph(object):
         self.mapping = {}
         self.new_mapping = {}
 
-    def show_nodes(self, dag, spec, start, order, stop=''):
+    def show_nodes(self, dag, spec, branch, start, order, stop='',
+                   *, show_time=True, show_user=True):
         '''Printing function that displays a DAG representing the commit history
 
         Print a revision history alongside a revision graph drawn with ASCII
@@ -221,6 +222,9 @@ class Graph(object):
             2 connections per node
         spec: dict
             dictionary of commit specification (user name, email, message, etc).
+        branch : dict
+            dict of commit hash -> list of branch names whose HEAD commit is at
+            that key.
         start : string
             commit hash to act as the top of the topological sort.
         order: list
@@ -235,14 +239,23 @@ class Graph(object):
 
         fmtSpec = {}
         for cmt, cmtspec in spec.items():
-            t = time.strftime('%d%b%Y %H:%M:%S', time.gmtime(cmtspec['commit_time']))
-            u = cmtspec['commit_user']
+            if show_time:
+                t = f"({time.strftime('%d%b%Y %H:%M:%S', time.gmtime(cmtspec['commit_time']))})"
+            else:
+                t = ''
+            if show_user:
+                u = f"({cmtspec['commit_user']})"
+            else:
+                u = ''
             m = cmtspec['commit_message']
-            fmtSpec[cmt] = f'{cmt} ({t}) ({u}): {m}'
+            br = ' '
+            if cmt in branch:
+                for branchName in branch[cmt]:
+                    br = f'{br}({COLOR_BOLD_RED}{branchName}{COLOR_RESET}) '
+            fmtSpec[cmt] = f'{cmt}{br}{t}{u}: {m}'
 
         for rev in order:
             parents = dag[rev]
-
             self._update(rev, parents)
             self._show_commit()
             self.outfile.write(fmtSpec[rev])
