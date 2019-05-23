@@ -194,7 +194,7 @@ def is_valid_directory_path(path: str) -> str:
         isWriteable = os.access(usr_path, os.W_OK)
     except TypeError:
         msg = f'HANGAR TYPE ERROR:: `path` arg: {path} of type: {type(path)} '\
-                f'is not valid path specifier'
+              f'is not valid path specifier'
         raise TypeError(msg)
 
     if not isDir:
@@ -202,7 +202,7 @@ def is_valid_directory_path(path: str) -> str:
         raise OSError(msg)
     elif not isWriteable:
         msg = f'HANGAR PERMISSION ERROR:: user does not have permission to write '\
-                f'to directory `path` arg: {path}'
+              f'to directory `path` arg: {path}'
         raise PermissionError(msg)
 
     return usr_path
