@@ -10,7 +10,7 @@ class TestMetadata(object):
 
     def test_name_conflict(self, w_checkout):
         w_checkout.metadata.add('a', 'b')
-        w_checkout.commit()
+        w_checkout.commit('tehis is a merge message')
         # TODO: shouldn't it raise a warning atleast?
         w_checkout.metadata.add('a', 'c')
         w_checkout.commit('second time')
@@ -34,17 +34,17 @@ class TestMetadata(object):
         with pytest.raises(TypeError):
             co.metadata.add('1')
         co.metadata.add('a', 'b')
-        co.commit()
+        co.commit('this is a commit message')
         with pytest.raises(TypeError):
             co.metadata.remove()
         co.metadata.remove('a')
-        co.commit()
+        co.commit('this is a commit message')
         assert list(co.metadata.keys()) == []
 
     def test_get_and_remove_wrong_key(self, repo):
         co = repo.checkout(write=True)
         co.metadata.add('a', 'b')
-        co.commit()
+        co.commit('this is a commit message')
         with pytest.raises(KeyError):
             co.metadata.get('randome')
         with pytest.raises(KeyError):
@@ -55,7 +55,7 @@ class TestMetadata(object):
         limit = 10
         for i in range(limit):
             co.metadata.add(f'k_{i}', f'v_{i}')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
         for i, (k, v) in enumerate(co.metadata.items()):

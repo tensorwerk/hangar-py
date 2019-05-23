@@ -120,7 +120,7 @@ class HashQuery(object):
         return recs
 
 
-def remove_unused_dataset_hdf_files(repo_path, stagehashenv):
+def remove_unused_dataset_hdf5(repo_path, stagehashenv):
     '''If no changes made to staged hdf files, remove and unlik them from stagedir
 
     This searchs the stagehashenv file for all schemas & instances, and if any

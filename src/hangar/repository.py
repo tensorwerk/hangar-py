@@ -6,7 +6,7 @@ config_logging.setup_logging()
 from tqdm.auto import tqdm
 import grpc
 
-from . import config, diff
+from . import config, diff, merger
 from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
 from .diagnostics import graphing
@@ -131,11 +131,13 @@ class Repository(object):
                     labelenv=self._env.labelenv,
                     dataenv=self._env.cmtenv[commit_hash],
                     hashenv=self._env.hashenv,
+                    branchenv=self._env.branchenv,
+                    refenv=self._env.refenv,
                     commit=commit_hash)
                 return co
         except (RuntimeError, ValueError) as e:
-            logger.error(e, exc_info=1, extra=self._env.__dict__)
-            return None
+            logger.error(e, exc_info=False, extra=self._env.__dict__)
+            raise e from None
 
     def clone(self, user_name: str, user_email: str, remote_address: str,
               *, remove_old: bool = False) -> str:
@@ -528,20 +530,6 @@ class Repository(object):
         else:
             print(ppbuf.getvalue())
 
-    def status(self):
-        '''status of the staging area, dirty or clean
-
-        Returns
-        -------
-        str
-            status of the staging area. One of "DIRTY" or "CLEAN"
-        '''
-        res = diff.staging_area_status(
-            stageenv=self._env.stageenv,
-            refenv=self._env.refenv,
-            branchenv=self._env.branchenv)
-        return res
-
     def _details(self):
         '''DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
         '''
@@ -549,7 +537,7 @@ class Repository(object):
         return
 
     def merge(self, message, master_branch, dev_branch):
-        '''Not Implemented
+        '''Perform a merge of the changes made on two branches.
 
         Parameters
         ----------
@@ -565,7 +553,7 @@ class Repository(object):
         str
             Hashof the commit which is written if possible.
         '''
-        commit_hash = diff.select_merge_algorithm(
+        commit_hash = merger.select_merge_algorithm(
             message=message,
             branchenv=self._env.branchenv,
             stageenv=self._env.stageenv,
@@ -576,68 +564,6 @@ class Repository(object):
             repo_path=self._repo_path)
 
         return commit_hash
-
-    def diff_commit(self, master_commit, dev_commit):
-        '''Returns the diff of two commit hashes
-
-        Parameters
-        ----------
-        master_commit : str
-            commit hash to serve as the "master" branch
-        dev_commit : str
-            commit hash to serve as the "dev" branch
-
-        Returns
-        -------
-        list
-            list of all changes in the repository between the two commits
-            (adds/changes/removes)
-        '''
-        dif = diff.diff_commits(
-            refenv=self._env.refenv,
-            masterHEAD=master_commit,
-            devHEAD=dev_commit)
-        return dif
-
-    def diff_branch(self, master_branch, dev_branch):
-        '''Returns the diff of the head commits between a master and dev branch.
-
-        Parameters
-        ----------
-        master_branch : str
-            name of the master branch - must exist in the repository
-        dev_branch : str
-            name of the dev branch - must exist in the repository
-
-        Returns
-        -------
-        list
-            list of all changes in the repository between the two branches
-            (adds/changes/removes)
-        '''
-        masterHEAD = heads.get_branch_head_commit(
-            branchenv=self._env.branchenv, branch_name=master_branch)
-        devHEAD = heads.get_branch_head_commit(
-            branchenv=self._env.branchenv, branch_name=dev_branch)
-
-        dif = diff.diff_commits(
-            refenv=self._env.refenv, masterHEAD=masterHEAD, devHEAD=devHEAD)
-        return dif
-
-    def diff_staged_changes(self):
-        '''Find the diff of all changes in the staging area
-
-        Returns
-        -------
-        list
-            list of all changes in the repository between current stage area and
-            the last branch head commit.
-        '''
-        dif = diff.diff_staged_changes(
-            refenv=self._env.refenv,
-            stageenv=self._env.stageenv,
-            branchenv=self._env.branchenv)
-        return dif
 
     def create_branch(self, branch_name, base_commit=None):
         '''create a branch with the provided name from a certain commit.
@@ -660,8 +586,8 @@ class Repository(object):
 
         Returns
         -------
-        bool
-            if the operation was successful.
+        str
+            name of the branch which was created
         '''
         if not is_ascii_alnum(branch_name):
             msg = (f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` is not allowed. '

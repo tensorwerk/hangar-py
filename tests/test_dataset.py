@@ -29,7 +29,7 @@ class TestDataset(object):
         dsetOldSchemaUUID = dsetOld._schema_uuid
 
         dsetOld.add(array5by7, '1')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
 
@@ -51,20 +51,20 @@ class TestDataset(object):
         co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
         assert len(co.datasets) == 1
         co.datasets.remove_dset('_dset')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout(write=True)
         assert len(co.datasets) == 0
 
         co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout(write=True)
         assert len(co.datasets) == 1
         del co.datasets['_dset']
         assert len(co.datasets) == 0
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
     def test_init_again(self, repo, randomsizedarray):
@@ -96,10 +96,10 @@ class TestDataset(object):
         arr = np.array(1, dtype=np.int64)
         dset = co.datasets.init_dataset('dset1', shape=(), dtype=np.int64)
         dset['1'] = arr
-        co.commit()
+        co.commit('this is a commit message')
         dset = co.datasets.init_dataset('dset2', prototype=arr)
         dset['1'] = arr
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
         dset1 = co.datasets['dset1']
@@ -133,7 +133,7 @@ class TestDataWithFixedSizedDataset(object):
             dset3['3'] = np.zeros((3, 4), dtype=np.float32)
             all_tensors.extend([dset3['1'], dset3['2'], dset3['3']])
 
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         co = repo.checkout()
@@ -159,7 +159,7 @@ class TestDataWithFixedSizedDataset(object):
     def test_get_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         co.datasets['_dset']['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
         assert np.allclose(
@@ -177,7 +177,7 @@ class TestDataWithFixedSizedDataset(object):
             dset[1] = array5by7
         dset['1'] = array5by7
         dset.add(array5by7, '2')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
         assert np.allclose(
@@ -194,8 +194,9 @@ class TestDataWithFixedSizedDataset(object):
         co.datasets['_dset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
         co.datasets['_dset']['2'] = new_array
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = written_repo.checkout()
         dset = co.datasets['_dset']
         assert len(dset) == 2
@@ -206,15 +207,17 @@ class TestDataWithFixedSizedDataset(object):
     def test_multiple_data_multiple_commit(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].add(array5by7, '1')
-        co.commit()
+        co.commit('this is a commit message')
         new_array = np.zeros_like(array5by7)
         co.datasets['_dset']['2'] = new_array
         co.close()
+
         new_new_array = new_array + 5
         co = written_repo.checkout(write=True)
         co.datasets['_dset']['3'] = new_new_array
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = written_repo.checkout()
         dset = co.datasets['_dset']
         assert np.allclose(dset['1'], array5by7)
@@ -226,8 +229,10 @@ class TestDataWithFixedSizedDataset(object):
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].add(array5by7, '1')
         co.close()
+
         with pytest.raises(PermissionError):
-            co.commit()
+            co.commit('this is a commit message')
+
         co = written_repo.checkout()
         dset = co.datasets['_dset']
         with pytest.raises(KeyError):
@@ -240,13 +245,15 @@ class TestDataWithFixedSizedDataset(object):
         new_array = np.zeros_like(array5by7)
         co.datasets['_dset']['2'] = new_array
         co.datasets['_dset']['3'] = new_array + 5
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].remove('1')
         del co.datasets['_dset']['3']
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = written_repo.checkout()
         with pytest.raises(KeyError):
             co.datasets['_dset']['1']
@@ -261,30 +268,29 @@ class TestDataWithFixedSizedDataset(object):
         co.datasets['_dset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
         co.datasets['_dset']['2'] = new_array
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = written_repo.checkout(write=True)
         co.datasets['_dset'].remove('1')
         co.datasets['_dset'].remove('2')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = written_repo.checkout()
         with pytest.raises(KeyError):
             # removal of all data removes the dataset
             co.datasets['_dset']
         co.close()
+
         # recreating same and verifying
         co = written_repo.checkout(write=True)
         co.datasets.init_dataset('_dset', prototype=array5by7)
         co.datasets['_dset']['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
         assert np.allclose(co.datasets['_dset']['1'], array5by7)
-
-    @pytest.mark.skip(reason='not implemented')
-    def test_all_dataset_removal_removes_indexing_key(self):
-        pass
 
     def test_multiple_datasets_single_commit(self, written_repo, randomsizedarray):
         co = written_repo.checkout(write=True)
@@ -292,7 +298,7 @@ class TestDataWithFixedSizedDataset(object):
         dset2 = co.datasets.init_dataset('dset2', prototype=randomsizedarray)
         dset1['arr'] = randomsizedarray
         dset2['arr'] = randomsizedarray
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
         assert np.allclose(co.datasets['dset1']['arr'], randomsizedarray)
@@ -303,15 +309,13 @@ class TestDataWithFixedSizedDataset(object):
         co = repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
         dset2 = co.datasets.init_dataset(
-            'dset2',
-            shape=randomsizedarray.shape,
-            dtype=randomsizedarray.dtype)
-        newarray = np.random.random(
-            randomsizedarray.shape).astype(dtype=randomsizedarray.dtype)
+            'dset2', shape=randomsizedarray.shape, dtype=randomsizedarray.dtype)
+        newarray = np.random.random(randomsizedarray.shape).astype(randomsizedarray.dtype)
         dset1['arr1'] = newarray
         dset2['arr'] = newarray
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = repo.checkout()
         assert np.allclose(co.datasets['dset1']['arr1'], newarray)
         assert np.allclose(co.datasets['dset2']['arr'], newarray)
@@ -357,7 +361,7 @@ class TestDataWithFixedSizedDataset(object):
         with pytest.raises(LookupError):
             # raises before commit
             dset['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         with pytest.raises(LookupError):
             # raises after commit
             dset['1'] = array5by7
@@ -373,7 +377,7 @@ class TestDataWithFixedSizedDataset(object):
         dset = co.datasets.init_dataset('dset', prototype=randomsizedarray)
         with co.datasets['dset'] as dset:
             dset.add(randomsizedarray, '1')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
         assert np.allclose(co.datasets['dset']['1'], randomsizedarray)
@@ -382,7 +386,7 @@ class TestDataWithFixedSizedDataset(object):
         co = repo.checkout(write=True)
         with co.metadata as metadata:
             metadata.add('key', 'val')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
         assert co.metadata['key'] == 'val'
@@ -397,7 +401,7 @@ class TestDataWithFixedSizedDataset(object):
             newarr = randomsizedarray + 1
             dset['2'] = newarr
             metadata.add('key', 'val')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
 
         co = repo.checkout()
@@ -416,7 +420,7 @@ class TestDataWithFixedSizedDataset(object):
             'dset_no_name2',
             prototype=randomsizedarray,
             samples_are_named=False)
-        co.commit()
+        co.commit('this is a commit message')
 
         # dummy additino with wrong key
         with pytest.raises(KeyError):
@@ -425,10 +429,9 @@ class TestDataWithFixedSizedDataset(object):
                     'dset_no_name2': randomsizedarray / 255,
                     'dummykey': randomsizedarray
                 })
-
         # making sure above addition did not add partial data
         with pytest.raises(RuntimeError):
-            co.commit()
+            co.commit('this is a commit message')
 
         # proper addition and verification
         co.datasets.add(
@@ -436,8 +439,9 @@ class TestDataWithFixedSizedDataset(object):
                 'dset_no_name1': randomsizedarray,
                 'dset_no_name2': randomsizedarray / 255
             })
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = repo.checkout()
         data1 = next(co.datasets['dset_no_name1'].values())
         data2 = next(co.datasets['dset_no_name2'].values())

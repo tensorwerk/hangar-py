@@ -382,6 +382,7 @@ def dataset_record_schema_raw_key_from_db_key(db_key):
 
 def dataset_record_schema_raw_val_from_db_val(db_val):
     schema_spec = json.loads(db_val)
+    schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
     raw_val = RawDatasetSchemaVal(**schema_spec)
     return raw_val
 

@@ -56,7 +56,7 @@ def managed_tmpdir(tmp_path):
 
 
 @pytest.fixture()
-def repo(managed_tmpdir):
+def repo(managed_tmpdir) -> Repository:
     repo_obj = Repository(path=managed_tmpdir)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     yield repo_obj
@@ -66,7 +66,7 @@ def repo(managed_tmpdir):
 def written_repo(repo):
     co = repo.checkout(write=True)
     co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
-    co.commit()
+    co.commit('this is a commit message')
     co.close()
     yield repo
 

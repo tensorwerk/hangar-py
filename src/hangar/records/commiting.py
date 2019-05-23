@@ -18,6 +18,32 @@ Reading commit specifications and parents.
 '''
 
 
+def check_commit_hash_in_history(refenv, commit_hash):
+    '''Check if a commit hash exists in the repository history
+
+    Parameters
+    ----------
+    refenv : lmdb.Environment
+        refenv where the commit history is stored
+    commit_hash : str
+        hash of the commit to check for existence
+
+    Returns
+    -------
+    bool
+        True if exists, otherwise False
+    '''
+    reftxn = TxnRegister().begin_reader_txn(refenv)
+    try:
+        commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+        commitParentVal = reftxn.get(commitParentKey, default=False)
+        isCommitInHistory = True if commitParentVal is not False else False
+    finally:
+        TxnRegister().abort_reader_txn(refenv)
+    return isCommitInHistory
+
+
+
 def get_commit_spec(refenv, commit_hash):
     '''Get the commit specifications of a particular hash.
 
@@ -32,15 +58,23 @@ def get_commit_spec(refenv, commit_hash):
     -------
     namedtuple
         named tuple with all the commit specs included
+
+    Raises
+    ------
+    ValueError
+        if no commit exists with the provided hash
     '''
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
         parentCommitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
-        parentCommitSpecVal = reftxn.get(parentCommitSpecKey)
-        parentCommitSpec = parsing.commit_spec_raw_val_from_db_val(parentCommitSpecVal)
+        parentCommitSpecVal = reftxn.get(parentCommitSpecKey, default=False)
     finally:
         TxnRegister().abort_reader_txn(refenv)
 
+    if parentCommitSpecVal is False:
+        raise ValueError(f'No commit exists with the hash: {commit_hash}')
+
+    parentCommitSpec = parsing.commit_spec_raw_val_from_db_val(parentCommitSpecVal)
     return parentCommitSpec
 
 
@@ -59,16 +93,24 @@ def get_commit_ancestors(refenv, commit_hash):
     namedtuple
         Namedtuple describing is_merge_commit, master_ancester, &
         child_ancestor (in the even of merge commit)
+
+    Raises
+    ------
+    ValueError
+        if no commit exists with the provided hash
     '''
 
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
         parentCommitKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
-        parentCommitVal = reftxn.get(parentCommitKey)
-        parentCommitAncestors = parsing.commit_parent_raw_val_from_db_val(parentCommitVal)
+        parentCommitVal = reftxn.get(parentCommitKey, default=False)
     finally:
         TxnRegister().abort_reader_txn(refenv)
 
+    if parentCommitVal is False:
+        raise ValueError(f'No commit exists with the hash: {commit_hash}')
+
+    parentCommitAncestors = parsing.commit_parent_raw_val_from_db_val(parentCommitVal)
     return parentCommitAncestors
 
 
@@ -151,6 +193,11 @@ def get_commit_ref(refenv, commit_hash):
     tuple
         tuple of tuples containing encoded key/value pairs of the data
         records
+
+    Raises
+    ------
+    ValueError
+        if no commit exists with the provided hash
     '''
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
@@ -403,7 +450,6 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
         headBranchName = heads.get_staging_branch_head(branchenv)
         heads.set_branch_head_commit(branchenv, headBranchName, commit_hash)
     else:
-        replace_staging_area_with_commit(refenv=refenv, stageenv=stageenv, commit_hash=commit_hash)
         heads.set_staging_branch_head(branchenv=branchenv, branch_name=merge_master)
         heads.set_branch_head_commit(branchenv, merge_master, commit_hash)
 
@@ -416,11 +462,10 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
 def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
     '''DANGER ZONE: Delete the stage db and replace it with a copy of a commit environent.
 
-    .. note::
+    .. warning::
 
         In the current implementation, this method will not validate that it is safe
         to do this operation. All validation logic must be handled upstream.
-        Warnings will be generated until this behavior is taken care of.
 
     Parameters
     ----------
@@ -441,6 +486,42 @@ def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
 
     unpack_commit_ref(refenv=refenv, cmtrefenv=stageenv, commit_hash=commit_hash)
     return
+
+
+def replace_staging_area_with_refs(stageenv, sorted_content):
+    '''DANGER ZONE: Delete all stage db records and replace it with specified data.
+
+    .. warning::
+
+        In the current implementation, this method will not validate that it is safe
+        to do this operation. All validation logic must be handled upstream.
+
+    Parameters
+    ----------
+    stageenv : lmdb.Enviornment
+        staging area db to replace all data in.
+    sorted_content : iterable of tuple
+        iterable containing two-tuple of byte encoded record data to place in the
+        stageenv db. index 0 -> db key; index 1 -> db val, it is assumed that the
+        order of the tuples is lexigraphically sorted by index 0 values, if not,
+        this will result in unknown behavior.
+    '''
+    stagetxn = TxnRegister().begin_writer_txn(stageenv)
+    with stagetxn.cursor() as cursor:
+        positionExists = cursor.first()
+        while positionExists:
+            positionExists = cursor.delete()
+    cursor.close()
+    TxnRegister().commit_writer_txn(stageenv)
+
+    cmttxn = TxnRegister().begin_writer_txn(stageenv)
+    try:
+        with cmttxn.cursor() as cursor:
+            cursor.first()
+            cursor.putmulti(sorted_content, append=True)
+        cursor.close()
+    finally:
+        TxnRegister().commit_writer_txn(stageenv)
 
 
 def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False):

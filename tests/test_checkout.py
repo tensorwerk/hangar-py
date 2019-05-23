@@ -30,14 +30,10 @@ class TestCheckout(object):
         r2_checkout.close()
         w_checkout.close()
 
-    @pytest.mark.skip(reason='Need to Fix TODO')
     def test_write_with_read_checkout(self, written_repo, array5by7):
         co = written_repo.checkout()
-        # TODO: This should raise more informative error message
-        # Now it's type error because `init_dataset` is None
         with pytest.raises(TypeError):
             co.datasets.init_dataset(name='dset', shape=(5, 7), dtype=np.float64)
-        # TODO: This should be permission error
         with pytest.raises(AttributeError):
             co.metadata.add('a', 'b')
         co.close()
@@ -53,7 +49,7 @@ class TestCheckout(object):
         dset = co.datasets['_dset']
         dset['1'] = array5by7
         with pytest.raises(OSError):
-            co.commit()
+            co.commit('this is a commit message')
         co.close()
 
     def test_writer_dset_obj_not_accessible_after_close(self, written_repo):
@@ -219,17 +215,17 @@ class TestCheckout(object):
 
         r_co.close()
         with pytest.raises(PermissionError):
-            shouldFail = r_co.datasets
+            r_co.datasets
 
     def test_operate_on_dataset_after_closing_old_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=array5by7)
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         co = repo.checkout(write=True)
         with pytest.raises(ReferenceError):
             dset.add(array5by7, '1')
-            co.commit()
+            co.commit('this is a commit message')
         co.close()
         with pytest.raises(ReferenceError):
             dset['1']
@@ -237,7 +233,7 @@ class TestCheckout(object):
     def test_operate_on_closed_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
         co.datasets.init_dataset('dset', prototype=array5by7)
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         with pytest.raises(PermissionError):
             co.datasets['dset']['1'] = array5by7
@@ -296,19 +292,15 @@ class TestCheckout(object):
             dset2.name
 
 
-class TestBranching:
+class TestBranching(object):
 
     def test_invalid_name(self, repo):
         with pytest.raises(ValueError):
             repo.create_branch('dummy branch')
 
-    @pytest.mark.skip(reason='Need to Fix TODO')
-    def test_new_branch_from_new_repo(self, repo):
-        branch = repo.create_branch('testbranch')
-        # TODO: it doesnt raise value error to the user
-        # instead return false and print out the value error
-        # Ideally, it should let users create new branch
-        co = repo.checkout(write=True, branch_name=branch)
+    def test_cannot_create_new_branch_from_new_repo(self, repo):
+        with pytest.raises(RuntimeError):
+            repo.create_branch('testbranch')
 
     def test_merge(self, written_repo, array5by7):
         branch = written_repo.create_branch('testbranch')
@@ -317,7 +309,7 @@ class TestBranching:
         assert co._branch_name == branch
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a', 'b')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
         written_repo.merge('test merge', 'master', branch)
         co = written_repo.checkout()
@@ -328,7 +320,7 @@ class TestBranching:
         branch = written_repo.create_branch('testbranch')
         co = written_repo.checkout(write=True, branch_name=branch)
         co.datasets['_dset']['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         with pytest.raises(PermissionError):
             written_repo.merge('test merge', 'master', branch)
 
@@ -350,16 +342,19 @@ class TestBranching:
         co = written_repo.checkout(write=True, branch_name=branch1)
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a1', 'b1')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         branch2 = written_repo.create_branch('testbranch2')
         co = written_repo.checkout(write=True, branch_name=branch2)
         co.datasets['_dset']['2'] = array5by7
         co.metadata.add('a2', 'b2')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         written_repo.merge('test merge 1', 'master', branch1)
         written_repo.merge('test merge 2', 'master', branch2)
+
         co = written_repo.checkout(branch_name='master')
         assert len(co.datasets) == 1
         assert len(co.datasets['_dset']) == 2
@@ -369,16 +364,19 @@ class TestBranching:
         branch1 = written_repo.create_branch('testbranch1')
         co = written_repo.checkout(write=True, branch_name=branch1)
         co.datasets['_dset']['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         branch2 = written_repo.create_branch('testbranch2')
         co = written_repo.checkout(write=True, branch_name=branch2)
         second_dset = co.datasets.init_dataset(name='second_dset', prototype=array5by7)
         second_dset['1'] = array5by7
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         written_repo.merge('test merge 1', 'master', branch1)
         written_repo.merge('test merge 2', 'master', branch2)
+
         co = written_repo.checkout(branch_name='master')
         assert len(co.datasets) == 2
         assert len(co.datasets['_dset']) == 1
@@ -387,42 +385,44 @@ class TestBranching:
     def test_merge_diverged_conflict(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
         branch2 = written_repo.create_branch('testbranch2')
+
         co = written_repo.checkout(write=True, branch_name=branch1)
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a', 'b')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
+
         co = written_repo.checkout(write=True, branch_name=branch2)
         newarray = np.zeros_like(array5by7)
         co.datasets['_dset']['1'] = newarray
         co.metadata.add('a', 'c')
-        co.commit()
+        co.commit('this is a commit message')
         co.close()
-        written_repo.merge('commit message', 'master', branch1)
-        # TODO: This should raise a conflict coz of same key
-        written_repo.merge('commit message', 'master', branch2)
-        co = written_repo.checkout()
-        print(co.datasets['_dset']['1'])
-        print(co.metadata.get('a'))
 
-    @pytest.mark.skip(reason='Need to Fix TODO')
+        written_repo.merge('commit message', 'master', branch1)
+
+        with pytest.raises(ValueError):
+            written_repo.merge('commit message', 'master', branch2)
+
     def test_new_branch_from_where(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
         branch2 = written_repo.create_branch('testbranch2')
         co1 = written_repo.checkout(write=True, branch_name=branch1)
-        # TODO: better way to get history: could be part of checkout itself
-        h1 = summarize.list_history(co1._refenv, co1._branchenv, co1._branch_name)
+        h1 = written_repo.log(branch_name=co1.branch_name, return_contents=True)
         co1.close()
+
         co2 = written_repo.checkout(write=True, branch_name=branch2)
         co2.datasets.init_dataset('dset2', prototype=array5by7)
         co2.datasets['dset2']['2'] = array5by7
-        co2.commit()
+        co2.commit('this is a merge message')
         co2.close()
-        h2 = summarize.list_history(co2._refenv, co2._branchenv, co2._branch_name)
+        h2 = written_repo.log(branch_name=branch2, return_contents=True)
+
         branch3 = written_repo.create_branch('testbranch3')
         co3 = written_repo.checkout(write=True, branch_name=branch3)
-        h3 = summarize.list_history(co3._refenv, co3._branchenv, co3._branch_name)
+        h3 = written_repo.log(branch_name=co3.branch_name, return_contents=True)
         co3.close()
+
         assert h2['head'] == h3['head']
         assert h2['ancestors'][h2['head']] == h3['ancestors'][h3['head']]
         assert h1['head'] in h2['ancestors'][h2['head']]

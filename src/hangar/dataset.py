@@ -101,15 +101,48 @@ class DatasetDataReader(object):
         self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
     def __getitem__(self, key):
+        '''Retrieve a sample with a given key. Convenience method for dict style access.
+
+        .. seealso:: :meth:`get()`
+
+        Parameters
+        ----------
+        key : string
+            sample key to retrieve from the dataset
+
+        Returns
+        -------
+        np.array
+            sample array data corresponding to the provided key
+        '''
         return self.get(key)
 
     def __iter__(self):
         return self.keys()
 
     def __len__(self):
+        '''Check how many samples are present in a given dataset
+
+        Returns
+        -------
+        int
+            number of samples the dataset contains
+        '''
         return len(self._Query.dataset_data_names(self._dsetn))
 
     def __contains__(self, key):
+        '''Determine if a key is a valid sample name in the dataset
+
+        Parameters
+        ----------
+        key : string
+            name to check if it is a sample in the dataset
+
+        Returns
+        -------
+        bool
+            True if key exists, else False
+        '''
         if not self._is_conman:
             self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
 
@@ -152,6 +185,42 @@ class DatasetDataReader(object):
 
     def _close(self):
         self._fs.close(mode=self._mode)
+
+    @property
+    def name(self):
+        '''Name of the dataset. Read-Only attribute.
+        '''
+        return self._dsetn
+
+    @property
+    def dtype(self):
+        '''Datatype of the dataset schema. Read-only attribute.
+        '''
+        return np.typeDict[self._schema_dtype_num]
+
+    @property
+    def shape(self):
+        '''Shape (or `max_shape`) of the dataset sample tensors. Read-only attribute.
+        '''
+        return self._schema_max_shape
+
+    @property
+    def variable_shape(self):
+        '''Bool indicating if dataset schema is variable sized. Read-only attribute.
+        '''
+        return self._schema_variable
+
+    @property
+    def named_samples(self):
+        '''Bool indicating if samples are named. Read-only attribute.
+        '''
+        return self._samples_are_named
+
+    @property
+    def iswriteable(self):
+        '''Bool indicating if this dataset object is write-enabled. Read-only attribute.
+        '''
+        return False if self._mode == 'r' else True
 
     def keys(self):
         '''generator which yields the names of every sample in the dataset
@@ -237,7 +306,6 @@ class DatasetDataWriter(DatasetDataReader):
 
     def __init__(self, stagehashenv, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self._stagehashenv = stagehashenv
         self._setup_file_access()
 
@@ -567,7 +635,6 @@ class Datasets(object):
     def __setup(self):
         '''Do not allow users to use internal functions
         '''
-
         self._from_commit = None
         self._from_staging_area = None
         if self._mode == 'r':
@@ -670,6 +737,12 @@ class Datasets(object):
 
     def __iter__(self):
         return iter(self._datasets)
+
+    @property
+    def iswriteable(self):
+        '''Bool indicating if this dataset object is write-enabled. Read-only attribute.
+        '''
+        return False if self._mode == 'r' else True
 
     def keys(self):
         '''list all dataset keys (names) in the checkout
