@@ -1,12 +1,13 @@
+*************************************
 Checkouts, Branching, & Basic Merging
-======================================
+*************************************
 
 
 This section describes how to work with branches, and previous
 commit histories.
 
 Creating A Branch
-------------------
+=================
 
 The hangar workflow is intended to mimic the best git-flow practices.
 
@@ -21,36 +22,36 @@ at the tip of a branch.
 
 
 Checking out a Branch
----------------------
+=====================
 
 For Writing
-^^^^^^^^^^^
+-----------
 
 For Reading
-^^^^^^^^^^^
+-----------
 
 
 All About The Staging Area
---------------------------
+==========================
 
 
 Checking out commits
---------------------
+====================
 
 
 Diffing Changes across branches
--------------------------------
+===============================
 
 
 Merging
--------
+=======
 
 
 Strategies
-^^^^^^^^^^
+----------
 
 Methods
-^^^^^^^
+-------
 
 Conflict Handling
-^^^^^^^^^^^^^^^^^^
+------------------

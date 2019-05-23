@@ -1,17 +1,14 @@
 .. include:: ../README.rst
 
-.. Index
-.. =====
-
 .. toctree::
    :maxdepth: 3
    :hidden:
 
    readme
+   quickstart
    installation
+   concepts
    tutorial
-   usage
-   reference/index
    design
    api
    contributing

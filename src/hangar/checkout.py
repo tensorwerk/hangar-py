@@ -109,6 +109,11 @@ class ReaderCheckout(object):
     def datasets(self):
         '''Provides access to dataset interaction object.
 
+        .. seealso::
+
+            The class :class:`hangar.dataset.Datasets` contains all methods accessible
+            by this property accessor
+
         Returns
         -------
         weakref.proxy
@@ -124,6 +129,11 @@ class ReaderCheckout(object):
     def metadata(self):
         '''Provides access to metadata interaction object.
 
+        .. seealso::
+
+            The class :class:`hangar.metadata.MetadataReader` contains all methods accessible
+            by this property accessor
+
         Returns
         -------
         weakref.proxy
@@ -137,6 +147,20 @@ class ReaderCheckout(object):
 
     @property
     def diff(self):
+        '''Access the differ methods for a read-only checkout.
+
+        .. seealso::
+
+            The class :class:`hangar.diff.ReaderUserDiff` contains all methods accessible
+            by this property accessor
+
+        Returns
+        -------
+        weakref.proxy
+            weakref proxy to the differ object (and contained methods) which behaves
+            exactally like the differ class but which can be invalidated when the
+            writer lock is released.
+        '''
         self.__verify_checkout_alive()
         wr = weakref.proxy(self._differ)
         return wr
@@ -256,6 +280,11 @@ class WriterCheckout(object):
     def datasets(self):
         '''Provides access to dataset interaction object.
 
+        .. seealso::
+
+            The class :class:`hangar.dataset.Datasets` contains all methods accessible
+            by this property accessor
+
         Returns
         -------
         weakref.proxy
@@ -271,6 +300,11 @@ class WriterCheckout(object):
     def metadata(self):
         '''Provides access to metadata interaction object.
 
+        .. seealso::
+
+            The class :class:`hangar.metadata.MetadataWriter` contains all methods accessible
+            by this property accessor
+
         Returns
         -------
         weakref.proxy
@@ -285,6 +319,11 @@ class WriterCheckout(object):
     @property
     def diff(self):
         '''Access the differ methods which are aware of any staged changes.
+
+        .. seealso::
+
+            The class :class:`hangar.diff.WriterUserDiff` contains all methods accessible
+            by this property accessor
 
         Returns
         -------

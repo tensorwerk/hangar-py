@@ -25,7 +25,7 @@ Overview
 
 .. |appveyor| image:: https://ci.appveyor.com/api/projects/status/github/tensorwerk/hangar-py?branch=master&svg=true
     :alt: AppVeyor Build Status
-    :target: https://ci.appveyor.com/project/tensorwerk/hangar-py
+    :target: https://ci.appveyor.com/project/rlizzo/hangar-py
 
 .. |version| image:: https://img.shields.io/pypi/v/hangar.svg
     :alt: PyPI Package latest release
@@ -58,9 +58,59 @@ collaborate in the data-defined software era.
 What is Hangar?
 ===============
 
-Hangar is based off of the founded from the belief that too much time is spent collecting,
-managing, and creating home-brewed version control systems for data. Hangar is
-a `Git` inspired tool to version and work with data!
+Hangar is based off of the founded from the belief that too much time is spent
+collecting, managing, and creating home-brewed version control systems for data.
+At it's core Hangar is designed to solve many of the same problems faced by
+traditional code version control system (ie. ``Git``), just adapted for
+numerical data:
+
+* Time travel through the historical evolution of a dataset
+* Zero-cost Branching to enable exploratory analysis and collaboration
+* Cheap Merging to build datasets over time (with multiple collaborators)
+* Completely abstracted organization and management of data files on disk
+* Ability to only retrieve a small portion of the data (as needed) while still
+  maintaining complete historical record
+* Ability to push and pull changes directly to collaborators or a central server
+  (ie a truly distributed version control system)
+
+The ability of version control systems to perform these tasks for codebases is
+largely taken for granted by almost every developer today; However, we are
+in-fact standing on the shoulders of giants, with decades of engineering which
+has resulted in these phenomenally useful tools. Now that a new era of
+"Data-Defined software" is taking hold, we find there is a strong need for
+analogous version control systems which are designed to handle numerical data at
+large scale... Welcome to Hangar!
+
+
+The Hangar Workflow:
+
+::
+
+       Checkout Branch
+              |
+              ▼
+     Create/Access Datasets
+              |
+              ▼
+    Add/Remove/Update Samples
+              |
+              ▼
+           Commit
+
+Log Style Output:
+
+::
+
+    *   5254ec (master) : merge commit combining training updates and new validation samples
+    |\
+    | * 650361 (add-validation-data) : Add validation labels and image data in isolated branch
+    * | 5f15b4 : Add some metadata for later reference and add new training samples recieved after initial import
+    |/
+    *   baddba : Initial commit adding training images and labels
+
+
+Learn more about what Hangar is all about at https://hangar-py.readthedocs.io/
+
 
 Installation
 ============
