@@ -12,20 +12,20 @@ Pre-Built Installation
 ======================
 
 
-Python Distributions
---------------------
+.. Python Distributions
+.. --------------------
 
-If you do not already use a Python Distribution, we recommend the `Anaconda
-<https://www.anaconda.com/distribution/>`_ (or `Miniconda
-<https://docs.conda.io/en/latest/miniconda.html>`_) distribution, which supports
-all major operating systems (Windows, MacOSX, & the typical Linux variations).
-Detailed usage instructions are available `on the anaconda website
-<https://docs.anaconda.com/anaconda/>`_.
+.. If you do not already use a Python Distribution, we recommend the `Anaconda
+.. <https://www.anaconda.com/distribution/>`_ (or `Miniconda
+.. <https://docs.conda.io/en/latest/miniconda.html>`_) distribution, which supports
+.. all major operating systems (Windows, MacOSX, & the typical Linux variations).
+.. Detailed usage instructions are available `on the anaconda website
+.. <https://docs.anaconda.com/anaconda/>`_.
 
-To install Hangar via the Anaconda Distribution (from the `[tensor]werk conda
-channel <https://anaconda.org/tensorwerk>`_)::
+.. To install Hangar via the Anaconda Distribution (from the `[tensor]werk conda
+.. channel <https://anaconda.org/tensorwerk>`_)::
 
-    conda install -c tensorwerk hangar
+..     conda install -c conda-forge hangar
 
 
 Wheels (PyPi)

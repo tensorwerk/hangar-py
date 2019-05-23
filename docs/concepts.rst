@@ -225,7 +225,7 @@ a single backend (each of which will have significant performance tradeoffs for
 arrays of particular datatypes, shapes, and access patterns), we simultaneously
 store different data pieces in the backend which is most suited to it. A great
 deal of care has been taken to optimize parameters in the backend interface
-which affecting performance and compression of data samples.
+which affects performance and compression of data samples.
 
 The choice of backend to store a piece of data is selected automatically from
 heuristics based on the dataset specification, system details, and context of
@@ -291,6 +291,14 @@ the same.
 How To Overcome The "Size" Problem
 ----------------------------------
 
+.. note::
+
+    The features described in this section are in active development for a
+    future release. This is an exciting feature which we hope to do much more
+    with; Time is our main constraint right now. Hangar is a young project, and
+    is rapidly evolving. Current progress can be tracked in the `GitHub
+    Repository <https://github.com/tensorwerk/hangar-py>`_
+
 Even if the greatest tool imaginable existed to version, branch, and merge
 datasets, it would face one massive problem which if it didn't solve would kill
 the project: *The size of data can very easily exceeds what can fit on (most)
@@ -321,12 +329,12 @@ client/server.
     the following example may provide some insight into the implications of this
     property:
 
-        If you ``clone`` some hangar repository, Bookeeping says that "some number
-        of data piece exist" and they should retrieved from the server. However,
-        the bookeeping records transfered in a ``fetch`` / ``push`` / ``clone``
-        operation do not include information about where that piece of data
-        existed on the client (or server) computer. Two synced repositories can
-        use completly different backends to store the data, in completly
+        If you ``clone`` some hangar repository, Bookeeping says that "some
+        number of data pieces exist" and they should retrieved from the server.
+        However, the bookeeping records transfered in a ``fetch`` / ``push`` /
+        ``clone`` operation do not include information about where that piece of
+        data existed on the client (or server) computer. Two synced repositories
+        can use completly different backends to store the data, in completly
         different locations, and it does not matter - Hangar only guarrentees
         that when collaborators ask for a data sample in some checkout, that
         they will be provided with identical arrays, not that they will come
@@ -350,13 +358,6 @@ performed between branches which may contain partial (or even no) actual data**.
 Aka. You don't need data on disk to merge changes into it. It's an odd concept
 which will be explained more in depth in the future.
 
-.. note::
-
-    The features described in this section are in active development for a
-    future release. This is an exciting feature which we hope to do much more
-    with; Time is our main constraint right now. Hangar is a young project, and
-    is rapidly evolving. Current progress can be tracked in the `GitHub
-    Repository <https://github.com/tensorwerk/hangar-py>`_
 
 What Does it Mean to "Merge" Data?
 ----------------------------------
@@ -459,6 +460,31 @@ This is the actual behavior of Hangar.
              \          [[1, 1, 1], /
               ------->   [0, 1, 2],
                          [0, 1, 2]]
+
+When a conflict is detected, the merge author must either pick a sample from one
+of the commits or make changes in one of the branches such that the conflicting
+sample values are resolved.
+
+How Are Conflicts Detected?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Any merge conflicts can be identified and addressed ahead of running a ``merge``
+command by using the built in ``diff`` tools. When diffing commits, Hangar will
+provide a list of conflicts which it identifies. In general these fall into 4
+catagories:
+
+1) **Additions** in both branches which created new keys (samples / datasets /
+   metadata) with non-compatible values. For samples & metadata, the hash of the
+   data is compared, for datasets, the schema specification is checked for
+   compatibility in a method custom to the internal workings of Hangar.
+2) **Removal** in ``Master Commit/Branch`` **& Mutation** in ``Dev Commit/Branch``.
+   Applies for samples, datasets, and metadata identically.
+3) **Mutation** in ``Dev Commit/Branch`` **& Removal** in ``Master Commit/Branch``.
+   Applies for samples, datasets, and metadata identically.
+4) **Mutations** on keys both branches to non-compatible values. For samples &
+   metadata, the hash of the data is compared, for datasets, the schema
+   specification is checked for compatibility in a method custom to the internal
+   workings of Hangar.
 
 
 ************

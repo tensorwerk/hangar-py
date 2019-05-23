@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 class MetadataReader(object):
     '''Class implementing get access to the metadata in a repository.
 
-    Unlike the :class:`DatasetDataReader` and :class:`DatasetDataWriter`, the
-    equivalent Metadata classes do not need a factory function or class to
-    coordinate access through the checkout. This is primarily because the
-    metadata is only stored at a single level, and because the long term storage
-    is must simpler than for array data (just write to a lmdb database).
+    Unlike the :class:`hangar.dataset.DatasetDataReader` and
+    :class:`hangar.dataset.DatasetDataWriter`, the equivalent Metadata classes
+    do not need a factory function or class to coordinate access through the
+    checkout. This is primarily because the metadata is only stored at a single
+    level, and because the long term storage is must simpler than for array data
+    (just write to a lmdb database).
 
     .. note::
 
@@ -200,9 +201,9 @@ class MetadataReader(object):
 class MetadataWriter(MetadataReader):
     '''Class implementing write access to repository metadata.
 
-    Similar to the :class:`DatasetDataWriter`, this class inherets the
-    functionality of the :class:`MetadataReader` for reading. The only
-    difference is that the reader will be initialized with a data record
+    Similar to the :class:`hangar.dataset.DatasetDataWriter`, this class
+    inherets the functionality of the :class:`MetadataReader` for reading. The
+    only difference is that the reader will be initialized with a data record
     lmdb environment pointing to the staging area, and not a commit which is
     checked out.
 
@@ -237,9 +238,9 @@ class MetadataWriter(MetadataReader):
         self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
 
     def __setitem__(self, key, value):
-        '''Store a key/value pair as metadata. Convenince method to :meth:``add``.
+        '''Store a key/value pair as metadata. Convenince method to :meth:`add`.
 
-        .. seealso:: :meth:``add``
+        .. seealso:: :meth:`add`
 
         Parameters
         ----------
@@ -256,9 +257,9 @@ class MetadataWriter(MetadataReader):
         return self.add(key, value)
 
     def __delitem__(self, key):
-        '''Remove a key/value pair from metadata. Convenence method to :meth:``remove``.
+        '''Remove a key/value pair from metadata. Convenence method to :meth:`remove`.
 
-        .. seealso:: :meth:``remove``
+        .. seealso:: :meth:`remove`
 
         Parameters
         ----------

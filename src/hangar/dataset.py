@@ -333,9 +333,9 @@ class DatasetDataWriter(DatasetDataReader):
         self._fs.__exit__(*exc)
 
     def __setitem__(self, key, value):
-        '''Store a piece of data in a dataset. Convenince method to :meth:``add``.
+        '''Store a piece of data in a dataset. Convenince method to :meth:`add`.
 
-        .. seealso:: :meth:``add``
+        .. seealso:: :meth:`add`
 
         Parameters
         ----------
@@ -353,9 +353,9 @@ class DatasetDataWriter(DatasetDataReader):
         return key
 
     def __delitem__(self, key):
-        '''Remove a sample from the dataset. Convenence method to :meth:``remove``.
+        '''Remove a sample from the dataset. Convenence method to :meth:`remove`.
 
-        .. seealso:: :meth:``remove``
+        .. seealso:: :meth:`remove`
 
         Parameters
         ----------
@@ -377,7 +377,8 @@ class DatasetDataWriter(DatasetDataReader):
         data : np.array
             data to store as a sample in the dataset
         name : str, optional
-            name to assign to the same (assuming the dataset accepts named samples), by default None
+            name to assign to the same (assuming the dataset accepts named
+            samples), by default None
 
         Returns
         -------
@@ -683,7 +684,7 @@ class Datasets(object):
 
         Returns
         -------
-        :class:``DatasetDataReader`` or :class:``DatasetDataWriter``
+        :class:`DatasetDataReader` or :class:`DatasetDataWriter`
             The object which is returned depends on the mode of checkout specified.
             If the dataset was checked out with write-enabled, return writer object,
             otherwise return read only object.
@@ -768,12 +769,12 @@ class Datasets(object):
             yield wr
 
     def items(self):
-        '''generator providing access to dataset_name, :class:``Datasets``
+        '''generator providing access to dataset_name, :class:`Datasets`
 
         Yields
         ------
         tuple
-            containing (name, :class:``Datasets``) for all datasets.
+            containing (name, :class:`Datasets`) for all datasets.
 
         '''
         for dsetN, dsetObj in self._datasets.items():
@@ -926,7 +927,7 @@ class Datasets(object):
 
         Returns
         -------
-        :class:``DatasetDataWriter``
+        :class:`DatasetDataWriter`
             instance object of the initialized dataset.
 
         Raises
@@ -1155,10 +1156,10 @@ class Datasets(object):
 
         Returns
         -------
-        :class:``Datasets``
+        :class:`Datasets`
             Interface class with write-enabled attributes activated and any
             datasets existing initialized in write mode via
-            :class:``DatasetDataWriter``.
+            :class:`DatasetDataWriter`.
         '''
 
         datasets = {}
@@ -1203,7 +1204,7 @@ class Datasets(object):
         -------
         :class:`Datasets`
             Interface class with all write-enabled attributes deactivated
-            datasets initialized in read mode via :class:``DatasetDataReader``.
+            datasets initialized in read mode via :class:`DatasetDataReader`.
         '''
         datasets = {}
         query = RecordQuery(cmtrefenv)
