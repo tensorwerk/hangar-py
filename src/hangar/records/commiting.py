@@ -450,7 +450,6 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
         headBranchName = heads.get_staging_branch_head(branchenv)
         heads.set_branch_head_commit(branchenv, headBranchName, commit_hash)
     else:
-        replace_staging_area_with_commit(refenv=refenv, stageenv=stageenv, commit_hash=commit_hash)
         heads.set_staging_branch_head(branchenv=branchenv, branch_name=merge_master)
         heads.set_branch_head_commit(branchenv, merge_master, commit_hash)
 
@@ -463,11 +462,10 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
 def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
     '''DANGER ZONE: Delete the stage db and replace it with a copy of a commit environent.
 
-    .. note::
+    .. warning::
 
         In the current implementation, this method will not validate that it is safe
         to do this operation. All validation logic must be handled upstream.
-        Warnings will be generated until this behavior is taken care of.
 
     Parameters
     ----------
@@ -488,6 +486,42 @@ def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
 
     unpack_commit_ref(refenv=refenv, cmtrefenv=stageenv, commit_hash=commit_hash)
     return
+
+
+def replace_staging_area_with_refs(stageenv, sorted_content):
+    '''DANGER ZONE: Delete all stage db records and replace it with specified data.
+
+    .. warning::
+
+        In the current implementation, this method will not validate that it is safe
+        to do this operation. All validation logic must be handled upstream.
+
+    Parameters
+    ----------
+    stageenv : lmdb.Enviornment
+        staging area db to replace all data in.
+    sorted_content : iterable of tuple
+        iterable containing two-tuple of byte encoded record data to place in the
+        stageenv db. index 0 -> db key; index 1 -> db val, it is assumed that the
+        order of the tuples is lexigraphically sorted by index 0 values, if not,
+        this will result in unknown behavior.
+    '''
+    stagetxn = TxnRegister().begin_writer_txn(stageenv)
+    with stagetxn.cursor() as cursor:
+        positionExists = cursor.first()
+        while positionExists:
+            positionExists = cursor.delete()
+    cursor.close()
+    TxnRegister().commit_writer_txn(stageenv)
+
+    cmttxn = TxnRegister().begin_writer_txn(stageenv)
+    try:
+        with cmttxn.cursor() as cursor:
+            cursor.first()
+            cursor.putmulti(sorted_content, append=True)
+        cursor.close()
+    finally:
+        TxnRegister().commit_writer_txn(stageenv)
 
 
 def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False):

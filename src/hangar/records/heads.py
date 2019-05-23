@@ -332,10 +332,11 @@ def get_branch_head_commit(branchenv, branch_name):
 
 
 def set_branch_head_commit(branchenv, branch_name, commit_hash):
-    '''Update an existing branch HEAD to point to a new commit hash
+    '''Update an existing branch HEAD to point to a new commit hash.
 
-    if the current HEAD of the branch == the new commit hash, no operation will
-    occur and an exception will be thrown.
+    Does not update stage or refenv contents. If the current HEAD of the branch
+    == the new commit hash, no operation will occur and an exception will be
+    thrown.
 
     Parameters
     ----------

@@ -66,11 +66,12 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
     str
         commit hash of the merge if this was a successful operation.
     '''
-    # ensure the writer lock is held and that the staging area is in a 'CLEAN' state.
     current_head = heads.get_staging_branch_head(branchenv)
-    writerDiffer = WriterUserDiff(
-        stageenv=stageenv, branchenv=branchenv, refenv=refenv, branch_name=current_head)
-    if writerDiffer.status() != 'CLEAN':
+    wDiffer = WriterUserDiff(stageenv=stageenv,
+                             branchenv=branchenv,
+                             refenv=refenv,
+                             branch_name=current_head)
+    if wDiffer.status() != 'CLEAN':
         msg = 'HANGAR RUNTIME ERROR: Changes are currently pending in the staging area '\
               'To avoid mangled histories, the staging area must exist in a clean state '\
               'Please reset or commit any changes before the merge operation'
@@ -85,13 +86,10 @@ def select_merge_algorithm(message, branchenv, stageenv, refenv,
         raise e from None
 
     try:
-        mHEAD = heads.get_branch_head_commit(
-            branchenv=branchenv, branch_name=master_branch_name)
-        dHEAD = heads.get_branch_head_commit(
-            branchenv=branchenv, branch_name=dev_branch_name)
-        readerDiffer = ReaderUserDiff(
-            commit_hash=mHEAD, branchenv=branchenv, refenv=refenv)
-        branchHistory = readerDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
+        mHEAD = heads.get_branch_head_commit(branchenv, branch_name=master_branch_name)
+        dHEAD = heads.get_branch_head_commit(branchenv, branch_name=dev_branch_name)
+        rDiffer = ReaderUserDiff(commit_hash=mHEAD, branchenv=branchenv, refenv=refenv)
+        branchHistory = rDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
 
         if branchHistory.canFF is True:
             logger.info('Selected Fast-Forward Merge Stratagy')
@@ -164,16 +162,19 @@ def _fast_forward_merge(
     try:
         commiting.replace_staging_area_with_commit(
             refenv=refenv, stageenv=stageenv, commit_hash=new_masterHEAD)
-        success = heads.set_branch_head_commit(
+
+        outBranchName = heads.set_branch_head_commit(
             branchenv=branchenv, branch_name=master_branch, commit_hash=new_masterHEAD)
         heads.set_staging_branch_head(branchenv=branchenv, branch_name=master_branch)
-        hashs.remove_unused_dataset_hdf_files(repo_path=repo_path, stagehashenv=stagehashenv)
+
+        hashs.remove_unused_dataset_hdf5(repo_path=repo_path, stagehashenv=stagehashenv)
         hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
 
     except ValueError as e:
         logger.error(e, exc_info=False)
         raise e from None
-    return success
+
+    return outBranchName
 
 
 # ----------------------- Three-Way Merge Methods -----------------------------
@@ -228,15 +229,14 @@ def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
         patch
     5)  Compute new commit hash, and commit staging area records
     '''
-    a_cont = commiting.get_commit_ref_contents(refenv, ancestorHEAD)
-    m_cont = commiting.get_commit_ref_contents(refenv, masterHEAD)
-    d_cont = commiting.get_commit_ref_contents(refenv, devHEAD)
+    aCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=ancestorHEAD)
+    mCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=masterHEAD)
+    dCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=devHEAD)
 
-    mergeContents = _compute_merge_results(a_cont, m_cont, d_cont)
-    formatedContents = _merge_dict_to_lmdb_tuples(mergeContents)
-    hashs.remove_unused_dataset_hdf_files(repo_path, stagehashenv)
-    # TODO: Is this duplicating work in commiting.commit_records()??
-    _overwrite_stageenv(stageenv, formatedContents)
+    mergeContents = _compute_merge_results(a_cont=aCont, m_cont=mCont, d_cont=dCont)
+    fmtCont = _merge_dict_to_lmdb_tuples(patchedRecs=mergeContents)
+    hashs.remove_unused_dataset_hdf5(repo_path=repo_path, stagehashenv=stagehashenv)
+    commiting.replace_staging_area_with_refs(stageenv=stageenv, sorted_content=fmtCont)
 
     commit_hash = commiting.commit_records(
         message=message,
@@ -248,42 +248,8 @@ def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
         merge_master=master_branch_name,
         merge_dev=dev_branch_name)
 
-    hashs.clear_stage_hash_records(stagehashenv)
+    hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
     return commit_hash
-
-
-def _overwrite_stageenv(stageenv, sorted_tuple_output):
-    '''Delete all records in a db and replace it with specified data.
-
-    This method does not validate that it is safe to perform this operation, all
-    checking needs to be performed before this point is reached
-
-    Parameters
-    ----------
-    stageenv : lmdb.Enviornment
-        staging area db to replace all data in.
-    sorted_tuple_output : iterable of tuple
-        iterable containing two-tuple of byte encoded record data to place in
-        the stageenv db. index 0 -> db key; index 1 -> db val, it is assumed
-        that the order of the tuples is lexigraphically sorted by index 0
-        values, if not, this will result in unknown behavior.
-    '''
-    stagetxn = TxnRegister().begin_writer_txn(stageenv)
-    with stagetxn.cursor() as cursor:
-        positionExists = cursor.first()
-        while positionExists:
-            positionExists = cursor.delete()
-    cursor.close()
-    TxnRegister().commit_writer_txn(stageenv)
-
-    cmttxn = TxnRegister().begin_writer_txn(stageenv)
-    try:
-        with cmttxn.cursor() as cursor:
-            cursor.first()
-            cursor.putmulti(sorted_tuple_output, append=True)
-        cursor.close()
-    finally:
-        TxnRegister().commit_writer_txn(stageenv)
 
 
 def _merge_changes(changes: dict, m_dict: dict) -> dict:
@@ -310,10 +276,10 @@ def _merge_changes(changes: dict, m_dict: dict) -> dict:
     '''
     m_added = changes['master']['additions']
     m_unchanged = changes['master']['unchanged']
-    m_removed = changes['master']['removals']
+    # m_removed = changes['master']['removals']
     m_mutated = changes['master']['mutations']
     d_added = changes['dev']['additions']
-    d_unchanged = changes['dev']['unchanged']
+    # d_unchanged = changes['dev']['unchanged']
     d_removed = changes['dev']['removals']
     d_mutated = changes['dev']['mutations']
 

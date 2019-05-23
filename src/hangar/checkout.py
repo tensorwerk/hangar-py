@@ -446,7 +446,7 @@ class WriterCheckout(object):
                 dsetHandle._close()
             except KeyError:
                 pass
-        hashs.remove_unused_dataset_hdf_files(self._repo_path, self._stagehashenv)
+        hashs.remove_unused_dataset_hdf5(self._repo_path, self._stagehashenv)
 
         commit_hash = commiting.commit_records(
             message=commit_message,
@@ -504,7 +504,7 @@ class WriterCheckout(object):
                 pass
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
-        hashs.remove_unused_dataset_hdf_files(self._repo_path, self._stagehashenv)
+        hashs.remove_unused_dataset_hdf5(self._repo_path, self._stagehashenv)
 
         branch_head = heads.get_staging_branch_head(self._branchenv)
         head_commit = heads.get_branch_head_commit(self._branchenv, branch_head)

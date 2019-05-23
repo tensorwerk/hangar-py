@@ -537,7 +537,7 @@ class Repository(object):
         return
 
     def merge(self, message, master_branch, dev_branch):
-        '''Not Implemented
+        '''Perform a merge of the changes made on two branches.
 
         Parameters
         ----------
