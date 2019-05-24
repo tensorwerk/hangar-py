@@ -3,52 +3,201 @@ import pytest
 
 class TestMetadata(object):
 
-    def test_invalid_name(self, w_checkout):
-        # TODO: It's a value error in dataset and branch
-        with pytest.raises(SyntaxError):
+    def test_writer_add_key_contains_whitespace(self, w_checkout):
+        with pytest.raises(ValueError):
             w_checkout.metadata.add('a a', 'b')
 
-    def test_name_conflict(self, w_checkout):
+    def test_writer_add_can_overwrite_key_with_new_value(self, w_checkout):
         w_checkout.metadata.add('a', 'b')
         w_checkout.commit('tehis is a merge message')
-        # TODO: shouldn't it raise a warning atleast?
         w_checkout.metadata.add('a', 'c')
         w_checkout.commit('second time')
         assert w_checkout.metadata.get('a') == 'c'
 
-    def test_other_datatype(self, w_checkout):
-        # TODO: should raise a proper error
-        with pytest.raises(AttributeError):
+    def test_writer_add_requires_string_type_arguments(self, w_checkout):
+        w_checkout.metadata.add('1', 'test')
+        with pytest.raises(ValueError):
             w_checkout.metadata.add(1, '1')
-        with pytest.raises(AttributeError):
+        with pytest.raises(ValueError):
             w_checkout.metadata.add('1', 1)
+        assert w_checkout.metadata.get('1') == 'test'
+        assert list(w_checkout.metadata.keys()) == ['1']
 
-    def test_read_only_mode(self, written_repo):
-        co = written_repo.checkout()
-        # TODO: should be permissionerror
-        with pytest.raises(AttributeError):
-            co.metadata.add('a', 'b')
+    def test_writer_get_requires_string_type_arguments(self, w_checkout):
+        w_checkout.metadata.add('1', 'test')
+        with pytest.raises(ValueError):
+            w_checkout.metadata.get(1)
+        assert w_checkout.metadata.get('1') == 'test'
+        assert list(w_checkout.metadata.keys()) == ['1']
 
-    def test_add_remove_without_enough_args(self, repo):
+    def test_writer_remove_requires_string_type_arguments(self, w_checkout):
+        w_checkout.metadata.add('1', 'test')
+        with pytest.raises(ValueError):
+            w_checkout.metadata.remove(1)
+        assert w_checkout.metadata.get('1') == 'test'
+        assert list(w_checkout.metadata.keys()) == ['1']
+
+    def test_writer_dict_style_add_get_works(self, w_checkout):
+        w_checkout.metadata['1'] = 'test'
+        assert w_checkout.metadata['1'] == 'test'
+        assert list(w_checkout.metadata.keys()) == ['1']
+
+    def test_writer_dict_style_add_delete_works(self, w_checkout):
+        w_checkout.metadata['1'] = 'test'
+        w_checkout.metadata['2'] = 'test two'
+        del w_checkout.metadata['2']
+        with pytest.raises(KeyError):
+            w_checkout.metadata['2']
+        assert list(w_checkout.metadata.keys()) == ['1']
+
+        w_checkout.commit('test commit')
+        w_checkout.metadata['2'] = 'test two.two'
+        del w_checkout.metadata['1']
+        with pytest.raises(KeyError):
+            w_checkout.metadata['1']
+        assert w_checkout.metadata['2'] == 'test two.two'
+        assert list(w_checkout.metadata.keys()) == ['2']
+
+        w_checkout.commit('commit two')
+        assert w_checkout.metadata['2'] == 'test two.two'
+        assert list(w_checkout.metadata.keys()) == ['2']
+
+    def test_writer_remove_requires_arguments(self, repo):
         co = repo.checkout(write=True)
         with pytest.raises(TypeError):
             co.metadata.add('1')
         co.metadata.add('a', 'b')
         co.commit('this is a commit message')
+        assert co.metadata['a'] == 'b'
+        assert list(co.metadata.keys()) == ['a']
+
         with pytest.raises(TypeError):
             co.metadata.remove()
+        assert co.metadata['a'] == 'b'
+        assert list(co.metadata.keys()) == ['a']
+
         co.metadata.remove('a')
         co.commit('this is a commit message')
         assert list(co.metadata.keys()) == []
 
-    def test_get_and_remove_wrong_key(self, repo):
+    def test_writer_get_does_not_succeed_if_key_does_not_exist(self, repo):
         co = repo.checkout(write=True)
         co.metadata.add('a', 'b')
         co.commit('this is a commit message')
         with pytest.raises(KeyError):
             co.metadata.get('randome')
+
+    def test_writer_remove_does_not_succeed_if_key_does_not_exist(self, repo):
+        co = repo.checkout(write=True)
+        co.metadata.add('a', 'b')
+        co.commit('this is a commit message')
         with pytest.raises(KeyError):
             co.metadata.remove('randome')
+
+    def test_writer_len_magic_works(self, repo):
+        co = repo.checkout(write=True)
+        co.metadata.add('a', 'b')
+        co.metadata['1'] = '2'
+        assert len(co.metadata) == 2
+        del co.metadata['1']
+        assert len(co.metadata) == 1
+        del co.metadata['a']
+        assert len(co.metadata) == 0
+
+    def test_writer_contains_magic_works(self, repo):
+        co = repo.checkout(write=True)
+        co.metadata.add('a', 'b')
+        co.metadata['1'] = '2'
+        assert 'a' in co.metadata
+        assert '1' in co.metadata
+        assert 'foo' not in co.metadata
+
+    def test_writer_iswriteable_property_is_true(self, repo):
+        co = repo.checkout(write=True)
+        assert co.metadata.iswriteable is True
+        co.close()
+
+    def test_reader_get_requires_string_type_arguments(self, repo):
+        w_checkout = repo.checkout(write=True)
+        w_checkout.metadata.add('1', 'test')
+        w_checkout.commit('test commit')
+        w_checkout.close()
+
+        r_checkout = repo.checkout()
+        with pytest.raises(ValueError):
+            r_checkout.metadata.get(1)
+        assert r_checkout.metadata.get('1') == 'test'
+        assert list(r_checkout.metadata.keys()) == ['1']
+        r_checkout.close()
+
+    def test_reader_dict_style_get_works(self, repo):
+        w_checkout = repo.checkout(write=True)
+        w_checkout.metadata.add('1', 'test')
+        w_checkout.commit('test commit')
+        w_checkout.close()
+
+        r_checkout = repo.checkout()
+        assert r_checkout.metadata['1'] == 'test'
+        assert list(r_checkout.metadata.keys()) == ['1']
+        r_checkout.close()
+
+    def test_reader_add_not_permitted(self, written_repo):
+        co = written_repo.checkout()
+        with pytest.raises(AttributeError):
+            co.metadata.add('a', 'b')
+
+    def test_reader_dict_style_add_not_permitted(self, written_repo):
+        co = written_repo.checkout()
+        with pytest.raises(TypeError):
+            co.metadata['a'] = 'b'
+
+    def test_reader_remove_not_permitted(self, written_repo):
+        co = written_repo.checkout()
+        with pytest.raises(TypeError):
+            del co.metadata['a']
+
+    def test_reader_len_magic_works(self, repo):
+        wco = repo.checkout(write=True)
+        wco.metadata.add('a', 'b')
+        wco.metadata['1'] = '2'
+        wco.commit('test commit')
+        wco.close()
+
+        rco = repo.checkout()
+        assert len(rco.metadata) == 2
+        rco.close()
+
+    def test_reader_contains_magic_works(self, repo):
+        wco = repo.checkout(write=True)
+        wco.metadata.add('a', 'b')
+        wco.metadata['1'] = '2'
+        wco.commit('test commit')
+        wco.close()
+
+        rco = repo.checkout()
+        assert 'a' in rco.metadata
+        assert '1' in rco.metadata
+        assert 'foo' not in rco.metadata
+
+    def test_reader_iswriteable_property_is_false(self, written_repo):
+        co = written_repo.checkout(write=False)
+        assert co.metadata.iswriteable is False
+        co.close()
+
+    def test_metadata_correct_after_mutating_same_key_in_multiple_commits(self, repo):
+
+        cmt_hashs = []
+        co = repo.checkout(write=True)
+        for idx in range(10):
+            co.metadata['key'] = f'value {idx}'
+            cmt_hashs.append(co.commit(f'this is commit {idx}'))
+        co.close()
+
+        for idx, cmt in enumerate(cmt_hashs):
+            rco = repo.checkout(write=False, commit=cmt)
+            assert rco.metadata['key'] == f'value {idx}'
+            assert list(rco.metadata.keys()) == ['key']
+            rco.close()
 
     def test_loop_through(self, repo):
         co = repo.checkout(write=True)

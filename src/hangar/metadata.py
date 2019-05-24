@@ -167,6 +167,9 @@ class MetadataReader(object):
 
         Raises
         ------
+        ValueError
+            If the `key` is not str type or contains whitespace or non
+            alpha-numeric characters.
         KeyError
             If no metadata exists in the checkout with the provided key.
         '''
@@ -175,6 +178,11 @@ class MetadataReader(object):
             self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
 
         try:
+            if not (isinstance(key, str) and is_ascii_alnum(key)):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
+                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+                raise ValueError(msg)
+
             refKey = parsing.metadata_record_db_key_from_raw_key(key)
             hashVal = self._dataTxn.get(refKey, default=False)
             if hashVal is False:
@@ -292,25 +300,25 @@ class MetadataWriter(MetadataReader):
 
         Raises
         ------
-        SyntaxError
+        ValueError
             If the `key` contains any whitespace or non alpha-numeric characters.
-        SyntaxError
+        ValueError
             If the `value` contains any non ascii characters.
         LookupError
             If an identical key/value pair exists in the checkout
         '''
         try:
-            if not is_ascii_alnum(key):
-                msg = f'HANGAR SYNTAX ERROR:: metadata key: `{key}` not allowed. '\
-                      f'Must only contain alpha-numeric ascii (no whitespace) characters.'
-                raise SyntaxError(msg)
-            if not is_ascii(value):
-                msg = f'HANGAR SYNTAX ERROR:: metadata value: `{value}` not allowed. '\
-                      f'Must only contain ascii characters.'
-                raise SyntaxError(msg)
-        except SyntaxError as e:
+            if not (isinstance(key, str) and is_ascii_alnum(key)):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
+                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+                raise ValueError(msg)
+            elif not (isinstance(value, str) and is_ascii(value)):
+                msg = f'HANGAR VALUE ERROR:: metadata value: `{value}` not allowed. '\
+                      f'Must be str with only ascii characters.'
+                raise ValueError(msg)
+        except ValueError as e:
             logger.error(e, exc_info=False)
-            raise
+            raise e from None
 
         if not self.__is_conman:
             self._labelTxn = TxnRegister().begin_writer_txn(self._labelenv)
@@ -365,6 +373,9 @@ class MetadataWriter(MetadataReader):
 
         Raises
         ------
+        ValueError
+            If the key provided is not string type and containing only
+            ascii-alphanumeric characters.
         KeyError
             If the checkout does not contain metadata with the provided key.
         '''
@@ -372,6 +383,11 @@ class MetadataWriter(MetadataReader):
             self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
 
         try:
+            if not (isinstance(key, str) and is_ascii_alnum(key)):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
+                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+                raise ValueError(msg)
+
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             delete_succeeded = self._dataTxn.delete(metaRecKey)
             if delete_succeeded is False:
@@ -388,9 +404,9 @@ class MetadataWriter(MetadataReader):
                 newMetaRecCountVal = parsing.metadata_count_db_val_from_raw_val(meta_count)
                 self._dataTxn.put(metaRecCountKey, newMetaRecCountVal)
 
-        except KeyError as e:
-            logger.error(e)
-            raise
+        except (KeyError, ValueError) as e:
+            logger.error(e, exc_info=False)
+            raise e from None
 
         finally:
             if not self.__is_conman:

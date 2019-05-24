@@ -77,10 +77,7 @@ class TestDataset(object):
     def test_dataset_with_more_dimension(self, repo):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
-        # TODO: shouldn't it be some other error
-        # the error comes because of the zero in shape tuple
-        # makes chunk_nbytes to become zero
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             co.datasets.init_dataset('dset', shape=shape, dtype=np.int)
         shape = [1] * 31
         dset = co.datasets.init_dataset('dset1', shape=shape, dtype=np.int)
@@ -186,7 +183,7 @@ class TestDataWithFixedSizedDataset(object):
 
     def test_add_with_wrong_argument_order(self, w_checkout, array5by7):
         dset = w_checkout.datasets['_dset']
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             dset.add('1', array5by7)
 
     def test_multiple_data_single_commit(self, written_repo, array5by7):
@@ -346,7 +343,7 @@ class TestDataWithFixedSizedDataset(object):
         dset['1'] = arr
 
         newarr = np.random.random(shape).astype(another_dtype)
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             dset['2'] = newarr
 
         newarr = np.random.random(another_shape).astype(dtype)
@@ -448,6 +445,26 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(data1, randomsizedarray)
         assert np.allclose(data2, randomsizedarray / 255)
 
+    def test_writer_dataset_properties_are_correct(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        d = co.datasets['_dset']
+        assert d.name == '_dset'
+        assert d.dtype == array5by7.dtype
+        assert np.allclose(d.shape, array5by7.shape) is True
+        assert d.variable_shape is False
+        assert d.named_samples is True
+        assert d.iswriteable is True
+        co.close()
+
+    def test_reader_dataset_properties_are_correct(self, written_repo, array5by7):
+        co = written_repo.checkout(write=False)
+        d = co.datasets['_dset']
+        assert d.name == '_dset'
+        assert d.dtype == array5by7.dtype
+        assert np.allclose(d.shape, array5by7.shape) is True
+        assert d.variable_shape is False
+        assert d.named_samples is True
+        assert d.iswriteable is False
 
 @pytest.mark.skip(reason='not implemented')
 class TestVariableSizedDataset(object):
