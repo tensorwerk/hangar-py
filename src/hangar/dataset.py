@@ -397,9 +397,9 @@ class DatasetDataWriter(DatasetDataReader):
         ValueError
             For fixed shape datasets, if input data dimensions do not exactally match
             specified dataset dimensions.
-        TypeError
+        ValueError
             If type of `data` argument is not an instance of np.ndarray.
-        TypeError
+        ValueError
             If the datatype of the input data does not match the specifed data type of
             the dataset
         LookupError
@@ -410,30 +410,26 @@ class DatasetDataWriter(DatasetDataReader):
         # ------------------------ argument type checking ---------------------
 
         try:
-            if not isinstance(data, np.ndarray):
-                msg = f'HANGAR TYPE ERROR:: `data` argument type: {type(data)} != `np.ndarray`'
-                raise TypeError(msg)
-
             if self._samples_are_named:
-                if not (isinstance(name, str)):
-                    msg = f'HANGAR VALUE ERROR:: string type not provided to `name` argument while '\
-                          f' adding sample to dset: {self._dsetn} requiring named samples.'
-                    raise ValueError(msg)
-                elif not is_ascii_alnum(name):
-                    msg = f'HANGAR VALUE ERROR:: name: {name} is invalid. Must only contain '\
-                          f'alpha-numeric ascii characters (no whitespace).'
+                if not (isinstance(name, str) and is_ascii_alnum(name)):
+                    msg = f'HANGAR VALUE ERROR:: name: {name} invalid. Must be of type str & '\
+                          f'only contain alpha-numeric ascii characters (no whitespace).'
                     raise ValueError(msg)
             else:
-                try:
-                    name = kwargs['bulk_add_name']
-                except KeyError:
-                    name = parsing.generate_sample_name()
+                name = kwargs['bulkn'] if 'bulkn' in kwargs else parsing.generate_sample_name()
+
+            if not isinstance(data, np.ndarray):
+                msg = f'HANGAR VALUE ERROR:: `data` argument type: {type(data)} != `np.ndarray`'
+                raise ValueError(msg)
+            elif data.dtype.num != self._schema_dtype_num:
+                msg = f'HANGAR VALUE ERROR:: data type of input data: {data.dtype} != type of '\
+                      f'specified type: {np.typeDict[self._schema_dtype_num]}.'
+                raise ValueError(msg)
 
             if self._schema_variable is True:
                 if data.ndim != len(self._schema_max_shape):
                     msg = f'HANGAR VALUE ERROR:: rank of input tensor: {data.ndim} exceeds '\
-                          f'rank of dataset: {self._dsetn} specified max rank: '\
-                          f'{len(self._schema_max_shape)}'
+                          f'rank specified max rank: {len(self._schema_max_shape)}'
                     raise ValueError(msg)
                 for dataDimSize, schemaDimSize in zip(data.shape, self._schema_max_shape):
                     if dataDimSize > schemaDimSize:
@@ -442,21 +438,14 @@ class DatasetDataWriter(DatasetDataReader):
                               f'max dimensions: {self._schema_max_shape}. DIM SIZE: '\
                               f'{dataDimSize} > {schemaDimSize}'
                         raise ValueError(msg)
-            else:
-                if data.shape != self._schema_max_shape:
-                    msg = f'HANGAR VALUE ERROR:: shape of input data: {data.shape} != fixed '\
-                          f'dims of dset: {self._dsetn} specified dimss: {self._schema_max_shape}'
-                    raise ValueError(msg)
+            elif data.shape != self._schema_max_shape:
+                msg = f'HANGAR VALUE ERROR:: shape of input data: {data.shape} != fixed '\
+                      f'dims of dset: {self._dsetn} specified dimss: {self._schema_max_shape}'
+                raise ValueError(msg)
 
-            if data.dtype.num != self._schema_dtype_num:
-                msg = f'HANGAR TYPE ERROR:: data type of input data: {data.dtype} != type of '\
-                      f'dataset: {self._dsetn} with specified type: '\
-                      f'{np.typeDict[self._schema_dtype_num]}.'
-                raise TypeError(msg)
-
-        except (ValueError, TypeError) as e:
+        except ValueError as e:
             logger.error(e, exc_info=False)
-            raise
+            raise e from None
 
         # --------------------- add data to storage backend -------------------
 
@@ -869,7 +858,7 @@ class Datasets(object):
             assert all([k in self._datasets for k in mapping.keys()])
             data_name = parsing.generate_sample_name()
             for k, v in mapping.items():
-                self._datasets[k].add(v, bulk_add_name=data_name)
+                self._datasets[k].add(v, bulkn=data_name)
 
         except AssertionError:
             msg = f'HANGAR KEY ERROR:: one of keys: {mapping.keys()} not in '\
@@ -944,20 +933,23 @@ class Datasets(object):
             value if `variable_shape=True`.
         ValueError
             If rank of maximum tensor shape > 31.
+        ValueError
+            If zero sized dimension in `shape` argument
+        ValueError
+            If zero sized dimension in `max_shape` argument
         '''
 
         # ------------- Checks for argument validity --------------------------
 
         if not is_ascii_alnum(name):
-            msg = f'HANGAR VALUE ERROR:: dataset name provided: `{name}` is not allowed. '\
-                  f'Must only contain alpha-numeric ascii with no whitespace characters.'
+            msg = f'Dataset name provided: `{name}` is invalid. Must only contain '\
+                  f'alpha-numeric ascii with no whitespace characters.'
             e = ValueError(msg)
             logger.error(e, exc_info=False)
             raise e
 
         if name in self._datasets:
-            msg = f'HANGAR KEY EXISTS ERROR: dataset already exists with name: {name}.'
-            e = LookupError(msg)
+            e = LookupError(f'KEY EXISTS ERROR: dataset already exists with name: {name}.')
             logger.error(e)
             raise e
 
@@ -969,17 +961,15 @@ class Datasets(object):
             prototype = np.zeros(tenShape, dtype=dtype)
             style = 'provided'
         else:
-            msg = f'HANGAR SYNTAX ERROR:: Both `shape` & `dtype` arguments required if '\
-                  f'`prototype` is not specified.'
-            e = SyntaxError(msg)
+            e = SyntaxError(f'Both `shape` & `dtype` required if `prototype` not specified.')
             logger.error(e, exc_info=False)
             raise e
 
         if variable_shape is True:
             maxShape = tuple(max_shape) if isinstance(max_shape, list) else max_shape
             if not np.all(np.less_equal(prototype.shape, maxShape)):
-                msg = f'HANGAR VALUE ERROR:: variable shape `max_shape` value: {maxShape} not '\
-                      f'<= specified prototype shape: {tenShape}.'
+                msg = f'Variable shape `max_shape` value: {maxShape} not <= specified '\
+                      f'prototype shape: {tenShape}.'
                 e = ValueError(msg)
                 logger.error(e)
                 raise e
@@ -988,9 +978,13 @@ class Datasets(object):
         else:
             maxShape = tenShape
 
+        if 0 in tenShape:
+            raise ValueError(f'Invalid `shape`: {tenShape}. Dimension sizes must be > 0')
+        elif 0 in maxShape:
+            raise ValueError(f'Invalid `max_shape`: {maxShape}. Dimension sizes must be > 0')
+
         if len(maxShape) > 31:
-            msg = f'HANGAR VALUE ERROR:: maximum tensor rank must be <= 31. specified: {len(maxShape)}'
-            e = ValueError(msg)
+            e = ValueError(f'Maximum tensor rank must be <= 31. specified: {len(maxShape)}')
             logger.error(e, exc_info=False)
             raise e
 
