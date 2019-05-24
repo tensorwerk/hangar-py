@@ -26,10 +26,7 @@ setup(
     version='0.1.0',
     license='Apache 2.0',
     description='Hangar is version control for tensor data. Commit, branch, merge, revert, and collaborate in the data-defined software era.',
-    long_description='%s\n%s' % (
-        re.compile('^.. start-badges.*^.. end-badges', re.M | re.S).sub('', read('README.rst')),
-        re.sub(':[a-z]+:`~?(.*?)`', r'``\1``', read('CHANGELOG.rst'))
-    ),
+    long_description=read('README.rst'),
     author='Richard Izzo',
     author_email='rick@tensorwerk.com',
     url='https://github.com/tensorwerk/hangar-py',
@@ -42,7 +39,7 @@ setup(
         # complete classifier list: http://pypi.python.org/pypi?%3Aaction=list_classifiers
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved',
         'Operating System :: Unix',
         'Operating System :: POSIX',
         'Operating System :: Microsoft :: Windows',
