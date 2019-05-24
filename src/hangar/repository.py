@@ -408,7 +408,7 @@ class Repository(object):
             for commit in tqdm(m_commits, desc='Push Commits:'):
                 self._client.push_commit_record(commit)
 
-            self._client.push_branch_record('master')
+            self._client.push_branch_record(branch_name)
 
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.PERMISSION_DENIED:
