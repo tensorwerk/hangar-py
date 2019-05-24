@@ -31,9 +31,9 @@ Overview
     :alt: PyPI Package latest release
     :target: https://pypi.org/project/hangar
 
-.. |commits-since| image:: https://img.shields.io/github/commits-since/tensorwerk/hangar-py/v0.1.0.svg
+.. |commits-since| image:: https://img.shields.io/github/commits-since/tensorwerk/hangar-py/v0.1.1.svg
     :alt: Commits since latest release
-    :target: https://github.com/tensorwerk/hangar-py/compare/v0.1.0...master
+    :target: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...master
 
 .. |wheel| image:: https://img.shields.io/pypi/wheel/hangar.svg
     :alt: PyPI Wheel
@@ -58,11 +58,10 @@ collaborate in the data-defined software era.
 What is Hangar?
 ===============
 
-Hangar is based off of the founded from the belief that too much time is spent
-collecting, managing, and creating home-brewed version control systems for data.
-At it's core Hangar is designed to solve many of the same problems faced by
-traditional code version control system (ie. ``Git``), just adapted for
-numerical data:
+Hangar is based off the belief that too much time is spent collecting, managing,
+and creating home-brewed version control systems for data. At it's core Hangar
+is designed to solve many of the same problems faced by traditional code version
+control system (ie. ``Git``), just adapted for numerical data:
 
 * Time travel through the historical evolution of a dataset
 * Zero-cost Branching to enable exploratory analysis and collaboration
