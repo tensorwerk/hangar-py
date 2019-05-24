@@ -2,6 +2,15 @@
 Change Log
 ==========
 
+`v0.1.1`_ (2019-05-24)
+===========================
+
+Bug Fixes
+---------
+
+* Fixed typo in README which was uploaded to PyPi
+
+
 `v0.1.0`_ (2019-05-24)
 ===========================
 
@@ -46,3 +55,4 @@ Breaking changes
 
 .. _v0.0.0: https://github.com/tensorwerk/hangar-py/commit/2aff3805c66083a7fbb2ebf701ceaf38ac5165c7
 .. _v0.1.0: https://github.com/tensorwerk/hangar-py/compare/v0.0.0...v0.1.0
+.. _v0.1.1: https://github.com/tensorwerk/hangar-py/compare/v0.1.0...v0.1.1
