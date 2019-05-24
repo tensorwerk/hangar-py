@@ -2,7 +2,7 @@
 Change Log
 ==========
 
-`v0.1.0-dev`_ (In Progress)
+`v0.1.0`_ (2019-05-24)
 ===========================
 
 New Features
@@ -45,4 +45,4 @@ Breaking changes
 * First Public Release of Hangar!
 
 .. _v0.0.0: https://github.com/tensorwerk/hangar-py/commit/2aff3805c66083a7fbb2ebf701ceaf38ac5165c7
-.. _v0.1.0-dev: https://github.com/tensorwerk/hangar-py/compare/v0.0.0...master
+.. _v0.1.0: https://github.com/tensorwerk/hangar-py/compare/v0.0.0...v0.1.0
