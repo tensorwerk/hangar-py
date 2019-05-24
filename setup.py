@@ -23,7 +23,7 @@ def read(*names, **kwargs):
 
 setup(
     name='hangar',
-    version='0.0.0',
+    version='0.1.0',
     license='Apache 2.0',
     description='Hangar is version control for tensor data. Commit, branch, merge, revert, and collaborate in the data-defined software era.',
     long_description='%s\n%s' % (
