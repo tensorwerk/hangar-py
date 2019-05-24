@@ -34,7 +34,7 @@ project = 'Hangar'
 year = '2019-2020'
 author = 'Richard Izzo'
 copyright = '{0}, {1}'.format(year, author)
-version = release = '0.1.0'
+version = release = '0.1.1'
 
 pygments_style = 'trac'
 pygments_lexer = 'python3'

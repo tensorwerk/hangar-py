@@ -2,7 +2,7 @@
 # Version Configuration
 #######################
 hangar:
-  __version__: '0.1.0'
+  __version__: '0.1.1'
 
   lmdb:
     map_size: 2_000_000_000
