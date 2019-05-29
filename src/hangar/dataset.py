@@ -84,7 +84,7 @@ class DatasetDataReader(object):
         self._fs = {
             'hdf5_00': HDF5_00_FileHandles(repo_path=repo_pth),
         }
-        self._fs['hdf5'].open(self._path, self._mode)
+        self._fs['hdf5_00'].open(self._path, self._mode)
 
         self._default_schema_hash = default_schema_hash
         self._schema_uuid = schema_uuid
@@ -321,17 +321,18 @@ class DatasetDataWriter(DatasetDataReader):
     def _setup_file_access(self):
         '''Internal method used to open handles to the backing store.
         '''
-        if self._default_schema_hash not in self._fs.wHands:
-            sample_array = np.zeros(self._schema_max_shape, dtype=np.typeDict[self._schema_dtype_num])
-            self._fs.create_schema(self._path, self._default_schema_hash, sample_array)
-        self._fs.open(self._path, self._mode)
+        if self._default_schema_backend == 'hdf5_00':
+            if self._default_schema_hash not in self._fs['hdf5_00'].wHands:
+                sample_array = np.zeros(self._schema_max_shape, dtype=np.typeDict[self._schema_dtype_num])
+                self._fs['hdf5_00'].create_schema(self._path, self._default_schema_hash, sample_array)
+            self._fs['hdf5_00'].open(self._path, self._mode)
 
     def __enter__(self):
         self._is_conman = True
         self._hashTxn = self._TxnRegister.begin_writer_txn(self._hashenv)
         self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
         self._stageHashTxn = self._TxnRegister.begin_writer_txn(self._stagehashenv)
-        self._fs.__enter__()
+        self._fs['hdf5_00'].__enter__()
         return self
 
     def __exit__(self, *exc):
@@ -339,7 +340,7 @@ class DatasetDataWriter(DatasetDataReader):
         self._hashTxn = self._TxnRegister.commit_writer_txn(self._hashenv)
         self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
         self._stageHashTxn = self._TxnRegister.commit_writer_txn(self._stagehashenv)
-        self._fs.__exit__(*exc)
+        self._fs['hdf5_00'].__exit__(*exc)
 
     def __setitem__(self, key, value):
         '''Store a piece of data in a dataset. Convenince method to :meth:`add`.
@@ -647,6 +648,7 @@ class Datasets(object):
         if self._mode == 'r':
             self.init_dataset = None
             self.remove_dset = None
+            self.add = None
 
 # ------------- Methods Available To Both Read & Write Checkouts ------------------
 
@@ -1057,8 +1059,8 @@ class Datasets(object):
             stage_dir = os.path.join(self._repo_pth, STAGE_DATA_DIR, f'hdf_{schema_hash}')
             if not os.path.isdir(stage_dir):
                 f_handle = HDF5_00_FileHandles(repo_path=self._repo_pth)
-                f_handle.create_schema(self._repo_pth, schema_hash, prototype)
-                f_handle.close()
+                fh = f_handle.create_schema(self._repo_pth, schema_hash, prototype)
+                fh.close()
         else:
             print('not hdf5_00 backend')
 
