@@ -291,6 +291,17 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             dset2.name
 
+    def test_with_wrong_argument_value(self, repo):
+        # It is intuitive to a user to pass branchname as positional
+        # argument but hangar expect permission as first argument
+        with pytest.raises(ValueError):
+            repo.checkout('branchname')
+        with pytest.raises(ValueError):
+            repo.checkout(write='True')
+        with pytest.raises(ValueError):
+            repo.checkout(branch_name=True)
+        repo.checkout(True)  # This should not raise any excpetion
+
 
 class TestBranching(object):
 
@@ -426,8 +437,3 @@ class TestBranching(object):
         assert h2['head'] == h3['head']
         assert h2['ancestors'][h2['head']] == h3['ancestors'][h3['head']]
         assert h1['head'] in h2['ancestors'][h2['head']]
-
-
-@pytest.mark.skip(reason='not implemented')
-class TestTimeTravel(object):
-    pass
