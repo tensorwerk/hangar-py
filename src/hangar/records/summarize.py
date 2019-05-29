@@ -114,11 +114,16 @@ def details(env):
     print('======================')
     print('')
     hashtxn = TxnRegister().begin_reader_txn(env.hashenv)
+    entries = hashtxn.stat()['entries'] - 10
     with hashtxn.cursor() as cursor:
-        count = 0
+        count, once = 0, False
         for key, value in cursor:
-            if count >= 100:
-                break
+            if (count >= 100) and (count < entries):
+                count += 1
+                if (once is False) and (count < entries):
+                    once = True
+                    print('...\n...\n...')
+                continue
             print(key, value)
             count += 1
     cursor.close()
@@ -131,11 +136,16 @@ def details(env):
     print('======================')
     print('')
     stagehashtxn = TxnRegister().begin_reader_txn(env.stagehashenv)
+    entries = stagehashtxn.stat()['entries'] - 10
     with stagehashtxn.cursor() as cursor:
-        count = 0
+        count, once = 0, False
         for key, value in cursor:
-            if count >= 100:
-                break
+            if (count >= 100) and (count < entries):
+                count += 1
+                if (once is False) and (count < entries):
+                    once = True
+                    print('...')
+                continue
             print(key, value)
             count += 1
     cursor.close()

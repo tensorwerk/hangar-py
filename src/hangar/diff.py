@@ -450,7 +450,7 @@ def _schema_dict_to_nt(record_dict: dict) -> set:
 
 
 def _schema_mutation_finder(sch_nt_func, a_unchanged_kv: dict,
-                                   d_unchanged_kv: dict) -> set:
+                            d_unchanged_kv: dict) -> set:
     '''Determine mutated dataset schemas betwwen an ancestor and dev commit
 
     Parameters

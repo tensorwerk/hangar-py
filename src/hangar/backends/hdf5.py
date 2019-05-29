@@ -7,19 +7,19 @@ import logging
 import h5py
 import numpy as np
 
-from . import __version__
-from . import config
-from .utils import find_next_prime
+from .. import __version__
+from .. import config
+from ..utils import find_next_prime
 
 logger = logging.getLogger(__name__)
 
 
-class FileHandlesSingleton(type):
+class HDF5_00_FileHandlesSingleton(type):
     _instances = {}
     def __call__(cls, *args, **kwargs):
         repo_pth = kwargs['repo_path']
         if repo_pth not in cls._instances:
-            cls._instances[repo_pth] = super(FileHandlesSingleton, cls).__call__(*args, **kwargs)
+            cls._instances[repo_pth] = super(HDF5_00_FileHandlesSingleton, cls).__call__(*args, **kwargs)
         return cls._instances[repo_pth]
 
 
@@ -29,7 +29,7 @@ Dense Array Methods
 '''
 
 
-class FileHandles(metaclass=FileHandlesSingleton):
+class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
     '''Singleton to manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
@@ -524,15 +524,15 @@ class FileHandles(metaclass=FileHandlesSingleton):
         np.array
             requested data.
         '''
-        dsetIdx = int(hashVal.hdf5_dataset_idx)
-        dataShape = hashVal.data_shape
-        dsetCol = f'/{hashVal.hdf5_dataset}'
-        fSchema = hashVal.hdf5_file_schema
-        fInstance = hashVal.hdf5_schema_instance
+        dsetIdx = int(hashVal.dataset_idx)
+        dataShape = hashVal.shape
+        dsetCol = f'/{hashVal.dataset}'
+        fSchema = hashVal.schema
+        fInstance = hashVal.instance
 
         srcSlc = (self.slcExpr[dsetIdx], *(self.slcExpr[0:x] for x in dataShape))
         destSlc = None
-        destArr = np.empty((hashVal.data_shape), np.typeDict[dtype])
+        destArr = np.empty((hashVal.shape), np.typeDict[dtype])
 
         if mode == 'r':
             self.rHands[fSchema][fInstance][dsetCol].read_direct(destArr, srcSlc, destSlc)

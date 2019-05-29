@@ -21,13 +21,16 @@ hangar:
       - ' | '
       - ' <> '
 
-  locations:
-    hdf5:
-      local: '101'
-      remote: '001'
-    tiledb:
-      local: '102'
-      remote: '002'
+  hash:
+    blake2b_20byte: '0'  # 0-9, a-Z formats for possible hashs. One character
+
+  # locations:
+  #   # LOCALS -> [0:50]
+  #   '00': hdf5_00
+  #   '01': numpy_00
+  #   '02': tiledb_00
+  #   # REMOTES -> [50:100]
+  #   '50': 'url_00'
 
   repository:
     hangar_dir_name: '__hangar' # folder name where data is placed

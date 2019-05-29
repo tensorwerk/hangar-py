@@ -9,7 +9,8 @@ import lmdb
 
 from . import config
 from .context import TxnRegister
-from .hdf5_store import FileHandles
+from .backends.hdf5 import HDF5_00_FileHandles
+from .backends.selection import backend_decoder, backend_encoder, backend_decoder_name
 from .records import parsing
 from .records.queries import RecordQuery
 from .utils import is_ascii_alnum, cm_weakref_obj_proxy
@@ -66,28 +67,33 @@ class DatasetDataReader(object):
                  mode: str,
                  **kwargs):
 
+        self._mode = mode
         self._path = repo_pth
         self._dsetn = dset_name
+        self._is_conman = False
+        self._index_expr_factory = np.s_
+        self._index_expr_factory.maketuple = False
+
         self._dataenv = dataenv
         self._hashenv = hashenv
+        self._Query = RecordQuery(self._dataenv)
+        self._hashTxn: Optional[lmdb.Transaction] = None
+        self._dataTxn: Optional[lmdb.Transaction] = None
+        self._TxnRegister = TxnRegister()
+
+        self._fs = {
+            'hdf5_00': HDF5_00_FileHandles(repo_path=repo_pth),
+        }
+        self._fs['hdf5'].open(self._path, self._mode)
+
         self._default_schema_hash = default_schema_hash
         self._schema_uuid = schema_uuid
         self._samples_are_named = samplesAreNamed
         self._schema_variable = isVar
         self._schema_max_shape = tuple(varMaxShape)
-        self._index_expr_factory = np.s_
-        self._index_expr_factory.maketuple = False
         self._schema_dtype_num = varDtypeNum
-        self._mode = mode
-        self._fs = FileHandles(repo_path=repo_pth)
-        self._Query = RecordQuery(self._dataenv)
-        self._TxnRegister = TxnRegister()
 
-        self._fs.open(self._path, self._mode)
-
-        self._hashTxn: Optional[lmdb.Transaction] = None
-        self._dataTxn: Optional[lmdb.Transaction] = None
-        self._is_conman = False
+        self._sample_accessor = {}
 
     def __enter__(self):
         self._is_conman = True
@@ -184,7 +190,7 @@ class DatasetDataReader(object):
         return res
 
     def _close(self):
-        self._fs.close(mode=self._mode)
+        self._fs['hdf5_00'].close(mode=self._mode)
 
     @property
     def name(self):
@@ -274,9 +280,11 @@ class DatasetDataReader(object):
             dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
             hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = self._hashTxn.get(hashKey)
-            hashVal = parsing.hash_data_raw_val_from_db_val(hash_ref)
+            hashVal = backend_decoder(hash_ref)
+            backend = backend_decoder_name(hash_ref)
+            # hashVal = parsing.hash_data_raw_val_from_db_val(hash_ref)
             # This is a tight enough loop where keyword args can impact performance
-            data = self._fs.read_data(hashVal, self._mode, self._schema_dtype_num)
+            data = self._fs[backend].read_data(hashVal, self._mode, self._schema_dtype_num)
 
         except KeyError as e:
             logger.error(e, exc_info=False)
@@ -304,9 +312,10 @@ class DatasetDataWriter(DatasetDataReader):
             See args of :class:`DatasetDataReader`
     '''
 
-    def __init__(self, stagehashenv, *args, **kwargs):
+    def __init__(self, stagehashenv, default_schema_backend, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._stagehashenv = stagehashenv
+        self._default_schema_backend = default_schema_backend
         self._setup_file_access()
 
     def _setup_file_access(self):
@@ -470,10 +479,18 @@ class DatasetDataWriter(DatasetDataReader):
             # write new data if data hash does not exist
             existingHashVal = self._hashTxn.get(hashKey, default=False)
             if existingHashVal is False:
-                hdf_instance, hdf_dset, hdf_idx = self._fs.add_tensor_data(
+                instance, dset, idx = self._fs[self._default_schema_backend].add_tensor_data(
                     data, self._default_schema_hash)
-                hashVal = parsing.hash_data_db_val_from_raw_val(
-                    self._default_schema_hash, hdf_instance, hdf_dset, hdf_idx, data.shape)
+                # hdf_instance, hdf_dset, hdf_idx = self._fs.add_tensor_data(
+                #     data, self._default_schema_hash)
+                hashVal = backend_encoder(backend=self._default_schema_backend,
+                                          schema=self._default_schema_hash,
+                                          instance=instance,
+                                          dataset=dset,
+                                          dataset_idx=idx,
+                                          shape=data.shape)
+                # hashVal = parsing.hash_data_db_val_from_raw_val(
+                # self._default_schema_hash, hdf_instance, hdf_dset, hdf_idx, data.shape)
                 self._hashTxn.put(hashKey, hashVal)
                 self._stageHashTxn.put(hashKey, hashVal)
 
@@ -871,8 +888,9 @@ class Datasets(object):
 
         return data_name
 
-    def init_dataset(self, name: str, shape=None, dtype=None, prototype=None, *,
-                     samples_are_named=True, variable_shape=False, max_shape=None):
+    def init_dataset(self, name: str, shape=None, dtype=None, prototype=None,
+                     samples_are_named=True, variable_shape=False, max_shape=None,
+                     *, backend='hdf5_00'):
         '''Initializes a dataset in the repository.
 
         Datasets are groups of related data pieces (samples). All samples within
@@ -913,6 +931,8 @@ class Datasets(object):
             with. The number of dimensions must match that specified in the
             `shape` or `prototype` argument, and each dimension size must be >=
             the equivalent dimension size specified. defaults to None.
+        backend : str, optional, kwarg only
+            Backend which should be used to write the dataset files on disk.
 
         Returns
         -------
@@ -995,7 +1015,8 @@ class Datasets(object):
               f'DType: `{prototype.dtype}`, '\
               f'Samples Named: `{samples_are_named}`, '\
               f'Variable Shape: `{variable_shape}`, '\
-              f'Max Shape: `{maxShape}`'
+              f'Max Shape: `{maxShape}`, '\
+              f'Backend; `{backend}`'
         logger.info(msg)
 
         # ----------- Determine schema format details -------------------------
@@ -1014,7 +1035,8 @@ class Datasets(object):
             schema_is_var=variable_shape,
             schema_max_shape=prototype.shape,
             schema_dtype=prototype.dtype.num,
-            schema_is_named=samples_are_named)
+            schema_is_named=samples_are_named,
+            schema_default_backend=backend)
 
         # -------- Create staged schema storage backend -----------------------
         #
@@ -1030,12 +1052,15 @@ class Datasets(object):
         # last backend takes priority.
         #
 
-        STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-        stage_dir = os.path.join(self._repo_pth, STAGE_DATA_DIR, f'hdf_{schema_hash}')
-        if not os.path.isdir(stage_dir):
-            f_handle = FileHandles(repo_path=self._repo_pth).create_schema(
-                self._repo_pth, schema_hash, prototype)
-            f_handle.close()
+        if backend == 'hdf5_00':
+            STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
+            stage_dir = os.path.join(self._repo_pth, STAGE_DATA_DIR, f'hdf_{schema_hash}')
+            if not os.path.isdir(stage_dir):
+                f_handle = HDF5_00_FileHandles(repo_path=self._repo_pth)
+                f_handle.create_schema(self._repo_pth, schema_hash, prototype)
+                f_handle.close()
+        else:
+            print('not hdf5_00 backend')
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
@@ -1067,7 +1092,8 @@ class Datasets(object):
             varDtypeNum=prototype.dtype.num,
             hashenv=self._hashenv,
             dataenv=self._dataenv,
-            mode='a')
+            mode='a',
+            default_schema_backend=backend)
 
         logger.info(f'Dataset Initialized: `{name}`')
         return self.get(name)
@@ -1172,7 +1198,8 @@ class Datasets(object):
                 varDtypeNum=schemaSpec.schema_dtype,
                 hashenv=hashenv,
                 dataenv=stageenv,
-                mode='a')
+                mode='a',
+                default_schema_backend=schemaSpec.default_schema_backend)
 
         return cls(repo_pth, datasets, hashenv, stageenv, stagehashenv, 'a')
 

@@ -25,6 +25,9 @@ COMMITSEP = config.get('hangar.seps.commit')
 HASHSEP = config.get('hangar.seps.hash')
 REMOTES = config.get('hangar.keys.remotes')
 
+WRITER_LOCK = config.get('hangar.keys.writer_lock')
+WRITER_LOCK_SENTINEL = config.get('hangar.keys.writer_lock_sentinel')
+
 cycle_list = [str(c).rjust(4, '0') for c in range(9_999)]
 NAME_CYCLER = cycle(cycle_list)
 RANDOM_NAME_SEED = str(randint(0, 999_999_999)).rjust(0, '0')
@@ -122,13 +125,11 @@ Methods working with writer lock key/values
 
 
 def repo_writer_lock_db_key():
-    WRITER_LOCK = config.get('hangar.keys.writer_lock')
     db_key = f'{WRITER_LOCK}'.encode()
     return db_key
 
 
 def repo_writer_lock_sentinal_db_val():
-    WRITER_LOCK_SENTINEL = config.get('hangar.keys.writer_lock_sentinel')
     db_val = f'{WRITER_LOCK_SENTINEL}'.encode()
     return db_val
 
@@ -189,7 +190,8 @@ RawDatasetSchemaVal = namedtuple(
         'schema_dtype',
         'schema_is_var',
         'schema_max_shape',
-        'schema_is_named'])
+        'schema_is_named',
+        'schema_default_backend'])
 
 '''
 Parsing functions to convert lmdb data record keys/vals to/from python vars
@@ -333,7 +335,8 @@ def dataset_record_schema_db_key_from_raw_key(dset_name):
 
 def dataset_record_schema_db_val_from_raw_val(schema_uuid, schema_hash,
                                               schema_is_var, schema_max_shape,
-                                              schema_dtype, schema_is_named):
+                                              schema_dtype, schema_is_named,
+                                              schema_default_backend):
     '''Format the db_value which includes all details of the dataset schema.
 
     Parameters
@@ -355,6 +358,8 @@ def dataset_record_schema_db_val_from_raw_val(schema_uuid, schema_hash,
         tensors must exactally match this datatype.
     schema_is_named : bool
         Are samples in the datasets identifiable with names, or not.
+    schema_default_backend : str
+        backend specification for the schema default backend.
 
     Returns
     -------
@@ -368,6 +373,7 @@ def dataset_record_schema_db_val_from_raw_val(schema_uuid, schema_hash,
         'schema_is_var': schema_is_var,
         'schema_max_shape': schema_max_shape,
         'schema_is_named': schema_is_named,
+        'schema_default_backend': schema_default_backend,
     }
     db_schema_val = json.dumps(schema_val, ensure_ascii=True).encode()
     return db_schema_val
@@ -567,13 +573,17 @@ begining development on any of the above features.
 
 # ------------------- Named Tuple Specifications Used -------------------------
 
-DataHashVal = namedtuple(
-    typename='DataHashVal',
-    field_names=['hdf5_file_schema', 'hdf5_schema_instance',
-                 'hdf5_dataset', 'hdf5_dataset_idx', 'data_shape'])
+# DataHashVal = namedtuple(
+#     typename='DataHashVal',
+#     field_names=['hdf5_file_schema', 'hdf5_schema_instance',
+#                  'hdf5_dataset', 'hdf5_dataset_idx', 'data_shape'])
 
-# match and remove the following characters: '['   ']'   '('   ')'   ','
-DataShapeReplacementRegEx = re.compile('[,\(\)\[\]]')
+# DataHashVal = namedtuple(
+#     typename='DataHashVal',
+#     field_names=['schema', 'instance', 'dataset', 'dataset_idx', 'shape'])
+
+# # match and remove the following characters: '['   ']'   '('   ')'   ','
+# DataShapeReplacementRegEx = re.compile('[,\(\)\[\]]')
 
 '''
 Data Hash parsing functions used to convert db key/val to raw pyhon obj
@@ -595,45 +605,6 @@ def hash_data_db_key_from_raw_key(data_hash):
     return db_key
 
 
-def hash_data_db_val_from_raw_val(hdf5_file_schema, hdf5_schema_instance, hdf5_dataset,
-                                  hdf5_dataset_idx, data_shape):
-    '''converts the hdf5 data has spec to an appropriate db value
-
-    .. Note:: This is the inverse of `hash_data_raw_val_from_db_val()`. Any changes in
-              db value format must be reflected in both functions.
-
-    Parameters
-    ----------
-    hdf5_file_schema : str
-        directory name of the hdf5 schema to find this data piece in.
-    hdf5_schema_instance : str
-        file name (schema instance) of the hdf5 file to find this data piece in.
-    hdf5_dataset : str
-        collection (ie. hdf5 dataset) name to find find this data piece.
-    hdf5_dataset_idx : int or str
-        collection first axis index in which this data piece resides.
-    data_shape : tuple
-        shape of the data sample written to the collection idx. ie:
-        what subslices of the hdf5 dataset should be read to retrieve
-        the sample as recorded.
-
-    Returns
-    -------
-    bytestring
-        hash data db value recording all input specifications.
-    '''
-    # match and remove the following characters: '['   ']'   '('   ')'   ','
-    # shape_str = re.sub('[,\(\)\[\]]', '', str(data_shape))
-    shape_str = DataShapeReplacementRegEx.sub('', str(data_shape))
-
-    hdf5_file_str = f'{LISTSEP}'.join([hdf5_file_schema, hdf5_schema_instance])
-    hdf5_dset_str = f'{LISTSEP}'.join([hdf5_dataset, hdf5_dataset_idx])
-    hdf5_str = f'{HASHSEP}'.join([hdf5_file_str, hdf5_dset_str])
-    full_str = f'{SLICESEP}'.join([hdf5_str, shape_str])
-    db_val = full_str.encode()
-    return db_val
-
-
 # ----------------------------- db -> raw (python) ----------------------------
 
 
@@ -648,45 +619,6 @@ def hash_data_raw_key_from_db_key(db_key: bytes) -> str:
     raw_key = db_key.decode()
     data_hash = raw_key.replace(HASH, '', 1)
     return data_hash
-
-
-def hash_data_raw_val_from_db_val(db_val: bytes) -> DataHashVal:
-    '''converts an hdf5 data hash db val into an hdf5 data python spec.
-
-    .. Note:: This is the inverse of `hash_data_db_val_from_raw_val()`. Any changes in
-              db value format must be reflected in both functions.
-
-    Parameters
-    ----------
-    db_val : bytestring
-        data hash db value
-
-    Returns
-    -------
-    namedtuple
-        hdf5 data hash specification in DataHashVal named tuple format
-    '''
-    db_str = db_val.decode()
-    hdf5_schema_vals, _, hdf5_dset_vals = db_str.partition(HASHSEP)
-    hdf5_file_schema, hdf5_schema_instance = hdf5_schema_vals.split(LISTSEP)
-
-    hdf5_vals, _, shape_vals = hdf5_dset_vals.rpartition(SLICESEP)
-    hdf5_dataset, hdf5_dataset_idx = hdf5_vals.split(LISTSEP)
-    if shape_vals == '':
-        # if the data is of empty shape -> ()
-        data_shape = ()
-    else:
-        data_shape_val = [int(dim) for dim in shape_vals.split(' ')]
-        data_shape = tuple(data_shape_val)
-
-    raw_val = DataHashVal(
-        hdf5_file_schema,
-        hdf5_schema_instance,
-        hdf5_dataset,
-        hdf5_dataset_idx,
-        data_shape)
-
-    return raw_val
 
 
 '''

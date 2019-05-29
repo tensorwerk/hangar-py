@@ -20,7 +20,7 @@ def reset_singletons(monkeypatch):
             env._close_environments()
         except Exception:
             pass
-    for fd in hangar.hdf5_store.FileHandlesSingleton._instances.values():
+    for fd in hangar.backends.hdf5.HDF5_00_FileHandlesSingleton._instances.values():
         try:
             fd.close(mode='a')
         except Exception:
@@ -31,7 +31,7 @@ def reset_singletons(monkeypatch):
             pass
     hangar.context.TxnRegisterSingleton._instances = {}
     hangar.context.EnvironmentsSingleton._instances = {}
-    hangar.hdf5_store.FileHandlesSingleton._instances = {}
+    hangar.backends.hdf5.HDF5_00_FileHandlesSingleton._instances = {}
 
 
 @pytest.fixture()
@@ -43,7 +43,7 @@ def managed_tmpdir(tmp_path):
             env._close_environments()
         except Exception:
             pass
-    for fd in hangar.hdf5_store.FileHandlesSingleton._instances.values():
+    for fd in hangar.backends.hdf5.HDF5_00_FileHandlesSingleton._instances.values():
         try:
             fd.close(mode='a')
         except Exception:

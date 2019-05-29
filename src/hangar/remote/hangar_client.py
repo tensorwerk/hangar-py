@@ -18,7 +18,8 @@ from .header_manipulator_client_interceptor import header_adder_interceptor
 from .. import config
 from ..context import Environments
 from ..context import TxnRegister
-from ..hdf5_store import FileHandles
+from ..backends.hdf5 import HDF5_00_FileHandles
+from ..backends.selection import backend_encoder, backend_decoder
 from ..records import commiting
 from ..records import hashs
 from ..records import heads
@@ -50,7 +51,7 @@ class HangarClient(object):
                  auth_username: str = '', auth_password: str = ''):
 
         self.env = envs
-        self.fs = FileHandles(repo_path=self.env.repo_path)
+        self.fs = HDF5_00_FileHandles(repo_path=self.env.repo_path)
         self.fs.open(self.env.repo_path, 'r')
 
         self.header_adder_int = header_adder_interceptor(auth_username, auth_password)
@@ -245,12 +246,18 @@ class HangarClient(object):
                     schema_hash=schema_hash,
                     remote_operation=True)
                 hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
-                hashVal = parsing.hash_data_db_val_from_raw_val(
-                    hdf5_file_schema=schema_hash,
-                    hdf5_schema_instance=hdf_instance,
-                    hdf5_dataset=hdf_dset,
-                    hdf5_dataset_idx=hdf_idx,
-                    data_shape=tensor.shape)
+                hashVal = backend_encoder(backend='hdf5_00',
+                                          schema=schema_hash,
+                                          instance=hdf_instance,
+                                          dataset=hdf_dset,
+                                          dataset_idx=hdf_idx,
+                                          shape=tensor.shape)
+                # hashVal = parsing.hash_data_db_val_from_raw_val(
+                #     schema=schema_hash,
+                #     instance=hdf_instance,
+                #     dataset=hdf_dset,
+                #     dataset_idx=hdf_idx,
+                #     shape=tensor.shape)
                 hashTxn.put(hashKey, hashVal)
                 save_bar.update(1)
         finally:
@@ -271,9 +278,10 @@ class HangarClient(object):
                 if not hashVal:
                     raise KeyError(f'No hash record with key: {hashKey}')
 
-                hash_val = parsing.hash_data_raw_val_from_db_val(hashVal)
-                schema_hash = hash_val.hdf5_file_schema
-                data_shape = hash_val.data_shape
+                # hash_val = parsing.hash_data_raw_val_from_db_val(hashVal)
+                hash_val = backend_decoder(hashVal)
+                schema_hash = hash_val.schema
+                data_shape = hash_val.shape
                 hashSchemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
                 schemaVal = hashTxn.get(hashSchemaKey, default=False)
                 if not schemaVal:

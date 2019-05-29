@@ -411,7 +411,8 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
             schema_is_var=schemaSpec.schema_is_var,
             schema_max_shape=schemaSpec.schema_max_shape,
             schema_dtype=schemaSpec.schema_dtype,
-            schema_is_named=schemaSpec.schema_is_named)
+            schema_is_named=schemaSpec.schema_is_named,
+            schema_default_backend=schemaSpec.schema_default_backend)
         entries.append((schemaKey, schemaVal))
 
         dataRecs = patchedRecs['datasets'][dsetn]['data']

@@ -5,6 +5,7 @@ from os.path import join as pjoin
 from . import parsing
 from .. import config
 from ..context import TxnRegister
+from ..backends.selection import backend_decoder
 
 logger = logging.getLogger(__name__)
 
@@ -105,9 +106,9 @@ class HashQuery(object):
     def list_all_schema_and_instances(self):
         unique = set()
         recs = self._traverse_all_hash_records(keys=False, vals=True)
-        formatted = map(parsing.hash_data_raw_val_from_db_val, recs)
+        formatted = map(backend_decoder, recs)
         for v in formatted:
-            unique.add((v.hdf5_file_schema, v.hdf5_schema_instance))
+            unique.add((v.schema, v.instance))
         return list(unique)
 
     def list_all_schema_keys_raw(self):
