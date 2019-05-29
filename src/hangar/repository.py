@@ -142,6 +142,11 @@ class Repository(object):
             name parameter if it is set. Note: this only will be used in
             non-writeable checkouts, defaults to ''
 
+        Raises
+        ------
+        ValueError
+            If the value of `write` argument is not boolean
+
         Returns
         -------
         object
@@ -161,7 +166,7 @@ class Repository(object):
                     branchenv=self._env.branchenv,
                     stagehashenv=self._env.stagehashenv)
                 return co
-            else:
+            elif write is False:
                 commit_hash = self._env.checkout_commit(
                     branch_name=branch_name, commit=commit)
 
@@ -174,6 +179,8 @@ class Repository(object):
                     refenv=self._env.refenv,
                     commit=commit_hash)
                 return co
+            else:
+                raise ValueError("Argument `write` only takes True or False as value")
         except (RuntimeError, ValueError) as e:
             logger.error(e, exc_info=False, extra=self._env.__dict__)
             raise e from None
