@@ -280,11 +280,9 @@ class DatasetDataReader(object):
             dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
             hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = self._hashTxn.get(hashKey)
-            hashVal = backend_decoder(hash_ref)
             backend = backend_decoder_name(hash_ref)
-            # hashVal = parsing.hash_data_raw_val_from_db_val(hash_ref)
             # This is a tight enough loop where keyword args can impact performance
-            data = self._fs[backend].read_data(hashVal, self._mode, self._schema_dtype_num)
+            data = self._fs[backend].read_data(hash_ref, self._mode, self._schema_dtype_num)
 
         except KeyError as e:
             logger.error(e, exc_info=False)
@@ -322,7 +320,7 @@ class DatasetDataWriter(DatasetDataReader):
         '''Internal method used to open handles to the backing store.
         '''
         if self._default_schema_backend == 'hdf5_00':
-            if self._default_schema_hash not in self._fs['hdf5_00'].wHands:
+            if self._default_schema_hash not in self._fs['hdf5_00'].wFp:
                 sample_array = np.zeros(self._schema_max_shape, dtype=np.typeDict[self._schema_dtype_num])
                 self._fs['hdf5_00'].create_schema(self._path, self._default_schema_hash, sample_array)
             self._fs['hdf5_00'].open(self._path, self._mode)
@@ -480,18 +478,8 @@ class DatasetDataWriter(DatasetDataReader):
             # write new data if data hash does not exist
             existingHashVal = self._hashTxn.get(hashKey, default=False)
             if existingHashVal is False:
-                instance, dset, idx = self._fs[self._default_schema_backend].add_tensor_data(
-                    data, self._default_schema_hash)
-                # hdf_instance, hdf_dset, hdf_idx = self._fs.add_tensor_data(
-                #     data, self._default_schema_hash)
-                hashVal = backend_encoder(backend=self._default_schema_backend,
-                                          schema=self._default_schema_hash,
-                                          instance=instance,
-                                          dataset=dset,
-                                          dataset_idx=idx,
-                                          shape=data.shape)
-                # hashVal = parsing.hash_data_db_val_from_raw_val(
-                # self._default_schema_hash, hdf_instance, hdf_dset, hdf_idx, data.shape)
+                hashVal = self._fs[self._default_schema_backend].add_tensor_data(
+                        array=data, dhash=full_hash, shash=self._default_schema_hash)
                 self._hashTxn.put(hashKey, hashVal)
                 self._stageHashTxn.put(hashKey, hashVal)
 
@@ -1121,7 +1109,7 @@ class Datasets(object):
         datatxn = TxnRegister().begin_writer_txn(self._dataenv)
         try:
             if dset_name not in self._datasets:
-                msg = f'HANGAR KEY ERROR:: Cannot remove: {dset_name}. No dset exists with that name.'
+                msg = f'HANGAR KEY ERROR:: Cannot remove: {dset_name}. Key does not exist.'
                 raise KeyError(msg)
             self._datasets[dset_name]._close()
             self._datasets.__delitem__(dset_name)
@@ -1201,7 +1189,7 @@ class Datasets(object):
                 hashenv=hashenv,
                 dataenv=stageenv,
                 mode='a',
-                default_schema_backend=schemaSpec.default_schema_backend)
+                default_schema_backend=schemaSpec.schema_default_backend)
 
         return cls(repo_pth, datasets, hashenv, stageenv, stagehashenv, 'a')
 
