@@ -571,20 +571,6 @@ These assumptions will change soon, and it is recomended to start here when
 begining development on any of the above features.
 '''
 
-# ------------------- Named Tuple Specifications Used -------------------------
-
-# DataHashVal = namedtuple(
-#     typename='DataHashVal',
-#     field_names=['hdf5_file_schema', 'hdf5_schema_instance',
-#                  'hdf5_dataset', 'hdf5_dataset_idx', 'data_shape'])
-
-# DataHashVal = namedtuple(
-#     typename='DataHashVal',
-#     field_names=['schema', 'instance', 'dataset', 'dataset_idx', 'shape'])
-
-# # match and remove the following characters: '['   ']'   '('   ')'   ','
-# DataShapeReplacementRegEx = re.compile('[,\(\)\[\]]')
-
 '''
 Data Hash parsing functions used to convert db key/val to raw pyhon obj
 -----------------------------------------------------------------------

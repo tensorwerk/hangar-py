@@ -1,7 +1,9 @@
 import logging
 from os.path import join as pjoin
 from uuid import uuid4
+from typing import MutableMapping
 import weakref
+import warnings
 
 import numpy as np
 
@@ -546,13 +548,7 @@ class WriterCheckout(object):
             logger.error(e, exc_info=False)
             raise e
 
-        for dsetHandle in self._datasets.values():
-            try:
-                dsetHandle._close()
-            except KeyError:
-                pass
-        hashs.remove_unused_dataset_hdf5(self._repo_path, self._stagehashenv)
-
+        self._datasets._close()
         commit_hash = commiting.commit_records(
             message=commit_message,
             branchenv=self._branchenv,
@@ -563,9 +559,7 @@ class WriterCheckout(object):
         hashs.clear_stage_hash_records(self._stagehashenv)
         # reopen the hdf5 file handles so that we don't have to invalidate
         # previous weakproxy references like if we just called `__setup`
-        for dsetH in self._datasets.values():
-            dsetH._setup_file_access()
-
+        self._datasets._open()
         logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
 
@@ -602,14 +596,10 @@ class WriterCheckout(object):
             logger.error(e, exc_info=False)
             raise e
 
-        for dsetHandle in self._datasets.values():
-            try:
-                dsetHandle._close()
-            except KeyError:
-                pass
+        self._datasets._close()
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
-        hashs.remove_unused_dataset_hdf5(self._repo_path, self._stagehashenv)
+        hashs.remove_unused(self._repo_path, self._stagehashenv)
 
         branch_head = heads.get_staging_branch_head(self._branchenv)
         head_commit = heads.get_branch_head_commit(self._branchenv, branch_head)
@@ -630,11 +620,7 @@ class WriterCheckout(object):
         writes until it has been manually cleared.
         '''
         self.__acquire_writer_lock()
-        for dsetHandle in self._datasets.values():
-            try:
-                dsetHandle._close()
-            except KeyError:
-                pass
+        self._datasets._close()
         del self._datasets
         del self._metadata
         del self._differ

@@ -325,7 +325,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
                 hashdir = os.path.join(self.data_dir, digest[:2])
-                fname = os.path.join(hashdir, f'{digest}.npz')
+                fname = os.path.join(hashdir, f'{digest}.npy')
                 hashVal = f'{schema_hash} {fname}'.encode()
                 if not os.path.isdir(hashdir):
                     os.makedirs(hashdir)

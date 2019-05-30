@@ -3,6 +3,7 @@ import os
 import tempfile
 import time
 from os.path import join as pjoin
+import shutil
 
 import lmdb
 
@@ -10,6 +11,7 @@ from . import heads, parsing
 from .. import config
 from ..context import TxnRegister
 from .queries import RecordQuery
+from ..utils import symlink_rel
 
 
 '''
@@ -41,7 +43,6 @@ def check_commit_hash_in_history(refenv, commit_hash):
     finally:
         TxnRegister().abort_reader_txn(refenv)
     return isCommitInHistory
-
 
 
 def get_commit_spec(refenv, commit_hash):
@@ -549,31 +550,32 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
     STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
     store_dir = pjoin(repo_path, STORE_DATA_DIR)
 
-    if remote_operation:
-        REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
-        process_dir = pjoin(repo_path, REMOTE_DATA_DIR)
-    else:
+    if not remote_operation:
         STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
         process_dir = pjoin(repo_path, STAGE_DATA_DIR)
+    else:
+        REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
+        process_dir = pjoin(repo_path, REMOTE_DATA_DIR)
 
-    p_schema_dirs = [x for x in os.listdir(process_dir) if x.startswith('hdf_')]
-    for p_schema_dir in p_schema_dirs:
-        schema_dir_pth = pjoin(process_dir, p_schema_dir)
-        p_files = [x for x in os.listdir(schema_dir_pth) if x.endswith('.hdf5')]
-        store_schema_dir_pth = pjoin(store_dir, p_schema_dir)
+    dirs_to_make, symlinks_to_make = [], []
+    for root, dirs, files in os.walk(process_dir):
+        for d in dirs:
+            dirs_to_make.append(os.path.relpath(pjoin(root, d), process_dir))
+        for f in files:
+            store_file_pth = pjoin(store_dir, os.path.relpath(pjoin(root, f), process_dir))
+            link_file_pth = os.path.normpath(pjoin(root, os.readlink(pjoin(root, f))))
+            symlinks_to_make.append((link_file_pth, store_file_pth))
 
-        for p_file in p_files:
-            if not os.path.isdir(store_schema_dir_pth):
-                os.makedirs(store_schema_dir_pth)
-            p_fp = pjoin(schema_dir_pth, p_file)
-            p_relpth = os.readlink(p_fp)
-            store_fp = pjoin(store_schema_dir_pth, p_file)
-            os.symlink(p_relpth, store_fp)
-            os.remove(p_fp)
+    for d in dirs_to_make:
+        dpth = pjoin(store_dir, d)
+        if not os.path.isdir(dpth):
+            os.makedirs(dpth)
+    for src, dest in symlinks_to_make:
+        symlink_rel(src, dest)
 
-        os.removedirs(schema_dir_pth)
-
-    os.makedirs(process_dir, exist_ok=True)
+    # reset before releasing control.
+    shutil.rmtree(process_dir)
+    os.makedirs(process_dir)
 
 
 def list_all_commits(refenv):

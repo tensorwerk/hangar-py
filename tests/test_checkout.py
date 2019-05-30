@@ -38,20 +38,6 @@ class TestCheckout(object):
             co.metadata.add('a', 'b')
         co.close()
 
-    @pytest.mark.skipif(platform.system() == 'Windows',
-        reason='Files cannot be removed when process is using them on windows systems')
-    def test_write_after_repo_deletion(self, written_repo, array5by7):
-        co = written_repo.checkout(write=True)
-        shutil.rmtree(written_repo._repo_path)
-        with pytest.raises(OSError):
-            co.datasets.init_dataset('dset', prototype=array5by7)
-        co.metadata.add('a', 'b')
-        dset = co.datasets['_dset']
-        dset['1'] = array5by7
-        with pytest.raises(OSError):
-            co.commit('this is a commit message')
-        co.close()
-
     def test_writer_dset_obj_not_accessible_after_close(self, written_repo):
         repo = written_repo
         co = repo.checkout(write=True)
@@ -240,9 +226,10 @@ class TestCheckout(object):
         with pytest.raises(PermissionError):
             co.metadata.add('a', 'b')
 
-    def test_operate_on_dataset_samples_after_commiting_but_not_closing_checkout(self, repo, array5by7):
+    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    def test_operate_on_dataset_samples_after_commiting_but_not_closing_checkout(self, dset_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset_backend)
         dset.add(array5by7, '1')
         co.commit('hi')
 
@@ -271,14 +258,16 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             md['hello']
 
-    def test_operate_on_datasets_after_commiting_but_not_closing_checkout(self, repo, array5by7):
+    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    def test_operate_on_datasets_after_commiting_but_not_closing_checkout(self, dset1_backend, dset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         dsets = co.datasets
-        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset1_backend)
         dset.add(array5by7, '1')
         co.commit('hi')
 
-        dset2 = co.datasets.init_dataset('arange', prototype=np.arange(50))
+        dset2 = co.datasets.init_dataset('arange', prototype=np.arange(50), backend=dset2_backend)
         dset2['0'] = np.arange(50)
         co.commit('hello 2')
         assert np.allclose(dset2['0'], np.arange(50))

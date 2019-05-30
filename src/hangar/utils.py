@@ -4,8 +4,17 @@ from functools import partial
 from contextlib import contextmanager
 from datetime import timedelta
 from numbers import Number
+import random
+import string
 
 import wrapt
+
+
+def random_string(stringLength=10):
+    '''Generate a random string of fixed length
+    '''
+    letters = string.ascii_lowercase + string.ascii_uppercase + string.digits
+    return ''.join(random.choice(letters) for i in range(stringLength))
 
 
 def cm_weakref_obj_proxy(obj):
@@ -34,6 +43,20 @@ def cm_weakref_obj_proxy(obj):
     setattr(wr, '__exit__', partial(obj.__class__.__exit__, wr))
     obj_proxy = wrapt.ObjectProxy(wr)
     return obj_proxy
+
+
+def symlink_rel(src: os.PathLike, dst: os.PathLike):
+    '''Create symbolic links which actually work like they should
+
+    Parameters
+    ----------
+    src : os.PathLike
+        create a symbolic link pointic to src
+    dst : os.PathLike
+        create a link named dst
+    '''
+    rel_path_src = os.path.relpath(src, os.path.dirname(dst))
+    os.symlink(rel_path_src, dst)
 
 
 def is_ascii_alnum(str_data: str):

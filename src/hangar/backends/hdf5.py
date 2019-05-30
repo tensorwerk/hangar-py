@@ -1,52 +1,65 @@
+import logging
 import math
 import os
-import subprocess
+from os.path import splitext as psplitext
 import re
-from collections import namedtuple
+import subprocess
+from collections import namedtuple, ChainMap
 from os.path import join as pjoin
-import logging
+from functools import partial
 
 import h5py
 import numpy as np
 
-from .. import __version__
-from .. import config
-from ..utils import find_next_prime
+from .. import __version__, config
+from ..utils import find_next_prime, symlink_rel, random_string
 
 logger = logging.getLogger(__name__)
-
 
 SEP = config.get('hangar.seps.key')
 LISTSEP = config.get('hangar.seps.list')
 SLICESEP = config.get('hangar.seps.slice')
 HASHSEP = config.get('hangar.seps.hash')
 
+STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
+REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
+DATA_DIR = config.get('hangar.repository.data_dir')
+STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
+
+HDF_CHUNK_OPTS = config.get('hangar.hdf5.dataset.chunking')
+HDF_DSET_CONTENTS = config.get('hangar.hdf5.contents')
+HDF_ATTRS = config.get('hangar.hdf5.attributes.keys')
+
+HDF_DSET_FILTERS = config.get('hangar.hdf5.dataset.filters.default')
+if HDF_DSET_FILTERS['complib'].startswith('blosc'):
+    bloscFilterAvail = h5py.h5z.filter_avail(32001)
+    if not bloscFilterAvail:
+        HDF_DSET_FILTERS = config.get('hangar.hdf5.dataset.filters.backup')
+
 
 class HDF5_00_Parser(object):
 
-    __slots__ = ['FmtCode', 'FmtCodeIdx', 'DataShapeReplacementRE', 'DataHashSpec']
+    __slots__ = ['FmtBackend', 'FmtCode', 'FmtCodeIdx', 'ShapeFmtRE', 'DataHashSpec']
 
     def __init__(self):
 
-        self.FmtCode = f'00{SEP}'
-        self.FmtCodeIdx = len(self.FmtCode)
+        self.FmtBackend = 'hdf5_00'
+        self.FmtCode = '00'
+        self.FmtCodeIdx = 3
 
         # match and remove the following characters: '['   ']'   '('   ')'   ','
-        self.DataShapeReplacementRE = re.compile('[,\(\)\[\]]')
-
+        self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
         self.DataHashSpec = namedtuple(
-            typename='DataHashVal',
-            field_names=['schema', 'instance', 'dataset', 'dataset_idx', 'shape'])
+            typename='DataHashSpec',
+            field_names=['backend', 'uid', 'dataset', 'dataset_idx', 'shape'])
 
-    def encode(self, schema, instance, dataset, dataset_idx, shape) -> bytes:
+    def encode(self, uid, dataset, dataset_idx, shape) -> bytes:
         '''converts the hdf5 data has spec to an appropriate db value
 
         Parameters
         ----------
-        schema : str
-            hdf5 schema hash to find this data piece in.
-        instance : str
-            file name (schema instance) of the hdf5 file to find this data piece in.
+        uid : str
+            the file name prefix which the data is written to.
         dataset : str
             collection (ie. hdf5 dataset) name to find find this data piece.
         dataset_idx : int or str
@@ -61,12 +74,11 @@ class HDF5_00_Parser(object):
         bytes
             hash data db value recording all input specifications.
         '''
-        out_str = f'{self.FmtCode}'\
-                  f'{schema}{LISTSEP}{instance}'\
+        out_str = f'{self.FmtCode}{SEP}{uid}'\
                   f'{HASHSEP}'\
                   f'{dataset}{LISTSEP}{dataset_idx}'\
                   f'{SLICESEP}'\
-                  f'{self.DataShapeReplacementRE.sub("", str(shape))}'
+                  f'{self.ShapeFmtRE.sub("", str(shape))}'
         return out_str.encode()
 
     def decode(self, db_val: bytes) -> namedtuple:
@@ -80,33 +92,24 @@ class HDF5_00_Parser(object):
         Returns
         -------
         namedtuple
-            hdf5 data hash specification in DataHashVal named tuple format
+            hdf5 data hash specification containing `backend`, `schema`,
+            `instance`, `dataset`, `dataset_idx`, `shape`
         '''
         db_str = db_val.decode()[self.FmtCodeIdx:]
 
-        schema_vals, _, dset_vals = db_str.partition(HASHSEP)
-        schema, instance = schema_vals.split(LISTSEP)
+        uid, _, dset_vals = db_str.partition(HASHSEP)
 
         dataset_vs, _, shape_vs = dset_vals.rpartition(SLICESEP)
         dataset, dataset_idx = dataset_vs.split(LISTSEP)
         # if the data is of empty shape -> ()
         shape = () if shape_vs == '' else tuple([int(x) for x in shape_vs.split(LISTSEP)])
 
-        raw_val = self.DataHashSpec(schema=schema,
-                                    instance=instance,
+        raw_val = self.DataHashSpec(backend=self.FmtBackend,
+                                    uid=uid,
                                     dataset=dataset,
                                     dataset_idx=dataset_idx,
                                     shape=shape)
         return raw_val
-
-
-class HDF5_00_FileHandlesSingleton(type):
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        repo_pth = kwargs['repo_path']
-        if repo_pth not in cls._instances:
-            cls._instances[repo_pth] = super(HDF5_00_FileHandlesSingleton, cls).__call__(*args, **kwargs)
-        return cls._instances[repo_pth]
 
 
 '''
@@ -115,7 +118,7 @@ Dense Array Methods
 '''
 
 
-class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
+class HDF5_00_FileHandles(object):
     '''Singleton to manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
@@ -123,30 +126,41 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
     write to the same dataset schema.
     '''
 
-    def __init__(self, repo_path):
+    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
+        self.schema_shape = schema_shape
+        self.schema_dtype = schema_dtype
+
         self.rFp = {}
         self.wFp = {}
-        self.hMaxSize = {}
-        self.hNextPath = {}
-        self.hIdx = {}
-        self.hColsRemain = {}
-        self.hNextInstance = {}
+        self.Fp = ChainMap(self.rFp, self.wFp)
+
+        self.mode: str = None
+        self.hIdx: int = None
+        self.w_uid: str = None
+        self.hMaxSize: int = None
+        self.hNextPath: int = None
+        self.hColsRemain: int = None
+
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
         self.fmtParser = HDF5_00_Parser()
+
+        self.STAGEDIR = pjoin(self.repo_path, STAGE_DATA_DIR, self.fmtParser.FmtCode)
+        self.REMOTEDIR = pjoin(self.repo_path, REMOTE_DATA_DIR, self.fmtParser.FmtCode)
+        self.DATADIR = pjoin(self.repo_path, DATA_DIR, self.fmtParser.FmtCode)
+        self.STOREDIR = pjoin(self.repo_path, STORE_DATA_DIR, self.fmtParser.FmtCode)
+        if not os.path.isdir(self.DATADIR):
+            os.makedirs(self.DATADIR)
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
-        for schema in list(self.wFp.keys()):
-            for instance in list(self.wFp[schema].keys()):
-                self.wFp[schema][instance]['/'].attrs.modify(
-                    'next_dset', (self.hNextPath[schema][instance], self.hIdx[schema][instance]))
-                self.wFp[schema][instance]['/'].attrs.modify(
-                    'num_collections_remaining', self.hColsRemain[schema][instance])
-                self.wFp[schema][instance].flush()
+        if self.w_uid in self.wFp:
+            self.wFp[self.w_uid]['/'].attrs.modify('next_dset', (self.hNextPath, self.hIdx))
+            self.wFp[self.w_uid]['/'].attrs.modify('num_collections_remaining', self.hColsRemain)
+            self.wFp[self.w_uid].flush()
 
     @staticmethod
     def _dataset_opts(complib, complevel, shuffle, fletcher32):
@@ -237,17 +251,15 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
 
         return (chunk_shape, chunk_nbytes)
 
-    @staticmethod
-    def create_schema(repo_path: str, schema_hash: str, sample_array: np.ndarray,
-                      *, remote_operation: bool = False) -> h5py.File:
+    def create_schema(self, *, remote_operation: bool = False) -> h5py.File:
         '''stores the shape and dtype as the schema of a dataset.
 
         Parameters
         ----------
         repo_path : str
             path where the repository files can be accessed on the local disk.
-        schema_hash : str
-            hash of the dataset schema
+        uid : str
+            file name prefix for the hdf5 file
         sample_array : np.ndarray
             sample input tensor (representitative of all data which will fill the dset) to
             extract the shape and dtype from.
@@ -285,46 +297,10 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
             http://docs.h5py.org/en/stable/high/file.html#chunk-cache
 
         '''
-        HDF_DSET_FILTERS = config.get('hangar.hdf5.dataset.filters.default')
-        if HDF_DSET_FILTERS['complib'].startswith('blosc'):
-            bloscFilterAvail = h5py.h5z.filter_avail(32001)
-            if not bloscFilterAvail:
-                HDF_DSET_FILTERS = config.get('hangar.hdf5.dataset.filters.backup')
-
-        HDF_CHUNK_OPTS = config.get('hangar.hdf5.dataset.chunking')
-        HDF_DSET_CONTENTS = config.get('hangar.hdf5.contents')
-        HDF_ATTRS = config.get('hangar.hdf5.attributes.keys')
-
-        # ---------------------- Directory Access & Creation  ------------------
-
-        STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
-        STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-        REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
-        DATA_DIR = config.get('hangar.repository.data_dir')
-
-        store_dir = pjoin(repo_path, STORE_DATA_DIR, f'hdf_{schema_hash}')
-        stage_dir = pjoin(repo_path, STAGE_DATA_DIR, f'hdf_{schema_hash}')
-        remote_dir = pjoin(repo_path, REMOTE_DATA_DIR, f'hdf_{schema_hash}')
-        data_dir = pjoin(repo_path, DATA_DIR)
-
-        num_schemas = 0
-        if os.path.isdir(store_dir):
-            num_schemas += len([x for x in os.listdir(store_dir) if x.endswith('.hdf5')])
-        if os.path.isdir(stage_dir):
-            num_schemas += len([x for x in os.listdir(stage_dir) if x.endswith('.hdf5')])
-        if os.path.isdir(remote_dir):
-            num_schemas += len([x for x in os.listdir(remote_dir) if x.endswith('.hdf5')])
-
-        if not remote_operation and not os.path.isdir(stage_dir):
-            os.makedirs(stage_dir)
-        elif remote_operation and not os.path.isdir(remote_dir):
-            os.makedirs(remote_dir)
-
-        schema_just = str(num_schemas).rjust(3, '0')
-        file_path = pjoin(data_dir, f'hdf_{schema_hash}_{schema_just}.hdf5')
 
         # -------------------- Chunk & RDCC Vals ------------------------------
 
+        sample_array = np.zeros(self.schema_shape, dtype=self.schema_dtype)
         chunk_shape, chunk_nbytes = __class__._chunk_opts(
             sample_array=sample_array,
             max_chunk_nbytes=HDF_CHUNK_OPTS['max_nbytes'])
@@ -340,6 +316,8 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
 
         # ---------------------------- File Creation --------------------------
 
+        uid = random_string()
+        file_path = pjoin(self.DATADIR, f'{uid}.hdf5')
         logger.debug(f'creating: {file_path}')
         fh = h5py.File(
             file_path,
@@ -350,13 +328,11 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
             rdcc_nslots=rdcc_nslots_prime_val)
 
         if remote_operation:
-            symlink_file_path = pjoin(remote_dir, f'{schema_just}.hdf5')
-            relpath = os.path.relpath(file_path, start=remote_dir)
+            symlink_file_path = pjoin(self.REMOTEDIR, f'{uid}.hdf5')
         else:
-            symlink_file_path = pjoin(stage_dir, f'{schema_just}.hdf5')
-            relpath = os.path.relpath(file_path, start=stage_dir)
+            symlink_file_path = pjoin(self.STAGEDIR, f'{uid}.hdf5')
 
-        os.symlink(relpath, symlink_file_path)
+        symlink_rel(file_path, symlink_file_path)
 
         # ----------------------- Dataset Creation ----------------------------
 
@@ -374,12 +350,9 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
         # ---------------------- Attribute Config Vals ------------------------
 
         fh['/'].attrs[HDF_ATTRS['hangar_version']] = __version__
-        fh['/'].attrs[HDF_ATTRS['schema_hash']] = schema_hash
-        fh['/'].attrs[HDF_ATTRS['schema_instance']] = num_schemas
         fh['/'].attrs[HDF_ATTRS['schema_shape']] = sample_array.shape
         fh['/'].attrs[HDF_ATTRS['schema_dtype']] = sample_array.dtype.num
         fh['/'].attrs[HDF_ATTRS['next_location']] = (0, 0)
-        fh['/'].attrs[HDF_ATTRS['next_instance']] = schema_just
         fh['/'].attrs[HDF_ATTRS['collection_max_size']] = HDF_DSET_CONTENTS['collection_size']
         fh['/'].attrs[HDF_ATTRS['collection_total']] = HDF_DSET_CONTENTS['num_collections']
         fh['/'].attrs[HDF_ATTRS['collections_remaining']] = HDF_DSET_CONTENTS['num_collections']
@@ -400,39 +373,19 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
             fh.swmr_mode = True
         except ValueError:
             assert fh.swmr_mode is True
-        return fh
 
-    @staticmethod
-    def clear_consistency_flag(file_path: str) -> bool:
-        '''Creates a subprocess to clear the hdf5 swmr consistency flag
+        self.w_uid = uid
+        self.wFp[uid] = fh
+        self.hNextPath = 0
+        self.hIdx = 0
+        self.hColsRemain = HDF_DSET_CONTENTS['num_collections']
+        self.hMaxSize = HDF_DSET_CONTENTS['collection_size']
 
-        This is needed on non-standard file close operations. generally not
-        an issue here because we use context managers to pretty much handle all
-        access operations.
-
-        Parameters
-        ----------
-        file_path : str
-            path to the hdf5 file which needs the consistency flag cleared
-
-        Returns
-        -------
-        bool
-            True on success, False on error
-        '''
-        ret = subprocess.call(['h5clear', '-s', f'{file_path}'])
-        if ret == 0:
-            return True
-        else:
-            return False
-
-    def open(self, repo_path: str, mode: str, *, remote_operation: bool = False):
+    def open(self, mode: str, *, remote_operation: bool = False):
         '''Open an hdf5 file handle in the Handler Singleton
 
         Parameters
         ----------
-        repo_path : str
-            directory path to the repository on disk
         mode : str
             one of `r` or `a` for read only / read-write.
         repote_operation : optional, kwarg only, bool
@@ -442,117 +395,102 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
             write operations use the stage data dir and read operations use data store
             dir)
         '''
+        self.mode = mode
+        if self.mode == 'a':
+            process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
+            if not os.path.isdir(process_dir):
+                os.makedirs(process_dir)
 
-        if remote_operation:
-            REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
-            process_dir = pjoin(repo_path, REMOTE_DATA_DIR)
-        else:
-            STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-            process_dir = pjoin(repo_path, STAGE_DATA_DIR)
-
-        process_schemas = [x for x in os.listdir(process_dir) if x.startswith('hdf_')]
-
-        if mode == 'a':
-            for p_schema in process_schemas:
-                schema_pth = pjoin(process_dir, p_schema)
-                schHash = p_schema.replace('hdf_', '', 1)
-                p_files = [x for x in os.listdir(schema_pth) if x.endswith('.hdf5')]
-                latest_p = sorted(p_files, reverse=True)
-
-                for idx, p_file in enumerate(latest_p):
-                    file_pth = pjoin(schema_pth, p_file)
-                    pInstance = p_file.replace('.hdf5', '')
-
-                    if schHash not in self.wFp:
-                        self.wFp[schHash] = {}
-                        self.hNextPath[schHash] = {}
-                        self.hIdx[schHash] = {}
-                        self.hMaxSize[schHash] = {}
-                        self.hColsRemain[schHash] = {}
-
-                    if pInstance not in self.wFp[schHash]:
-                        handle = h5py.File(file_pth, 'a', libver='latest')
-                        handle.swmr_mode = True
-                        next_dset = handle['/'].attrs['next_dset']
-                        colsRemaining = int(handle['/'].attrs['num_collections_remaining'])
-
-                        self.wFp[schHash][pInstance] = handle
-                        self.hNextPath[schHash][pInstance] = next_dset[0]
-                        self.hIdx[schHash][pInstance] = next_dset[1]
-                        self.hMaxSize[schHash][pInstance] = handle['/'].attrs['max_size']
-                        self.hColsRemain[schHash][pInstance] = colsRemaining
-                        if idx == 0:
-                            self.hNextInstance[schHash] = pInstance
+            process_uids = [x for x in os.listdir(process_dir) if x.endswith('.hdf5')]
+            for uid in process_uids:
+                file_pth = pjoin(process_dir, f'{uid}.hdf5')
+                self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
 
         if not remote_operation:
-            STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
-            store_dir = pjoin(repo_path, STORE_DATA_DIR)
-            store_schemas = [x for x in os.listdir(store_dir) if x.startswith('hdf_')]
+            if not os.path.isdir(self.STOREDIR):
+                return
+            store_uids = [x for x in os.listdir(self.STOREDIR) if x.endswith('.hdf5')]
+            for uid in store_uids:
+                file_pth = pjoin(self.STOREDIR, f'{uid}.hdf5')
+                self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
 
-            for store_schema in store_schemas:
-                schema_pth = pjoin(store_dir, store_schema)
-                schHash = store_schema.replace('hdf_', '', 1)
-                store_files = [x for x in os.listdir(schema_pth) if x.endswith('.hdf5')]
-
-                for store_file in store_files:
-                    schInstance = store_file.replace('.hdf5', '')
-                    file_pth = pjoin(schema_pth, store_file)
-                    if schHash not in self.rFp:
-                        self.rFp[schHash] = {}
-                    if schInstance not in self.rFp[schHash]:
-                        handle = h5py.File(file_pth, 'r', swmr=True, libver='latest')
-                        self.rFp[schHash][schInstance] = handle
-
-    def close(self, mode):
+    def close(self):
         '''Close a file handle after writes have been completed
 
         behavior changes depending on write-enable or read-only file
-
-        Parameters
-        ----------
-        mode : str
-            one of `r` or `a` specifying the mode which the file was opened in
 
         Returns
         -------
         bool
             True if success, otherwise False.
         '''
-        if mode == 'a':
-            for schema in list(self.wFp.keys()):
-                for instance in list(self.wFp[schema].keys()):
-                    self.wFp[schema][instance]['/'].attrs.modify(
-                        'next_dset', (self.hNextPath[schema][instance], self.hIdx[schema][instance]))
-                    self.wFp[schema][instance]['/'].attrs.modify(
-                        'num_collections_remaining', self.hColsRemain[schema][instance])
-
-                    self.wFp[schema][instance].flush()
-                    self.wFp[schema][instance].close()
-
-                self.hNextInstance.__delitem__(schema)
-                self.wFp.__delitem__(schema)
-                self.hMaxSize.__delitem__(schema)
-                self.hNextPath.__delitem__(schema)
-                self.hIdx.__delitem__(schema)
-                self.hColsRemain.__delitem__(schema)
+        if self.mode == 'a':
+            if self.w_uid in self.wFp:
+                self.wFp[self.w_uid]['/'].attrs.modify('next_dset', (self.hNextPath, self.hIdx))
+                self.wFp[self.w_uid]['/'].attrs.modify('num_collections_remaining', self.hColsRemain)
+                self.wFp[self.w_uid].flush()
+                self.hMaxSize = None
+                self.hNextPath = None
+                self.hIdx = None
+                self.hColsRemain = None
+                self.w_uid = None
+            for uid in list(self.wFp.keys()):
+                try:
+                    self.wFp[uid].close()
+                except AttributeError:
+                    pass
+                del self.wFp[uid]
         else:
-            for schema in list(self.rFp.keys()):
-                for instance in list(self.rFp[schema].keys()):
-                    self.rFp[schema][instance].close()
-                    self.rFp[schema].__delitem__(instance)
-                self.rFp.__delitem__(schema)
+            for uid in list(self.rFp.keys()):
+                try:
+                    self.rFp[uid].close()
+                except AttributeError:
+                    pass
+                del self.rFp[uid]
 
-    def add_tensor_data(self, array, dhash, shash, *, remote_operation=False):
+    @staticmethod
+    def remove_unused(repo_path, stagehashenv):
+        '''If no changes made to staged hdf files, remove and unlik them from stagedir
+
+        This searchs the stagehashenv file for all schemas & instances, and if any
+        files are present in the stagedir without references in stagehashenv, the
+        symlinks in stagedir and backing data files in datadir are removed.
+
+        Parameters
+        ----------
+        repo_path : str
+            path to the repository on disk
+        stagehashenv : `lmdb.Environment`
+            db where all stage hash additions are recorded
+
+        '''
+        from ..records.hashs import HashQuery
+
+        FmtCode = HDF5_00_Parser().FmtCode
+        FmtBackend = HDF5_00_Parser().FmtBackend
+        dat_dir = pjoin(repo_path, DATA_DIR, FmtCode)
+        stg_dir = pjoin(repo_path, STAGE_DATA_DIR, FmtCode)
+        if not os.path.isdir(stg_dir):
+            return
+
+        stgHashs = HashQuery(stagehashenv).list_all_hash_values()
+        stg_files = set(v.uid for v in stgHashs if v.backend == FmtBackend)
+        stg_uids = set(psplitext(x)[0] for x in os.listdir(stg_dir) if x.endswith('.hdf5'))
+        unused_uids = stg_uids.difference(stg_files)
+
+        for unused_uid in unused_uids:
+            remove_link_pth = pjoin(stg_dir, f'{unused_uid}.hdf5')
+            remove_data_pth = pjoin(dat_dir, f'{unused_uid}.hdf5')
+            os.remove(remove_link_pth)
+            os.remove(remove_data_pth)
+
+    def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
         '''verifies correctness of array data and performs write operation.
 
         Parameters
         ----------
         array : np.ndarray
             tensor to write to group.
-        dhash : str
-            hash of the tensor data to add.
-        shash : str
-            hash value of the schema dset file to place the array in.
         remote_operation : optional, kwarg only, bool
             If this is a remote process which is adding data, any necessary
             hdf5 dataset files will be created in the remote data dir instead
@@ -561,76 +499,58 @@ class HDF5_00_FileHandles(metaclass=HDF5_00_FileHandlesSingleton):
 
         Returns
         -------
-        tuple
+        bytes
             string identifying the collection dataset and collection dim-0 index
             which the array can be accessed at.
         '''
-        nxt_instance = self.hNextInstance[shash]
-        idx = self.hIdx[shash][nxt_instance] + 1
-        nxt_dspth = self.hNextPath[shash][nxt_instance]
-
-        if idx >= self.hMaxSize[shash][nxt_instance]:
-            idx = 0
-            nxt_dspth += 1
-            self.hNextPath[shash][nxt_instance] += 1
-            self.hColsRemain[shash][nxt_instance] -= 1
-
-            if self.hColsRemain[shash][nxt_instance] <= 1:
-                sample_array = self.wFp[shash][nxt_instance]['/0'][(0)]
-                h = self.create_schema(repo_path=self.repo_path,
-                                       schema_hash=shash,
-                                       sample_array=sample_array,
-                                       remote_operation=remote_operation)
-                h.close()
-                self.open(self.repo_path,
-                          mode='a',
-                          remote_operation=remote_operation)
+        if self.w_uid in self.wFp:
+            self.hIdx += 1
+            if self.hIdx >= self.hMaxSize:
+                self.hIdx = 0
+                self.hNextPath += 1
+                self.hColsRemain -= 1
+                if self.hColsRemain <= 1:
+                    self.wFp[self.w_uid]['/'].attrs.modify('next_dset', (self.hNextPath, self.hIdx))
+                    self.wFp[self.w_uid]['/'].attrs.modify('num_collections_remaining', self.hColsRemain)
+                    self.wFp[self.w_uid].flush()
+                    self.create_schema(remote_operation=remote_operation)
+        else:
+            self.create_schema(remote_operation=remote_operation)
 
         srcSlc = None
-        destSlc = (self.slcExpr[idx], *(self.slcExpr[0:x] for x in array.shape))
+        destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
+        self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(array, srcSlc, destSlc)
 
-        self.wFp[shash][nxt_instance][f'/{nxt_dspth}'].write_direct(array, srcSlc, destSlc)
-        self.hIdx[shash][nxt_instance] = idx
-        hashVal = self.fmtParser.encode(schema=shash,
-                                        instance=nxt_instance,
-                                        dataset=nxt_dspth,
-                                        dataset_idx=idx,
+        hashVal = self.fmtParser.encode(uid=self.w_uid,
+                                        dataset=self.hNextPath,
+                                        dataset_idx=self.hIdx,
                                         shape=array.shape)
         return hashVal
 
-    def read_data(self, dbHashVal, mode, dtype):
+    def read_data(self, hashVal: HDF5_00_Parser.DataHashSpec) -> np.ndarray:
         '''Read data from an hdf5 file handle at the specified locations
 
         Parameters
         ----------
-        dbHashVal : bytes
-            Hash specification stored in the DB.
-        mode : str
-            one of 'r' or 'a', indicating which mode this process is opening the file in.
-        dtype : int
-            numeric type code of the output data.
+        hashVal : namedtuple
+            record specification stored in the DB.
 
         Returns
         -------
         np.array
             requested data.
         '''
-        hashVal = self.fmtParser.decode(dbHashVal)
         dsetIdx = int(hashVal.dataset_idx)
         dsetCol = f'/{hashVal.dataset}'
-        fSchema = hashVal.schema
-        fInstance = hashVal.instance
 
         srcSlc = (self.slcExpr[dsetIdx], *(self.slcExpr[0:x] for x in hashVal.shape))
         destSlc = None
-        destArr = np.empty((hashVal.shape), np.typeDict[dtype])
+        destArr = np.empty((hashVal.shape), self.schema_dtype)
 
-        if mode == 'r':
-            self.rFp[fSchema][fInstance][dsetCol].read_direct(destArr, srcSlc, destSlc)
-        else:
-            try:
-                self.rFp[fSchema][fInstance][dsetCol].read_direct(destArr, srcSlc, destSlc)
-            except KeyError:
-                self.wFp[fSchema][fInstance][dsetCol].read_direct(destArr, srcSlc, destSlc)
+        try:
+            self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+        except TypeError:
+            self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
+            self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
 
         return destArr

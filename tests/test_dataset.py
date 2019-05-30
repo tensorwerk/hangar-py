@@ -42,13 +42,14 @@ class TestDataset(object):
         assert dsetOldDefaultSchemaHash == dsetNew._default_schema_hash
         assert dsetOldSchemaUUID == dsetNew._schema_uuid
 
-    def test_remove_dataset(self, written_repo):
+    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    def test_remove_dataset(self, dset_backend, written_repo):
         co = written_repo.checkout(write=True)
         co.datasets.remove_dset('_dset')
         with pytest.raises(KeyError):
             co.datasets.remove_dset('_dset')
 
-        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
+        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64, backend=dset_backend)
         assert len(co.datasets) == 1
         co.datasets.remove_dset('_dset')
         co.commit('this is a commit message')
@@ -57,7 +58,7 @@ class TestDataset(object):
         co = written_repo.checkout(write=True)
         assert len(co.datasets) == 0
 
-        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
+        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64, backend=dset_backend)
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout(write=True)
@@ -67,31 +68,34 @@ class TestDataset(object):
         co.commit('this is a commit message')
         co.close()
 
-    def test_init_again(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    def test_init_again(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        co.datasets.init_dataset('dset', prototype=randomsizedarray)
+        co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         with pytest.raises(LookupError):
-            co.datasets.init_dataset('dset', prototype=randomsizedarray)
+            co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         co.close()
 
-    def test_dataset_with_more_dimension(self, repo):
+    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    def test_dataset_with_more_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
         with pytest.raises(ValueError):
-            co.datasets.init_dataset('dset', shape=shape, dtype=np.int)
+            co.datasets.init_dataset('dset', shape=shape, dtype=np.int, backend=dset_backend)
         shape = [1] * 31
-        dset = co.datasets.init_dataset('dset1', shape=shape, dtype=np.int)
+        dset = co.datasets.init_dataset('dset1', shape=shape, dtype=np.int, backend=dset_backend)
         assert len(dset._schema_max_shape) == 31
         shape = [1] * 32
         with pytest.raises(ValueError):
             # maximum tensor rank must be <= 31
-            co.datasets.init_dataset('dset2', shape=shape, dtype=np.int)
+            co.datasets.init_dataset('dset2', shape=shape, dtype=np.int, backend=dset_backend)
         co.close()
 
-    def test_dataset_with_empty_dimension(self, repo):
+    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    def test_dataset_with_empty_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.array(1, dtype=np.int64)
-        dset = co.datasets.init_dataset('dset1', shape=(), dtype=np.int64)
+        dset = co.datasets.init_dataset('dset1', shape=(), dtype=np.int64, backend=dset_backend)
         dset['1'] = arr
         co.commit('this is a commit message')
         dset = co.datasets.init_dataset('dset2', prototype=arr)
@@ -107,12 +111,15 @@ class TestDataset(object):
 
 class TestDataWithFixedSizedDataset(object):
 
-    def test_iterating_over(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset3_backend", ['hdf5_00', 'numpy_00'])
+    def test_iterating_over(self, dset1_backend, dset2_backend, dset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
-        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
-        dset2 = co.datasets.init_dataset('dset2', shape=(2, 2), dtype=np.int)
-        dset3 = co.datasets.init_dataset('dset3', shape=(3, 4), dtype=np.float32)
+        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray, backend=dset1_backend)
+        dset2 = co.datasets.init_dataset('dset2', shape=(2, 2), dtype=np.int, backend=dset2_backend)
+        dset3 = co.datasets.init_dataset('dset3', shape=(3, 4), dtype=np.float32, backend=dset3_backend)
 
         with dset1, dset2, dset3:
             dset1['1'] = randomsizedarray
@@ -289,10 +296,12 @@ class TestDataWithFixedSizedDataset(object):
         co = written_repo.checkout()
         assert np.allclose(co.datasets['_dset']['1'], array5by7)
 
-    def test_multiple_datasets_single_commit(self, written_repo, randomsizedarray):
+    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    def test_multiple_datasets_single_commit(self, dset1_backend, dset2_backend, written_repo, randomsizedarray):
         co = written_repo.checkout(write=True)
-        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
-        dset2 = co.datasets.init_dataset('dset2', prototype=randomsizedarray)
+        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray, backend=dset1_backend)
+        dset2 = co.datasets.init_dataset('dset2', prototype=randomsizedarray, backend=dset2_backend)
         dset1['arr'] = randomsizedarray
         dset2['arr'] = randomsizedarray
         co.commit('this is a commit message')
@@ -302,11 +311,15 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(co.datasets['dset2']['arr'], randomsizedarray)
         co.close()
 
-    def test_prototype_and_shape(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    def test_prototype_and_shape(self, dset1_backend, dset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
+        dset1 = co.datasets.init_dataset(
+            'dset1', prototype=randomsizedarray, backend=dset1_backend)
         dset2 = co.datasets.init_dataset(
-            'dset2', shape=randomsizedarray.shape, dtype=randomsizedarray.dtype)
+            'dset2', shape=randomsizedarray.shape, dtype=randomsizedarray.dtype, backend=dset2_backend)
+
         newarray = np.random.random(randomsizedarray.shape).astype(randomsizedarray.dtype)
         dset1['arr1'] = newarray
         dset2['arr'] = newarray
@@ -351,9 +364,10 @@ class TestDataWithFixedSizedDataset(object):
             dset['3'] = newarr
         co.close()
 
-    def test_adding_same_data_again_with_same_name(self, repo, array5by7):
+    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    def test_adding_same_data_again_with_same_name(self, dset_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset_backend)
         dset['1'] = array5by7
         with pytest.raises(LookupError):
             # raises before commit
@@ -369,9 +383,10 @@ class TestDataWithFixedSizedDataset(object):
             # raises in another checkout
             dset['1'] = array5by7
 
-    def test_writer_context_manager_dataset_add_sample(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    def test_writer_context_manager_dataset_add_sample(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray)
+        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         with co.datasets['dset'] as dset:
             dset.add(randomsizedarray, '1')
         co.commit('this is a commit message')
@@ -388,9 +403,10 @@ class TestDataWithFixedSizedDataset(object):
         co = repo.checkout()
         assert co.metadata['key'] == 'val'
 
-    def test_dataset_context_manager_dset_sample_and_metadata_add(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    def test_dataset_context_manager_dset_sample_and_metadata_add(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray)
+        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         with co.datasets['dset'] as dset:
             dset.add(randomsizedarray, '1')
             co.metadata['hello'] = 'world'
@@ -407,16 +423,20 @@ class TestDataWithFixedSizedDataset(object):
         assert co.metadata['key'] == 'val'
         assert co.metadata.get('hello') == 'world'
 
-    def test_bulk_add(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    def test_bulk_add(self, dset1_backend, dset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.datasets.init_dataset(
             'dset_no_name1',
             prototype=randomsizedarray,
-            samples_are_named=False)
+            samples_are_named=False,
+            backend=dset1_backend)
         co.datasets.init_dataset(
             'dset_no_name2',
             prototype=randomsizedarray,
-            samples_are_named=False)
+            samples_are_named=False,
+            backend=dset2_backend)
         co.commit('this is a commit message')
 
         # dummy additino with wrong key

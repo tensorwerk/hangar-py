@@ -1,6 +1,6 @@
 import hashlib
 import os
-from typing import Optional
+from typing import Optional, MutableMapping
 from uuid import uuid1
 import logging
 
@@ -10,7 +10,7 @@ import lmdb
 from . import config
 from .context import TxnRegister
 from .backends.hdf5 import HDF5_00_FileHandles
-from .backends.selection import backend_decoder, backend_encoder, backend_decoder_name
+from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP
 from .records import parsing
 from .records.queries import RecordQuery
 from .utils import is_ascii_alnum, cm_weakref_obj_proxy
@@ -70,30 +70,32 @@ class DatasetDataReader(object):
         self._mode = mode
         self._path = repo_pth
         self._dsetn = dset_name
+        self._schema_variable = isVar
+        self._schema_uuid = schema_uuid
+        self._schema_dtype_num = varDtypeNum
+        self._samples_are_named = samplesAreNamed
+        self._schema_max_shape = tuple(varMaxShape)
+        self._default_schema_hash = default_schema_hash
+
+        self._dataenv: lmdb.Environment = dataenv
+        self._hashenv: lmdb.Environment = hashenv
+        self._hashTxn: Optional[lmdb.Transaction] = None
+        self._dataTxn: Optional[lmdb.Transaction] = None
+        self._TxnRegister = TxnRegister()
+        self._Query = RecordQuery(self._dataenv)
+
         self._is_conman = False
         self._index_expr_factory = np.s_
         self._index_expr_factory.maketuple = False
 
-        self._dataenv = dataenv
-        self._hashenv = hashenv
-        self._Query = RecordQuery(self._dataenv)
-        self._hashTxn: Optional[lmdb.Transaction] = None
-        self._dataTxn: Optional[lmdb.Transaction] = None
-        self._TxnRegister = TxnRegister()
-
-        self._fs = {
-            'hdf5_00': HDF5_00_FileHandles(repo_path=repo_pth),
-        }
-        self._fs['hdf5_00'].open(self._path, self._mode)
-
-        self._default_schema_hash = default_schema_hash
-        self._schema_uuid = schema_uuid
-        self._samples_are_named = samplesAreNamed
-        self._schema_variable = isVar
-        self._schema_max_shape = tuple(varMaxShape)
-        self._schema_dtype_num = varDtypeNum
-
-        self._sample_accessor = {}
+        self._fs = {}
+        for backend, accessor in BACKEND_ACCESSOR_MAP.items():
+            if accessor is not None:
+                self._fs[backend] = accessor(
+                    repo_path=self._path,
+                    schema_shape=self._schema_max_shape,
+                    schema_dtype=np.typeDict[self._schema_dtype_num])
+                self._fs[backend].open(self._mode)
 
     def __enter__(self):
         self._is_conman = True
@@ -189,8 +191,13 @@ class DatasetDataReader(object):
               f'mode={self._mode})'
         return res
 
+    def _open(self):
+        for val in self._fs.values():
+            val.open(mode=self._mode)
+
     def _close(self):
-        self._fs['hdf5_00'].close(mode=self._mode)
+        for val in self._fs.values():
+            val.close()
 
     @property
     def name(self):
@@ -280,9 +287,9 @@ class DatasetDataReader(object):
             dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
             hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = self._hashTxn.get(hashKey)
-            backend = backend_decoder_name(hash_ref)
+            spec = backend_decoder(hash_ref)
             # This is a tight enough loop where keyword args can impact performance
-            data = self._fs[backend].read_data(hash_ref, self._mode, self._schema_dtype_num)
+            data = self._fs[spec.backend].read_data(spec)
 
         except KeyError as e:
             logger.error(e, exc_info=False)
@@ -313,24 +320,14 @@ class DatasetDataWriter(DatasetDataReader):
     def __init__(self, stagehashenv, default_schema_backend, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._stagehashenv = stagehashenv
-        self._default_schema_backend = default_schema_backend
-        self._setup_file_access()
-
-    def _setup_file_access(self):
-        '''Internal method used to open handles to the backing store.
-        '''
-        if self._default_schema_backend == 'hdf5_00':
-            if self._default_schema_hash not in self._fs['hdf5_00'].wFp:
-                sample_array = np.zeros(self._schema_max_shape, dtype=np.typeDict[self._schema_dtype_num])
-                self._fs['hdf5_00'].create_schema(self._path, self._default_schema_hash, sample_array)
-            self._fs['hdf5_00'].open(self._path, self._mode)
+        self._dflt_backend = default_schema_backend
 
     def __enter__(self):
         self._is_conman = True
         self._hashTxn = self._TxnRegister.begin_writer_txn(self._hashenv)
         self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
         self._stageHashTxn = self._TxnRegister.begin_writer_txn(self._stagehashenv)
-        self._fs['hdf5_00'].__enter__()
+        # self._fs['hdf5_00'].__enter__()
         return self
 
     def __exit__(self, *exc):
@@ -338,7 +335,7 @@ class DatasetDataWriter(DatasetDataReader):
         self._hashTxn = self._TxnRegister.commit_writer_txn(self._hashenv)
         self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
         self._stageHashTxn = self._TxnRegister.commit_writer_txn(self._stagehashenv)
-        self._fs['hdf5_00'].__exit__(*exc)
+        # self._fs['hdf5_00'].__exit__(*exc)
 
     def __setitem__(self, key, value):
         '''Store a piece of data in a dataset. Convenince method to :meth:`add`.
@@ -478,8 +475,7 @@ class DatasetDataWriter(DatasetDataReader):
             # write new data if data hash does not exist
             existingHashVal = self._hashTxn.get(hashKey, default=False)
             if existingHashVal is False:
-                hashVal = self._fs[self._default_schema_backend].add_tensor_data(
-                        array=data, dhash=full_hash, shash=self._default_schema_hash)
+                hashVal = self._fs[self._dflt_backend].write_data(data)
                 self._hashTxn.put(hashKey, hashVal)
                 self._stageHashTxn.put(hashKey, hashVal)
 
@@ -637,6 +633,16 @@ class Datasets(object):
             self.init_dataset = None
             self.remove_dset = None
             self.add = None
+
+    def _open(self):
+
+        for v in self._datasets.values():
+            v._open()
+
+    def _close(self):
+
+        for v in self._datasets.values():
+            v._close()
 
 # ------------- Methods Available To Both Read & Write Checkouts ------------------
 
@@ -1027,30 +1033,6 @@ class Datasets(object):
             schema_dtype=prototype.dtype.num,
             schema_is_named=samples_are_named,
             schema_default_backend=backend)
-
-        # -------- Create staged schema storage backend -----------------------
-        #
-        # If this is a dataset with a different name from an existing one, but
-        # which has the same schema hash, don't create a second one. Without
-        # this method an operation like:
-        #
-        #     testProto = trainProto = np.array(shape=Foo, dtype=bar)
-        #     init_dataset(name='test', prototype=testProto)
-        #     init_dataset(name='train', prototype=trainProto)
-        #
-        # would create two backends and the first would not be used since the
-        # last backend takes priority.
-        #
-
-        if backend == 'hdf5_00':
-            STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-            stage_dir = os.path.join(self._repo_pth, STAGE_DATA_DIR, f'hdf_{schema_hash}')
-            if not os.path.isdir(stage_dir):
-                f_handle = HDF5_00_FileHandles(repo_path=self._repo_pth)
-                fh = f_handle.create_schema(self._repo_pth, schema_hash, prototype)
-                fh.close()
-        else:
-            print('not hdf5_00 backend')
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 

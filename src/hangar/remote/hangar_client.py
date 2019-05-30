@@ -241,7 +241,7 @@ class HangarClient(object):
                     msg = f'HASH MANGLED, recieved: {recieved_hash} != digest: {hdigest}'
                     raise RuntimeError(msg)
 
-                hdf_instance, hdf_dset, hdf_idx = fs.add_tensor_data(
+                hdf_instance, hdf_dset, hdf_idx = fs.write_data(
                     array=tensor,
                     schema_hash=schema_hash,
                     remote_operation=True)

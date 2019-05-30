@@ -184,6 +184,29 @@ class RecordQuery(object):
         data_names = list(map(lambda x: x.data_name, data_key_rec))
         return data_names
 
+    def dataset_data_hashes(self, dataset_name):
+        '''Find all data hashes contained within a particular dataset
+
+        Note: this method does not remove any duplicates which may be present,
+        if dedup is required, process it downstream
+
+        Parameters
+        ----------
+        dataset_name : str
+            name of the dataset to find the hashes contained in
+
+        Returns
+        -------
+        list
+            all hash values for all data pieces in the dataset
+        '''
+        all_hashes = []
+        recs = self._traverse_dataset_data_records(dataset_name)
+        data_val_rec = map(parsing.data_record_raw_val_from_db_val, recs.values())
+        data_hashes = map(lambda x: x.data_hash, data_val_rec)
+        all_hashes.extend(data_hashes)
+        return all_hashes
+
     def data_hashes(self) -> list:
         '''Find all data hashes contained within all datasets
 
