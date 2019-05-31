@@ -1,19 +1,16 @@
 import hashlib
-import os
-from typing import Optional, MutableMapping
+from typing import Optional
 from uuid import uuid1
 import logging
 
 import numpy as np
 import lmdb
 
-from . import config
 from .context import TxnRegister
-from .backends.hdf5 import HDF5_00_FileHandles
 from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP
 from .records import parsing
 from .records.queries import RecordQuery
-from .utils import is_ascii_alnum, cm_weakref_obj_proxy
+from .utils import is_suitable_user_key, cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +133,18 @@ class DatasetDataReader(object):
         int
             number of samples the dataset contains
         '''
-        return len(self._Query.dataset_data_names(self._dsetn))
+        if not self._is_conman:
+            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+
+        try:
+            dsetCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
+            dsetCountVal = self._dataTxn.get(dsetCountKey, default='0'.encode())
+            dset_count = parsing.dataset_record_count_raw_val_from_db_val(dsetCountVal)
+        finally:
+            if not self._is_conman:
+                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+
+        return dset_count
 
     def __contains__(self, key):
         '''Determine if a key is a valid sample name in the dataset
@@ -288,7 +296,6 @@ class DatasetDataReader(object):
             hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = self._hashTxn.get(hashKey)
             spec = backend_decoder(hash_ref)
-            # This is a tight enough loop where keyword args can impact performance
             data = self._fs[spec.backend].read_data(spec)
 
         except KeyError as e:
@@ -327,7 +334,8 @@ class DatasetDataWriter(DatasetDataReader):
         self._hashTxn = self._TxnRegister.begin_writer_txn(self._hashenv)
         self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
         self._stageHashTxn = self._TxnRegister.begin_writer_txn(self._stagehashenv)
-        # self._fs['hdf5_00'].__enter__()
+        for k in self._fs.keys():
+            self._fs[k].__enter__()
         return self
 
     def __exit__(self, *exc):
@@ -335,7 +343,8 @@ class DatasetDataWriter(DatasetDataReader):
         self._hashTxn = self._TxnRegister.commit_writer_txn(self._hashenv)
         self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
         self._stageHashTxn = self._TxnRegister.commit_writer_txn(self._stagehashenv)
-        # self._fs['hdf5_00'].__exit__(*exc)
+        for k in self._fs.keys():
+            self._fs[k].__exit__(*exc)
 
     def __setitem__(self, key, value):
         '''Store a piece of data in a dataset. Convenince method to :meth:`add`.
@@ -415,12 +424,11 @@ class DatasetDataWriter(DatasetDataReader):
         # ------------------------ argument type checking ---------------------
 
         try:
-            if self._samples_are_named:
-                if not (isinstance(name, str) and is_ascii_alnum(name)):
-                    msg = f'HANGAR VALUE ERROR:: name: {name} invalid. Must be of type str & '\
-                          f'only contain alpha-numeric ascii characters (no whitespace).'
-                    raise ValueError(msg)
-            else:
+            if self._samples_are_named and not is_suitable_user_key(name):
+                msg = f'HANGAR VALUE ERROR:: name: {name} invalid. Must be str which '\
+                      f'only contains alpha-numeric or "." "_" "-" ascii characters.'
+                raise ValueError(msg)
+            elif not self._samples_are_named:
                 name = kwargs['bulkn'] if 'bulkn' in kwargs else parsing.generate_sample_name()
 
             if not isinstance(data, np.ndarray):
@@ -957,9 +965,9 @@ class Datasets(object):
 
         # ------------- Checks for argument validity --------------------------
 
-        if not is_ascii_alnum(name):
-            msg = f'Dataset name provided: `{name}` is invalid. Must only contain '\
-                  f'alpha-numeric ascii with no whitespace characters.'
+        if not is_suitable_user_key(name):
+            msg = f'Dataset name provided: `{name}` is invalid. Can only contain '\
+                  f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).'
             e = ValueError(msg)
             logger.error(e, exc_info=False)
             raise e

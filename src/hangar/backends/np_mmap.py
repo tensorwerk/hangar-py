@@ -10,6 +10,7 @@ from os.path import splitext as psplitext
 import numpy as np
 
 from .. import config
+from .. import new_config as c
 from ..utils import symlink_rel, random_string
 
 logger = logging.getLogger(__name__)
@@ -118,6 +119,13 @@ class NUMPY_00_FileHandles(object):
         self.STOREDIR = pjoin(self.repo_path, STORE_DATA_DIR, self.fmtParser.FmtCode)
         if not os.path.isdir(self.DATADIR):
             os.makedirs(self.DATADIR)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        if self.w_uid in self.wFp:
+            self.wFp[self.w_uid].flush()
 
     def open(self, mode: str, *, remote_operation: bool = False):
         '''open numpy file handle coded directories
@@ -243,11 +251,19 @@ class NUMPY_00_FileHandles(object):
             tensor data stored at the provided hashVal specification.
         '''
         srcSlc = (self.slcExpr[int(hashVal.dataset_idx)], *(self.slcExpr[0:x] for x in hashVal.shape))
+
         try:
             res = self.Fp[hashVal.uid][srcSlc]
         except TypeError:
             self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
             res = self.Fp[hashVal.uid][srcSlc]
+        except KeyError:
+            file_pth = pjoin(self.STAGEDIR, f'{hashVal.uid}.npy')
+            if (self.mode == 'a') and os.path.islink(file_pth):
+                self.rFp[hashVal.uid] = np.lib.format.open_memmap(file_pth, 'r')
+                res = self.Fp[hashVal.uid][srcSlc]
+            else:
+                raise
         return res
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
@@ -281,7 +297,6 @@ class NUMPY_00_FileHandles(object):
 
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][destSlc] = array
-        self.wFp[self.w_uid].flush()
 
         hashVal = self.fmtParser.encode(uid=self.w_uid,
                                         dataset_idx=self.hIdx,

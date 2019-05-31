@@ -1,64 +1,91 @@
-language: python
-cache: pip
-env:
-  global:
-    - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
-    - SEGFAULT_SIGNALS=all
 matrix:
   include:
-    - python: '3.7'
+    - os: linux
+      dist: xenial
+      language: python
+      python: '3.7'
+      cache: pip
       env:
+        - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
+        - SEGFAULT_SIGNALS=all
         - TOXENV=docs
-    - python: '3.6'
+    # - os: linux
+    #   dist: xenial
+    #   python: '3.6'
+    #   env:
+    #     - TOXENV=py36-cover,report
+    - os: linux
+      dist: xenial
+      language: python
+      python: '3.6'
+      cache: pip
       env:
-        - TOXENV=py36-cover,report
-    - python: '3.6'
-      env:
+        - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
+        - SEGFAULT_SIGNALS=all
         - TOXENV=py36-nocov
-    - python: '3.7'
+    # - os: linux
+    #   dist: xenial
+    #   python: '3.7'
+    #   env:
+    #     - TOXENV=py37-cover,report
+    - os: linux
       dist: xenial
+      language: python
+      python: '3.7'
+      cache: pip
       env:
-        - TOXENV=py37-cover,report
-    - python: '3.7'
-      dist: xenial
-      env:
+        - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
+        - SEGFAULT_SIGNALS=all
         - TOXENV=py37-nocov
+    - os: osx
+      osx_image: xcode9.4
+      language: generic
+      env:
+        - CONDA_INSTALL_LOCN="${HOME}/miniconda"
+        - TR_PYTHON_VERSION="3.6"
+        - TOXENV=py36-nocov
+    - os: osx
+      osx_image: xcode9.4
+      language: generic
+      env:
+        - CONDA_INSTALL_LOCN="${HOME}/miniconda"
+        - TR_PYTHON_VERSION="3.7"
+        - TOXENV=py37-nocov
+
 before_install:
+  - |
+    if [ "$TRAVIS_OS_NAME" == "osx" ]; then
+      # Install and set up miniconda.
+      wget http://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh
+      bash miniconda.sh -b -p $CONDA_INSTALL_LOCN
+      export PATH=${CONDA_INSTALL_LOCN}/bin:$PATH
+      conda config --set always_yes true
+      conda install python=${TR_PYTHON_VERSION}
+      # ensure we have the latest version of pip installed
+      python -m pip install -U pip
+      python -m easy_install -U setuptools
+      # To ease debugging, list installed packages
+      conda info -a
+      conda list
+    fi
   - python --version
   - uname -a
-  - lsb_release -a
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then lsb_release -a; fi
+
 install:
   - pip install tox
   - virtualenv --version
   - easy_install --version
   - pip --version
   - tox --version
-  - |
-    set -ex
-    if [[ $TRAVIS_PYTHON_VERSION == 'pypy' ]]; then
-        (cd $HOME
-         wget https://bitbucket.org/pypy/pypy/downloads/pypy2-v6.0.0-linux64.tar.bz2
-         tar xf pypy2-*.tar.bz2
-         pypy2-*/bin/pypy -m ensurepip
-         pypy2-*/bin/pypy -m pip install -U virtualenv)
-        export PATH=$(echo $HOME/pypy2-*/bin):$PATH
-        export TOXPYTHON=$(echo $HOME/pypy2-*/bin/pypy)
-    fi
-    if [[ $TRAVIS_PYTHON_VERSION == 'pypy3' ]]; then
-        (cd $HOME
-         wget https://bitbucket.org/pypy/pypy/downloads/pypy3-v6.0.0-linux64.tar.bz2
-         tar xf pypy3-*.tar.bz2
-         pypy3-*/bin/pypy3 -m ensurepip
-         pypy3-*/bin/pypy3 -m pip install -U virtualenv)
-        export PATH=$(echo $HOME/pypy3-*/bin):$PATH
-        export TOXPYTHON=$(echo $HOME/pypy3-*/bin/pypy3)
-    fi
-    set +x
+
 script:
   - tox -v
+
 after_failure:
   - more .tox/log/* | cat
   - more .tox/*/log/* | cat
+
 notifications:
   email:
     on_success: never

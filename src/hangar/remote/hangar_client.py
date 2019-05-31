@@ -252,12 +252,6 @@ class HangarClient(object):
                                           dataset=hdf_dset,
                                           dataset_idx=hdf_idx,
                                           shape=tensor.shape)
-                # hashVal = parsing.hash_data_db_val_from_raw_val(
-                #     schema=schema_hash,
-                #     instance=hdf_instance,
-                #     dataset=hdf_dset,
-                #     dataset_idx=hdf_idx,
-                #     shape=tensor.shape)
                 hashTxn.put(hashKey, hashVal)
                 save_bar.update(1)
         finally:

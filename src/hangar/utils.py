@@ -1,11 +1,12 @@
 import os
+import random
+import re
+import string
 import weakref
-from functools import partial
 from contextlib import contextmanager
 from datetime import timedelta
+from functools import partial
 from numbers import Number
-import random
-import string
 
 import wrapt
 
@@ -59,8 +60,11 @@ def symlink_rel(src: os.PathLike, dst: os.PathLike):
     os.symlink(rel_path_src, dst)
 
 
-def is_ascii_alnum(str_data: str):
-    '''Checks if string contains only alpha-numeric ascii chars (no whitespace)
+SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)
+
+
+def is_suitable_user_key(str_data: str) -> bool:
+    '''Checks if string contains only alpha-numeric ascii chars or ['.', '-' '_'] (no whitespace)
 
     Necessary because python 3.6 does not have a str.isascii() method.
 
@@ -75,10 +79,8 @@ def is_ascii_alnum(str_data: str):
         True if only ascii characters in the string, else False.
     '''
     try:
-        str_data.encode('ascii')
-        asciiStrIsAlnum = False if any(c.isspace() for c in str_data) else True
-        return asciiStrIsAlnum
-    except UnicodeEncodeError:
+        return bool(SuitableCharRE.match(str_data))
+    except TypeError:
         return False
 
 

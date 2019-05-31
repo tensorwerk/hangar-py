@@ -2,7 +2,6 @@ import logging
 
 import lmdb
 
-from .context import TxnRegister
 from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
 from .records import commiting, hashs, heads, parsing
 

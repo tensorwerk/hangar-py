@@ -7,7 +7,7 @@ import lmdb
 from .context import TxnRegister
 from .records import parsing
 from .records.queries import RecordQuery
-from .utils import is_ascii_alnum, is_ascii
+from .utils import is_suitable_user_key, is_ascii
 
 logger = logging.getLogger(__name__)
 
@@ -178,9 +178,9 @@ class MetadataReader(object):
             self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
 
         try:
-            if not (isinstance(key, str) and is_ascii_alnum(key)):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
-                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+            if not is_suitable_user_key(key):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Can '\
+                      f'only contain alpha-numeric or "." "_" "-" ascii characters.'
                 raise ValueError(msg)
 
             refKey = parsing.metadata_record_db_key_from_raw_key(key)
@@ -308,9 +308,9 @@ class MetadataWriter(MetadataReader):
             If an identical key/value pair exists in the checkout
         '''
         try:
-            if not (isinstance(key, str) and is_ascii_alnum(key)):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
-                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+            if not is_suitable_user_key(key):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Must be '\
+                      f'str containing only alpha-numeric or "." "_" "-" ascii characters.'
                 raise ValueError(msg)
             elif not (isinstance(value, str) and is_ascii(value)):
                 msg = f'HANGAR VALUE ERROR:: metadata value: `{value}` not allowed. '\
@@ -383,9 +383,9 @@ class MetadataWriter(MetadataReader):
             self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
 
         try:
-            if not (isinstance(key, str) and is_ascii_alnum(key)):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
-                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+            if not is_suitable_user_key(key):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Must be str'\
+                      f'containing alpha-numeric or "." "_" "-" ascii characters (no whitespace).'
                 raise ValueError(msg)
 
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)

@@ -308,13 +308,18 @@ class HDF5_00_FileHandles(object):
         uid = random_string()
         file_path = pjoin(self.DATADIR, f'{uid}.hdf5')
         logger.debug(f'creating: {file_path}')
-        fh = h5py.File(
-            file_path,
-            mode='w',
-            libver='latest',
-            rdcc_nbytes=rdcc_nbytes_val,
-            rdcc_w0=HDF_CHUNK_OPTS['rdcc_w0'],
-            rdcc_nslots=rdcc_nslots_prime_val)
+        self.wFp[uid] = h5py.File(file_path,
+                                  mode='w',
+                                  libver='latest',
+                                  rdcc_nbytes=rdcc_nbytes_val,
+                                  rdcc_w0=HDF_CHUNK_OPTS['rdcc_w0'],
+                                  rdcc_nslots=rdcc_nslots_prime_val)
+
+        self.w_uid = uid
+        self.hNextPath = 0
+        self.hIdx = 0
+        self.hColsRemain = HDF_DSET_CONTENTS['num_collections']
+        self.hMaxSize = HDF_DSET_CONTENTS['collection_size']
 
         if remote_operation:
             symlink_file_path = pjoin(self.REMOTEDIR, f'{uid}.hdf5')
@@ -328,7 +333,7 @@ class HDF5_00_FileHandles(object):
         optKwargs = __class__._dataset_opts(**HDF_DSET_FILTERS)
 
         for dset_num in range(HDF_DSET_CONTENTS['num_collections']):
-            fh.create_dataset(
+            self.wFp[uid].create_dataset(
                 f'/{dset_num}',
                 shape=(HDF_DSET_CONTENTS['collection_size'], *sample_array.shape),
                 dtype=sample_array.dtype,
@@ -338,37 +343,30 @@ class HDF5_00_FileHandles(object):
 
         # ---------------------- Attribute Config Vals ------------------------
 
-        fh['/'].attrs[HDF_ATTRS['hangar_version']] = __version__
-        fh['/'].attrs[HDF_ATTRS['schema_shape']] = sample_array.shape
-        fh['/'].attrs[HDF_ATTRS['schema_dtype']] = sample_array.dtype.num
-        fh['/'].attrs[HDF_ATTRS['next_location']] = (0, 0)
-        fh['/'].attrs[HDF_ATTRS['collection_max_size']] = HDF_DSET_CONTENTS['collection_size']
-        fh['/'].attrs[HDF_ATTRS['collection_total']] = HDF_DSET_CONTENTS['num_collections']
-        fh['/'].attrs[HDF_ATTRS['collections_remaining']] = HDF_DSET_CONTENTS['num_collections']
-        fh['/'].attrs[HDF_ATTRS['rdcc_nbytes']] = rdcc_nbytes_val
-        fh['/'].attrs[HDF_ATTRS['rdcc_w0']] = HDF_CHUNK_OPTS['rdcc_w0']
-        fh['/'].attrs[HDF_ATTRS['rdcc_nslots']] = rdcc_nslots_prime_val
-        fh['/'].attrs[HDF_ATTRS['shuffle']] = optKwargs['shuffle']
-        fh['/'].attrs[HDF_ATTRS['complib']] = HDF_DSET_FILTERS['complib']
-        fh['/'].attrs[HDF_ATTRS['fletcher32']] = optKwargs['fletcher32']
-        fh['/'].attrs[HDF_ATTRS['chunk_shape']] = chunk_shape
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['hangar_version']] = __version__
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['schema_shape']] = sample_array.shape
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['schema_dtype']] = sample_array.dtype.num
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['next_location']] = (0, 0)
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['collection_max_size']] = HDF_DSET_CONTENTS['collection_size']
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['collection_total']] = HDF_DSET_CONTENTS['num_collections']
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['collections_remaining']] = HDF_DSET_CONTENTS['num_collections']
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['rdcc_nbytes']] = rdcc_nbytes_val
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['rdcc_w0']] = HDF_CHUNK_OPTS['rdcc_w0']
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['rdcc_nslots']] = rdcc_nslots_prime_val
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['shuffle']] = optKwargs['shuffle']
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['complib']] = HDF_DSET_FILTERS['complib']
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['fletcher32']] = optKwargs['fletcher32']
+        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['chunk_shape']] = chunk_shape
         if optKwargs['compression_opts'] is not None:
-            fh['/'].attrs[HDF_ATTRS['comp_opts']] = optKwargs['compression_opts']
+            self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['comp_opts']] = optKwargs['compression_opts']
         else:
-            fh['/'].attrs[HDF_ATTRS['comp_opts']] = False
+            self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['comp_opts']] = False
 
-        fh.flush()
+        self.wFp[self.w_uid].flush()
         try:
-            fh.swmr_mode = True
+            self.wFp[self.w_uid].swmr_mode = True
         except ValueError:
-            assert fh.swmr_mode is True
-
-        self.w_uid = uid
-        self.wFp[uid] = fh
-        self.hNextPath = 0
-        self.hIdx = 0
-        self.hColsRemain = HDF_DSET_CONTENTS['num_collections']
-        self.hMaxSize = HDF_DSET_CONTENTS['collection_size']
+            assert self.wFp[self.w_uid].swmr_mode is True
 
     def open(self, mode: str, *, remote_operation: bool = False):
         '''Open an hdf5 file handle in the Handler Singleton
@@ -473,6 +471,41 @@ class HDF5_00_FileHandles(object):
             os.remove(remove_link_pth)
             os.remove(remove_data_pth)
 
+    def read_data(self, hashVal: HDF5_00_Parser.DataHashSpec) -> np.ndarray:
+        '''Read data from an hdf5 file handle at the specified locations
+
+        Parameters
+        ----------
+        hashVal : namedtuple
+            record specification stored in the DB.
+
+        Returns
+        -------
+        np.array
+            requested data.
+        '''
+        dsetIdx = int(hashVal.dataset_idx)
+        dsetCol = f'/{hashVal.dataset}'
+
+        srcSlc = (self.slcExpr[dsetIdx], *(self.slcExpr[0:x] for x in hashVal.shape))
+        destSlc = None
+        destArr = np.empty((hashVal.shape), self.schema_dtype)
+
+        try:
+            self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+        except TypeError:
+            self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
+            self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+        except KeyError:
+            file_pth = pjoin(self.STAGEDIR, f'{hashVal.uid}.hdf5')
+            if (self.mode == 'a') and os.path.islink(file_pth):
+                self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
+                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+            else:
+                raise
+
+        return destArr
+
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
         '''verifies correctness of array data and performs write operation.
 
@@ -515,31 +548,3 @@ class HDF5_00_FileHandles(object):
                                         dataset_idx=self.hIdx,
                                         shape=array.shape)
         return hashVal
-
-    def read_data(self, hashVal: HDF5_00_Parser.DataHashSpec) -> np.ndarray:
-        '''Read data from an hdf5 file handle at the specified locations
-
-        Parameters
-        ----------
-        hashVal : namedtuple
-            record specification stored in the DB.
-
-        Returns
-        -------
-        np.array
-            requested data.
-        '''
-        dsetIdx = int(hashVal.dataset_idx)
-        dsetCol = f'/{hashVal.dataset}'
-
-        srcSlc = (self.slcExpr[dsetIdx], *(self.slcExpr[0:x] for x in hashVal.shape))
-        destSlc = None
-        destArr = np.empty((hashVal.shape), self.schema_dtype)
-
-        try:
-            self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
-        except TypeError:
-            self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
-            self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
-
-        return destArr

@@ -121,21 +121,22 @@ class TestDataWithFixedSizedDataset(object):
         dset2 = co.datasets.init_dataset('dset2', shape=(2, 2), dtype=np.int, backend=dset2_backend)
         dset3 = co.datasets.init_dataset('dset3', shape=(3, 4), dtype=np.float32, backend=dset3_backend)
 
-        with dset1, dset2, dset3:
-            dset1['1'] = randomsizedarray
-            dset1['2'] = np.zeros_like(randomsizedarray)
-            dset1['3'] = np.zeros_like(randomsizedarray) + 5
-            all_tensors.extend([dset1['1'], dset1['2'], dset1['3']])
+        with dset1 as d1, dset2 as d2, dset3 as d3:
+            d1['1'] = randomsizedarray
+            d1['2'] = np.zeros_like(randomsizedarray)
+            d1['3'] = np.zeros_like(randomsizedarray) + 5
 
-            dset2['1'] = np.ones((2, 2), dtype=np.int)
-            dset2['2'] = np.ones((2, 2), dtype=np.int) * 5
-            dset2['3'] = np.zeros((2, 2), dtype=np.int)
-            all_tensors.extend([dset2['1'], dset2['2'], dset2['3']])
+            d2['1'] = np.ones((2, 2), dtype=np.int)
+            d2['2'] = np.ones((2, 2), dtype=np.int) * 5
+            d2['3'] = np.zeros((2, 2), dtype=np.int)
 
-            dset3['1'] = np.ones((3, 4), dtype=np.float32)
-            dset3['2'] = np.ones((3, 4), dtype=np.float32) * 7
-            dset3['3'] = np.zeros((3, 4), dtype=np.float32)
-            all_tensors.extend([dset3['1'], dset3['2'], dset3['3']])
+            d3['1'] = np.ones((3, 4), dtype=np.float32)
+            d3['2'] = np.ones((3, 4), dtype=np.float32) * 7
+            d3['3'] = np.zeros((3, 4), dtype=np.float32)
+
+        all_tensors.extend([dset1['1'], dset1['2'], dset1['3']])
+        all_tensors.extend([dset2['1'], dset2['2'], dset2['3']])
+        all_tensors.extend([dset3['1'], dset3['2'], dset3['3']])
 
         co.commit('this is a commit message')
         co.close()
@@ -159,6 +160,7 @@ class TestDataWithFixedSizedDataset(object):
         for dset in co.datasets.values():
             for sample in dset.values():
                 assert np.allclose(sample, next(tensors_in_the_order))
+        co.close()
 
     def test_get_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)

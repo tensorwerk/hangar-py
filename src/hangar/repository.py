@@ -1,18 +1,19 @@
 import os
 import logging
-from . import config_logging
-config_logging.setup_logging()
 
 from tqdm.auto import tqdm
 import grpc
 
-from . import config, diff, merger
+from . import config_logging
+config_logging.setup_logging()
+
+from . import config, merger
 from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
 from .diagnostics import graphing
 from .records import heads, parsing, summarize, commiting
 from .remote.hangar_client import HangarClient
-from .utils import is_valid_directory_path, is_ascii_alnum
+from .utils import is_valid_directory_path, is_suitable_user_key
 
 logger = logging.getLogger(__name__)
 
@@ -653,9 +654,9 @@ class Repository(object):
             name of the branch which was created
         '''
         self.__verify_repo_initialized()
-        if not is_ascii_alnum(branch_name):
-            msg = (f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` is not allowed. '
-                   'Must only contain alpha-numeric ascii with no whitespace characters.')
+        if not is_suitable_user_key(branch_name):
+            msg = f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` invalid. '\
+                  f'Must only contain alpha-numeric or "." "_" "-" ascii characters.'
             e = ValueError(msg)
             logger.error(e, exc_info=False)
             raise e
