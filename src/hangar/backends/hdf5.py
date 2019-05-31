@@ -1,12 +1,13 @@
 import logging
 import math
 import os
-from os.path import splitext as psplitext
 import re
-import subprocess
 from collections import namedtuple, ChainMap
 from os.path import join as pjoin
+from os.path import splitext as psplitext
 from functools import partial
+from typing import MutableMapping
+
 
 import h5py
 import numpy as np
@@ -131,8 +132,8 @@ class HDF5_00_FileHandles(object):
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
 
-        self.rFp = {}
-        self.wFp = {}
+        self.rFp: MutableMapping[str, h5py.File] = {}
+        self.wFp: MutableMapping[str, h5py.File] = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
 
         self.mode: str = None
@@ -251,28 +252,16 @@ class HDF5_00_FileHandles(object):
 
         return (chunk_shape, chunk_nbytes)
 
-    def create_schema(self, *, remote_operation: bool = False) -> h5py.File:
+    def create_schema(self, *, remote_operation: bool = False):
         '''stores the shape and dtype as the schema of a dataset.
 
         Parameters
         ----------
-        repo_path : str
-            path where the repository files can be accessed on the local disk.
-        uid : str
-            file name prefix for the hdf5 file
-        sample_array : np.ndarray
-            sample input tensor (representitative of all data which will fill the dset) to
-            extract the shape and dtype from.
         remote_operation : optional, kwarg only, bool
             if this schema is being created from a remote fetch operation, then do not
             place the file symlink in the staging directory. Instead symlink it
             to a special remote staging directory. (default is False, which places the
             symlink in the stage data directory.)
-
-        Returns
-        -------
-        h5py.File
-            File handle to the created h5py file
 
         Notes
         -----
@@ -401,7 +390,7 @@ class HDF5_00_FileHandles(object):
             if not os.path.isdir(process_dir):
                 os.makedirs(process_dir)
 
-            process_uids = [x for x in os.listdir(process_dir) if x.endswith('.hdf5')]
+            process_uids = [psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.hdf5')]
             for uid in process_uids:
                 file_pth = pjoin(process_dir, f'{uid}.hdf5')
                 self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
@@ -409,7 +398,7 @@ class HDF5_00_FileHandles(object):
         if not remote_operation:
             if not os.path.isdir(self.STOREDIR):
                 return
-            store_uids = [x for x in os.listdir(self.STOREDIR) if x.endswith('.hdf5')]
+            store_uids = [psplitext(x)[0] for x in os.listdir(self.STOREDIR) if x.endswith('.hdf5')]
             for uid in store_uids:
                 file_pth = pjoin(self.STOREDIR, f'{uid}.hdf5')
                 self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
@@ -440,13 +429,13 @@ class HDF5_00_FileHandles(object):
                 except AttributeError:
                     pass
                 del self.wFp[uid]
-        else:
-            for uid in list(self.rFp.keys()):
-                try:
-                    self.rFp[uid].close()
-                except AttributeError:
-                    pass
-                del self.rFp[uid]
+
+        for uid in list(self.rFp.keys()):
+            try:
+                self.rFp[uid].close()
+            except AttributeError:
+                pass
+            del self.rFp[uid]
 
     @staticmethod
     def remove_unused(repo_path, stagehashenv):

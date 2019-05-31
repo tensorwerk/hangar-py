@@ -133,7 +133,7 @@ def remove_unused(repo_path, stagehashenv):
     '''
     for backend, accesor in BACKEND_ACCESSOR_MAP.items():
         if accesor is not None:
-            acc = accesor(repo_path=repo_path)
+            acc = accesor(repo_path, None, None)
             acc.remove_unused(repo_path=repo_path, stagehashenv=stagehashenv)
 
 

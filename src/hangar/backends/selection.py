@@ -6,7 +6,7 @@ from .np_raw import NUMPY_00_Parser, NUMPY_00_FileHandles
 CODE_BACKEND_MAP = {
     # LOCALS -> [0:50]
     b'00': HDF5_00_Parser(),   # hdf5_00
-    # b'01': NUMPY_00_Parser(),  # numpy_00
+    b'01': NUMPY_00_Parser(),  # numpy_00
     b'02': None,               # tiledb_00
     # REMOTES -> [50:100]
     b'50': None,               # remote_00
@@ -16,7 +16,7 @@ CODE_BACKEND_MAP = {
 BACKEND_CODE_MAP = {
     # LOCALS -> [0:50]
     'hdf5_00': HDF5_00_Parser(),    # 00
-    # 'numpy_00': NUMPY_00_Parser(),  # 01
+    'numpy_00': NUMPY_00_Parser(),  # 01
     'tiledb_00': None,              # 02
     # REMOTES -> [50:100]
     'remote_00': None,              # 50
@@ -26,7 +26,7 @@ BACKEND_CODE_MAP = {
 BACKEND_ACCESSOR_MAP = {
     # LOCALS -> [0:50]
     'hdf5_00': HDF5_00_FileHandles,
-    # 'numpy_00': NUMPY_00_FileHandles,
+    'numpy_00': NUMPY_00_FileHandles,
     'tiledb_00': None,
     # REMOTES -> [50:100]
     'remote_00': None,

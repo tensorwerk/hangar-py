@@ -20,18 +20,8 @@ def reset_singletons(monkeypatch):
             env._close_environments()
         except Exception:
             pass
-    for fd in hangar.backends.hdf5.HDF5_00_FileHandlesSingleton._instances.values():
-        try:
-            fd.close(mode='a')
-        except Exception:
-            pass
-        try:
-            fd.close(mode='r')
-        except Exception:
-            pass
     hangar.context.TxnRegisterSingleton._instances = {}
     hangar.context.EnvironmentsSingleton._instances = {}
-    hangar.backends.hdf5.HDF5_00_FileHandlesSingleton._instances = {}
 
 
 @pytest.fixture()
@@ -41,15 +31,6 @@ def managed_tmpdir(tmp_path):
         # need to close handles to prevent file lock issues in windows
         try:
             env._close_environments()
-        except Exception:
-            pass
-    for fd in hangar.backends.hdf5.HDF5_00_FileHandlesSingleton._instances.values():
-        try:
-            fd.close(mode='a')
-        except Exception:
-            pass
-        try:
-            fd.close(mode='r')
         except Exception:
             pass
     shutil.rmtree(tmp_path)

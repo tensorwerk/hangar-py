@@ -1,9 +1,11 @@
 import logging
 import os
 import re
-from collections import namedtuple
+from functools import partial
+from collections import namedtuple, ChainMap
 from typing import MutableMapping
 from os.path import join as pjoin
+from os.path import splitext as psplitext
 
 import numpy as np
 
@@ -16,6 +18,11 @@ SEP = config.get('hangar.seps.key')
 LISTSEP = config.get('hangar.seps.list')
 SLICESEP = config.get('hangar.seps.slice')
 HASHSEP = config.get('hangar.seps.hash')
+
+STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
+REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
+DATA_DIR = config.get('hangar.repository.data_dir')
+STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
 
 
 class NUMPY_00_Parser(object):
@@ -31,15 +38,13 @@ class NUMPY_00_Parser(object):
         # match and remove the following characters: '['   ']'   '('   ')'   ','
         self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
         self.DataHashSpec = namedtuple(
-            typename='DataHashSpec', field_names=['backend', 'schema', 'uid', 'dataset_idx', 'shape'])
+            typename='DataHashSpec', field_names=['backend', 'uid', 'dataset_idx', 'shape'])
 
-    def encode(self, schema: str, uid: str, dataset_idx: int, shape: tuple) -> bytes:
+    def encode(self, uid: str, dataset_idx: int, shape: tuple) -> bytes:
         '''converts the numpy data spect to an appropriate db value
 
         Parameters
         ----------
-        schema : str
-            schema hash of this data piece
         uid : str
             file name (schema uid) of the np file to find this data piece in.
         dataset_idx : int
@@ -54,8 +59,7 @@ class NUMPY_00_Parser(object):
         bytes
             hash data db value recording all input specifications
         '''
-        out_str = f'{self.FmtCode}{SEP}'\
-                  f'{schema}{LISTSEP}{uid}'\
+        out_str = f'{self.FmtCode}{SEP}{uid}'\
                   f'{HASHSEP}'\
                   f'{dataset_idx}'\
                   f'{SLICESEP}'\
@@ -77,45 +81,43 @@ class NUMPY_00_Parser(object):
             `uid`, `dataset_idx` and `shape` fields.
         '''
         db_str = db_val.decode()[self.FmtCodeIdx:]
-
-        schema_vals, _, dset_vals = db_str.partition(HASHSEP)
-        schema, uid = schema_vals.split(LISTSEP)
-
+        uid, _, dset_vals = db_str.partition(HASHSEP)
         dataset_idx, _, shape_vs = dset_vals.rpartition(SLICESEP)
-        # dataset, dataset_idx = dataset_vs.split(LISTSEP)
         # if the data is of empty shape -> ()
         shape = () if shape_vs == '' else tuple([int(x) for x in shape_vs.split(LISTSEP)])
-
         raw_val = self.DataHashSpec(backend=self.FmtBackend,
-                                    schema=schema,
                                     uid=uid,
                                     dataset_idx=dataset_idx,
                                     shape=shape)
         return raw_val
 
-        # val = db_val.decode()[self.FmtCodeIdx:]
-        # schema, fname = val.split(LISTSEP, 1)
-        # raw_val = self.DataHashSpec(backend=self.FmtBackend, schema=schema, fname=fname)
-        # return raw_val
-
 
 class NUMPY_00_FileHandles(object):
 
-    def __init__(self, repo_path):
-
+    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
-        self.fmtParser = NUMPY_00_Parser()
+        self.schema_shape = schema_shape
+        self.schema_dtype = schema_dtype
 
-        self.STOREDIR: os.PathLike = None
-        self.STAGEDIR: os.PathLike = None
-        self.REMOTEDIR: os.PathLike = None
-        self.DATADIR: os.PathLike = None
-
-        self.repo_path = repo_path
         self.rFp: MutableMapping[str, np.memmap] = {}
         self.wFp: MutableMapping[str, np.memmap] = {}
+        self.Fp = ChainMap(self.rFp, self.wFp)
+
+        self.mode: str = None
+        self.w_uid: str = None
+        self.hIdx: int = None
+        self.hMaxSize: int = None
+
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
+        self.fmtParser = NUMPY_00_Parser()
+
+        self.STAGEDIR = pjoin(self.repo_path, STAGE_DATA_DIR, self.fmtParser.FmtCode)
+        self.REMOTEDIR = pjoin(self.repo_path, REMOTE_DATA_DIR, self.fmtParser.FmtCode)
+        self.DATADIR = pjoin(self.repo_path, DATA_DIR, self.fmtParser.FmtCode)
+        self.STOREDIR = pjoin(self.repo_path, STORE_DATA_DIR, self.fmtParser.FmtCode)
+        if not os.path.isdir(self.DATADIR):
+            os.makedirs(self.DATADIR)
 
     def open(self, mode: str, *, remote_operation: bool = False):
         '''open numpy file handle coded directories
@@ -128,32 +130,36 @@ class NUMPY_00_FileHandles(object):
             True if remote operations call this method. Changes the symlink
             directories used while writing., by default False
         '''
-        CONF_STORE_DIR = config.get('hangar.repository.store_data_dir')
-        CONF_STAGE_DIR = config.get('hangar.repository.stage_data_dir')
-        CONF_REMOTE_DIR = config.get('hangar.repository.remote_data_dir')
-        CONF_DATA_DIR = config.get('hangar.repository.data_dir')
+        self.mode = mode
+        if self.mode == 'a':
+            process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
+            if not os.path.isdir(process_dir):
+                os.makedirs(process_dir)
 
-        self.STOREDIR = pjoin(self.repo_path, CONF_STORE_DIR, self.fmtParser.FmtCode)
-        self.STAGEDIR = pjoin(self.repo_path, CONF_STAGE_DIR, self.fmtParser.FmtCode)
-        self.REMOTEDIR = pjoin(self.repo_path, CONF_REMOTE_DIR, self.fmtParser.FmtCode)
-        self.DATADIR = pjoin(self.repo_path, CONF_DATA_DIR, self.fmtParser.FmtCode)
+            process_uids = [psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.npy')]
+            for uid in process_uids:
+                file_pth = pjoin(process_dir, f'{uid}.npy')
+                self.rFp[uid] = partial(np.lib.format.open_memmap, file_pth, 'r')
 
-        if mode == 'a':
-            if not remote_operation and not os.path.isdir(self.DATADIR):
-                os.makedirs(self.DATADIR)
-            if not remote_operation and not os.path.isdir(self.STOREDIR):
-                os.makedirs(self.STOREDIR)
-            if not remote_operation and not os.path.isdir(self.STAGEDIR):
-                os.makedirs(self.STAGEDIR)
-            elif remote_operation and not os.path.isdir(self.REMOTEDIR):
-                os.makedirs(self.REMOTEDIR)
+        if not remote_operation:
+            if not os.path.isdir(self.STOREDIR):
+                return
+            store_uids = [psplitext(x)[0] for x in os.listdir(self.STOREDIR) if x.endswith('.npy')]
+            for uid in store_uids:
+                file_pth = pjoin(self.STOREDIR, f'{uid}.npy')
+                self.rFp[uid] = partial(np.lib.format.open_memmap, file_pth, 'r')
 
     def close(self, *args, **kwargs):
         '''Close any open file handles.
         '''
-        for k in list(self.wFp.keys()):
-            self.wFp.flush()
-            del self.wFp[k]
+        if self.mode == 'a':
+            if self.w_uid in self.wFp:
+                self.wFp[self.w_uid].flush()
+                self.w_uid = None
+                self.hIdx = None
+                self.hMaxSize = None
+            for k in list(self.wFp.keys()):
+                del self.wFp[k]
 
         for k in list(self.rFp.keys()):
             del self.rFp[k]
@@ -176,33 +182,54 @@ class NUMPY_00_FileHandles(object):
         '''
         from ..records.hashs import HashQuery
 
-        DATA_DIR = config.get('hangar.repository.data_dir')
-        STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
         FmtCode = NUMPY_00_Parser().FmtCode
         FmtBackend = NUMPY_00_Parser().FmtBackend
-
-        data_pth = pjoin(repo_path, DATA_DIR, FmtCode)
-        stage_dir = pjoin(repo_path, STAGE_DATA_DIR, FmtCode)
-        if os.path.isdir(stage_dir) is False:
+        dat_dir = pjoin(repo_path, DATA_DIR, FmtCode)
+        stg_dir = pjoin(repo_path, STAGE_DATA_DIR, FmtCode)
+        if not os.path.isdir(stg_dir):
             return
 
         stgHashs = HashQuery(stagehashenv).list_all_hash_values()
-        stg_data_fs = set(v.fname for v in stgHashs if v.backend == FmtBackend)
+        stg_files = set(v.uid for v in stgHashs if v.backend == FmtBackend)
+        stg_uids = set(psplitext(x)[0] for x in os.listdir(stg_dir) if x.endswith('.npy'))
+        unused_uids = stg_uids.difference(stg_files)
 
-        for stgDigestDir in os.listdir(stage_dir):
-            subDigestPth = pjoin(stage_dir, stgDigestDir)
-            if os.path.isdir(subDigestPth):
-                stage_files = [x for x in os.listdir(subDigestPth) if x.endswith('.npy')]
-                for instance in stage_files:
-                    if instance in stg_data_fs:
-                        continue
-                    else:
-                        remove_link_pth = pjoin(subDigestPth, instance)
-                        remove_data_pth = pjoin(data_pth, stgDigestDir, instance)
-                        os.remove(remove_link_pth)
-                        os.remove(remove_data_pth)
+        for unused_uid in unused_uids:
+            remove_link_pth = pjoin(stg_dir, f'{unused_uid}.npy')
+            remove_data_pth = pjoin(dat_dir, f'{unused_uid}.npy')
+            os.remove(remove_link_pth)
+            os.remove(remove_data_pth)
 
-    def read_data(self, hashVal: namedtuple, *args, **kwargs) -> np.ndarray:
+    def create_schema(self, *, remote_operation: bool = False):
+        '''stores the shape and dtype as the schema of a dataset.
+
+        Parameters
+        ----------
+        remote_operation : optional, kwarg only, bool
+            if this schema is being created from a remote fetch operation, then do not
+            place the file symlink in the staging directory. Instead symlink it
+            to a special remote staging directory. (default is False, which places the
+            symlink in the stage data directory.)
+        '''
+        uid = random_string()
+        file_path = pjoin(self.DATADIR, f'{uid}.npy')
+
+        m = np.lib.format.open_memmap(file_path,
+                                      mode='w+',
+                                      dtype=self.schema_dtype,
+                                      shape=(500, *self.schema_shape))
+        self.wFp[uid] = m
+        self.w_uid = uid
+        self.hIdx = 0
+        self.hMaxSize = 500  # TODO; CONFIGURE
+
+        if remote_operation:
+            symlink_file_path = pjoin(self.REMOTEDIR, f'{uid}.npy')
+        else:
+            symlink_file_path = pjoin(self.STAGEDIR, f'{uid}.npy')
+        symlink_rel(file_path, symlink_file_path)
+
+    def read_data(self, hashVal: namedtuple) -> np.ndarray:
         '''Read data from disk written in the numpy_00 fmtBackend
 
         Parameters
@@ -215,48 +242,21 @@ class NUMPY_00_FileHandles(object):
         np.ndarray
             tensor data stored at the provided hashVal specification.
         '''
-        key = f'{hashVal.schema}_{hashVal.uid}'
-        srcSlc = (self.slcExpr[hashVal.dataset_idx], *(self.slcExpr[0:x] for x in hashVal.shape))
+        srcSlc = (self.slcExpr[int(hashVal.dataset_idx)], *(self.slcExpr[0:x] for x in hashVal.shape))
+        try:
+            res = self.Fp[hashVal.uid][srcSlc]
+        except TypeError:
+            self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
+            res = self.Fp[hashVal.uid][srcSlc]
+        return res
 
-        if key in self.rFp:
-            out = self.rFp[key][srcSlc]
-        elif key in self.wFp:
-            out = self.wFp[key][srcSlc]
-        else:
-            stagePth = pjoin(self.STAGEDIR, hashVal.schema, f'{hashVal.uid}.npy')
-            storePth = pjoin(self.STOREDIR, hashVal.schema, f'{hashVal.uid}.npy')
-            if os.path.islink(stagePth):
-                self.rFp[key] = np.lib.format.open_memmap(stagePth, mode='r')
-                out = self.rFp[key][srcSlc]
-            elif os.path.islink(storePth):
-                self.rFp[key] = np.lib.format.open_memmap(storePth, mode='r')
-                out = self.rFp[key][srcSlc]
-
-        return out
-
-        # fname = hashVal.fname
-        # digest_prefix = fname[:2]
-
-        # try:
-        #     data_fp = pjoin(self.STOREDIR, digest_prefix, fname)
-        #     data = np.load(data_fp)
-        # except FileNotFoundError:
-        #     data_fp = pjoin(self.STAGEDIR, digest_prefix, fname)
-        #     data = np.load(data_fp)
-        # return data
-
-    def write_data(self, array: np.ndarray, dhash: str, shash: str,
-                   *, remote_operation: bool = False) -> bytes:
+    def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
         '''writes array data to disk in the numpy_00 fmtBackend
 
         Parameters
         ----------
         array : np.ndarray
             tensor to write to disk
-        dhash : str
-            hash of the tensor data
-        shash : str
-            hash of the sample's dataset schema
         remote_operation : bool, optional, kwarg only
             True if writing in a remote operation, otherwise False. Default is
             False
@@ -271,38 +271,19 @@ class NUMPY_00_FileHandles(object):
         FileExistsError
             If the provided data hash exists on disk
         '''
-        if shash in self.wFp:
-            mmapArr = self.wFp[shash]
-            idx = int(mmapArr.item(0))
-            uid = self.wFpUID[shash]
-            mmapArr.itemset(0, idx + 1)
+        if self.w_uid in self.wFp:
+            self.hIdx += 1
+            if self.hIdx >= self.hMaxSize:
+                self.wFp[self.w_uid].flush()
+                self.create_schema(remote_operation=remote_operation)
         else:
-            uid = random_string()
-            data_dir = pjoin(self.DATADIR, shash)
-            data_fp = pjoin(data_dir, f'{uid}.npy')
+            self.create_schema(remote_operation=remote_operation)
 
-        try:
-            with open(data_fp, 'xb') as fh:
-                np.save(fh, array)
-        except FileNotFoundError:
-            os.makedirs(data_dir)
-            with open(data_fp, 'xb') as fh:
-                np.save(fh, array)
-        except FileExistsError:
-            logger.error(f'dhash: {dhash}')
-            raise
+        destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
+        self.wFp[self.w_uid][destSlc] = array
+        self.wFp[self.w_uid].flush()
 
-        if not remote_operation:
-            symlink_dest = pjoin(self.STAGEDIR, dhash[:2], f'{dhash}.npy')
-        else:
-            symlink_dest = pjoin(self.REMOTEDIR, dhash[:2], f'{dhash}.npy')
-
-        try:
-            symlink_rel(data_fp, symlink_dest)
-        except FileNotFoundError:
-            symlink_dir = os.path.dirname(symlink_dest)
-            os.makedirs(symlink_dir)
-            symlink_rel(data_fp, symlink_dest)
-
-        hashVal = self.fmtParser.encode(schema=shash, data_hash=dhash)
+        hashVal = self.fmtParser.encode(uid=self.w_uid,
+                                        dataset_idx=self.hIdx,
+                                        shape=array.shape)
         return hashVal
