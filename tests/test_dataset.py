@@ -472,12 +472,12 @@ class TestDataWithFixedSizedDataset(object):
         assert len(dset) == 0
         dset.add(array5by7, '1')
         assert len(dset) == 1
-        co.commit()
+        co.commit('dset len test')
         dset.add(array5by7, '2')
         co.close()
-        # co = repo.checkout()
-        # dset = co.datasets['dset']
-        # print(len(dset))
+        co = repo.checkout()
+        dset = co.datasets['dset']
+        assert len(dset) == 1
 
 
 @pytest.mark.skip(reason='not implemented')
