@@ -8,34 +8,50 @@ from os.path import splitext as psplitext
 from functools import partial
 from typing import MutableMapping
 
-
 import h5py
 import numpy as np
 
-from .. import __version__, config
+from .. import __version__
+from .. import constants as c
 from ..utils import find_next_prime, symlink_rel, random_string
 
 logger = logging.getLogger(__name__)
 
-SEP = config.get('hangar.seps.key')
-LISTSEP = config.get('hangar.seps.list')
-SLICESEP = config.get('hangar.seps.slice')
-HASHSEP = config.get('hangar.seps.hash')
 
-STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
-DATA_DIR = config.get('hangar.repository.data_dir')
-STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
+# ----------------------------- Configuration ---------------------------------
 
-HDF_CHUNK_OPTS = config.get('hangar.hdf5.dataset.chunking')
-HDF_DSET_CONTENTS = config.get('hangar.hdf5.contents')
-HDF_ATTRS = config.get('hangar.hdf5.attributes.keys')
 
-HDF_DSET_FILTERS = config.get('hangar.hdf5.dataset.filters.default')
-if HDF_DSET_FILTERS['complib'].startswith('blosc'):
+# contents of a single hdf5 file
+COLLECTION_SIZE = 500
+COLLECTION_COUNT = 100
+
+# chunking options for compression schemes
+CHUNK_MAX_NBYTES = 400_000
+CHUNK_MAX_RDCC_NBYTES = 100_000_000
+CHUNK_RDCC_W0 = 0.75
+
+# filter definition and backup selection if not available.
+filter_options = {
+    'default': {
+        'shuffle': True,
+        'complib': 'blosc:lz4',
+        'complevel': 5,
+        'fletcher32': True},
+    'backup': {
+        'shuffle': True,
+        'complib': 'lzf',
+        'complevel': None,
+        'fletcher32': True},
+}
+if filter_options['default']['complib'].startswith('blosc'):
     bloscFilterAvail = h5py.h5z.filter_avail(32001)
     if not bloscFilterAvail:
-        HDF_DSET_FILTERS = config.get('hangar.hdf5.dataset.filters.backup')
+        HDF5_FILTER = filter_options['backup']
+    else:
+        HDF5_FILTER = filter_options['default']
+
+
+# -------------------------------- Parser Implementation ----------------------
 
 
 class HDF5_00_Parser(object):
@@ -75,10 +91,10 @@ class HDF5_00_Parser(object):
         bytes
             hash data db value recording all input specifications.
         '''
-        out_str = f'{self.FmtCode}{SEP}{uid}'\
-                  f'{HASHSEP}'\
-                  f'{dataset}{LISTSEP}{dataset_idx}'\
-                  f'{SLICESEP}'\
+        out_str = f'{self.FmtCode}{c.SEP_KEY}{uid}'\
+                  f'{c.SEP_HSH}'\
+                  f'{dataset}{c.SEP_LST}{dataset_idx}'\
+                  f'{c.SEP_SLC}'\
                   f'{self.ShapeFmtRE.sub("", str(shape))}'
         return out_str.encode()
 
@@ -98,12 +114,12 @@ class HDF5_00_Parser(object):
         '''
         db_str = db_val.decode()[self.FmtCodeIdx:]
 
-        uid, _, dset_vals = db_str.partition(HASHSEP)
+        uid, _, dset_vals = db_str.partition(c.SEP_HSH)
 
-        dataset_vs, _, shape_vs = dset_vals.rpartition(SLICESEP)
-        dataset, dataset_idx = dataset_vs.split(LISTSEP)
+        dataset_vs, _, shape_vs = dset_vals.rpartition(c.SEP_SLC)
+        dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
         # if the data is of empty shape -> ()
-        shape = () if shape_vs == '' else tuple([int(x) for x in shape_vs.split(LISTSEP)])
+        shape = () if shape_vs == '' else tuple([int(x) for x in shape_vs.split(c.SEP_LST)])
 
         raw_val = self.DataHashSpec(backend=self.FmtBackend,
                                     uid=uid,
@@ -113,10 +129,8 @@ class HDF5_00_Parser(object):
         return raw_val
 
 
-'''
-Dense Array Methods
--------------------
-'''
+
+# ------------------------- Accessor Object -----------------------------------
 
 
 class HDF5_00_FileHandles(object):
@@ -147,10 +161,10 @@ class HDF5_00_FileHandles(object):
         self.slcExpr.maketuple = False
         self.fmtParser = HDF5_00_Parser()
 
-        self.STAGEDIR = pjoin(self.repo_path, STAGE_DATA_DIR, self.fmtParser.FmtCode)
-        self.REMOTEDIR = pjoin(self.repo_path, REMOTE_DATA_DIR, self.fmtParser.FmtCode)
-        self.DATADIR = pjoin(self.repo_path, DATA_DIR, self.fmtParser.FmtCode)
-        self.STOREDIR = pjoin(self.repo_path, STORE_DATA_DIR, self.fmtParser.FmtCode)
+        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, self.fmtParser.FmtCode)
+        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, self.fmtParser.FmtCode)
+        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, self.fmtParser.FmtCode)
+        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, self.fmtParser.FmtCode)
         if not os.path.isdir(self.DATADIR):
             os.makedirs(self.DATADIR)
 
@@ -159,8 +173,8 @@ class HDF5_00_FileHandles(object):
 
     def __exit__(self, *exc):
         if self.w_uid in self.wFp:
-            self.wFp[self.w_uid]['/'].attrs.modify('next_dset', (self.hNextPath, self.hIdx))
-            self.wFp[self.w_uid]['/'].attrs.modify('num_collections_remaining', self.hColsRemain)
+            self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
+            self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
             self.wFp[self.w_uid].flush()
 
     @staticmethod
@@ -292,13 +306,13 @@ class HDF5_00_FileHandles(object):
         sample_array = np.zeros(self.schema_shape, dtype=self.schema_dtype)
         chunk_shape, chunk_nbytes = __class__._chunk_opts(
             sample_array=sample_array,
-            max_chunk_nbytes=HDF_CHUNK_OPTS['max_nbytes'])
+            max_chunk_nbytes=CHUNK_MAX_NBYTES)
 
         rdcc_nbytes_val = math.ceil((sample_array.nbytes / chunk_nbytes) * chunk_nbytes * 10)
-        if rdcc_nbytes_val < HDF_CHUNK_OPTS['max_nbytes']:
-            rdcc_nbytes_val = HDF_CHUNK_OPTS['max_nbytes']
-        elif rdcc_nbytes_val > HDF_CHUNK_OPTS['max_rdcc_nbytes']:
-            rdcc_nbytes_val = HDF_CHUNK_OPTS['max_rdcc_nbytes']
+        if rdcc_nbytes_val < CHUNK_MAX_NBYTES:
+            rdcc_nbytes_val = CHUNK_MAX_NBYTES
+        elif rdcc_nbytes_val > CHUNK_MAX_RDCC_NBYTES:
+            rdcc_nbytes_val = CHUNK_MAX_RDCC_NBYTES
 
         rdcc_nslots_guess = math.ceil(rdcc_nbytes_val / chunk_nbytes) * 100
         rdcc_nslots_prime_val = find_next_prime(rdcc_nslots_guess)
@@ -312,55 +326,52 @@ class HDF5_00_FileHandles(object):
                                   mode='w',
                                   libver='latest',
                                   rdcc_nbytes=rdcc_nbytes_val,
-                                  rdcc_w0=HDF_CHUNK_OPTS['rdcc_w0'],
+                                  rdcc_w0=CHUNK_RDCC_W0,
                                   rdcc_nslots=rdcc_nslots_prime_val)
-
         self.w_uid = uid
         self.hNextPath = 0
         self.hIdx = 0
-        self.hColsRemain = HDF_DSET_CONTENTS['num_collections']
-        self.hMaxSize = HDF_DSET_CONTENTS['collection_size']
+        self.hColsRemain = COLLECTION_COUNT
+        self.hMaxSize = COLLECTION_SIZE
 
         if remote_operation:
             symlink_file_path = pjoin(self.REMOTEDIR, f'{uid}.hdf5')
         else:
             symlink_file_path = pjoin(self.STAGEDIR, f'{uid}.hdf5')
-
         symlink_rel(file_path, symlink_file_path)
 
         # ----------------------- Dataset Creation ----------------------------
 
-        optKwargs = __class__._dataset_opts(**HDF_DSET_FILTERS)
-
-        for dset_num in range(HDF_DSET_CONTENTS['num_collections']):
+        optKwargs = self._dataset_opts(**HDF5_FILTER)
+        for dset_num in range(COLLECTION_COUNT):
             self.wFp[uid].create_dataset(
                 f'/{dset_num}',
-                shape=(HDF_DSET_CONTENTS['collection_size'], *sample_array.shape),
+                shape=(COLLECTION_SIZE, *sample_array.shape),
                 dtype=sample_array.dtype,
-                maxshape=(HDF_DSET_CONTENTS['collection_size'], *sample_array.shape),
+                maxshape=(COLLECTION_SIZE, *sample_array.shape),
                 chunks=(1, *chunk_shape),
                 **optKwargs)
 
         # ---------------------- Attribute Config Vals ------------------------
 
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['hangar_version']] = __version__
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['schema_shape']] = sample_array.shape
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['schema_dtype']] = sample_array.dtype.num
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['next_location']] = (0, 0)
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['collection_max_size']] = HDF_DSET_CONTENTS['collection_size']
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['collection_total']] = HDF_DSET_CONTENTS['num_collections']
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['collections_remaining']] = HDF_DSET_CONTENTS['num_collections']
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['rdcc_nbytes']] = rdcc_nbytes_val
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['rdcc_w0']] = HDF_CHUNK_OPTS['rdcc_w0']
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['rdcc_nslots']] = rdcc_nslots_prime_val
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['shuffle']] = optKwargs['shuffle']
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['complib']] = HDF_DSET_FILTERS['complib']
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['fletcher32']] = optKwargs['fletcher32']
-        self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['chunk_shape']] = chunk_shape
+        self.wFp[self.w_uid]['/'].attrs['HANGAR_VERSION'] = __version__
+        self.wFp[self.w_uid]['/'].attrs['schema_shape'] = sample_array.shape
+        self.wFp[self.w_uid]['/'].attrs['schema_dtype_num'] = sample_array.dtype.num
+        self.wFp[self.w_uid]['/'].attrs['next_location'] = (0, 0)
+        self.wFp[self.w_uid]['/'].attrs['collection_max_size'] = COLLECTION_SIZE
+        self.wFp[self.w_uid]['/'].attrs['collection_total'] = COLLECTION_COUNT
+        self.wFp[self.w_uid]['/'].attrs['collections_remaining'] = COLLECTION_COUNT
+        self.wFp[self.w_uid]['/'].attrs['rdcc_nbytes'] = rdcc_nbytes_val
+        self.wFp[self.w_uid]['/'].attrs['rdcc_w0'] = CHUNK_RDCC_W0
+        self.wFp[self.w_uid]['/'].attrs['rdcc_nslots'] = rdcc_nslots_prime_val
+        self.wFp[self.w_uid]['/'].attrs['shuffle'] = HDF5_FILTER['shuffle']
+        self.wFp[self.w_uid]['/'].attrs['complib'] = HDF5_FILTER['complib']
+        self.wFp[self.w_uid]['/'].attrs['fletcher32'] = HDF5_FILTER['fletcher32']
+        self.wFp[self.w_uid]['/'].attrs['chunk_shape'] = chunk_shape
         if optKwargs['compression_opts'] is not None:
-            self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['comp_opts']] = optKwargs['compression_opts']
+            self.wFp[self.w_uid]['/'].attrs['compression_opts'] = optKwargs['compression_opts']
         else:
-            self.wFp[self.w_uid]['/'].attrs[HDF_ATTRS['comp_opts']] = False
+            self.wFp[self.w_uid]['/'].attrs['compression_opts'] = False
 
         self.wFp[self.w_uid].flush()
         try:
@@ -413,8 +424,8 @@ class HDF5_00_FileHandles(object):
         '''
         if self.mode == 'a':
             if self.w_uid in self.wFp:
-                self.wFp[self.w_uid]['/'].attrs.modify('next_dset', (self.hNextPath, self.hIdx))
-                self.wFp[self.w_uid]['/'].attrs.modify('num_collections_remaining', self.hColsRemain)
+                self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
+                self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
                 self.wFp[self.w_uid].flush()
                 self.hMaxSize = None
                 self.hNextPath = None
@@ -455,8 +466,8 @@ class HDF5_00_FileHandles(object):
 
         FmtCode = HDF5_00_Parser().FmtCode
         FmtBackend = HDF5_00_Parser().FmtBackend
-        dat_dir = pjoin(repo_path, DATA_DIR, FmtCode)
-        stg_dir = pjoin(repo_path, STAGE_DATA_DIR, FmtCode)
+        dat_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
+        stg_dir = pjoin(repo_path, c.DIR_DATA_STAGE, FmtCode)
         if not os.path.isdir(stg_dir):
             return
 
@@ -532,8 +543,8 @@ class HDF5_00_FileHandles(object):
                 self.hNextPath += 1
                 self.hColsRemain -= 1
                 if self.hColsRemain <= 1:
-                    self.wFp[self.w_uid]['/'].attrs.modify('next_dset', (self.hNextPath, self.hIdx))
-                    self.wFp[self.w_uid]['/'].attrs.modify('num_collections_remaining', self.hColsRemain)
+                    self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
+                    self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
                     self.wFp[self.w_uid].flush()
                     self.create_schema(remote_operation=remote_operation)
         else:

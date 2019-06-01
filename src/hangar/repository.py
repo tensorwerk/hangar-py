@@ -4,17 +4,16 @@ import logging
 from tqdm.auto import tqdm
 import grpc
 
-from . import config_logging
-config_logging.setup_logging()
-
-from . import config, merger
+from . import merger
+from . import constants as c
 from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
 from .diagnostics import graphing
 from .records import heads, parsing, summarize, commiting
 from .remote.hangar_client import HangarClient
-from .utils import is_valid_directory_path, is_suitable_user_key
+from .utils import is_valid_directory_path, is_suitable_user_key, setup_logging
 
+setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +41,7 @@ class Repository(object):
             logger.error(e, exc_info=False)
             raise
 
-        repo_pth = os.path.join(usr_path, config.get('hangar.repository.hangar_dir_name'))
+        repo_pth = os.path.join(usr_path, c.DIR_HANGAR)
         self._env: Environments = Environments(repo_path=repo_pth)
         self._repo_path: str = self._env.repo_path
         self._client: HangarClient = None

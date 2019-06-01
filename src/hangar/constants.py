@@ -8,6 +8,11 @@ DIR_DATA_STORE = 'store_data'
 DIR_DATA_STAGE = 'stage_data'
 DIR_DATA_REMOTE = 'remote_data'
 
+# configuration file names:
+
+CONFIG_USER_NAME = 'config_user.yml'
+CONFIG_SERVER_NAME = 'config_server.yml'
+
 # LMDB database names and settings.
 
 LMDB_SETTINGS = {
@@ -33,7 +38,7 @@ SEP_CMT = ' << '
 SEP_SLC = " * "
 SEP_HSH = ' $ '
 
-K_BRCH = f'branch{SEP_KEY}'
+K_BRANCH = f'branch{SEP_KEY}'
 K_HEAD = 'head'
 K_REMOTES = 'remote{SEP_KEY}'
 K_STGARR = f'a{SEP_KEY}'

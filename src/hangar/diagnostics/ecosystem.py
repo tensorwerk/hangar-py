@@ -5,7 +5,6 @@ import platform
 import struct
 import sys
 
-from .. import config
 from ..utils import ignoring
 
 required_packages = [('hangar', lambda p: p.__version__),
@@ -25,8 +24,7 @@ def get_versions():
     """
 
     d = {'host': get_system_info(),
-         'packages': get_package_info(required_packages),
-         'config': config.config}
+         'packages': get_package_info(required_packages)}
     return d
 
 

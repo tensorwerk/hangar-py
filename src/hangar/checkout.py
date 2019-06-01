@@ -7,7 +7,7 @@ import warnings
 
 import numpy as np
 
-from . import config
+from . import constants as c
 from .dataset import Datasets
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
@@ -19,9 +19,6 @@ from .records import heads
 from .utils import cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
-
-STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
-STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
 
 
 class ReaderCheckout(object):
@@ -242,8 +239,8 @@ class WriterCheckout(object):
         self._branch_name = branch_name
         self._writer_lock = str(uuid4())
         self._repo_path = repo_pth
-        self._repo_stage_path = pjoin(self._repo_path, STAGE_DATA_DIR)
-        self._repo_store_path = pjoin(self._repo_path, STORE_DATA_DIR)
+        self._repo_stage_path = pjoin(self._repo_path, c.DIR_DATA_STAGE)
+        self._repo_store_path = pjoin(self._repo_path, c.DIR_DATA_STORE)
         self._labelenv = labelenv
         self._stageenv = stageenv
         self._hashenv = hashenv

@@ -1,8 +1,6 @@
 from . import parsing
-from .. import config
+from .. import constants as c
 from ..context import TxnRegister
-
-SEP = config.get('hangar.seps.key')
 
 
 '''
@@ -69,8 +67,7 @@ class RecordQuery(object):
             dictionary of schema keys and db_values
         '''
         schemaRecords = {}
-        SCHEMA = config.get('hangar.keys.schema')
-        startSchemaRangeKey = f'{SCHEMA}'.encode()
+        startSchemaRangeKey = f'{c.K_SCHEMA}'.encode()
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
@@ -112,7 +109,7 @@ class RecordQuery(object):
             with datatxn.cursor() as cursor:
                 # with datatxn.cursor() as cursor:
                 dataRecordsExist = cursor.set_range(startDatasetRecordCountRangeKey)
-                dataRecKeySubString = f'{startDatasetRecordCountRangeKey.decode()}{SEP}'.encode()
+                dataRecKeySubString = f'{startDatasetRecordCountRangeKey.decode()}{c.SEP_KEY}'.encode()
                 cursor.next()
                 while dataRecordsExist:
                     dataRecKey, dataRecVal = cursor.item()

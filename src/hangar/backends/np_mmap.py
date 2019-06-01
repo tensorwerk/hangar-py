@@ -9,21 +9,10 @@ from os.path import splitext as psplitext
 
 import numpy as np
 
-from .. import config
-from .. import new_config as c
+from .. import constants as c
 from ..utils import symlink_rel, random_string
 
 logger = logging.getLogger(__name__)
-
-SEP = config.get('hangar.seps.key')
-LISTSEP = config.get('hangar.seps.list')
-SLICESEP = config.get('hangar.seps.slice')
-HASHSEP = config.get('hangar.seps.hash')
-
-STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
-DATA_DIR = config.get('hangar.repository.data_dir')
-STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
 
 
 class NUMPY_00_Parser(object):
@@ -60,10 +49,10 @@ class NUMPY_00_Parser(object):
         bytes
             hash data db value recording all input specifications
         '''
-        out_str = f'{self.FmtCode}{SEP}{uid}'\
-                  f'{HASHSEP}'\
+        out_str = f'{self.FmtCode}{c.SEP_KEY}{uid}'\
+                  f'{c.SEP_HSH}'\
                   f'{dataset_idx}'\
-                  f'{SLICESEP}'\
+                  f'{c.SEP_SLC}'\
                   f'{self.ShapeFmtRE.sub("", str(shape))}'
         return out_str.encode()
 
@@ -82,10 +71,10 @@ class NUMPY_00_Parser(object):
             `uid`, `dataset_idx` and `shape` fields.
         '''
         db_str = db_val.decode()[self.FmtCodeIdx:]
-        uid, _, dset_vals = db_str.partition(HASHSEP)
-        dataset_idx, _, shape_vs = dset_vals.rpartition(SLICESEP)
+        uid, _, dset_vals = db_str.partition(c.SEP_HSH)
+        dataset_idx, _, shape_vs = dset_vals.rpartition(c.SEP_SLC)
         # if the data is of empty shape -> ()
-        shape = () if shape_vs == '' else tuple([int(x) for x in shape_vs.split(LISTSEP)])
+        shape = () if shape_vs == '' else tuple([int(x) for x in shape_vs.split(c.SEP_LST)])
         raw_val = self.DataHashSpec(backend=self.FmtBackend,
                                     uid=uid,
                                     dataset_idx=dataset_idx,
@@ -113,10 +102,10 @@ class NUMPY_00_FileHandles(object):
         self.slcExpr.maketuple = False
         self.fmtParser = NUMPY_00_Parser()
 
-        self.STAGEDIR = pjoin(self.repo_path, STAGE_DATA_DIR, self.fmtParser.FmtCode)
-        self.REMOTEDIR = pjoin(self.repo_path, REMOTE_DATA_DIR, self.fmtParser.FmtCode)
-        self.DATADIR = pjoin(self.repo_path, DATA_DIR, self.fmtParser.FmtCode)
-        self.STOREDIR = pjoin(self.repo_path, STORE_DATA_DIR, self.fmtParser.FmtCode)
+        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, self.fmtParser.FmtCode)
+        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, self.fmtParser.FmtCode)
+        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, self.fmtParser.FmtCode)
+        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, self.fmtParser.FmtCode)
         if not os.path.isdir(self.DATADIR):
             os.makedirs(self.DATADIR)
 
@@ -192,8 +181,8 @@ class NUMPY_00_FileHandles(object):
 
         FmtCode = NUMPY_00_Parser().FmtCode
         FmtBackend = NUMPY_00_Parser().FmtBackend
-        dat_dir = pjoin(repo_path, DATA_DIR, FmtCode)
-        stg_dir = pjoin(repo_path, STAGE_DATA_DIR, FmtCode)
+        dat_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
+        stg_dir = pjoin(repo_path, c.DIR_DATA_STAGE, FmtCode)
         if not os.path.isdir(stg_dir):
             return
 

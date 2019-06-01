@@ -6,9 +6,10 @@ from os.path import join as pjoin
 import shutil
 
 import lmdb
+import yaml
 
 from . import heads, parsing
-from .. import config
+from .. import constants as c
 from ..context import TxnRegister
 from .queries import RecordQuery
 from ..utils import symlink_rel
@@ -231,11 +232,9 @@ def get_commit_ref_contents(refenv, commit_hash):
     dict
         nested dict
     '''
-    LMDB_CONFIG = config.get('hangar.lmdb')
-
     with tempfile.TemporaryDirectory() as tempD:
         tmpDF = os.path.join(tempD, 'test.lmdb')
-        tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+        tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
         unpack_commit_ref(refenv, tmpDB, commit_hash)
         outDict = RecordQuery(tmpDB).all_records()
         tmpDB.close()
@@ -419,8 +418,12 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
         master_branch_name=merge_master,
         dev_branch_name=merge_dev)
 
-    USER_NAME = config.get('user.name')
-    USER_EMAIL = config.get('user.email')
+    user_info_pth = pjoin(repo_path, 'config_user.yml')
+    with open(user_info_pth) as f:
+        user_info = yaml.safe_load(f.read()) or {}
+
+    USER_NAME = user_info['name']
+    USER_EMAIL = user_info['email']
     if (USER_NAME is None) or (USER_EMAIL is None):
         raise RuntimeError(f'Username and Email are required. Please configure.')
 
@@ -547,15 +550,12 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
         area)
 
     '''
-    STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
-    store_dir = pjoin(repo_path, STORE_DATA_DIR)
+    store_dir = pjoin(repo_path, c.DIR_DATA_STORE)
 
     if not remote_operation:
-        STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-        process_dir = pjoin(repo_path, STAGE_DATA_DIR)
+        process_dir = pjoin(repo_path, c.DIR_DATA_STAGE)
     else:
-        REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
-        process_dir = pjoin(repo_path, REMOTE_DATA_DIR)
+        process_dir = pjoin(repo_path, c.DIR_DATA_REMOTE)
 
     dirs_to_make, symlinks_to_make = [], []
     for root, dirs, files in os.walk(process_dir):

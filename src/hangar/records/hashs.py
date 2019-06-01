@@ -1,7 +1,7 @@
 import logging
 
 from . import parsing
-from .. import config
+from .. import constants as c
 from ..context import TxnRegister
 from ..backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP
 
@@ -40,8 +40,7 @@ class HashQuery(object):
         list of tuples of bytes
             list type stack of tuples with each db_key, db_val pair
         '''
-        HASH = config.get('hangar.keys.hash')
-        startHashRangeKey = f'{HASH}'.encode()
+        startHashRangeKey = f'{c.K_HASH}'.encode()
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             with hashtxn.cursor() as cursor:
@@ -70,8 +69,7 @@ class HashQuery(object):
         list of tuples of bytes
             list type stack of tuples with each db_key, db_val pair
         '''
-        SCHEMA = config.get('hangar.keys.schema')
-        startSchemaRangeKey = f'{SCHEMA}'.encode()
+        startSchemaRangeKey = f'{c.K_SCHEMA}'.encode()
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             with hashtxn.cursor() as cursor:

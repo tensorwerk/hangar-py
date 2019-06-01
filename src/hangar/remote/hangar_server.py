@@ -17,7 +17,8 @@ from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
 from .request_header_validator_interceptor import RequestHeaderValidatorInterceptor
-from .. import config
+from . import config
+from .. import constants as c
 from ..context import Environments
 from ..context import TxnRegister
 from ..records import commiting
@@ -43,13 +44,13 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         except OSError:
             pass
 
-        src_path = pjoin(os.path.dirname(__file__), 'config_server.yml')
+        src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
         config.ensure_file(src_path, destination=repo_path, comment=False)
         config.refresh(paths=[repo_path])
 
         self.txnregister = TxnRegister()
         self.repo_path = self.env.repo_path
-        self.data_dir = pjoin(self.repo_path, config.get('hangar.repository.data_dir'))
+        self.data_dir = pjoin(self.repo_path, c.DIR_DATA)
 
     # -------------------- Client Config --------------------------------------
 
@@ -469,10 +470,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         uncompBytes = blosc.decompress(hBytes)
         c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=False))
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             s_hashes = set(queries.RecordQuery(tmpDB).data_hashes())
             tmpDB.close()
@@ -513,10 +513,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         uncompBytes = blosc.decompress(hBytes)
         c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=False))
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             s_hashes = set(queries.RecordQuery(tmpDB).metadata_hashes())
             tmpDB.close()
@@ -551,10 +550,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         commit = request.commit
         c_schemas = set(request.schema_digests)
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             s_schemas = set(queries.RecordQuery(tmpDB).schema_hashes())
             tmpDB.close()
@@ -588,7 +586,7 @@ def serve(hangar_path, overwrite=False):
     # ------------------- Configure Server ------------------------------------
 
     src_path = pjoin(os.path.dirname(__file__), 'config_server.yml')
-    dest_path = pjoin(hangar_path, config.get('hangar.repository.hangar_server_dir_name'))
+    dest_path = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
     config.ensure_file(src_path, destination=dest_path, comment=False)
     config.refresh(paths=[dest_path])
 

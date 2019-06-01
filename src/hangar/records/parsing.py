@@ -1,5 +1,4 @@
 import json
-import re
 from collections import namedtuple
 from itertools import cycle
 from time import sleep
@@ -9,24 +8,7 @@ from random import randint
 import blosc
 import msgpack
 
-from .. import config
-
-HEAD = config.get('hangar.keys.head')
-BRCH = config.get('hangar.keys.brch')
-STGARR = config.get('hangar.keys.stgarr')
-SCHEMA = config.get('hangar.keys.schema')
-HASH = config.get('hangar.keys.hash')
-STGMETA = config.get('hangar.keys.stgmeta')
-
-LISTSEP = config.get('hangar.seps.list')
-SEP = config.get('hangar.seps.key')
-SLICESEP = config.get('hangar.seps.slice')
-COMMITSEP = config.get('hangar.seps.commit')
-HASHSEP = config.get('hangar.seps.hash')
-REMOTES = config.get('hangar.keys.remotes')
-
-WRITER_LOCK = config.get('hangar.keys.writer_lock')
-WRITER_LOCK_SENTINEL = config.get('hangar.keys.writer_lock_sentinel')
+from .. import constants as c
 
 cycle_list = [str(c).rjust(4, '0') for c in range(9_999)]
 NAME_CYCLER = cycle(cycle_list)
@@ -64,7 +46,7 @@ def repo_head_db_key():
     bytestring
         lmdb key to query while looking up the head staging branch name
     '''
-    db_key = HEAD.encode()
+    db_key = c.K_HEAD.encode()
     return db_key
 
 
@@ -72,12 +54,12 @@ def repo_head_db_key():
 
 
 def repo_head_db_val_from_raw_val(branch_name):
-    db_val = f'{BRCH}{branch_name}'.encode()
+    db_val = f'{c.K_BRANCH}{branch_name}'.encode()
     return db_val
 
 
 def repo_head_raw_val_from_db_val(db_val):
-    raw_val = db_val.decode().replace(BRCH, '', 1)
+    raw_val = db_val.decode().replace(c.K_BRANCH, '', 1)
     return raw_val
 
 
@@ -90,7 +72,7 @@ Methods working with branch names / head commit values
 
 
 def repo_branch_head_db_key_from_raw_key(branch_name):
-    db_key = f'{BRCH}{branch_name}'.encode()
+    db_key = f'{c.K_BRANCH}{branch_name}'.encode()
     return db_key
 
 
@@ -104,7 +86,7 @@ def repo_branch_head_db_val_from_raw_val(commit_hash):
 
 def repo_branch_head_raw_key_from_db_key(db_key):
     key_str = db_key.decode()
-    branch_name = key_str.replace(BRCH, '', 1)
+    branch_name = key_str.replace(c.K_BRANCH, '', 1)
     return branch_name
 
 
@@ -125,12 +107,12 @@ Methods working with writer lock key/values
 
 
 def repo_writer_lock_db_key():
-    db_key = f'{WRITER_LOCK}'.encode()
+    db_key = f'{c.K_WLOCK}'.encode()
     return db_key
 
 
 def repo_writer_lock_sentinal_db_val():
-    db_val = f'{WRITER_LOCK_SENTINEL}'.encode()
+    db_val = f'{c.WLOCK_SENTINAL}'.encode()
     return db_val
 
 
@@ -215,7 +197,7 @@ def data_record_raw_key_from_db_key(db_key):
         Tuple containing the record dset_name, data_name
     '''
     key = db_key.decode()
-    dset_name, data_name = key.replace(STGARR, '', 1).split(SEP)
+    dset_name, data_name = key.replace(c.K_STGARR, '', 1).split(c.SEP_KEY)
     return RawDataRecordKey(dset_name, data_name)
 
 
@@ -254,7 +236,7 @@ def data_record_db_key_from_raw_key(dset_name, data_name):
     bytesstring
         Byte encoded db record key
     '''
-    record_key = f'{STGARR}{dset_name}{SEP}{data_name}'.encode()
+    record_key = f'{c.K_STGARR}{dset_name}{c.SEP_KEY}{data_name}'.encode()
     return record_key
 
 
@@ -286,7 +268,7 @@ Functions to convert dataset count records to/from python objects.
 
 
 def dataset_record_count_db_key_from_raw_key(dset_name):
-    db_record_count_key = f'{STGARR}{dset_name}'.encode()
+    db_record_count_key = f'{c.K_STGARR}{dset_name}'.encode()
     return db_record_count_key
 
 
@@ -299,7 +281,7 @@ def dataset_record_count_db_val_from_raw_val(dset_record_count):
 
 
 def dataset_record_count_raw_key_from_db_key(db_key):
-    dset_name = db_key.decode().replace(STGARR, '', 1)
+    dset_name = db_key.decode().replace(c.K_STGARR, '', 1)
     return dset_name
 
 
@@ -329,7 +311,7 @@ def dataset_record_schema_db_key_from_raw_key(dset_name):
     bytestring
         the db_key which can be used to query the schema
     '''
-    db_schema_key = f'{SCHEMA}{dset_name}'.encode()
+    db_schema_key = f'{c.K_SCHEMA}{dset_name}'.encode()
     return db_schema_key
 
 
@@ -382,7 +364,7 @@ def dataset_record_schema_db_val_from_raw_val(schema_uuid, schema_hash,
 # -------------- db schema -> raw schema -------------------------------
 
 def dataset_record_schema_raw_key_from_db_key(db_key):
-    dset_name = db_key.decode().replace(SCHEMA, '', 1)
+    dset_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
     return dset_name
 
 
@@ -402,7 +384,7 @@ Functions to convert total daset count records to/from python objects
 
 
 def dataset_total_count_db_key():
-    db_key = STGARR.encode()
+    db_key = c.K_STGARR.encode()
     return db_key
 
 
@@ -440,7 +422,7 @@ def metadata_count_db_key():
     bytestring
         db key to access the metadata count at
     '''
-    db_key = STGMETA.encode()
+    db_key = c.K_STGMETA.encode()
     return db_key
 
 
@@ -494,7 +476,7 @@ def metadata_record_raw_key_from_db_key(db_key):
     str
         string containing the metadata name
     '''
-    meta_name = db_key.decode().replace(STGMETA, '', 1)
+    meta_name = db_key.decode().replace(c.K_STGMETA, '', 1)
     return meta_name
 
 
@@ -531,7 +513,7 @@ def metadata_record_db_key_from_raw_key(meta_name):
     bytesstring
         Byte encoded db record key
     '''
-    record_key = f'{STGMETA}{meta_name}'.encode()
+    record_key = f'{c.K_STGMETA}{meta_name}'.encode()
     return record_key
 
 
@@ -580,13 +562,13 @@ Data Hash parsing functions used to convert db key/val to raw pyhon obj
 
 
 def hash_schema_db_key_from_raw_key(schema_hash):
-    key = f'{SCHEMA}{schema_hash}'
+    key = f'{c.K_SCHEMA}{schema_hash}'
     db_key = key.encode()
     return db_key
 
 
 def hash_data_db_key_from_raw_key(data_hash):
-    key = f'{HASH}{data_hash}'
+    key = f'{c.K_HASH}{data_hash}'
     db_key = key.encode()
     return db_key
 
@@ -596,14 +578,14 @@ def hash_data_db_key_from_raw_key(data_hash):
 
 def hash_schema_raw_key_from_db_key(db_key: bytes) -> str:
     raw_key = db_key.decode()
-    data_hash = raw_key.replace(SCHEMA, '', 1)
+    data_hash = raw_key.replace(c.K_SCHEMA, '', 1)
     return data_hash
 
 
 def hash_data_raw_key_from_db_key(db_key: bytes) -> str:
     # may be uncesessary
     raw_key = db_key.decode()
-    data_hash = raw_key.replace(HASH, '', 1)
+    data_hash = raw_key.replace(c.K_HASH, '', 1)
     return data_hash
 
 
@@ -616,7 +598,7 @@ Metadata/Label Hash parsing functions used to convert db key/val to raw pyhon ob
 
 
 def hash_meta_db_key_from_raw_key(meta_hash):
-    db_key = f'{HASH}{meta_hash}'.encode()
+    db_key = f'{c.K_HASH}{meta_hash}'.encode()
     return db_key
 
 
@@ -629,7 +611,7 @@ def hash_meta_db_val_from_raw_val(meta_val):
 
 
 def hash_meta_raw_key_from_db_key(db_key):
-    data_hash = db_key.decode().replace(HASH, '', 1)
+    data_hash = db_key.decode().replace(c.K_HASH, '', 1)
     return data_hash
 
 
@@ -669,7 +651,7 @@ def commit_parent_db_key_from_raw_key(commit_hash):
 
 def commit_parent_db_val_from_raw_val(master_ancestor, dev_ancestor='', is_merge_commit=False):
     if is_merge_commit:
-        str_val = f'{master_ancestor}{COMMITSEP}{dev_ancestor}'
+        str_val = f'{master_ancestor}{c.SEP_CMT}{dev_ancestor}'
     else:
         str_val = f'{master_ancestor}'
     db_val = str_val.encode()
@@ -699,7 +681,7 @@ def commit_parent_raw_val_from_db_val(db_val):
         `dev_ancestor`
     '''
     commit_str = db_val.decode()
-    commit_ancestors = commit_str.split(COMMITSEP)
+    commit_ancestors = commit_str.split(c.SEP_CMT)
     if len(commit_ancestors) == 1:
         is_merge_commit = False
         master_ancestor = commit_ancestors[0]
@@ -719,7 +701,7 @@ Commit reference key and values.
 
 
 def commit_ref_db_key_from_raw_key(commit_hash):
-    commit_ref_key = f'{commit_hash}{SEP}ref'.encode()
+    commit_ref_key = f'{commit_hash}{c.SEP_KEY}ref'.encode()
     return commit_ref_key
 
 
@@ -777,7 +759,7 @@ Commit spec reference keys and values
 
 
 def commit_spec_db_key_from_raw_key(commit_hash):
-    commit_spec_key = f'{commit_hash}{SEP}spec'.encode()
+    commit_spec_key = f'{commit_hash}{c.SEP_KEY}spec'.encode()
     return commit_spec_key
 
 
@@ -837,7 +819,7 @@ def remote_db_key_from_raw_key(remote_name: str) -> bytes:
     bytes
         db key allowing access to address value at the name of the remote
     '''
-    raw_key = f'{REMOTES}{remote_name}'
+    raw_key = f'{c.K_REMOTES}{remote_name}'
     db_key = raw_key.encode()
     return db_key
 
@@ -856,7 +838,7 @@ def remote_raw_key_from_db_key(db_key: bytes) -> str:
         name of the remote
     '''
     raw_key = db_key.decode()
-    remote_name = raw_key[len(REMOTES):]
+    remote_name = raw_key[len(c.K_REMOTES):]
     return remote_name
 
 

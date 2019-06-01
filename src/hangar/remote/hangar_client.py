@@ -15,9 +15,8 @@ from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
 from .header_manipulator_client_interceptor import header_adder_interceptor
-from .. import config
-from ..context import Environments
-from ..context import TxnRegister
+from .. import constants as c
+from ..context import Environments, TxnRegister
 from ..backends.hdf5 import HDF5_00_FileHandles
 from ..backends.selection import backend_encoder, backend_decoder
 from ..records import commiting
@@ -401,10 +400,9 @@ class HangarClient(object):
 
     def push_find_missing_hash_records(self, commit):
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             s_hashset = set(queries.RecordQuery(tmpDB).data_hashes())
             s_hashes = list(s_hashset)
@@ -446,10 +444,9 @@ class HangarClient(object):
         return missing_hashs
 
     def push_find_missing_labels(self, commit):
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             c_hashset = set(queries.RecordQuery(tmpDB).metadata_hashes())
             c_hashes = list(c_hashset)
@@ -483,10 +480,9 @@ class HangarClient(object):
 
     def push_find_missing_schemas(self, commit):
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             c_schemaset = set(queries.RecordQuery(tmpDB).schema_hashes())
             c_schemas = list(c_schemaset)
