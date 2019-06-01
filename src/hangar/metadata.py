@@ -72,7 +72,15 @@ class MetadataReader(object):
         int
             number of metadata key/value pairs.
         '''
-        return len(self._Query.metadata_names())
+        if not self.__is_conman:
+            self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
+        try:
+            metadataCountKey = parsing.metadata_count_db_key()
+            metadata_count = self._dataTxn.get(metadataCountKey)
+        finally:
+            if not self.__is_conman:
+                self._dataTxn = TxnRegister().abort_reader_txn(self._dataenv)
+        return int(metadata_count) if metadata_count is not None else 0
 
     def __getitem__(self, key):
         '''Retrieve a metadata sample with a key. Convenience method for dict style access.
