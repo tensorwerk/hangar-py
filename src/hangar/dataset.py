@@ -441,7 +441,7 @@ class DatasetDataWriter(DatasetDataReader):
 
             if self._schema_variable is True:
                 if data.ndim != len(self._schema_max_shape):
-                    msg = f'HANGAR VALUE ERROR:: rank of input tensor: {data.ndim} exceeds '\
+                    msg = f'HANGAR VALUE ERROR:: rank of input tensor: {data.ndim} != '\
                           f'rank specified max rank: {len(self._schema_max_shape)}'
                     raise ValueError(msg)
                 for dataDimSize, schemaDimSize in zip(data.shape, self._schema_max_shape):
@@ -893,7 +893,7 @@ class Datasets(object):
         return data_name
 
     def init_dataset(self, name: str, shape=None, dtype=None, prototype=None,
-                     samples_are_named=True, variable_shape=False, max_shape=None,
+                     samples_are_named=True, variable_shape=False,
                      *, backend='00'):
         '''Initializes a dataset in the repository.
 
@@ -928,13 +928,11 @@ class Datasets(object):
             all samples must be provided names, if not, no name will be assigned.
             defaults to True, which means all samples should have names.
         variable_shape : bool, optional
-            If this is a variable sized dataset. If true, a `max_shape` argument
-            must be specified, defaults to False.
-        max_shape : tuple of int, optional
-            The maximum size for each dimension which a data sample can be set
-            with. The number of dimensions must match that specified in the
-            `shape` or `prototype` argument, and each dimension size must be >=
-            the equivalent dimension size specified. defaults to None.
+            If this is a variable sized dataset. If true, a the maximum shape is
+            set from the provided `shape` or `prototype` argument. Any sample
+            added to the dataset can then have dimension sizes <= to this
+            initial specification (so long as they have the same rank as what
+            was specified) defaults to False.
         backend : str, optional, kwarg only
             Backend which should be used to write the dataset files on disk.
 
@@ -953,14 +951,9 @@ class Datasets(object):
         LookupError
             If a dataset already exists with the provided name.
         ValueError
-            If provided prototype shape (or `shape` argument) not <= `max_shape`
-            value if `variable_shape=True`.
-        ValueError
             If rank of maximum tensor shape > 31.
         ValueError
             If zero sized dimension in `shape` argument
-        ValueError
-            If zero sized dimension in `max_shape` argument
         '''
 
         # ------------- Checks for argument validity --------------------------
@@ -981,7 +974,14 @@ class Datasets(object):
             style = 'prototype'
             tenShape = prototype.shape
         elif (shape is not None) and (dtype is not None):
-            tenShape = tuple(shape) if isinstance(shape, list) else shape
+            if isinstance(shape, tuple):
+                tenShape = shape
+            elif isinstance(shape, list):
+                tenShape = tuple(shape)
+            elif isinstance(shape, int):
+                tenShape = tuple([shape])
+            else:
+                raise ValueError(f'unknown type set for shape: {shape}')
             prototype = np.zeros(tenShape, dtype=dtype)
             style = 'provided'
         else:
@@ -989,37 +989,20 @@ class Datasets(object):
             logger.error(e, exc_info=False)
             raise e
 
-        if variable_shape is True:
-            maxShape = tuple(max_shape) if isinstance(max_shape, list) else max_shape
-            if not np.all(np.less_equal(prototype.shape, maxShape)):
-                msg = f'Variable shape `max_shape` value: {maxShape} not <= specified '\
-                      f'prototype shape: {tenShape}.'
-                e = ValueError(msg)
-                logger.error(e)
-                raise e
-            prototype = np.zeros(maxShape, dtype=prototype.dtype)
-            style = f'{style} + variable_shape'
-        else:
-            maxShape = tenShape
-
         if 0 in tenShape:
             raise ValueError(f'Invalid `shape`: {tenShape}. Dimension sizes must be > 0')
-        elif 0 in maxShape:
-            raise ValueError(f'Invalid `max_shape`: {maxShape}. Dimension sizes must be > 0')
-
-        if len(maxShape) > 31:
-            e = ValueError(f'Maximum tensor rank must be <= 31. specified: {len(maxShape)}')
+        elif len(tenShape) > 31:
+            e = ValueError(f'Maximum tensor rank must be <= 31. specified: {len(tenShape)}')
             logger.error(e, exc_info=False)
             raise e
 
         msg = f'Dataset Specification:: '\
               f'Name: `{name}`, '\
               f'Initialization style: `{style}`, '\
-              f'Shape: `{prototype.shape}`, '\
+              f'(max) Shape: `{prototype.shape}`, '\
               f'DType: `{prototype.dtype}`, '\
               f'Samples Named: `{samples_are_named}`, '\
               f'Variable Shape: `{variable_shape}`, '\
-              f'Max Shape: `{maxShape}`, '\
               f'Backend; `{backend}`'
         logger.info(msg)
 

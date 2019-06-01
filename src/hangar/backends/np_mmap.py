@@ -263,11 +263,10 @@ class NUMPY_00_FileHandles(object):
             else:
                 raise
 
-        cksum = adler32(res)
+        out = np.array(res, dtype=res.dtype, order='C')
+        cksum = adler32(out)
         if cksum != int(hashVal.checksum):
             raise RuntimeError(f'DATA CORRUPTION ERROR: Checksum {cksum} != recorded for {hashVal}')
-
-        out = np.array(res, dtype=res.dtype)
         return out
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
@@ -297,7 +296,6 @@ class NUMPY_00_FileHandles(object):
 
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][destSlc] = array
-
         hashVal = self.fmtParser.encode(uid=self.w_uid,
                                         checksum=checksum,
                                         dataset_idx=self.hIdx,

@@ -42,6 +42,15 @@ def written_repo(repo):
 
 
 @pytest.fixture()
+def variable_shape_written_repo(repo):
+    co = repo.checkout(write=True)
+    co.datasets.init_dataset(name='_dset', shape=(10, 10), dtype=np.float64, variable_shape=True)
+    co.commit('this is a commit message')
+    co.close()
+    yield repo
+
+
+@pytest.fixture()
 def w_checkout(written_repo):
     co = written_repo.checkout(write=True)
     yield co

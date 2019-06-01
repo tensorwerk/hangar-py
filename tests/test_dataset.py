@@ -109,6 +109,25 @@ class TestDataset(object):
         assert np.allclose(dset2['1'], arr)
 
 
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_dataset_with_int_specifier_as_dimension(self, dset_backend, repo):
+        co = repo.checkout(write=True)
+        arr = np.arange(10, dtype=np.int64)
+        dset = co.datasets.init_dataset('dset1', shape=10, dtype=np.int64, backend=dset_backend)
+        dset['1'] = arr
+        co.commit('this is a commit message')
+        arr2 = np.array(53, dtype=np.int64)
+        dset = co.datasets.init_dataset('dset2', prototype=arr2)
+        dset['1'] = arr2
+        co.commit('this is a commit message')
+        co.close()
+        co = repo.checkout()
+        dset1 = co.datasets['dset1']
+        dset2 = co.datasets['dset2']
+        assert np.allclose(dset1['1'], arr)
+        assert np.allclose(dset2['1'], arr2)
+
+
 class TestDataWithFixedSizedDataset(object):
 
     @pytest.mark.parametrize("dset1_backend", ['00', '01'])
@@ -490,6 +509,144 @@ class TestDataWithFixedSizedDataset(object):
         assert d.named_samples is True
         assert d.iswriteable is False
 
-@pytest.mark.skip(reason='not implemented')
+
 class TestVariableSizedDataset(object):
-    pass
+
+    @pytest.mark.parametrize(
+        'test_shapes,shape',
+        [[[(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10)],
+         [[(10,), (1,), (5,)], (10,)],
+         [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]])
+    @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
+    @pytest.mark.parametrize('backend', ['00', '01'])
+    def test_writer_can_create_variable_size_dataset(self, written_repo, dtype, test_shapes, shape, backend):
+        repo = written_repo
+        wco = repo.checkout(write=True)
+        wco.datasets.init_dataset('vardset', shape=shape, dtype=dtype, variable_shape=True, backend=backend)
+        d = wco.datasets['vardset']
+
+        arrdict = {}
+        for idx, shape in enumerate(test_shapes):
+            arr = (np.random.random_sample(shape) * 10).astype(dtype)
+            arrdict[str(idx)] = arr
+            d[str(idx)] = arr
+
+        for k, v in arrdict.items():
+            # make sure they are good before committed
+            assert np.allclose(d[k], v)
+
+        wco.commit('first')
+
+        for k, v in arrdict.items():
+            # make sure they can work after commit
+            assert np.allclose(d[k], v)
+        wco.close()
+
+    @pytest.mark.parametrize('test_shapes,shape', [
+        [[(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10)],
+        [[(10,), (1,), (5,)], (10,)],
+        [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]
+    ])
+    @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
+    @pytest.mark.parametrize('backend', ['00', '01'])
+    def test_reader_recieves_expected_values_for_variable_size_dataset(self, written_repo, dtype, test_shapes, shape, backend):
+        repo = written_repo
+        wco = repo.checkout(write=True)
+        wco.datasets.init_dataset('vardset', shape=shape, dtype=dtype, variable_shape=True, backend=backend)
+        wd = wco.datasets['vardset']
+
+        arrdict = {}
+        for idx, shape in enumerate(test_shapes):
+            arr = (np.random.random_sample(shape) * 10).astype(dtype)
+            arrdict[str(idx)] = arr
+            wd[str(idx)] = arr
+
+        for k, v in arrdict.items():
+            # make sure they are good before committed
+            assert np.allclose(wd[k], v)
+
+        wco.commit('first')
+        rco = repo.checkout()
+        rd = rco.datasets['vardset']
+
+        for k, v in arrdict.items():
+            # make sure they can work after commit
+            assert np.allclose(wd[k], v)
+            assert np.allclose(rd[k], v)
+
+    @pytest.mark.parametrize('dset_specs', [
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '00', np.uint8]
+        ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+        ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+        ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+        ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '00', np.float32]
+        ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+        ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+        ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+        ]])
+    def test_writer_reader_can_create_read_multiple_variable_size_dataset(self, written_repo, dset_specs):
+        repo = written_repo
+        wco = repo.checkout(write=True)
+        arrdict = {}
+        for dset_spec in dset_specs:
+            dset_name, test_shapes, max_shape, backend, dtype = dset_spec
+            wco.datasets.init_dataset(dset_name, shape=max_shape, dtype=dtype, variable_shape=True, backend=backend)
+
+            arrdict[dset_name] = {}
+            for idx, shape in enumerate(test_shapes):
+                arr = (np.random.random_sample(shape) * 10).astype(dtype)
+                arrdict[dset_name][str(idx)] = arr
+                wco.datasets[dset_name][str(idx)] = arr
+
+        for dset_k in arrdict.keys():
+            for samp_k, v in arrdict[dset_k].items():
+                # make sure they are good before committed
+                assert np.allclose(wco.datasets[dset_k][samp_k], v)
+
+        wco.commit('first')
+        rco = repo.checkout()
+
+        for dset_k in arrdict.keys():
+            for samp_k, v in arrdict[dset_k].items():
+                # make sure they are good before committed
+                assert np.allclose(wco.datasets[dset_k][samp_k], v)
+                assert np.allclose(rco.datasets[dset_k][samp_k], v)
+        wco.close()
+        rco.close()
+
+    def test_writer_dataset_properties_are_correct(self, variable_shape_written_repo):
+        co = variable_shape_written_repo.checkout(write=True)
+        d = co.datasets['_dset']
+        assert d.name == '_dset'
+        assert d.dtype == np.float64
+        assert np.allclose(d.shape, (10, 10))
+        assert d.variable_shape is True
+        assert d.named_samples is True
+        assert d.iswriteable is True
+        co.close()
+
+    def test_reader_dataset_properties_are_correct(self, variable_shape_written_repo):
+        co = variable_shape_written_repo.checkout(write=False)
+        d = co.datasets['_dset']
+        assert d.name == '_dset'
+        assert d.dtype == np.float64
+        assert np.allclose(d.shape, (10, 10))
+        assert d.variable_shape is True
+        assert d.named_samples is True
+        assert d.iswriteable is False
+        co.close()
