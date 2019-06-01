@@ -894,7 +894,7 @@ class Datasets(object):
 
     def init_dataset(self, name: str, shape=None, dtype=None, prototype=None,
                      samples_are_named=True, variable_shape=False, max_shape=None,
-                     *, backend='hdf5_00'):
+                     *, backend='00'):
         '''Initializes a dataset in the repository.
 
         Datasets are groups of related data pieces (samples). All samples within

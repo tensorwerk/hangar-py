@@ -42,7 +42,7 @@ class TestDataset(object):
         assert dsetOldDefaultSchemaHash == dsetNew._default_schema_hash
         assert dsetOldSchemaUUID == dsetNew._schema_uuid
 
-    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_remove_dataset(self, dset_backend, written_repo):
         co = written_repo.checkout(write=True)
         co.datasets.remove_dset('_dset')
@@ -68,7 +68,7 @@ class TestDataset(object):
         co.commit('this is a commit message')
         co.close()
 
-    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_init_again(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
@@ -76,7 +76,7 @@ class TestDataset(object):
             co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         co.close()
 
-    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_dataset_with_more_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
@@ -91,7 +91,7 @@ class TestDataset(object):
             co.datasets.init_dataset('dset2', shape=shape, dtype=np.int, backend=dset_backend)
         co.close()
 
-    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_dataset_with_empty_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.array(1, dtype=np.int64)
@@ -111,9 +111,9 @@ class TestDataset(object):
 
 class TestDataWithFixedSizedDataset(object):
 
-    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
-    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
-    @pytest.mark.parametrize("dset3_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset3_backend", ['00', '01'])
     def test_iterating_over(self, dset1_backend, dset2_backend, dset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
@@ -297,9 +297,10 @@ class TestDataWithFixedSizedDataset(object):
         co.close()
         co = written_repo.checkout()
         assert np.allclose(co.datasets['_dset']['1'], array5by7)
+        co.close()
 
-    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
-    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
     def test_multiple_datasets_single_commit(self, dset1_backend, dset2_backend, written_repo, randomsizedarray):
         co = written_repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray, backend=dset1_backend)
@@ -313,8 +314,8 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(co.datasets['dset2']['arr'], randomsizedarray)
         co.close()
 
-    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
-    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
     def test_prototype_and_shape(self, dset1_backend, dset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         dset1 = co.datasets.init_dataset(
@@ -366,7 +367,7 @@ class TestDataWithFixedSizedDataset(object):
             dset['3'] = newarr
         co.close()
 
-    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_adding_same_data_again_with_same_name(self, dset_backend, repo, array5by7):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset_backend)
@@ -385,7 +386,7 @@ class TestDataWithFixedSizedDataset(object):
             # raises in another checkout
             dset['1'] = array5by7
 
-    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_writer_context_manager_dataset_add_sample(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
@@ -405,7 +406,7 @@ class TestDataWithFixedSizedDataset(object):
         co = repo.checkout()
         assert co.metadata['key'] == 'val'
 
-    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_dataset_context_manager_dset_sample_and_metadata_add(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
@@ -425,8 +426,8 @@ class TestDataWithFixedSizedDataset(object):
         assert co.metadata['key'] == 'val'
         assert co.metadata.get('hello') == 'world'
 
-    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
-    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
     def test_bulk_add(self, dset1_backend, dset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.datasets.init_dataset(
@@ -466,6 +467,7 @@ class TestDataWithFixedSizedDataset(object):
         data2 = next(co.datasets['dset_no_name2'].values())
         assert np.allclose(data1, randomsizedarray)
         assert np.allclose(data2, randomsizedarray / 255)
+        co.close()
 
     def test_writer_dataset_properties_are_correct(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)

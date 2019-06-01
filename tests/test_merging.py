@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 
 
-@pytest.fixture(params=['hdf5_00', 'numpy_00'])
+@pytest.fixture(params=['00', '01'])
 def repo_1_br_no_conf(request, repo):
 
     dummyData = np.arange(50)

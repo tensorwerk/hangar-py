@@ -35,8 +35,8 @@ LMDB_STAGE_HASH_NAME = 'stage_hash.lmdb'
 SEP_KEY = ':'
 SEP_LST = ' '
 SEP_CMT = ' << '
-SEP_SLC = " * "
-SEP_HSH = ' $ '
+SEP_SLC = "*"
+SEP_HSH = '$'
 
 K_BRANCH = f'branch{SEP_KEY}'
 K_HEAD = 'head'

@@ -226,7 +226,7 @@ class TestCheckout(object):
         with pytest.raises(PermissionError):
             co.metadata.add('a', 'b')
 
-    @pytest.mark.parametrize("dset_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_operate_on_dataset_samples_after_commiting_but_not_closing_checkout(self, dset_backend, repo, array5by7):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset_backend)
@@ -258,8 +258,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             md['hello']
 
-    @pytest.mark.parametrize("dset1_backend", ['hdf5_00', 'numpy_00'])
-    @pytest.mark.parametrize("dset2_backend", ['hdf5_00', 'numpy_00'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
     def test_operate_on_datasets_after_commiting_but_not_closing_checkout(self, dset1_backend, dset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         dsets = co.datasets

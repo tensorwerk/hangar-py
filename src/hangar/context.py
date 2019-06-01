@@ -173,16 +173,16 @@ if they aren't right now, we get circular imports...
 from .records import commiting, heads
 
 
-class EnvironmentsSingleton(type):
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        repo_path = kwargs['repo_path']
-        if repo_path not in cls._instances:
-            cls._instances[repo_path] = super(EnvironmentsSingleton, cls).__call__(*args, **kwargs)
-        return cls._instances[repo_path]
+# class EnvironmentsSingleton(type):
+#     _instances = {}
+#     def __call__(cls, *args, **kwargs):
+#         repo_path = kwargs['repo_path']
+#         if repo_path not in cls._instances:
+#             cls._instances[repo_path] = super(EnvironmentsSingleton, cls).__call__(*args, **kwargs)
+#         return cls._instances[repo_path]
 
 
-class Environments(metaclass=EnvironmentsSingleton):
+class Environments(object):
 
     def __init__(self, repo_path: str):
 

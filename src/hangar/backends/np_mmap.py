@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from zlib import adler32
 from functools import partial
 from collections import namedtuple, ChainMap
 from typing import MutableMapping
@@ -17,26 +18,26 @@ logger = logging.getLogger(__name__)
 
 class NUMPY_00_Parser(object):
 
-    __slots__ = ['FmtBackend', 'FmtCode', 'FmtCodeIdx', 'ShapeFmtRE', 'DataHashSpec']
+    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE', 'DataHashSpec']
 
     def __init__(self):
 
-        self.FmtBackend = f'numpy_00'
         self.FmtCode = '01'
-        self.FmtCodeIdx = 3
-
         # match and remove the following characters: '['   ']'   '('   ')'   ','
         self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
+        self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
         self.DataHashSpec = namedtuple(
-            typename='DataHashSpec', field_names=['backend', 'uid', 'dataset_idx', 'shape'])
+            typename='DataHashSpec', field_names=['backend', 'uid', 'checksum', 'dataset_idx', 'shape'])
 
-    def encode(self, uid: str, dataset_idx: int, shape: tuple) -> bytes:
+    def encode(self, uid: str, checksum: int, dataset_idx: int, shape: tuple) -> bytes:
         '''converts the numpy data spect to an appropriate db value
 
         Parameters
         ----------
         uid : str
             file name (schema uid) of the np file to find this data piece in.
+        checksum : int
+            adler32 checksum of the data as computed on that local machine.
         dataset_idx : int
             collection first axis index in which this data piece resides.
         shape : tuple
@@ -49,7 +50,8 @@ class NUMPY_00_Parser(object):
         bytes
             hash data db value recording all input specifications
         '''
-        out_str = f'{self.FmtCode}{c.SEP_KEY}{uid}'\
+        out_str = f'{self.FmtCode}{c.SEP_KEY}'\
+                  f'{uid}{c.SEP_HSH}{checksum}'\
                   f'{c.SEP_HSH}'\
                   f'{dataset_idx}'\
                   f'{c.SEP_SLC}'\
@@ -70,13 +72,16 @@ class NUMPY_00_Parser(object):
             numpy data hash specification containing `backend`, `schema`, and
             `uid`, `dataset_idx` and `shape` fields.
         '''
-        db_str = db_val.decode()[self.FmtCodeIdx:]
-        uid, _, dset_vals = db_str.partition(c.SEP_HSH)
-        dataset_idx, _, shape_vs = dset_vals.rpartition(c.SEP_SLC)
-        # if the data is of empty shape -> ()
-        shape = () if shape_vs == '' else tuple([int(x) for x in shape_vs.split(c.SEP_LST)])
-        raw_val = self.DataHashSpec(backend=self.FmtBackend,
+        db_str = db_val.decode()
+        _, uid, checksum, dataset_idx, shape_vs = self.SplitDecoderRE.split(db_str)
+        # if the data is of empty shape -> shape_vs = '' str.split() default
+        # value of none means split according to any whitespace, and discard
+        # empty strings from the result. So long as c.SEP_LST = ' ' this will
+        # work
+        shape = tuple(int(x) for x in shape_vs.split())
+        raw_val = self.DataHashSpec(backend=self.FmtCode,
                                     uid=uid,
+                                    checksum=checksum,
                                     dataset_idx=dataset_idx,
                                     shape=shape)
         return raw_val
@@ -180,14 +185,13 @@ class NUMPY_00_FileHandles(object):
         from ..records.hashs import HashQuery
 
         FmtCode = NUMPY_00_Parser().FmtCode
-        FmtBackend = NUMPY_00_Parser().FmtBackend
         dat_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
         stg_dir = pjoin(repo_path, c.DIR_DATA_STAGE, FmtCode)
         if not os.path.isdir(stg_dir):
             return
 
         stgHashs = HashQuery(stagehashenv).list_all_hash_values()
-        stg_files = set(v.uid for v in stgHashs if v.backend == FmtBackend)
+        stg_files = set(v.uid for v in stgHashs if v.backend == FmtCode)
         stg_uids = set(psplitext(x)[0] for x in os.listdir(stg_dir) if x.endswith('.npy'))
         unused_uids = stg_uids.difference(stg_files)
 
@@ -238,6 +242,11 @@ class NUMPY_00_FileHandles(object):
         -------
         np.ndarray
             tensor data stored at the provided hashVal specification.
+
+        Raises
+        ------
+        RuntimeError
+            If the recorded checksum does not match the recieved checksum value.
         '''
         srcSlc = (self.slcExpr[int(hashVal.dataset_idx)], *(self.slcExpr[0:x] for x in hashVal.shape))
 
@@ -253,7 +262,13 @@ class NUMPY_00_FileHandles(object):
                 res = self.Fp[hashVal.uid][srcSlc]
             else:
                 raise
-        return res
+
+        cksum = adler32(res)
+        if cksum != int(hashVal.checksum):
+            raise RuntimeError(f'DATA CORRUPTION ERROR: Checksum {cksum} != recorded for {hashVal}')
+
+        out = np.array(res, dtype=res.dtype)
+        return out
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
         '''writes array data to disk in the numpy_00 fmtBackend
@@ -270,12 +285,8 @@ class NUMPY_00_FileHandles(object):
         -------
         bytes
             db hash record value specifying location information
-
-        Raises
-        ------
-        FileExistsError
-            If the provided data hash exists on disk
         '''
+        checksum = adler32(array)
         if self.w_uid in self.wFp:
             self.hIdx += 1
             if self.hIdx >= self.hMaxSize:
@@ -288,6 +299,7 @@ class NUMPY_00_FileHandles(object):
         self.wFp[self.w_uid][destSlc] = array
 
         hashVal = self.fmtParser.encode(uid=self.w_uid,
+                                        checksum=checksum,
                                         dataset_idx=self.hIdx,
                                         shape=array.shape)
         return hashVal

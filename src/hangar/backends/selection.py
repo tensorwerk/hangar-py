@@ -19,14 +19,13 @@ Process & Guarrentees
 In order to maintain backwards compatibility across versions of Hangar into the
 future the following ruleset is specified and MUST BE HONORED:
 
-    * When a new backend is proposed, the contributor(s) provide a cannonical name
-      (hdf5_00, tiledb_01, etc) for developer consumption in the backend. The review
-      team will provide an available two-digit code which all records corresponding
-      to that backend must identify themselves with.
+    * When a new backend is proposed, the contributor(s) provide the class with a
+      cannonical name (HDF5_00, TILEDB_01, etc) for developer consumption in the
+      backend. The review team will provide an available two-digit code which all
+      records corresponding to that backend must identify themselves with.
 
-    * Once a new backend is accepted, the name and code assigned to it are PERMENANT
-      & UNCHANGING. The same name or code cannot be used in the future for other
-      backends.
+    * Once a new backend is accepted, the code assigned to it is PERMENANT &
+      UNCHANGING. The same code cannot be used in the future for other backends.
 
     * Each backend independently determines the information it needs to log/store to
       uniquely identify and retrieve a sample stored by it. There is no standard
@@ -56,46 +55,42 @@ from collections import namedtuple
 from .hdf5 import HDF5_00_Parser, HDF5_00_FileHandles
 from .np_mmap import NUMPY_00_Parser, NUMPY_00_FileHandles
 
-CODE_BACKEND_MAP = {
+BACKEND_PARSER_MAP = {
     # LOCALS -> [0:50]
-    b'00': HDF5_00_Parser(),   # hdf5_00
-    b'01': NUMPY_00_Parser(),  # numpy_00
+    b'00': HDF5_00_Parser(),
+    b'01': NUMPY_00_Parser(),
     b'02': None,               # tiledb_00 - Reserved
     # REMOTES -> [50:100]
     b'50': None,               # remote_00 - Reserved
     b'51': None,               # url_00 - Reserved
 }
 
-BACKEND_CODE_MAP = {
-    # LOCALS -> [0:50]
-    'hdf5_00': HDF5_00_Parser(),    # 00
-    'numpy_00': NUMPY_00_Parser(),  # 01
-    'tiledb_00': None,              # 02 - Reserved
-    # REMOTES -> [50:100]
-    'remote_00': None,              # 50 - Reserved
-    'tiledb_01': None,              # 51 - Reserved
-}
-
 BACKEND_ACCESSOR_MAP = {
     # LOCALS -> [0:50]
-    'hdf5_00': HDF5_00_FileHandles,
-    'numpy_00': NUMPY_00_FileHandles,
-    'tiledb_00': None,
+    '00': HDF5_00_FileHandles,
+    '01': NUMPY_00_FileHandles,
+    '02': None,
     # REMOTES -> [50:100]
-    'remote_00': None,
-    'url_00': None,
+    '50': None,
+    '51': None,
 }
 
 
 def backend_decoder(db_val: bytes) -> namedtuple:
+    '''Determine backend and decode specification for a raw hash record value.
 
-    parser = CODE_BACKEND_MAP[db_val[:2]]
+    Parameters
+    ----------
+    db_val : bytes
+        unmodified record specification bytes retrieved for a particular hash
+
+    Returns
+    -------
+    namedtuple
+        decoded specification with fields filled out uniquely for each backend.
+        The only field common to all backends is located at index [0] with the
+        field name `backend`.
+    '''
+    parser = BACKEND_PARSER_MAP[db_val[:2]]
     decoded = parser.decode(db_val)
     return decoded
-
-
-def backend_encoder(backend, *args, **kwargs):
-
-    parser = BACKEND_CODE_MAP[backend]
-    encoded = parser.encode(*args, **kwargs)
-    return encoded

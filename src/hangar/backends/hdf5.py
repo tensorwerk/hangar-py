@@ -56,16 +56,15 @@ if filter_options['default']['complib'].startswith('blosc'):
 
 class HDF5_00_Parser(object):
 
-    __slots__ = ['FmtBackend', 'FmtCode', 'FmtCodeIdx', 'ShapeFmtRE', 'DataHashSpec']
+    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE', 'DataHashSpec']
 
     def __init__(self):
 
-        self.FmtBackend = 'hdf5_00'
         self.FmtCode = '00'
-        self.FmtCodeIdx = 3
 
         # match and remove the following characters: '['   ']'   '('   ')'   ','
         self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
+        self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
         self.DataHashSpec = namedtuple(
             typename='DataHashSpec',
             field_names=['backend', 'uid', 'dataset', 'dataset_idx', 'shape'])
@@ -112,22 +111,20 @@ class HDF5_00_Parser(object):
             hdf5 data hash specification containing `backend`, `schema`,
             `instance`, `dataset`, `dataset_idx`, `shape`
         '''
-        db_str = db_val.decode()[self.FmtCodeIdx:]
-
-        uid, _, dset_vals = db_str.partition(c.SEP_HSH)
-
-        dataset_vs, _, shape_vs = dset_vals.rpartition(c.SEP_SLC)
+        db_str = db_val.decode()
+        _, uid, dataset_vs, shape_vs = self.SplitDecoderRE.split(db_str)
         dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
-        # if the data is of empty shape -> ()
-        shape = () if shape_vs == '' else tuple([int(x) for x in shape_vs.split(c.SEP_LST)])
-
-        raw_val = self.DataHashSpec(backend=self.FmtBackend,
+        # if the data is of empty shape -> shape_vs = '' str.split() default
+        # value of none means split according to any whitespace, and discard
+        # empty strings from the result. So long as c.SEP_LST = ' ' this will
+        # work
+        shape = tuple(int(x) for x in shape_vs.split())
+        raw_val = self.DataHashSpec(backend=self.FmtCode,
                                     uid=uid,
                                     dataset=dataset,
                                     dataset_idx=dataset_idx,
                                     shape=shape)
         return raw_val
-
 
 
 # ------------------------- Accessor Object -----------------------------------
@@ -465,14 +462,13 @@ class HDF5_00_FileHandles(object):
         from ..records.hashs import HashQuery
 
         FmtCode = HDF5_00_Parser().FmtCode
-        FmtBackend = HDF5_00_Parser().FmtBackend
         dat_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
         stg_dir = pjoin(repo_path, c.DIR_DATA_STAGE, FmtCode)
         if not os.path.isdir(stg_dir):
             return
 
         stgHashs = HashQuery(stagehashenv).list_all_hash_values()
-        stg_files = set(v.uid for v in stgHashs if v.backend == FmtBackend)
+        stg_files = set(v.uid for v in stgHashs if v.backend == FmtCode)
         stg_uids = set(psplitext(x)[0] for x in os.listdir(stg_dir) if x.endswith('.hdf5'))
         unused_uids = stg_uids.difference(stg_files)
 

@@ -14,25 +14,13 @@ def reset_singletons(monkeypatch):
     cleanup all singleton instances anyway before each test, to ensure
     no leaked state between tests.
     '''
-    for env in hangar.context.EnvironmentsSingleton._instances.values():
-        # need to close handles to prevent file lock issues in windows
-        try:
-            env._close_environments()
-        except Exception:
-            pass
     hangar.context.TxnRegisterSingleton._instances = {}
-    hangar.context.EnvironmentsSingleton._instances = {}
+    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 5_000_000)
 
 
 @pytest.fixture()
 def managed_tmpdir(tmp_path):
     yield tmp_path
-    for env in hangar.context.EnvironmentsSingleton._instances.values():
-        # need to close handles to prevent file lock issues in windows
-        try:
-            env._close_environments()
-        except Exception:
-            pass
     shutil.rmtree(tmp_path)
 
 
@@ -41,6 +29,7 @@ def repo(managed_tmpdir) -> Repository:
     repo_obj = Repository(path=managed_tmpdir)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     yield repo_obj
+    repo_obj._env._close_environments()
 
 
 @pytest.fixture()

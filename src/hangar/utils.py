@@ -46,10 +46,10 @@ def setup_logging(cfg_path='log_conf.yml', cfg_level=logging.INFO, env_key='HANG
         logging.basicConfig(level=cfg_level)
 
 
-def random_string(stringLength=10):
+def random_string(stringLength=6):
     '''Generate a random string of fixed length
     '''
-    letters = string.ascii_lowercase + string.ascii_uppercase + string.digits
+    letters = ''.join([string.ascii_letters, string.digits])
     return ''.join(random.choice(letters) for i in range(stringLength))
 
 

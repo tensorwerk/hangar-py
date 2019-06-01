@@ -18,7 +18,7 @@ from .header_manipulator_client_interceptor import header_adder_interceptor
 from .. import constants as c
 from ..context import Environments, TxnRegister
 from ..backends.hdf5 import HDF5_00_FileHandles
-from ..backends.selection import backend_encoder, backend_decoder
+from ..backends.selection import backend_decoder
 from ..records import commiting
 from ..records import hashs
 from ..records import heads
@@ -245,7 +245,7 @@ class HangarClient(object):
                     schema_hash=schema_hash,
                     remote_operation=True)
                 hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
-                hashVal = backend_encoder(backend='hdf5_00',
+                hashVal = backend_encoder(backend='00',
                                           schema=schema_hash,
                                           instance=hdf_instance,
                                           dataset=hdf_dset,
