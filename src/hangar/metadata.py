@@ -51,16 +51,16 @@ class MetadataReader(object):
         self._Query = RecordQuery(self._dataenv)
 
         self._is_writeable: bool = False
-        self.__is_conman: bool = False
+        self._is_conman: bool = False
 
     def __enter__(self):
-        self.__is_conman = True
+        self._is_conman = True
         self._labelTxn = TxnRegister().begin_reader_txn(self._labelenv)
         self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__is_conman = False
+        self._is_conman = False
         self._labelTxn = TxnRegister().abort_reader_txn(self._labelenv)
         self._dataTxn = TxnRegister().abort_reader_txn(self._dataenv)
 
@@ -72,13 +72,13 @@ class MetadataReader(object):
         int
             number of metadata key/value pairs.
         '''
-        if not self.__is_conman:
+        if not self._is_conman:
             self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
         try:
             metadataCountKey = parsing.metadata_count_db_key()
             metadata_count = self._dataTxn.get(metadataCountKey)
         finally:
-            if not self.__is_conman:
+            if not self._is_conman:
                 self._dataTxn = TxnRegister().abort_reader_txn(self._dataenv)
         return int(metadata_count) if metadata_count is not None else 0
 
@@ -181,7 +181,7 @@ class MetadataReader(object):
         KeyError
             If no metadata exists in the checkout with the provided key.
         '''
-        if not self.__is_conman:
+        if not self._is_conman:
             self._labelTxn = TxnRegister().begin_reader_txn(self._labelenv)
             self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
 
@@ -207,7 +207,7 @@ class MetadataReader(object):
             raise
 
         finally:
-            if not self.__is_conman:
+            if not self._is_conman:
                 self._labelTxn = TxnRegister().abort_reader_txn(self._labelenv)
                 self._dataTxn = TxnRegister().abort_reader_txn(self._dataenv)
 
@@ -239,17 +239,17 @@ class MetadataWriter(MetadataReader):
     def __init__(self, dataenv, labelenv):
 
         super().__init__(dataenv, labelenv)
-        self.__is_conman: bool = False
+        self._is_conman: bool = False
         self._is_writeable: bool = True
 
     def __enter__(self):
-        self.__is_conman = True
+        self._is_conman = True
         self._labelTxn = TxnRegister().begin_writer_txn(self._labelenv)
         self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__is_conman = False
+        self._is_conman = False
         self._labelTxn = TxnRegister().commit_writer_txn(self._labelenv)
         self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
 
@@ -328,7 +328,7 @@ class MetadataWriter(MetadataReader):
             logger.error(e, exc_info=False)
             raise e from None
 
-        if not self.__is_conman:
+        if not self._is_conman:
             self._labelTxn = TxnRegister().begin_writer_txn(self._labelenv)
             self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
 
@@ -360,7 +360,7 @@ class MetadataWriter(MetadataReader):
             raise
 
         finally:
-            if not self.__is_conman:
+            if not self._is_conman:
                 self._labelTxn = TxnRegister().commit_writer_txn(self._labelenv)
                 self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
 
@@ -387,7 +387,7 @@ class MetadataWriter(MetadataReader):
         KeyError
             If the checkout does not contain metadata with the provided key.
         '''
-        if not self.__is_conman:
+        if not self._is_conman:
             self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
 
         try:
@@ -417,6 +417,6 @@ class MetadataWriter(MetadataReader):
             raise e from None
 
         finally:
-            if not self.__is_conman:
+            if not self._is_conman:
                 self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
         return key
