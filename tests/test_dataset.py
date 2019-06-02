@@ -208,6 +208,7 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(
             co.datasets['_dset']['1'],
             co.datasets['_dset']['2'])
+        co.close()
 
     def test_add_with_wrong_argument_order(self, w_checkout, array5by7):
         dset = w_checkout.datasets['_dset']
