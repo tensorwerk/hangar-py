@@ -8,7 +8,7 @@ def repo_1_br_no_conf(request, repo):
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch_name='master')
     co1.datasets.init_dataset(
-        name='dummy', prototype=dummyData, samples_are_named=True, backend=request.param)
+        name='dummy', prototype=dummyData, named_samples=True, backend=request.param)
     for idx in range(10):
         dummyData[:] = idx
         co1.datasets['dummy'][str(idx)] = dummyData

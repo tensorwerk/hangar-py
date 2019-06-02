@@ -362,7 +362,7 @@ class TestDataWithFixedSizedDataset(object):
         dset_no_name = co.datasets.init_dataset(
             'dset_no_name',
             prototype=randomsizedarray,
-            samples_are_named=False)
+            named_samples=False)
         dset_no_name.add(randomsizedarray)
         assert np.allclose(next(dset_no_name.values()), randomsizedarray)
         co.close()
@@ -452,12 +452,12 @@ class TestDataWithFixedSizedDataset(object):
         co.datasets.init_dataset(
             'dset_no_name1',
             prototype=randomsizedarray,
-            samples_are_named=False,
+            named_samples=False,
             backend=dset1_backend)
         co.datasets.init_dataset(
             'dset_no_name2',
             prototype=randomsizedarray,
-            samples_are_named=False,
+            named_samples=False,
             backend=dset2_backend)
         co.commit('this is a commit message')
 

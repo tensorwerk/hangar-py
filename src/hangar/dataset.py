@@ -893,8 +893,7 @@ class Datasets(object):
         return data_name
 
     def init_dataset(self, name: str, shape=None, dtype=None, prototype=None,
-                     samples_are_named=True, variable_shape=False,
-                     *, backend='00'):
+                     named_samples=True, variable_shape=False, *, backend='00'):
         '''Initializes a dataset in the repository.
 
         Datasets are groups of related data pieces (samples). All samples within
@@ -923,7 +922,7 @@ class Datasets(object):
             A sample array of correct datatype and shape which will be used to
             initialize the dataset storage mechanisms. If this is provided, the
             `shape` and `dtype` arguments must not be set, defaults to None.
-        samples_are_named : bool, optional
+        named_samples : bool, optional
             If the samples in the dataset have names associated with them. If set,
             all samples must be provided names, if not, no name will be assigned.
             defaults to True, which means all samples should have names.
@@ -945,7 +944,7 @@ class Datasets(object):
         ------
         ValueError
             If provided name contains any non ascii, non alpha-numeric characters.
-        SyntaxError
+        ValueError
             If required `shape` and `dtype` arguments are not provided in absense of
             `prototype` argument.
         LookupError
@@ -958,53 +957,33 @@ class Datasets(object):
 
         # ------------- Checks for argument validity --------------------------
 
-        if not is_suitable_user_key(name):
-            msg = f'Dataset name provided: `{name}` is invalid. Can only contain '\
-                  f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).'
-            e = ValueError(msg)
-            logger.error(e, exc_info=False)
-            raise e
+        try:
+            if not is_suitable_user_key(name):
+                raise ValueError(
+                    f'Dataset name provided: `{name}` is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
+            if name in self._datasets:
+                raise LookupError(f'KEY EXISTS: dataset already exists with name: {name}.')
 
-        if name in self._datasets:
-            e = LookupError(f'KEY EXISTS ERROR: dataset already exists with name: {name}.')
-            logger.error(e)
-            raise e
-
-        if prototype is not None:
-            style = 'prototype'
-            tenShape = prototype.shape
-        elif (shape is not None) and (dtype is not None):
-            if isinstance(shape, tuple):
-                tenShape = shape
-            elif isinstance(shape, list):
-                tenShape = tuple(shape)
-            elif isinstance(shape, int):
-                tenShape = tuple([shape])
+            if prototype is not None:
+                if not isinstance(prototype, np.ndarray):
+                    raise ValueError(
+                        f'If specified (not None) `prototype` argument be `np.ndarray`-like.'
+                        f'Invalid value: {prototype} of type: {type(prototype)}')
+            elif isinstance(shape, (tuple, list, int)) and (dtype is not None):
+                prototype = np.zeros(shape, dtype=dtype)
             else:
-                raise ValueError(f'unknown type set for shape: {shape}')
-            prototype = np.zeros(tenShape, dtype=dtype)
-            style = 'provided'
-        else:
-            e = SyntaxError(f'Both `shape` & `dtype` required if `prototype` not specified.')
+                raise ValueError(f'`shape` & `dtype` args required if no `prototype` set.')
+
+            if (0 in prototype.shape) or (prototype.ndim > 31):
+                raise ValueError(
+                    f'Invalid shape specification with ndim: {prototype.ndim} and shape: '
+                    f'{prototype.shape}. Array rank > 31 dimensions not allowed AND '
+                    'all dimension sizes must be > 0.')
+
+        except (ValueError, LookupError) as e:
             logger.error(e, exc_info=False)
             raise e
-
-        if 0 in tenShape:
-            raise ValueError(f'Invalid `shape`: {tenShape}. Dimension sizes must be > 0')
-        elif len(tenShape) > 31:
-            e = ValueError(f'Maximum tensor rank must be <= 31. specified: {len(tenShape)}')
-            logger.error(e, exc_info=False)
-            raise e
-
-        msg = f'Dataset Specification:: '\
-              f'Name: `{name}`, '\
-              f'Initialization style: `{style}`, '\
-              f'(max) Shape: `{prototype.shape}`, '\
-              f'DType: `{prototype.dtype}`, '\
-              f'Samples Named: `{samples_are_named}`, '\
-              f'Variable Shape: `{variable_shape}`, '\
-              f'Backend; `{backend}`'
-        logger.info(msg)
 
         # ----------- Determine schema format details -------------------------
 
@@ -1022,7 +1001,7 @@ class Datasets(object):
             schema_is_var=variable_shape,
             schema_max_shape=prototype.shape,
             schema_dtype=prototype.dtype.num,
-            schema_is_named=samples_are_named,
+            schema_is_named=named_samples,
             schema_default_backend=backend)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
@@ -1049,7 +1028,7 @@ class Datasets(object):
             dset_name=name,
             default_schema_hash=schema_hash,
             schema_uuid=dset_uuid,
-            samplesAreNamed=samples_are_named,
+            samplesAreNamed=named_samples,
             isVar=variable_shape,
             varMaxShape=prototype.shape,
             varDtypeNum=prototype.dtype.num,
@@ -1058,7 +1037,6 @@ class Datasets(object):
             mode='a',
             default_schema_backend=backend)
 
-        logger.info(f'Dataset Initialized: `{name}`')
         return self.get(name)
 
     def remove_dset(self, dset_name):
@@ -1082,8 +1060,9 @@ class Datasets(object):
         datatxn = TxnRegister().begin_writer_txn(self._dataenv)
         try:
             if dset_name not in self._datasets:
-                msg = f'HANGAR KEY ERROR:: Cannot remove: {dset_name}. Key does not exist.'
-                raise KeyError(msg)
+                e = KeyError(f'HANGAR KEY ERROR:: Cannot remove: {dset_name}. Key does not exist.')
+                logger.error(e, exc_info=False)
+                raise e
             self._datasets[dset_name]._close()
             self._datasets.__delitem__(dset_name)
 
@@ -1107,9 +1086,6 @@ class Datasets(object):
             else:
                 numDsetsVal = parsing.dataset_total_count_db_val_from_raw_val(numDsets)
                 datatxn.put(numDsetsKey, numDsetsVal)
-        except KeyError as e:
-            logger.error(e)
-            raise
         finally:
             TxnRegister().commit_writer_txn(self._dataenv)
 

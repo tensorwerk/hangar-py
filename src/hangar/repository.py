@@ -11,9 +11,9 @@ from .context import Environments
 from .diagnostics import graphing
 from .records import heads, parsing, summarize, commiting
 from .remote.hangar_client import HangarClient
-from .utils import is_valid_directory_path, is_suitable_user_key, setup_logging
+from .utils import is_valid_directory_path, is_suitable_user_key
 
-setup_logging()
+
 logger = logging.getLogger(__name__)
 
 
