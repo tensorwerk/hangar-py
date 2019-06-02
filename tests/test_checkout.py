@@ -292,6 +292,60 @@ class TestCheckout(object):
         repo.checkout(True)  # This should not raise any excpetion
 
 
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    def test_reset_staging_area_clears_datasets(self, dset1_backend, dset2_backend, repo, array5by7):
+        co = repo.checkout(write=True)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset1_backend)
+        dset.add(array5by7, '1')
+        co.commit('hi')
+
+        dset2 = co.datasets.init_dataset('arange', prototype=np.arange(50), backend=dset2_backend)
+        dset2['0'] = np.arange(50)
+        # verifications before reset
+        assert np.allclose(dset2['0'], np.arange(50))
+        assert len(co.datasets) == 2
+        assert co.datasets['arange'].iswriteable
+
+        co.reset_staging_area()
+        # behavior expected after reset
+        assert len(co.datasets) == 1
+        with pytest.raises(ReferenceError):
+            dset2['0']
+        with pytest.raises(KeyError):
+            co.datasets['arange']
+        co.close()
+
+    def test_reset_staging_area_clears_metadata(self, repo):
+        co = repo.checkout(write=True)
+        md = co.metadata
+        md['hello'] = 'world'
+        co.commit('hi')
+
+        md['foo'] = 'bar'
+        co.metadata['bar'] = 'baz'
+        # verifications before reset
+        assert len(co.metadata) == 3
+        assert len(md) == 3
+        assert co.metadata['hello'] == 'world'
+        assert co.metadata['foo'] == 'bar'
+        assert co.metadata['bar'] == 'baz'
+        assert md['foo'] == 'bar'
+
+        co.reset_staging_area()
+        # behavior expected after reset
+        assert len(co.metadata) == 1
+        assert co.metadata['hello'] == 'world'
+        with pytest.raises(ReferenceError):
+            assert len(md) == 1
+        with pytest.raises(ReferenceError):
+            assert md['hello']
+        with pytest.raises(KeyError):
+            co.metadata['foo']
+        with pytest.raises(KeyError):
+            co.metadata['bar']
+        co.close()
+
 class TestBranching(object):
 
     def test_invalid_name(self, repo):

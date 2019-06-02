@@ -718,18 +718,13 @@ def commit_ref_db_val_from_raw_val(commit_db_key_val_list):
     bytes
         Serialized and compressed representation of the object.
     '''
-    serialized_db_list = msgpack.packb(
-        tuple(commit_db_key_val_list), use_bin_type=True)
-
+    serialized_db_list = msgpack.packb(tuple(commit_db_key_val_list), use_bin_type=True)
     zlibpacked = blosc.compress(
         serialized_db_list,
         cname='zlib',
         clevel=9,
         shuffle=blosc.SHUFFLE,
         typesize=1)
-
-    print(blosc.get_cbuffer_sizes(zlibpacked))
-
     return zlibpacked
 
 
@@ -744,8 +739,8 @@ def commit_ref_raw_val_from_db_val(commit_db_val):
     Returns
     -------
     tuple of two-tuple binary encoded key/values.
-        Iterable of binary encoded key/value pairs making up the repo state at the time of
-        that commit. key/value pairs are already in sorted order.
+        Iterable of binary encoded key/value pairs making up the repo state at
+        the time of that commit. key/value pairs are already in sorted order.
     '''
     uncompressed_db_list = blosc.decompress(commit_db_val)
     bytes_db_key_val_list = msgpack.unpackb(uncompressed_db_list, use_list=False)

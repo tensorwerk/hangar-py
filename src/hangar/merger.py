@@ -175,7 +175,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
             branchenv=branchenv, branch_name=master_branch, commit_hash=new_masterHEAD)
         heads.set_staging_branch_head(branchenv=branchenv, branch_name=master_branch)
 
-        hashs.remove_unstored_changes(repo_path=repo_path)
+        hashs.delete_in_process_data(repo_path=repo_path)
         hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
 
     except ValueError as e:
@@ -240,7 +240,7 @@ def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
         raise e from None
 
     fmtCont = _merge_dict_to_lmdb_tuples(patchedRecs=mergeContents)
-    hashs.remove_unstored_changes(repo_path=repo_path)
+    hashs.delete_in_process_data(repo_path=repo_path)
     commiting.replace_staging_area_with_refs(stageenv=stageenv, sorted_content=fmtCont)
 
     commit_hash = commiting.commit_records(

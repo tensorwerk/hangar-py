@@ -70,10 +70,10 @@ BACKEND_ACCESSOR_MAP = {
     # LOCALS -> [0:50]
     '00': HDF5_00_FileHandles,
     '01': NUMPY_00_FileHandles,
-    '02': None,
+    '02': None,               # tiledb_00 - Reserved
     # REMOTES -> [50:100]
     '50': REMOTE_UNKNOWN_00_Handler,
-    '51': None,
+    '51': None,               # url_00 - Reserved
 }
 
 

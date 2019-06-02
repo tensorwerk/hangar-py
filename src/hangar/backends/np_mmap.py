@@ -170,7 +170,7 @@ class NUMPY_00_FileHandles(object):
             del self.rFp[k]
 
     @staticmethod
-    def remove_unstored_changes(repo_path, *, remote_operation=False):
+    def delete_in_process_data(repo_path, *, remote_operation=False):
         '''Removes some set of files entirely from the stage/remote directory.
 
         DANGER ZONE. This should essentially only be used to perform hard resets

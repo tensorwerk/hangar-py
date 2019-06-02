@@ -643,12 +643,10 @@ class Datasets(object):
             self.add = None
 
     def _open(self):
-
         for v in self._datasets.values():
             v._open()
 
     def _close(self):
-
         for v in self._datasets.values():
             v._close()
 
@@ -726,9 +724,9 @@ class Datasets(object):
         Parameters
         ----------
         key : string
-            name of the dataset to remove from the repository. This will
-            remove all records from the staging area (though the actual data
-            and all records are still accessable) if they were previously commited
+            name of the dataset to remove from the repository. This will remove
+            all records from the staging area (though the actual data and all
+            records are still accessable) if they were previously commited
 
         Raises
         ------
@@ -932,7 +930,7 @@ class Datasets(object):
             added to the dataset can then have dimension sizes <= to this
             initial specification (so long as they have the same rank as what
             was specified) defaults to False.
-        backend : str, optional, kwarg only
+        backend : DEVELOPER USE ONLY. str, optional, kwarg only
             Backend which should be used to write the dataset files on disk.
 
         Returns

@@ -114,7 +114,7 @@ class HashQuery(object):
         return recs
 
 
-def remove_unstored_changes(repo_path, *, remote_operation=False):
+def delete_in_process_data(repo_path, *, remote_operation=False):
     '''DANGER! Permenantly delete uncommited data files/links for stage or remote area.
 
     This searchs each backend accessors staged (or remote) folder structure for
@@ -131,8 +131,9 @@ def remove_unstored_changes(repo_path, *, remote_operation=False):
     '''
     for backend, accesor in BACKEND_ACCESSOR_MAP.items():
         if accesor is not None:
-            acc = accesor(repo_path, None, None)
-            acc.remove_unstored_changes(repo_path=repo_path, remote_operation=remote_operation)
+            # acc = accesor(repo_path, None, None)
+            # accesor.delete_in_process_data()
+            accesor.delete_in_process_data(repo_path=repo_path, remote_operation=remote_operation)
 
 
 def clear_stage_hash_records(stagehashenv):

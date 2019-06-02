@@ -103,13 +103,12 @@ class RecordQuery(object):
             dict of db_key/db_values for each record traversed
         '''
         data_records = {}
-        startDatasetRecordCountRangeKey = parsing.dataset_record_count_db_key_from_raw_key(dataset_name)
+        startDsetRecCountRngK = parsing.dataset_record_count_db_key_from_raw_key(dataset_name)
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
-                # with datatxn.cursor() as cursor:
-                dataRecordsExist = cursor.set_range(startDatasetRecordCountRangeKey)
-                dataRecKeySubString = f'{startDatasetRecordCountRangeKey.decode()}{c.SEP_KEY}'.encode()
+                dataRecordsExist = cursor.set_range(startDsetRecCountRngK)
+                dataRecKeySubString = f'{startDsetRecCountRngK.decode()}{c.SEP_KEY}'.encode()
                 cursor.next()
                 while dataRecordsExist:
                     dataRecKey, dataRecVal = cursor.item()
@@ -162,7 +161,7 @@ class RecordQuery(object):
     def dataset_data_names(self, dataset_name):
         '''Find all data names contained within a dataset.
 
-        If you need both names, and uuid or hash values, call the `dataset_data_records`
+        If you need both names, and hash values, call the `dataset_data_records`
         function. The underlying cost of searching the db is identical, this just provides
         a pretty filter on top.
 

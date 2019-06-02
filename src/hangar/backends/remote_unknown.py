@@ -1,14 +1,8 @@
 import logging
 import os
-import warnings
-from collections import ChainMap, namedtuple
-from functools import partial
-from os.path import join as pjoin
-from os.path import splitext as psplitext
+from collections import namedtuple
 
 import numpy as np
-
-from .. import constants as c
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +52,6 @@ class REMOTE_UNKNOWN_00_Handler(object):
 
         self.fmtParser = REMOTE_UNKNOWN_00_Parser()
 
-        # self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, self.fmtParser.FmtCode)
-        # self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, self.fmtParser.FmtCode)
-        # self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, self.fmtParser.FmtCode)
-        # self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, self.fmtParser.FmtCode)
-
     def __enter__(self):
         return self
 
@@ -76,10 +65,10 @@ class REMOTE_UNKNOWN_00_Handler(object):
         return
 
     @staticmethod
-    def remove_unstored_changes(*args, **kwargs):
+    def delete_in_process_data(*args, **kwargs):
         '''mockup of clearing staged directory for upstream calls.
         '''
-        logger.warning(f'remove_unstored_changes method of REMOTE_UNKNOWN_00_Handler called')
+        logger.warning(f'delete_in_process_data for REMOTE_UNKNOWN_00_Handler called.')
         return
 
     def read_data(self, hashVal: namedtuple) -> None:

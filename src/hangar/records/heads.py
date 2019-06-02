@@ -166,8 +166,6 @@ Methods to interact with the branch head records
 ------------------------------------------------
 
 .. todo::
-   Some of the methods should aquire the writer lock.
-.. todo::
    Need a delete branch operation.
 '''
 

@@ -1,22 +1,15 @@
 import logging
-from os.path import join as pjoin
-from uuid import uuid4
-from typing import MutableMapping
 import weakref
-import warnings
-
-import numpy as np
+from uuid import uuid4
+from os.path import join as pjoin
 
 from . import constants as c
 from .dataset import Datasets
-from .diff import ReaderUserDiff, WriterUserDiff
-from .merger import select_merge_algorithm
-from .metadata import MetadataReader
-from .metadata import MetadataWriter
-from .records import commiting
-from .records import hashs
-from .records import heads
 from .utils import cm_weakref_obj_proxy
+from .merger import select_merge_algorithm
+from .records import commiting, hashs, heads
+from .diff import ReaderUserDiff, WriterUserDiff
+from .metadata import MetadataReader, MetadataWriter
 
 logger = logging.getLogger(__name__)
 
@@ -596,7 +589,7 @@ class WriterCheckout(object):
         self._datasets._close()
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
-        hashs.remove_unstored_changes(self._repo_path)
+        hashs.delete_in_process_data(self._repo_path)
 
         branch_head = heads.get_staging_branch_head(self._branchenv)
         head_commit = heads.get_branch_head_commit(self._branchenv, branch_head)
@@ -606,7 +599,19 @@ class WriterCheckout(object):
             commit_hash=head_commit)
 
         logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
-        self.close()
+        self._metadata = MetadataWriter(
+            dataenv=self._stageenv,
+            labelenv=self._labelenv)
+        self._datasets = Datasets._from_staging_area(
+            repo_pth=self._repo_path,
+            hashenv=self._hashenv,
+            stageenv=self._stageenv,
+            stagehashenv=self._stagehashenv)
+        self._differ = WriterUserDiff(
+            stageenv=self._stageenv,
+            refenv=self._refenv,
+            branchenv=self._branchenv,
+            branch_name=self._branch_name)
         return head_commit
 
     def close(self):
