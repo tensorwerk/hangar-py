@@ -174,6 +174,103 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
             self.wFp[self.w_uid].flush()
 
+    def open(self, mode: str, *, remote_operation: bool = False):
+        '''Open an hdf5 file handle in the Handler Singleton
+
+        Parameters
+        ----------
+        mode : str
+            one of `r` or `a` for read only / read-write.
+        repote_operation : optional, kwarg only, bool
+            if this hdf5 data is being created from a remote fetch operation, then
+            we don't open any files for reading, and only open files for writing
+            which exist in the remote data dir. (default is false, which means that
+            write operations use the stage data dir and read operations use data store
+            dir)
+        '''
+        self.mode = mode
+        if self.mode == 'a':
+            process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
+            if not os.path.isdir(process_dir):
+                os.makedirs(process_dir)
+
+            process_uids = [psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.hdf5')]
+            for uid in process_uids:
+                file_pth = pjoin(process_dir, f'{uid}.hdf5')
+                self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
+
+        if not remote_operation:
+            if not os.path.isdir(self.STOREDIR):
+                return
+            store_uids = [psplitext(x)[0] for x in os.listdir(self.STOREDIR) if x.endswith('.hdf5')]
+            for uid in store_uids:
+                file_pth = pjoin(self.STOREDIR, f'{uid}.hdf5')
+                self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
+
+    def close(self):
+        '''Close a file handle after writes have been completed
+
+        behavior changes depending on write-enable or read-only file
+
+        Returns
+        -------
+        bool
+            True if success, otherwise False.
+        '''
+        if self.mode == 'a':
+            if self.w_uid in self.wFp:
+                self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
+                self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
+                self.wFp[self.w_uid].flush()
+                self.hMaxSize = None
+                self.hNextPath = None
+                self.hIdx = None
+                self.hColsRemain = None
+                self.w_uid = None
+            for uid in list(self.wFp.keys()):
+                try:
+                    self.wFp[uid].close()
+                except AttributeError:
+                    pass
+                del self.wFp[uid]
+
+        for uid in list(self.rFp.keys()):
+            try:
+                self.rFp[uid].close()
+            except AttributeError:
+                pass
+            del self.rFp[uid]
+
+    @staticmethod
+    def remove_unstored_changes(repo_path, *, remote_operation=False):
+        '''Removes some set of files entirely from the stage/remote directory.
+
+        DANGER ZONE. This should essentially only be used to perform hard resets
+        of the repository state.
+
+        Parameters
+        ----------
+        repo_path : str
+            path to the repository on disk
+        remote_operation : optional, kwarg only, bool
+            If true, modify contents of the remote_dir, if false (default) modify
+            contents of the staging directory.
+        '''
+        FmtCode = HDF5_00_Parser().FmtCode
+        data_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
+        PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
+        process_dir = pjoin(repo_path, PDIR, FmtCode)
+        if not os.path.isdir(process_dir):
+            return
+
+        process_uids = (psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.hdf5'))
+        for process_uid in process_uids:
+            remove_link_pth = pjoin(process_dir, f'{process_uid}.hdf5')
+            remove_data_pth = pjoin(data_dir, f'{process_uid}.hdf5')
+            os.remove(remove_link_pth)
+            os.remove(remove_data_pth)
+        os.rmdir(process_dir)
+
     @staticmethod
     def _dataset_opts(complib, complevel, shuffle, fletcher32):
         '''specify compression options for the hdf5 dataset.
@@ -263,7 +360,7 @@ class HDF5_00_FileHandles(object):
 
         return (chunk_shape, chunk_nbytes)
 
-    def create_schema(self, *, remote_operation: bool = False):
+    def _create_schema(self, *, remote_operation: bool = False):
         '''stores the shape and dtype as the schema of a dataset.
 
         Parameters
@@ -376,108 +473,6 @@ class HDF5_00_FileHandles(object):
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
 
-    def open(self, mode: str, *, remote_operation: bool = False):
-        '''Open an hdf5 file handle in the Handler Singleton
-
-        Parameters
-        ----------
-        mode : str
-            one of `r` or `a` for read only / read-write.
-        repote_operation : optional, kwarg only, bool
-            if this hdf5 data is being created from a remote fetch operation, then
-            we don't open any files for reading, and only open files for writing
-            which exist in the remote data dir. (default is false, which means that
-            write operations use the stage data dir and read operations use data store
-            dir)
-        '''
-        self.mode = mode
-        if self.mode == 'a':
-            process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
-            if not os.path.isdir(process_dir):
-                os.makedirs(process_dir)
-
-            process_uids = [psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.hdf5')]
-            for uid in process_uids:
-                file_pth = pjoin(process_dir, f'{uid}.hdf5')
-                self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
-
-        if not remote_operation:
-            if not os.path.isdir(self.STOREDIR):
-                return
-            store_uids = [psplitext(x)[0] for x in os.listdir(self.STOREDIR) if x.endswith('.hdf5')]
-            for uid in store_uids:
-                file_pth = pjoin(self.STOREDIR, f'{uid}.hdf5')
-                self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
-
-    def close(self):
-        '''Close a file handle after writes have been completed
-
-        behavior changes depending on write-enable or read-only file
-
-        Returns
-        -------
-        bool
-            True if success, otherwise False.
-        '''
-        if self.mode == 'a':
-            if self.w_uid in self.wFp:
-                self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
-                self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
-                self.wFp[self.w_uid].flush()
-                self.hMaxSize = None
-                self.hNextPath = None
-                self.hIdx = None
-                self.hColsRemain = None
-                self.w_uid = None
-            for uid in list(self.wFp.keys()):
-                try:
-                    self.wFp[uid].close()
-                except AttributeError:
-                    pass
-                del self.wFp[uid]
-
-        for uid in list(self.rFp.keys()):
-            try:
-                self.rFp[uid].close()
-            except AttributeError:
-                pass
-            del self.rFp[uid]
-
-    @staticmethod
-    def remove_unused(repo_path, stagehashenv):
-        '''If no changes made to staged hdf files, remove and unlik them from stagedir
-
-        This searchs the stagehashenv file for all schemas & instances, and if any
-        files are present in the stagedir without references in stagehashenv, the
-        symlinks in stagedir and backing data files in datadir are removed.
-
-        Parameters
-        ----------
-        repo_path : str
-            path to the repository on disk
-        stagehashenv : `lmdb.Environment`
-            db where all stage hash additions are recorded
-
-        '''
-        from ..records.hashs import HashQuery
-
-        FmtCode = HDF5_00_Parser().FmtCode
-        dat_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
-        stg_dir = pjoin(repo_path, c.DIR_DATA_STAGE, FmtCode)
-        if not os.path.isdir(stg_dir):
-            return
-
-        stgHashs = HashQuery(stagehashenv).list_all_hash_values()
-        stg_files = set(v.uid for v in stgHashs if v.backend == FmtCode)
-        stg_uids = set(psplitext(x)[0] for x in os.listdir(stg_dir) if x.endswith('.hdf5'))
-        unused_uids = stg_uids.difference(stg_files)
-
-        for unused_uid in unused_uids:
-            remove_link_pth = pjoin(stg_dir, f'{unused_uid}.hdf5')
-            remove_data_pth = pjoin(dat_dir, f'{unused_uid}.hdf5')
-            os.remove(remove_link_pth)
-            os.remove(remove_data_pth)
-
     def read_data(self, hashVal: HDF5_00_Parser.DataHashSpec) -> np.ndarray:
         '''Read data from an hdf5 file handle at the specified locations
 
@@ -542,9 +537,9 @@ class HDF5_00_FileHandles(object):
                     self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
                     self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
                     self.wFp[self.w_uid].flush()
-                    self.create_schema(remote_operation=remote_operation)
+                    self._create_schema(remote_operation=remote_operation)
         else:
-            self.create_schema(remote_operation=remote_operation)
+            self._create_schema(remote_operation=remote_operation)
 
         srcSlc = None
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))

@@ -8,11 +8,10 @@ from . import merger
 from . import constants as c
 from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
-from .diagnostics import graphing
+from .diagnostics import graphing, ecosystem
 from .records import heads, parsing, summarize, commiting
 from .remote.hangar_client import HangarClient
 from .utils import is_valid_directory_path, is_suitable_user_key
-
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +58,9 @@ class Repository(object):
             required.
 
         '''
-        res = f'\
-            \n Hangar {self.__class__.__name__}\
-            \n     Repository Path  : {self._repo_path}\
-            \n     Writer-Lock Free : {heads.writer_lock_held(self._env.branchenv)}\n'
+        res = f'Hangar {self.__class__.__name__}\
+               \n    Repository Path  : {self._repo_path}\
+               \n    Writer-Lock Free : {heads.writer_lock_held(self._env.branchenv)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -597,6 +595,12 @@ class Repository(object):
         '''
         summarize.details(self._env)
         return
+
+    def _ecosystem_details(self):
+        '''DEVELOPER USER ONLY: log and return package versions on the sytem.
+        '''
+        eco = ecosystem.get_versions()
+        return eco
 
     def merge(self, message, master_branch, dev_branch):
         '''Perform a merge of the changes made on two branches.

@@ -54,14 +54,15 @@ from collections import namedtuple
 
 from .hdf5 import HDF5_00_Parser, HDF5_00_FileHandles
 from .np_mmap import NUMPY_00_Parser, NUMPY_00_FileHandles
+from .remote_unknown import REMOTE_UNKNOWN_00_Parser, REMOTE_UNKNOWN_00_Handler
 
 BACKEND_PARSER_MAP = {
-    # LOCALS -> [0:50]
+    # LOCALS -> [00:50]
     b'00': HDF5_00_Parser(),
     b'01': NUMPY_00_Parser(),
     b'02': None,               # tiledb_00 - Reserved
     # REMOTES -> [50:100]
-    b'50': None,               # remote_00 - Reserved
+    b'50': REMOTE_UNKNOWN_00_Parser(),
     b'51': None,               # url_00 - Reserved
 }
 
@@ -71,7 +72,7 @@ BACKEND_ACCESSOR_MAP = {
     '01': NUMPY_00_FileHandles,
     '02': None,
     # REMOTES -> [50:100]
-    '50': None,
+    '50': REMOTE_UNKNOWN_00_Handler,
     '51': None,
 }
 

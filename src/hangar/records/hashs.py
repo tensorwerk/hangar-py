@@ -114,25 +114,25 @@ class HashQuery(object):
         return recs
 
 
-def remove_unused(repo_path, stagehashenv):
-    '''If no changes made to staged files, remove and unlik them from stagedir
+def remove_unstored_changes(repo_path, *, remote_operation=False):
+    '''DANGER! Permenantly delete uncommited data files/links for stage or remote area.
 
-    This searchs the stagehashenv file for all schemas & instances, and if any
-    files are present in the stagedir without references in stagehashenv, the
-    symlinks in stagedir and backing data files in datadir are removed.
+    This searchs each backend accessors staged (or remote) folder structure for
+    files, and if any are present the symlinks in stagedir and backing data
+    files in datadir are removed.
 
     Parameters
     ----------
     repo_path : str
         path to the repository on disk
-    stagehashenv : `lmdb.Environment`
-        db where all stage hash additions are recorded
-
+    remote_operation : optional, kwarg only, bool
+        If true, modify contents of the remote_dir, if false (default) modify
+        contents of the staging directory.
     '''
     for backend, accesor in BACKEND_ACCESSOR_MAP.items():
         if accesor is not None:
             acc = accesor(repo_path, None, None)
-            acc.remove_unused(repo_path=repo_path, stagehashenv=stagehashenv)
+            acc.remove_unstored_changes(repo_path=repo_path, remote_operation=remote_operation)
 
 
 def clear_stage_hash_records(stagehashenv):
@@ -146,7 +146,6 @@ def clear_stage_hash_records(stagehashenv):
     stagehashenv : lmdb.Environment
         db where staged data hash additions are recorded
     '''
-    print(f'removing all stage hash records')
     stagehashtxn = TxnRegister().begin_writer_txn(stagehashenv)
     with stagehashtxn.cursor() as cursor:
         positionExists = cursor.first()
@@ -172,7 +171,6 @@ def remove_stage_hash_records_from_hashenv(hashenv, stagehashenv):
 
     '''
     stageHashKeys = HashQuery(stagehashenv).list_all_hash_keys_db()
-
     hashtxn = TxnRegister().begin_writer_txn(hashenv)
     for hashKey in stageHashKeys:
         logger.info(f'deleting: {hashKey}')

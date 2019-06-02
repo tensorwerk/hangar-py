@@ -1,17 +1,17 @@
 import logging
 import os
 import re
-from zlib import adler32
+from collections import ChainMap, namedtuple
 from functools import partial
-from collections import namedtuple, ChainMap
-from typing import MutableMapping
 from os.path import join as pjoin
 from os.path import splitext as psplitext
+from typing import MutableMapping
+from zlib import adler32
 
 import numpy as np
 
 from .. import constants as c
-from ..utils import symlink_rel, random_string
+from ..utils import random_string, symlink_rel
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +23,14 @@ class NUMPY_00_Parser(object):
     def __init__(self):
 
         self.FmtCode = '01'
+        self.DataHashSpec = namedtuple(
+            typename='DataHashSpec',
+            field_names=['backend', 'uid', 'checksum', 'dataset_idx', 'shape'])
+
         # match and remove the following characters: '['   ']'   '('   ')'   ','
         self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
+        # split up a formated parsed string into unique fields
         self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
-        self.DataHashSpec = namedtuple(
-            typename='DataHashSpec', field_names=['backend', 'uid', 'checksum', 'dataset_idx', 'shape'])
 
     def encode(self, uid: str, checksum: int, dataset_idx: int, shape: tuple) -> bytes:
         '''converts the numpy data spect to an appropriate db value
@@ -167,41 +170,36 @@ class NUMPY_00_FileHandles(object):
             del self.rFp[k]
 
     @staticmethod
-    def remove_unused(repo_path, stagehashenv):
-        '''If no changes made to staged hdf files, remove and unlik them from stagedir
+    def remove_unstored_changes(repo_path, *, remote_operation=False):
+        '''Removes some set of files entirely from the stage/remote directory.
 
-        This searchs the stagehashenv file for all schemas & instances, and if any
-        files are present in the stagedir without references in stagehashenv, the
-        symlinks in stagedir and backing data files in datadir are removed.
+        DANGER ZONE. This should essentially only be used to perform hard resets
+        of the repository state.
 
         Parameters
         ----------
         repo_path : str
             path to the repository on disk
-        stagehashenv : `lmdb.Environment`
-            db where all stage hash additions are recorded
-
+        remote_operation : optional, kwarg only, bool
+            If true, modify contents of the remote_dir, if false (default) modify
+            contents of the staging directory.
         '''
-        from ..records.hashs import HashQuery
-
         FmtCode = NUMPY_00_Parser().FmtCode
-        dat_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
-        stg_dir = pjoin(repo_path, c.DIR_DATA_STAGE, FmtCode)
-        if not os.path.isdir(stg_dir):
+        data_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
+        PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
+        process_dir = pjoin(repo_path, PDIR, FmtCode)
+        if not os.path.isdir(process_dir):
             return
 
-        stgHashs = HashQuery(stagehashenv).list_all_hash_values()
-        stg_files = set(v.uid for v in stgHashs if v.backend == FmtCode)
-        stg_uids = set(psplitext(x)[0] for x in os.listdir(stg_dir) if x.endswith('.npy'))
-        unused_uids = stg_uids.difference(stg_files)
-
-        for unused_uid in unused_uids:
-            remove_link_pth = pjoin(stg_dir, f'{unused_uid}.npy')
-            remove_data_pth = pjoin(dat_dir, f'{unused_uid}.npy')
+        process_uids = (psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.npy'))
+        for process_uid in process_uids:
+            remove_link_pth = pjoin(process_dir, f'{process_uid}.npy')
+            remove_data_pth = pjoin(data_dir, f'{process_uid}.npy')
             os.remove(remove_link_pth)
             os.remove(remove_data_pth)
+        os.rmdir(process_dir)
 
-    def create_schema(self, *, remote_operation: bool = False):
+    def _create_schema(self, *, remote_operation: bool = False):
         '''stores the shape and dtype as the schema of a dataset.
 
         Parameters
@@ -290,9 +288,9 @@ class NUMPY_00_FileHandles(object):
             self.hIdx += 1
             if self.hIdx >= self.hMaxSize:
                 self.wFp[self.w_uid].flush()
-                self.create_schema(remote_operation=remote_operation)
+                self._create_schema(remote_operation=remote_operation)
         else:
-            self.create_schema(remote_operation=remote_operation)
+            self._create_schema(remote_operation=remote_operation)
 
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][destSlc] = array

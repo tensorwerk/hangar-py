@@ -11,7 +11,6 @@ import lmdb
 import yaml
 
 from . import constants as c
-from .diagnostics.ecosystem import get_versions
 
 logger = logging.getLogger(__name__)
 
