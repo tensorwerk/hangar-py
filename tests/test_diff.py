@@ -57,33 +57,61 @@ class TestReaderDiff:
     def test_diff_by_commit_and_branch(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         testco = repo.checkout(branch_name='testbranch')
-        masterco = repo.checkout('master')
+        masterco = repo.checkout(branch_name='master')
         commit_diffs = masterco.diff.commit(testco.commit_hash)
         branch_diffs = masterco.diff.branch('testbranch')
         assert commit_diffs == branch_diffs
 
     def test_diff_with_wrong_commit_hash(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        testco = repo.checkout('testbranch')
-        masterco = repo.checkout('master')
+        testco = repo.checkout(branch_name='testbranch')
+        masterco = repo.checkout(branch_name='master')
         wrong_commit_hash = testco.commit_hash + 'WrongHash'
         with pytest.raises(ValueError):
             masterco.diff.commit(wrong_commit_hash)
 
-        # diff = masterco.diff.commit(testco.commit_hash)
-        breakpoint()
-        repo.merge('dummy', 'master', 'testbranch')
-        masterco = repo.checkout('master')
-
     def test_diff_with_wrong_branch_name(self, repo_1_br_no_conf):
         repo = repo_1_br_no_conf
-        masterco = repo.checkout('master')
+        masterco = repo.checkout(branch_name='master')
         with pytest.raises(ValueError):
             masterco.diff.branch('wrong_branch_name')
 
-    def test_diff_data(self, repo_1_br_no_conf):
+    def test_diff_data_samples(self, repo_1_br_no_conf):
         repo = repo_1_br_no_conf
-        co = repo.checkout('master')
+        dummyData = np.arange(50)
+
+        # mutating and removing data from testbranch
+        testco = repo.checkout(write=True, branch_name='testbranch')
+        testco.datasets['dummy']['1'] = dummyData
+        del testco.datasets['dummy']['2']
+        testco.commit("mutation and removal")
+        testco.close()
+
+        co = repo.checkout(branch_name='master')
         diffdata = co.diff.branch('testbranch')
+        conflict_dict = diffdata[1]
+        assert conflict_dict['conflict_found'] is False
+        diffs = diffdata[0]
+        from pprint import pprint
+        pprint(diffs)
         breakpoint()
 
+        # testing datasets and metadata that has no change
+        assert diffs['datasets']['master']['additions'] == {}
+        assert diffs['datasets']['master']['mutations'] == {}
+        assert diffs['datasets']['master']['removals'] == {}
+        assert 'dummy' in diffs['datasets']['master']['unchanged'].keys()
+        assert 'foo' in diffs['metadata']['master']['additions'].keys()
+        assert 'hello' in diffs['metadata']['master']['unchanged'].keys()
+        assert diffs['metadata']['master']['mutations'] == {}
+        assert diffs['metadata']['master']['removals'] == {}
+
+        # testing datarecords for addition, unchanged mutated, removed
+        for datarecord in diffs['samples']['master']['dummy']['additions']:
+            assert 9 < int(datarecord.data_name) < 20
+        for datarecord in diffs['samples']['master']['dummy']['unchanged']:
+            assert 0 <= int(datarecord.data_name) < 10
+        for removed in diffs['samples']['master']['dummy']['removals']:
+            removed.data_name == 2
+        for mutated in diffs['samples']['master']['dummy']['mutations']:
+            mutated.data_name == 1
