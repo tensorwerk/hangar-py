@@ -2,9 +2,7 @@ import os
 import logging
 from collections import defaultdict
 
-from tqdm.auto import tqdm
 import grpc
-import pdb
 
 from . import merger
 from . import constants as c
@@ -223,6 +221,9 @@ class Repository(object):
         self.init(user_name=user_name, user_email=user_email, remove_old=remove_old)
         self.add_remote(remote_name='origin', remote_address=remote_address)
         branch_name = self.fetch(remote_name='origin', branch_name='master', concat_branch_names=False)
+        co = self.checkout(write=True, branch_name='master')
+        co.reset_staging_area()
+        co.close()
         return branch_name
 
     def fetch(self, remote_name: str, branch_name: str,
@@ -254,48 +255,45 @@ class Repository(object):
 
         try:
             c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
-            c_bhistory = summarize.list_history(self._env.refenv, self._env.branchenv, branch_name=branch_name)
-            c_bhistory['order']
-
+            c_bhistory = summarize.list_history(
+                self._env.refenv, self._env.branchenv, branch_name=branch_name)
             s_branch = self._client.fetch_branch_record(branch_name)
+
             if s_branch.error.code == 0:
                 s_bcommit = s_branch.rec.commit
                 if s_bcommit == c_bcommit:
-                    logger.error(f'server head: {s_bcommit} == client head: {c_bcommit}. No-op')
+                    logger.error(f'server HEAD: {s_bcommit} == client HEAD: {c_bcommit}. No-op')
                     return
-                # TODO: way to reject divergences upstream
                 elif s_bcommit in c_bhistory:
-                    logger.warning(f'REJECTED: server head: {s_bcommit} in client history')
-                    return False
+                    logger.warning(f'REJECTED: server HEAD: {s_bcommit} in client history')
+                    return
 
         except ValueError:
             s_branch = self._client.fetch_branch_record(branch_name)
 
-        m_all_labels = []
+        m_labels = set()
         res = self._client.fetch_find_missing_commits(branch_name)
         m_commits = res.commits
+
         for commit in m_commits:
+            m_labels.update(self._client.fetch_find_missing_labels(commit))
+
             schema_res = self._client.fetch_find_missing_schemas(commit)
             missing_schemas = schema_res.schema_digests
             for schema in missing_schemas:
                 self._client.fetch_schema(schema)
 
-            missing_hashes = self._client.fetch_find_missing_hash_records(commit)
-            missing_hash_schemas = dict((k, v) for k, v in missing_hashes)
-            missing_schema_hashs = defaultdict(list)
-            for hsh, schema in sorted(missing_hash_schemas.items()):
-                missing_schema_hashs[schema].append(hsh)
+            m_hashes = self._client.fetch_find_missing_hash_records(commit)
+            m_hash_schemas = dict((k, v) for k, v in m_hashes)
+            m_schema_hashs = defaultdict(list)
+            for hsh, schema in m_hash_schemas.items():
+                m_schema_hashs[schema].append(hsh)
 
-            for schema, hashes in missing_schema_hashs.items():
+            for schema, hashes in m_schema_hashs.items():
                 ret = 'AGAIN'
                 while ret == 'AGAIN':
                     ret = self._client.fetch_data(schema, hashes)
-                    print(ret)
 
-            missing_labels = self._client.fetch_find_missing_labels(commit)
-            m_all_labels.extend(missing_labels)
-
-        m_labels = set(m_all_labels)
         for label in m_labels:
             self._client.fetch_label(label)
         for commit in m_commits:
@@ -357,14 +355,12 @@ class Repository(object):
         self.__verify_repo_initialized()
         try:
             address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
-            self._client = HangarClient(envs=self._env, address=address,
-                                        auth_username=username, auth_password=password)
+            self._client = HangarClient(
+                envs=self._env, address=address, auth_username=username, auth_password=password)
 
             c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
             c_bhistory = summarize.list_history(
-                refenv=self._env.refenv,
-                branchenv=self._env.branchenv,
-                branch_name=branch_name)
+                refenv=self._env.refenv, branchenv=self._env.branchenv, branch_name=branch_name)
 
             s_branch = self._client.fetch_branch_record(branch_name)
             if s_branch.error.code == 0:
@@ -376,7 +372,7 @@ class Repository(object):
                     logger.warning(f'REJECTED: server branch has commits not present on client')
                     return False
 
-            m_all_labels = []
+            m_labels = set()
             res = self._client.push_find_missing_commits(branch_name)
             m_commits = res.commits
             for commit in m_commits:
@@ -387,18 +383,16 @@ class Repository(object):
 
                     mis_hashes_sch = self._client.push_find_missing_hash_records(commit)
                     missing_schema_hashs = defaultdict(list)
-                    for hsh, schema in sorted(mis_hashes_sch.items()):
+                    for hsh, schema in mis_hashes_sch.items():
                         missing_schema_hashs[schema].append(hsh)
 
                     for schema, hashes in missing_schema_hashs.items():
                         self._client.push_data(schema, hashes)
-
                 except AttributeError:
                     pass
                 missing_labels = self._client.push_find_missing_labels(commit)
-                m_all_labels.extend(missing_labels)
+                m_labels.update(missing_labels)
 
-            m_labels = set(m_all_labels)
             for label in m_labels:
                 self._client.push_label(label)
             for commit in m_commits:
@@ -408,8 +402,6 @@ class Repository(object):
 
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.PERMISSION_DENIED:
-                # For expected case (not authorized). raise a standard python error
-                # instead of making users catch at grpc one.
                 msg = f'{rpc_error.code()}: {rpc_error.details()}'
                 logger.error(msg)
                 raise PermissionError(msg)
