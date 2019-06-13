@@ -63,8 +63,8 @@ class BaseUserDiff(object):
         return (res, conflicts)
 
     def _diff_ff_cmts(self, m_cont: dict, d_cont: dict) -> tuple:
-        ancestorToDevDiffer = ThreeWayCommitDiffer(m_cont, d_cont, m_cont)
-        res = ancestorToDevDiffer.all_changes(include_dev=False)
+        ancestorToDevDiffer = ThreeWayCommitDiffer(m_cont, m_cont, d_cont)
+        res = ancestorToDevDiffer.all_changes(include_master=True)
         conflicts = ancestorToDevDiffer.determine_conflicts()
         return (res, conflicts)
 
@@ -75,21 +75,6 @@ class ReaderUserDiff(BaseUserDiff):
 
         super().__init__(*args, **kwargs)
         self._commit_hash = commit_hash
-
-    @property
-    def commit_hash(self):
-        '''Return the commit_hash used for the reader checkout. Read-only attribute.
-
-        Unlike the analogous method on `write-enabled` checkouts, the reader
-        version cannot move across time, and is a fixed value set at checkout
-        time.
-
-        Returns
-        -------
-        string
-            commit hash of the checkout references.
-        '''
-        return self._commit_hash
 
     def commit(self, dev_commit_hash: str) -> tuple:
         '''Compute changes and conflicts for diff between HEAD and a commit hash.
@@ -165,35 +150,6 @@ class WriterUserDiff(BaseUserDiff):
         self._stageenv = stageenv
         self._branch_name = branch_name
 
-    @property
-    def commit_hash(self):
-        '''Calculate the current base commit for the write-enabled checkout object
-
-        Though read only, it's interesting to note that this is actually
-        calculated on the fly in order to allow a write-enabled checkout to
-        commit and move it's HEAD reference along without the value here being
-        out of date.
-
-        Returns
-        -------
-        string
-            commit hash of the base commit used to set up the staging area
-        '''
-        commit_hash = heads.get_branch_head_commit(
-            branchenv=self._branchenv, branch_name=self._branch_name)
-        return commit_hash
-
-    @property
-    def branch_name(self):
-        '''Branch name of the writer-checkout setting up this method. Read-only.
-
-        Returns
-        -------
-        string
-            branch name which the write-enabled checkout is committing on.
-        '''
-        return self._branch_name
-
     def status(self):
         '''Determine if changes have been made in the staging area
 
@@ -238,7 +194,8 @@ class WriterUserDiff(BaseUserDiff):
             msg = f'HANGAR VALUE ERROR: dev_commit_hash: {dev_commit_hash} does not exist'
             raise ValueError(msg)
 
-        hist = self._determine_ancestors(self.commit_hash, dev_commit_hash)
+        commit_hash = heads.get_branch_head_commit(self._branchenv, self._branch_name)
+        hist = self._determine_ancestors(commit_hash, dev_commit_hash)
         stage_cont = RecordQuery(self._stageenv).all_records()
         d_cont = commiting.get_commit_ref_contents(self._refenv, hist.devHEAD)
         if hist.canFF is True:
@@ -272,7 +229,8 @@ class WriterUserDiff(BaseUserDiff):
             msg = f'HANGAR VALUE ERROR: dev_branch_name: {dev_branch_name} invalid branch name'
             raise ValueError(msg)
 
-        hist = self._determine_ancestors(self.commit_hash, dHEAD)
+        commit_hash = heads.get_branch_head_commit(self._branchenv, self._branch_name)
+        hist = self._determine_ancestors(commit_hash, dHEAD)
         stage_cont = RecordQuery(self._stageenv).all_records()
         d_cont = commiting.get_commit_ref_contents(self._refenv, hist.devHEAD)
         if hist.canFF is True:
@@ -290,7 +248,8 @@ class WriterUserDiff(BaseUserDiff):
             contains all `addition`, `mutation`, `removals` and `unchanged` datasets
             schema, samples, and metadata references in the current staging area.
         '''
-        base_cont = commiting.get_commit_ref_contents(self._refenv, self.commit_hash)
+        commit_hash = heads.get_branch_head_commit(self._branchenv, self._branch_name)
+        base_cont = commiting.get_commit_ref_contents(self._refenv, commit_hash)
         stage_cont = RecordQuery(self._stageenv).all_records()
 
         ancestorToDevDiffer = ThreeWayCommitDiffer(base_cont, stage_cont, base_cont)
