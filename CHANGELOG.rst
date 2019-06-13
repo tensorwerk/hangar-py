@@ -2,6 +2,36 @@
 Change Log
 ==========
 
+
+`In-Progress`_
+==============
+
+New Features
+------------
+
+* Numpy memory-mapped array file backend added. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Remote server data backend added. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Selection heuristics to determine appropriate backend from dataset schema. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+Improvements
+------------
+
+* Record format versioning and standardization so to not break backwards compatibility in the future. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Backend addition and update developer protocols and documentation. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Many tests added (including support for Mac OSX on Travis-CI).
+
+Bug Fixes
+---------
+
+* Diff results for fast forward merges now returns sensible results (`#77 <https://github.com/tensorwerk/hangar-py/pull/77>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+Breaking changes
+----------------
+
+* These are backwards incompatible changes. For all versions > 0.2, repository upgrade utilities will be provided if breaking changes occur.
+
+
 `v0.1.1`_ (2019-05-24)
 ===========================
 
@@ -56,3 +86,4 @@ Breaking changes
 .. _v0.0.0: https://github.com/tensorwerk/hangar-py/commit/2aff3805c66083a7fbb2ebf701ceaf38ac5165c7
 .. _v0.1.0: https://github.com/tensorwerk/hangar-py/compare/v0.0.0...v0.1.0
 .. _v0.1.1: https://github.com/tensorwerk/hangar-py/compare/v0.1.0...v0.1.1
+.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...master
