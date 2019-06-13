@@ -7,7 +7,7 @@ import lmdb
 from .context import TxnRegister
 from .records import parsing
 from .records.queries import RecordQuery
-from .utils import is_ascii_alnum, is_ascii
+from .utils import is_suitable_user_key, is_ascii
 
 logger = logging.getLogger(__name__)
 
@@ -49,20 +49,21 @@ class MetadataReader(object):
         self._dataTxn: Optional[lmdb.Transaction] = None
 
         self._Query = RecordQuery(self._dataenv)
+        self._TxnRegister = TxnRegister()
 
         self._is_writeable: bool = False
-        self.__is_conman: bool = False
+        self._is_conman: bool = False
 
     def __enter__(self):
-        self.__is_conman = True
-        self._labelTxn = TxnRegister().begin_reader_txn(self._labelenv)
-        self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
+        self._is_conman = True
+        self._labelTxn = self._TxnRegister.begin_reader_txn(self._labelenv)
+        self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__is_conman = False
-        self._labelTxn = TxnRegister().abort_reader_txn(self._labelenv)
-        self._dataTxn = TxnRegister().abort_reader_txn(self._dataenv)
+        self._is_conman = False
+        self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
+        self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
     def __len__(self):
         '''Determine how many metadata key/value pairs are in the checkout
@@ -72,7 +73,17 @@ class MetadataReader(object):
         int
             number of metadata key/value pairs.
         '''
-        return len(self._Query.metadata_names())
+        if not self._is_conman:
+            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+
+        try:
+            metaCountKey = parsing.metadata_count_db_key()
+            metaCountVal = self._dataTxn.get(metaCountKey, default='0'.encode())
+            meta_count = parsing.metadata_count_raw_val_from_db_val(metaCountVal)
+        finally:
+            if not self._is_conman:
+                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+        return meta_count
 
     def __getitem__(self, key):
         '''Retrieve a metadata sample with a key. Convenience method for dict style access.
@@ -173,14 +184,14 @@ class MetadataReader(object):
         KeyError
             If no metadata exists in the checkout with the provided key.
         '''
-        if not self.__is_conman:
-            self._labelTxn = TxnRegister().begin_reader_txn(self._labelenv)
-            self._dataTxn = TxnRegister().begin_reader_txn(self._dataenv)
+        if not self._is_conman:
+            self._labelTxn = self._TxnRegister.begin_reader_txn(self._labelenv)
+            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
 
         try:
-            if not (isinstance(key, str) and is_ascii_alnum(key)):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
-                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+            if not is_suitable_user_key(key):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Can '\
+                      f'only contain alpha-numeric or "." "_" "-" ascii characters.'
                 raise ValueError(msg)
 
             refKey = parsing.metadata_record_db_key_from_raw_key(key)
@@ -199,9 +210,9 @@ class MetadataReader(object):
             raise
 
         finally:
-            if not self.__is_conman:
-                self._labelTxn = TxnRegister().abort_reader_txn(self._labelenv)
-                self._dataTxn = TxnRegister().abort_reader_txn(self._dataenv)
+            if not self._is_conman:
+                self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
+                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
         return meta_value
 
@@ -231,19 +242,19 @@ class MetadataWriter(MetadataReader):
     def __init__(self, dataenv, labelenv):
 
         super().__init__(dataenv, labelenv)
-        self.__is_conman: bool = False
+        self._is_conman: bool = False
         self._is_writeable: bool = True
 
     def __enter__(self):
-        self.__is_conman = True
-        self._labelTxn = TxnRegister().begin_writer_txn(self._labelenv)
-        self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
+        self._is_conman = True
+        self._labelTxn = self._TxnRegister.begin_writer_txn(self._labelenv)
+        self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__is_conman = False
-        self._labelTxn = TxnRegister().commit_writer_txn(self._labelenv)
-        self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
+        self._is_conman = False
+        self._labelTxn = self._TxnRegister.commit_writer_txn(self._labelenv)
+        self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
 
     def __setitem__(self, key, value):
         '''Store a key/value pair as metadata. Convenince method to :meth:`add`.
@@ -308,9 +319,9 @@ class MetadataWriter(MetadataReader):
             If an identical key/value pair exists in the checkout
         '''
         try:
-            if not (isinstance(key, str) and is_ascii_alnum(key)):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
-                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+            if not is_suitable_user_key(key):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Must be '\
+                      f'str containing only alpha-numeric or "." "_" "-" ascii characters.'
                 raise ValueError(msg)
             elif not (isinstance(value, str) and is_ascii(value)):
                 msg = f'HANGAR VALUE ERROR:: metadata value: `{value}` not allowed. '\
@@ -320,9 +331,9 @@ class MetadataWriter(MetadataReader):
             logger.error(e, exc_info=False)
             raise e from None
 
-        if not self.__is_conman:
-            self._labelTxn = TxnRegister().begin_writer_txn(self._labelenv)
-            self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
+        if not self._is_conman:
+            self._labelTxn = self._TxnRegister.begin_writer_txn(self._labelenv)
+            self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
 
         try:
             val_hash = hashlib.blake2b(value.encode(), digest_size=20).hexdigest()
@@ -352,9 +363,9 @@ class MetadataWriter(MetadataReader):
             raise
 
         finally:
-            if not self.__is_conman:
-                self._labelTxn = TxnRegister().commit_writer_txn(self._labelenv)
-                self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
+            if not self._is_conman:
+                self._labelTxn = self._TxnRegister.commit_writer_txn(self._labelenv)
+                self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
 
         return key
 
@@ -379,13 +390,13 @@ class MetadataWriter(MetadataReader):
         KeyError
             If the checkout does not contain metadata with the provided key.
         '''
-        if not self.__is_conman:
-            self._dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
+        if not self._is_conman:
+            self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
 
         try:
-            if not (isinstance(key, str) and is_ascii_alnum(key)):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. '\
-                      f'Must be str with only alpha-numeric ascii (no whitespace) chars.'
+            if not is_suitable_user_key(key):
+                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Must be str'\
+                      f'containing alpha-numeric or "." "_" "-" ascii characters (no whitespace).'
                 raise ValueError(msg)
 
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
@@ -409,6 +420,6 @@ class MetadataWriter(MetadataReader):
             raise e from None
 
         finally:
-            if not self.__is_conman:
-                self._dataTxn = TxnRegister().commit_writer_txn(self._dataenv)
+            if not self._is_conman:
+                self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
         return key

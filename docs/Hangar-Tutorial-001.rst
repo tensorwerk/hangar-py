@@ -137,7 +137,6 @@ Let's try it out here:
    Dataset prototype shape: (784,), dtype: uint8
    Hangar DatasetDataWriter
        Dataset Name     : mnist_training_images
-       Schema UUID      : d72247d253df11e992758c859047adef
        Schema Hash      : RM4DefFsjRs=
        Variable Shape   : False
        (max) Shape      : (784,)
@@ -164,7 +163,6 @@ dataset keys will autocomplete for you).
    >>> co.datasets['mnist_training_images']
    Hangar DatasetDataWriter
        Dataset Name     : mnist_training_images
-       Schema UUID      : d72247d253df11e992758c859047adef
        Schema Hash      : RM4DefFsjRs=
        Variable Shape   : False
        (max) Shape      : (784,)
@@ -227,7 +225,6 @@ Dictionary Style Retrieval for known keys
    >>> train_dset
    Hangar DatasetDataWriter
        Dataset Name     : mnist_training_images
-       Schema UUID      : d72247d253df11e992758c859047adef
        Schema Hash      : RM4DefFsjRs=
        Variable Shape   : False
        (max) Shape      : (784,)
@@ -424,7 +421,6 @@ general has been built to be the only way to directly access it!
     |  * Dataset Name: train_images
     |    Num Arrays: 50000
     |    Details:
-    |    - schema_uuid: daab93a653e211e989a98c859047adef
     |    - schema_hash: RM4DefFsjRs=
     |    - schema_dtype: 2
     |    - schema_is_var: False
@@ -434,7 +430,6 @@ general has been built to be the only way to directly access it!
     |  * Dataset Name: train_labels
     |    Num Arrays: 50000
     |    Details:
-    |    - schema_uuid: daf2623653e211e9acd18c859047adef
     |    - schema_hash: ncbHqE6Xldg=
     |    - schema_dtype: 7
     |    - schema_is_var: False

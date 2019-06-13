@@ -1,18 +1,15 @@
 import hashlib
-import os
 from typing import Optional
-from uuid import uuid1
 import logging
 
 import numpy as np
 import lmdb
 
-from . import config
 from .context import TxnRegister
-from .hdf5_store import FileHandles
+from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP, backend_from_heuristics
 from .records import parsing
 from .records.queries import RecordQuery
-from .utils import is_ascii_alnum, cm_weakref_obj_proxy
+from .utils import is_suitable_user_key, cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +29,6 @@ class DatasetDataReader(object):
         name of the dataset
     schema_hashes : list of str
         list of all schemas referenced in the dataset
-    schema_uuid : str
-        uuid of the dataset instance
     samplesAreNamed : bool
         do samples have names or not.
     isVar : bool
@@ -56,7 +51,6 @@ class DatasetDataReader(object):
                  repo_pth: str,
                  dset_name: str,
                  default_schema_hash: str,
-                 schema_uuid: str,
                  samplesAreNamed: bool,
                  isVar: bool,
                  varMaxShape: list,
@@ -66,28 +60,34 @@ class DatasetDataReader(object):
                  mode: str,
                  **kwargs):
 
+        self._mode = mode
         self._path = repo_pth
         self._dsetn = dset_name
-        self._dataenv = dataenv
-        self._hashenv = hashenv
-        self._default_schema_hash = default_schema_hash
-        self._schema_uuid = schema_uuid
-        self._samples_are_named = samplesAreNamed
         self._schema_variable = isVar
-        self._schema_max_shape = tuple(varMaxShape)
-        self._index_expr_factory = np.s_
-        self._index_expr_factory.maketuple = False
         self._schema_dtype_num = varDtypeNum
-        self._mode = mode
-        self._fs = FileHandles(repo_path=repo_pth)
-        self._Query = RecordQuery(self._dataenv)
-        self._TxnRegister = TxnRegister()
+        self._samples_are_named = samplesAreNamed
+        self._schema_max_shape = tuple(varMaxShape)
+        self._default_schema_hash = default_schema_hash
 
-        self._fs.open(self._path, self._mode)
-
+        self._dataenv: lmdb.Environment = dataenv
+        self._hashenv: lmdb.Environment = hashenv
         self._hashTxn: Optional[lmdb.Transaction] = None
         self._dataTxn: Optional[lmdb.Transaction] = None
+        self._TxnRegister = TxnRegister()
+        self._Query = RecordQuery(self._dataenv)
+
         self._is_conman = False
+        self._index_expr_factory = np.s_
+        self._index_expr_factory.maketuple = False
+
+        self._fs = {}
+        for backend, accessor in BACKEND_ACCESSOR_MAP.items():
+            if accessor is not None:
+                self._fs[backend] = accessor(
+                    repo_path=self._path,
+                    schema_shape=self._schema_max_shape,
+                    schema_dtype=np.typeDict[self._schema_dtype_num])
+                self._fs[backend].open(self._mode)
 
     def __enter__(self):
         self._is_conman = True
@@ -128,7 +128,18 @@ class DatasetDataReader(object):
         int
             number of samples the dataset contains
         '''
-        return len(self._Query.dataset_data_names(self._dsetn))
+        if not self._is_conman:
+            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+
+        try:
+            dsetCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
+            dsetCountVal = self._dataTxn.get(dsetCountKey, default='0'.encode())
+            dset_count = parsing.dataset_record_count_raw_val_from_db_val(dsetCountVal)
+        finally:
+            if not self._is_conman:
+                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+
+        return dset_count
 
     def __contains__(self, key):
         '''Determine if a key is a valid sample name in the dataset
@@ -159,7 +170,6 @@ class DatasetDataReader(object):
     def _repr_pretty_(self, p, cycle):
         res = f'\n Hangar {self.__class__.__name__} \
                 \n    Dataset Name     : {self._dsetn}\
-                \n    Schema UUID      : {self._schema_uuid}\
                 \n    Schema Hash      : {self._default_schema_hash}\
                 \n    Variable Shape   : {bool(int(self._schema_variable))}\
                 \n    (max) Shape      : {self._schema_max_shape}\
@@ -174,7 +184,6 @@ class DatasetDataReader(object):
               f'repo_pth={self._path}, '\
               f'dset_name={self._dsetn}, '\
               f'default_schema_hash={self._default_schema_hash}, '\
-              f'schema_uuid={self._schema_uuid}, '\
               f'isVar={self._schema_variable}, '\
               f'varMaxShape={self._schema_max_shape}, '\
               f'varDtypeNum={self._schema_dtype_num}, '\
@@ -183,8 +192,13 @@ class DatasetDataReader(object):
               f'mode={self._mode})'
         return res
 
+    def _open(self):
+        for val in self._fs.values():
+            val.open(mode=self._mode)
+
     def _close(self):
-        self._fs.close(mode=self._mode)
+        for val in self._fs.values():
+            val.close()
 
     @property
     def name(self):
@@ -274,9 +288,8 @@ class DatasetDataReader(object):
             dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
             hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = self._hashTxn.get(hashKey)
-            hashVal = parsing.hash_data_raw_val_from_db_val(hash_ref)
-            # This is a tight enough loop where keyword args can impact performance
-            data = self._fs.read_data(hashVal, self._mode, self._schema_dtype_num)
+            spec = backend_decoder(hash_ref)
+            data = self._fs[spec.backend].read_data(spec)
 
         except KeyError as e:
             logger.error(e, exc_info=False)
@@ -304,25 +317,18 @@ class DatasetDataWriter(DatasetDataReader):
             See args of :class:`DatasetDataReader`
     '''
 
-    def __init__(self, stagehashenv, *args, **kwargs):
+    def __init__(self, stagehashenv, default_schema_backend, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._stagehashenv = stagehashenv
-        self._setup_file_access()
-
-    def _setup_file_access(self):
-        '''Internal method used to open handles to the backing store.
-        '''
-        if self._default_schema_hash not in self._fs.wHands:
-            sample_array = np.zeros(self._schema_max_shape, dtype=np.typeDict[self._schema_dtype_num])
-            self._fs.create_schema(self._path, self._default_schema_hash, sample_array)
-        self._fs.open(self._path, self._mode)
+        self._dflt_backend = default_schema_backend
 
     def __enter__(self):
         self._is_conman = True
         self._hashTxn = self._TxnRegister.begin_writer_txn(self._hashenv)
         self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
         self._stageHashTxn = self._TxnRegister.begin_writer_txn(self._stagehashenv)
-        self._fs.__enter__()
+        for k in self._fs.keys():
+            self._fs[k].__enter__()
         return self
 
     def __exit__(self, *exc):
@@ -330,7 +336,8 @@ class DatasetDataWriter(DatasetDataReader):
         self._hashTxn = self._TxnRegister.commit_writer_txn(self._hashenv)
         self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
         self._stageHashTxn = self._TxnRegister.commit_writer_txn(self._stagehashenv)
-        self._fs.__exit__(*exc)
+        for k in self._fs.keys():
+            self._fs[k].__exit__(*exc)
 
     def __setitem__(self, key, value):
         '''Store a piece of data in a dataset. Convenince method to :meth:`add`.
@@ -369,13 +376,24 @@ class DatasetDataWriter(DatasetDataReader):
         '''
         return self.remove(key)
 
-    def add(self, data, name=None, **kwargs):
+    @ property
+    def _backend(self) -> str:
+        '''The default backend for the dataset which can be written to
+
+        Returns
+        -------
+        str
+            numeric format code of the default backend.
+        '''
+        return self._dflt_backend
+
+    def add(self, data: np.ndarray, name: str = None, **kwargs):
         '''Store a piece of data in a dataset
 
         Parameters
         ----------
-        data : np.array
-            data to store as a sample in the dataset
+        data : np.ndarray
+            data to store as a sample in the dataset.
         name : str, optional
             name to assign to the same (assuming the dataset accepts named
             samples), by default None
@@ -400,6 +418,8 @@ class DatasetDataWriter(DatasetDataReader):
         ValueError
             If type of `data` argument is not an instance of np.ndarray.
         ValueError
+            If `data` is not "C" contiguous array layout.
+        ValueError
             If the datatype of the input data does not match the specifed data type of
             the dataset
         LookupError
@@ -410,38 +430,34 @@ class DatasetDataWriter(DatasetDataReader):
         # ------------------------ argument type checking ---------------------
 
         try:
-            if self._samples_are_named:
-                if not (isinstance(name, str) and is_ascii_alnum(name)):
-                    msg = f'HANGAR VALUE ERROR:: name: {name} invalid. Must be of type str & '\
-                          f'only contain alpha-numeric ascii characters (no whitespace).'
-                    raise ValueError(msg)
-            else:
+            if self._samples_are_named and not is_suitable_user_key(name):
+                raise ValueError(
+                    f'Data name provided: `{name}` is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
+            elif not self._samples_are_named:
                 name = kwargs['bulkn'] if 'bulkn' in kwargs else parsing.generate_sample_name()
 
             if not isinstance(data, np.ndarray):
-                msg = f'HANGAR VALUE ERROR:: `data` argument type: {type(data)} != `np.ndarray`'
-                raise ValueError(msg)
+                raise ValueError(f'`data` argument type: {type(data)} != `np.ndarray`')
             elif data.dtype.num != self._schema_dtype_num:
-                msg = f'HANGAR VALUE ERROR:: data type of input data: {data.dtype} != type of '\
-                      f'specified type: {np.typeDict[self._schema_dtype_num]}.'
-                raise ValueError(msg)
+                raise ValueError(
+                    f'dtype: {data.dtype} != dset: {np.typeDict[self._schema_dtype_num]}.')
+            elif not data.flags.c_contiguous:
+                raise ValueError(f'`data` must be "C" contiguous array.')
 
             if self._schema_variable is True:
                 if data.ndim != len(self._schema_max_shape):
-                    msg = f'HANGAR VALUE ERROR:: rank of input tensor: {data.ndim} exceeds '\
-                          f'rank specified max rank: {len(self._schema_max_shape)}'
-                    raise ValueError(msg)
-                for dataDimSize, schemaDimSize in zip(data.shape, self._schema_max_shape):
-                    if dataDimSize > schemaDimSize:
-                        msg = f'HANGAR VALUE ERROR:: dimensions of input data: {data.shape} '\
-                              f'exceed variable max dims of dset: {self._dsetn} specified '\
-                              f'max dimensions: {self._schema_max_shape}. DIM SIZE: '\
-                              f'{dataDimSize} > {schemaDimSize}'
-                        raise ValueError(msg)
+                    raise ValueError(
+                        f'`data` rank: {data.ndim} != dset rank: {len(self._schema_max_shape)}')
+                for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
+                    if dDimSize > schDimSize:
+                        raise ValueError(
+                            f'dimensions of `data`: {data.shape} exceed variable max '
+                            f'dims of dset: {self._dsetn} specified max dimensions: '
+                            f'{self._schema_max_shape}: SIZE: {dDimSize} > {schDimSize}')
             elif data.shape != self._schema_max_shape:
-                msg = f'HANGAR VALUE ERROR:: shape of input data: {data.shape} != fixed '\
-                      f'dims of dset: {self._dsetn} specified dimss: {self._schema_max_shape}'
-                raise ValueError(msg)
+                raise ValueError(
+                    f'`data` shape: {data.shape} != fixed dset shape: {self._schema_max_shape}')
 
         except ValueError as e:
             logger.error(e, exc_info=False)
@@ -463,17 +479,14 @@ class DatasetDataWriter(DatasetDataReader):
             if existingDataRecVal:
                 existingDataRec = parsing.data_record_raw_val_from_db_val(existingDataRecVal)
                 if full_hash == existingDataRec.data_hash:
-                    msg = f'HANGAR KEY EXISTS ERROR:: dataset: {self._dsetn} already contains '\
-                          f'identical object named: {name} with same hash value: {full_hash}'
-                    raise LookupError(msg)
+                    raise LookupError(
+                        f'Dataset: {self._dsetn} already contains identical object named:'
+                        f'{name} with same hash value: {full_hash}')
 
             # write new data if data hash does not exist
             existingHashVal = self._hashTxn.get(hashKey, default=False)
             if existingHashVal is False:
-                hdf_instance, hdf_dset, hdf_idx = self._fs.add_tensor_data(
-                    data, self._default_schema_hash)
-                hashVal = parsing.hash_data_db_val_from_raw_val(
-                    self._default_schema_hash, hdf_instance, hdf_dset, hdf_idx, data.shape)
+                hashVal = self._fs[self._dflt_backend].write_data(data)
                 self._hashTxn.put(hashKey, hashVal)
                 self._stageHashTxn.put(hashKey, hashVal)
 
@@ -541,8 +554,7 @@ class DatasetDataWriter(DatasetDataReader):
         try:
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
-                msg = f'HANGAR KEY ERROR:: no sample: {name} exists in dset: {self._dsetn}'
-                raise KeyError(msg)
+                raise KeyError(f'No sample: {name} exists in dset: {self._dsetn}')
 
             dsetDataCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
             dsetDataCountVal = self._dataTxn.get(dsetDataCountKey)
@@ -630,6 +642,15 @@ class Datasets(object):
         if self._mode == 'r':
             self.init_dataset = None
             self.remove_dset = None
+            self.add = None
+
+    def _open(self):
+        for v in self._datasets.values():
+            v._open()
+
+    def _close(self):
+        for v in self._datasets.values():
+            v._close()
 
 # ------------- Methods Available To Both Read & Write Checkouts ------------------
 
@@ -705,9 +726,9 @@ class Datasets(object):
         Parameters
         ----------
         key : string
-            name of the dataset to remove from the repository. This will
-            remove all records from the staging area (though the actual data
-            and all records are still accessable) if they were previously commited
+            name of the dataset to remove from the repository. This will remove
+            all records from the staging area (though the actual data and all
+            records are still accessable) if they were previously commited
 
         Raises
         ------
@@ -715,8 +736,7 @@ class Datasets(object):
             If this is a read-only checkout, no operation is permitted.
         '''
         if self._mode == 'r':
-            msg = 'HANGAR NOT ALLOWED ERROR:: Cannot remove a dataset in read-only checkout'
-            e = PermissionError(msg)
+            e = PermissionError('Cannot remove a dataset in read-only checkout')
             logger.error(e, exc_info=False)
             raise e
         else:
@@ -794,8 +814,7 @@ class Datasets(object):
             wr = cm_weakref_obj_proxy(self._datasets[name])
             return wr
         except KeyError:
-            msg = f'HANGAR KEY ERROR:: No dataset exists with name: {name}'
-            e = KeyError(msg)
+            e = KeyError(f'No dataset exists with name: {name}')
             logger.error(e, exc_info=False)
             raise e
 
@@ -855,24 +874,25 @@ class Datasets(object):
             if tmpconman:
                 self.__enter__()
 
-            assert all([k in self._datasets for k in mapping.keys()])
+            if not all([k in self._datasets for k in mapping.keys()]):
+                raise KeyError(
+                    f'some key(s): {mapping.keys()} not in dset(s): {self._datasets.keys()}')
             data_name = parsing.generate_sample_name()
             for k, v in mapping.items():
                 self._datasets[k].add(v, bulkn=data_name)
 
-        except AssertionError:
-            msg = f'HANGAR KEY ERROR:: one of keys: {mapping.keys()} not in '\
-                  f'datasets: {self._datasets.keys()}'
-            logger.error(msg)
-            raise KeyError(msg) from None
+        except KeyError as e:
+            logger.error(e, exc_info=False)
+            raise e from None
+
         finally:
             if tmpconman:
                 self.__exit__()
 
         return data_name
 
-    def init_dataset(self, name: str, shape=None, dtype=None, prototype=None, *,
-                     samples_are_named=True, variable_shape=False, max_shape=None):
+    def init_dataset(self, name: str, shape=None, dtype=None, prototype=None,
+                     named_samples=True, variable_shape=False, *, backend: str = None):
         '''Initializes a dataset in the repository.
 
         Datasets are groups of related data pieces (samples). All samples within
@@ -901,18 +921,18 @@ class Datasets(object):
             A sample array of correct datatype and shape which will be used to
             initialize the dataset storage mechanisms. If this is provided, the
             `shape` and `dtype` arguments must not be set, defaults to None.
-        samples_are_named : bool, optional
+        named_samples : bool, optional
             If the samples in the dataset have names associated with them. If set,
             all samples must be provided names, if not, no name will be assigned.
             defaults to True, which means all samples should have names.
         variable_shape : bool, optional
-            If this is a variable sized dataset. If true, a `max_shape` argument
-            must be specified, defaults to False.
-        max_shape : tuple of int, optional
-            The maximum size for each dimension which a data sample can be set
-            with. The number of dimensions must match that specified in the
-            `shape` or `prototype` argument, and each dimension size must be >=
-            the equivalent dimension size specified. defaults to None.
+            If this is a variable sized dataset. If true, a the maximum shape is
+            set from the provided `shape` or `prototype` argument. Any sample
+            added to the dataset can then have dimension sizes <= to this
+            initial specification (so long as they have the same rank as what
+            was specified) defaults to False.
+        backend : DEVELOPER USE ONLY. str, optional, kwarg only
+            Backend which should be used to write the dataset files on disk.
 
         Returns
         -------
@@ -923,84 +943,62 @@ class Datasets(object):
         ------
         ValueError
             If provided name contains any non ascii, non alpha-numeric characters.
-        SyntaxError
+        ValueError
             If required `shape` and `dtype` arguments are not provided in absense of
             `prototype` argument.
+        ValueError
+            If `prototype` argument is not a C contiguous ndarray.
         LookupError
             If a dataset already exists with the provided name.
-        ValueError
-            If provided prototype shape (or `shape` argument) not <= `max_shape`
-            value if `variable_shape=True`.
         ValueError
             If rank of maximum tensor shape > 31.
         ValueError
             If zero sized dimension in `shape` argument
         ValueError
-            If zero sized dimension in `max_shape` argument
+            If the specified backend is not valid.
         '''
 
         # ------------- Checks for argument validity --------------------------
 
-        if not is_ascii_alnum(name):
-            msg = f'Dataset name provided: `{name}` is invalid. Must only contain '\
-                  f'alpha-numeric ascii with no whitespace characters.'
-            e = ValueError(msg)
+        try:
+
+            if not is_suitable_user_key(name):
+                raise ValueError(
+                    f'Dataset name provided: `{name}` is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
+            if name in self._datasets:
+                raise LookupError(f'KEY EXISTS: dataset already exists with name: {name}.')
+
+            if prototype is not None:
+                if not isinstance(prototype, np.ndarray):
+                    raise ValueError(
+                        f'If specified (not None) `prototype` argument be `np.ndarray`-like.'
+                        f'Invalid value: {prototype} of type: {type(prototype)}')
+                elif not prototype.flags.c_contiguous:
+                    raise ValueError(f'`prototype` must be "C" contiguous array.')
+            elif isinstance(shape, (tuple, list, int)) and (dtype is not None):
+                prototype = np.zeros(shape, dtype=dtype)
+            else:
+                raise ValueError(f'`shape` & `dtype` args required if no `prototype` set.')
+
+            if (0 in prototype.shape) or (prototype.ndim > 31):
+                raise ValueError(
+                    f'Invalid shape specification with ndim: {prototype.ndim} and shape: '
+                    f'{prototype.shape}. Array rank > 31 dimensions not allowed AND '
+                    'all dimension sizes must be > 0.')
+
+            if backend is not None:
+                if backend not in BACKEND_ACCESSOR_MAP:
+                    raise ValueError(f'Backend specifier: {backend} not known')
+            else:
+                backend = backend_from_heuristics(prototype)
+
+        except (ValueError, LookupError) as e:
             logger.error(e, exc_info=False)
             raise e
-
-        if name in self._datasets:
-            e = LookupError(f'KEY EXISTS ERROR: dataset already exists with name: {name}.')
-            logger.error(e)
-            raise e
-
-        if prototype is not None:
-            style = 'prototype'
-            tenShape = prototype.shape
-        elif (shape is not None) and (dtype is not None):
-            tenShape = tuple(shape) if isinstance(shape, list) else shape
-            prototype = np.zeros(tenShape, dtype=dtype)
-            style = 'provided'
-        else:
-            e = SyntaxError(f'Both `shape` & `dtype` required if `prototype` not specified.')
-            logger.error(e, exc_info=False)
-            raise e
-
-        if variable_shape is True:
-            maxShape = tuple(max_shape) if isinstance(max_shape, list) else max_shape
-            if not np.all(np.less_equal(prototype.shape, maxShape)):
-                msg = f'Variable shape `max_shape` value: {maxShape} not <= specified '\
-                      f'prototype shape: {tenShape}.'
-                e = ValueError(msg)
-                logger.error(e)
-                raise e
-            prototype = np.zeros(maxShape, dtype=prototype.dtype)
-            style = f'{style} + variable_shape'
-        else:
-            maxShape = tenShape
-
-        if 0 in tenShape:
-            raise ValueError(f'Invalid `shape`: {tenShape}. Dimension sizes must be > 0')
-        elif 0 in maxShape:
-            raise ValueError(f'Invalid `max_shape`: {maxShape}. Dimension sizes must be > 0')
-
-        if len(maxShape) > 31:
-            e = ValueError(f'Maximum tensor rank must be <= 31. specified: {len(maxShape)}')
-            logger.error(e, exc_info=False)
-            raise e
-
-        msg = f'Dataset Specification:: '\
-              f'Name: `{name}`, '\
-              f'Initialization style: `{style}`, '\
-              f'Shape: `{prototype.shape}`, '\
-              f'DType: `{prototype.dtype}`, '\
-              f'Samples Named: `{samples_are_named}`, '\
-              f'Variable Shape: `{variable_shape}`, '\
-              f'Max Shape: `{maxShape}`'
-        logger.info(msg)
 
         # ----------- Determine schema format details -------------------------
 
-        dset_uuid = uuid1().hex
         schema_format = np.array(
             (*prototype.shape, prototype.size, prototype.dtype.num), dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
@@ -1009,33 +1007,12 @@ class Datasets(object):
         dsetCountVal = parsing.dataset_record_count_db_val_from_raw_val(0)
         dsetSchemaKey = parsing.dataset_record_schema_db_key_from_raw_key(name)
         dsetSchemaVal = parsing.dataset_record_schema_db_val_from_raw_val(
-            schema_uuid=dset_uuid,
             schema_hash=schema_hash,
             schema_is_var=variable_shape,
             schema_max_shape=prototype.shape,
             schema_dtype=prototype.dtype.num,
-            schema_is_named=samples_are_named)
-
-        # -------- Create staged schema storage backend -----------------------
-        #
-        # If this is a dataset with a different name from an existing one, but
-        # which has the same schema hash, don't create a second one. Without
-        # this method an operation like:
-        #
-        #     testProto = trainProto = np.array(shape=Foo, dtype=bar)
-        #     init_dataset(name='test', prototype=testProto)
-        #     init_dataset(name='train', prototype=trainProto)
-        #
-        # would create two backends and the first would not be used since the
-        # last backend takes priority.
-        #
-
-        STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-        stage_dir = os.path.join(self._repo_pth, STAGE_DATA_DIR, f'hdf_{schema_hash}')
-        if not os.path.isdir(stage_dir):
-            f_handle = FileHandles(repo_path=self._repo_pth).create_schema(
-                self._repo_pth, schema_hash, prototype)
-            f_handle.close()
+            schema_is_named=named_samples,
+            schema_default_backend=backend)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
@@ -1060,16 +1037,15 @@ class Datasets(object):
             repo_pth=self._repo_pth,
             dset_name=name,
             default_schema_hash=schema_hash,
-            schema_uuid=dset_uuid,
-            samplesAreNamed=samples_are_named,
+            samplesAreNamed=named_samples,
             isVar=variable_shape,
             varMaxShape=prototype.shape,
             varDtypeNum=prototype.dtype.num,
             hashenv=self._hashenv,
             dataenv=self._dataenv,
-            mode='a')
+            mode='a',
+            default_schema_backend=backend)
 
-        logger.info(f'Dataset Initialized: `{name}`')
         return self.get(name)
 
     def remove_dset(self, dset_name):
@@ -1093,8 +1069,9 @@ class Datasets(object):
         datatxn = TxnRegister().begin_writer_txn(self._dataenv)
         try:
             if dset_name not in self._datasets:
-                msg = f'HANGAR KEY ERROR:: Cannot remove: {dset_name}. No dset exists with that name.'
-                raise KeyError(msg)
+                e = KeyError(f'HANGAR KEY ERROR:: Cannot remove: {dset_name}. Key does not exist.')
+                logger.error(e, exc_info=False)
+                raise e
             self._datasets[dset_name]._close()
             self._datasets.__delitem__(dset_name)
 
@@ -1118,9 +1095,6 @@ class Datasets(object):
             else:
                 numDsetsVal = parsing.dataset_total_count_db_val_from_raw_val(numDsets)
                 datatxn.put(numDsetsKey, numDsetsVal)
-        except KeyError as e:
-            logger.error(e)
-            raise
         finally:
             TxnRegister().commit_writer_txn(self._dataenv)
 
@@ -1165,14 +1139,14 @@ class Datasets(object):
                 repo_pth=repo_pth,
                 dset_name=dsetName,
                 default_schema_hash=schemaSpec.schema_hash,
-                schema_uuid=schemaSpec.schema_uuid,
                 samplesAreNamed=schemaSpec.schema_is_named,
                 isVar=schemaSpec.schema_is_var,
                 varMaxShape=schemaSpec.schema_max_shape,
                 varDtypeNum=schemaSpec.schema_dtype,
                 hashenv=hashenv,
                 dataenv=stageenv,
-                mode='a')
+                mode='a',
+                default_schema_backend=schemaSpec.schema_default_backend)
 
         return cls(repo_pth, datasets, hashenv, stageenv, stagehashenv, 'a')
 
@@ -1208,7 +1182,6 @@ class Datasets(object):
                 repo_pth=repo_pth,
                 dset_name=dsetName,
                 default_schema_hash=schemaSpec.schema_hash,
-                schema_uuid=schemaSpec.schema_uuid,
                 samplesAreNamed=schemaSpec.schema_is_named,
                 isVar=schemaSpec.schema_is_var,
                 varMaxShape=schemaSpec.schema_max_shape,

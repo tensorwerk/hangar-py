@@ -1,25 +1,17 @@
 import logging
-from os.path import join as pjoin
-from uuid import uuid4
 import weakref
+from uuid import uuid4
+from os.path import join as pjoin
 
-import numpy as np
-
-from . import config
+from . import constants as c
 from .dataset import Datasets
-from .diff import ReaderUserDiff, WriterUserDiff
-from .merger import select_merge_algorithm
-from .metadata import MetadataReader
-from .metadata import MetadataWriter
-from .records import commiting
-from .records import hashs
-from .records import heads
 from .utils import cm_weakref_obj_proxy
+from .merger import select_merge_algorithm
+from .records import commiting, hashs, heads
+from .diff import ReaderUserDiff, WriterUserDiff
+from .metadata import MetadataReader, MetadataWriter
 
 logger = logging.getLogger(__name__)
-
-STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
-STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
 
 
 class ReaderCheckout(object):
@@ -240,8 +232,8 @@ class WriterCheckout(object):
         self._branch_name = branch_name
         self._writer_lock = str(uuid4())
         self._repo_path = repo_pth
-        self._repo_stage_path = pjoin(self._repo_path, STAGE_DATA_DIR)
-        self._repo_store_path = pjoin(self._repo_path, STORE_DATA_DIR)
+        self._repo_stage_path = pjoin(self._repo_path, c.DIR_DATA_STAGE)
+        self._repo_store_path = pjoin(self._repo_path, c.DIR_DATA_STORE)
         self._labelenv = labelenv
         self._stageenv = stageenv
         self._hashenv = hashenv
@@ -546,13 +538,7 @@ class WriterCheckout(object):
             logger.error(e, exc_info=False)
             raise e
 
-        for dsetHandle in self._datasets.values():
-            try:
-                dsetHandle._close()
-            except KeyError:
-                pass
-        hashs.remove_unused_dataset_hdf5(self._repo_path, self._stagehashenv)
-
+        self._datasets._close()
         commit_hash = commiting.commit_records(
             message=commit_message,
             branchenv=self._branchenv,
@@ -563,9 +549,7 @@ class WriterCheckout(object):
         hashs.clear_stage_hash_records(self._stagehashenv)
         # reopen the hdf5 file handles so that we don't have to invalidate
         # previous weakproxy references like if we just called `__setup`
-        for dsetH in self._datasets.values():
-            dsetH._setup_file_access()
-
+        self._datasets._open()
         logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
 
@@ -602,14 +586,10 @@ class WriterCheckout(object):
             logger.error(e, exc_info=False)
             raise e
 
-        for dsetHandle in self._datasets.values():
-            try:
-                dsetHandle._close()
-            except KeyError:
-                pass
+        self._datasets._close()
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
-        hashs.remove_unused_dataset_hdf5(self._repo_path, self._stagehashenv)
+        hashs.delete_in_process_data(self._repo_path)
 
         branch_head = heads.get_staging_branch_head(self._branchenv)
         head_commit = heads.get_branch_head_commit(self._branchenv, branch_head)
@@ -619,7 +599,19 @@ class WriterCheckout(object):
             commit_hash=head_commit)
 
         logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
-        self.close()
+        self._metadata = MetadataWriter(
+            dataenv=self._stageenv,
+            labelenv=self._labelenv)
+        self._datasets = Datasets._from_staging_area(
+            repo_pth=self._repo_path,
+            hashenv=self._hashenv,
+            stageenv=self._stageenv,
+            stagehashenv=self._stagehashenv)
+        self._differ = WriterUserDiff(
+            stageenv=self._stageenv,
+            refenv=self._refenv,
+            branchenv=self._branchenv,
+            branch_name=self._branch_name)
         return head_commit
 
     def close(self):
@@ -630,11 +622,7 @@ class WriterCheckout(object):
         writes until it has been manually cleared.
         '''
         self.__acquire_writer_lock()
-        for dsetHandle in self._datasets.values():
-            try:
-                dsetHandle._close()
-            except KeyError:
-                pass
+        self._datasets._close()
         del self._datasets
         del self._metadata
         del self._differ

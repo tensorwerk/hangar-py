@@ -408,10 +408,3 @@ def update_defaults(new, config=config, defaults=defaults):
     get.cache_clear()
     defaults.append(new)
     update(config, new, priority='old')
-
-
-fn = os.path.join(os.path.dirname(__file__), 'config_hangar.yml')
-with open(fn) as f:
-    conf = yaml.safe_load(f)
-
-update_defaults(conf)

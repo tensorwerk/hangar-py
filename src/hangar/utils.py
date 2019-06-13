@@ -1,11 +1,24 @@
+import logging
 import os
+import random
+import re
+import string
 import weakref
-from functools import partial
 from contextlib import contextmanager
 from datetime import timedelta
+from functools import partial
 from numbers import Number
 
 import wrapt
+
+logger = logging.getLogger(__name__)
+
+
+def random_string(stringLength=6):
+    '''Generate a random string of fixed length
+    '''
+    letters = ''.join([string.ascii_letters, string.digits])
+    return ''.join(random.choice(letters) for i in range(stringLength))
 
 
 def cm_weakref_obj_proxy(obj):
@@ -36,8 +49,25 @@ def cm_weakref_obj_proxy(obj):
     return obj_proxy
 
 
-def is_ascii_alnum(str_data: str):
-    '''Checks if string contains only alpha-numeric ascii chars (no whitespace)
+def symlink_rel(src: os.PathLike, dst: os.PathLike):
+    '''Create symbolic links which actually work like they should
+
+    Parameters
+    ----------
+    src : os.PathLike
+        create a symbolic link pointic to src
+    dst : os.PathLike
+        create a link named dst
+    '''
+    rel_path_src = os.path.relpath(src, os.path.dirname(dst))
+    os.symlink(rel_path_src, dst)
+
+
+SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)
+
+
+def is_suitable_user_key(str_data: str) -> bool:
+    '''Checks if string contains only alpha-numeric ascii chars or ['.', '-' '_'] (no whitespace)
 
     Necessary because python 3.6 does not have a str.isascii() method.
 
@@ -52,10 +82,8 @@ def is_ascii_alnum(str_data: str):
         True if only ascii characters in the string, else False.
     '''
     try:
-        str_data.encode('ascii')
-        asciiStrIsAlnum = False if any(c.isspace() for c in str_data) else True
-        return asciiStrIsAlnum
-    except UnicodeEncodeError:
+        return bool(SuitableCharRE.match(str_data))
+    except TypeError:
         return False
 
 

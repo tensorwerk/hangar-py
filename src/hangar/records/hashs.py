@@ -1,10 +1,9 @@
 import logging
-import os
-from os.path import join as pjoin
 
 from . import parsing
-from .. import config
+from .. import constants as c
 from ..context import TxnRegister
+from ..backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +40,7 @@ class HashQuery(object):
         list of tuples of bytes
             list type stack of tuples with each db_key, db_val pair
         '''
-        HASH = config.get('hangar.keys.hash')
-        startHashRangeKey = f'{HASH}'.encode()
+        startHashRangeKey = f'{c.K_HASH}'.encode()
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             with hashtxn.cursor() as cursor:
@@ -71,8 +69,7 @@ class HashQuery(object):
         list of tuples of bytes
             list type stack of tuples with each db_key, db_val pair
         '''
-        SCHEMA = config.get('hangar.keys.schema')
-        startSchemaRangeKey = f'{SCHEMA}'.encode()
+        startSchemaRangeKey = f'{c.K_SCHEMA}'.encode()
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             with hashtxn.cursor() as cursor:
@@ -102,13 +99,10 @@ class HashQuery(object):
         recs = self._traverse_all_hash_records(keys=True, vals=False)
         return recs
 
-    def list_all_schema_and_instances(self):
-        unique = set()
+    def list_all_hash_values(self):
         recs = self._traverse_all_hash_records(keys=False, vals=True)
-        formatted = map(parsing.hash_data_raw_val_from_db_val, recs)
-        for v in formatted:
-            unique.add((v.hdf5_file_schema, v.hdf5_schema_instance))
-        return list(unique)
+        formatted = map(backend_decoder, recs)
+        return formatted
 
     def list_all_schema_keys_raw(self):
         recs = self._traverse_all_schema_records(keys=True, vals=False)
@@ -120,46 +114,26 @@ class HashQuery(object):
         return recs
 
 
-def remove_unused_dataset_hdf5(repo_path, stagehashenv):
-    '''If no changes made to staged hdf files, remove and unlik them from stagedir
+def delete_in_process_data(repo_path, *, remote_operation=False):
+    '''DANGER! Permenantly delete uncommited data files/links for stage or remote area.
 
-    This searchs the stagehashenv file for all schemas & instances, and if any
-    files are present in the stagedir without references in stagehashenv, the
-    symlinks in stagedir and backing data files in datadir are removed.
+    This searchs each backend accessors staged (or remote) folder structure for
+    files, and if any are present the symlinks in stagedir and backing data
+    files in datadir are removed.
 
     Parameters
     ----------
     repo_path : str
         path to the repository on disk
-    stagehashenv : `lmdb.Environment`
-        db where all stage hash additions are recorded
-
+    remote_operation : optional, kwarg only, bool
+        If true, modify contents of the remote_dir, if false (default) modify
+        contents of the staging directory.
     '''
-    staged_data_files = HashQuery(stagehashenv).list_all_schema_and_instances()
-
-    DATA_DIR = config.get('hangar.repository.data_dir')
-    STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-    data_pth = pjoin(repo_path, DATA_DIR)
-    stage_dir = pjoin(repo_path, STAGE_DATA_DIR)
-
-    stage_schemas = [x for x in os.listdir(stage_dir) if x.startswith('hdf_')]
-    for stage_schema in stage_schemas:
-        schema_pth = pjoin(stage_dir, stage_schema)
-        schema_hash = stage_schema.replace('hdf_', '', 1)
-        stage_files = [x for x in os.listdir(schema_pth) if x.endswith('.hdf5')]
-        stage_instances = [x.replace('.hdf5', '') for x in stage_files]
-        for instance in stage_instances:
-            check = (schema_hash, instance)
-            if check in staged_data_files:
-                logger.debug(f'skipped: {check}')
-                continue
-            else:
-                remove_link_pth = pjoin(schema_pth, f'{instance}.hdf5')
-                remove_data_pth = pjoin(data_pth, f'hdf_{schema_hash}_{instance}.hdf5')
-                logger.debug(f'removing: {remove_link_pth}')
-                logger.debug(f'removing: {remove_data_pth}')
-                os.remove(remove_link_pth)
-                os.remove(remove_data_pth)
+    for backend, accesor in BACKEND_ACCESSOR_MAP.items():
+        if accesor is not None:
+            # acc = accesor(repo_path, None, None)
+            # accesor.delete_in_process_data()
+            accesor.delete_in_process_data(repo_path=repo_path, remote_operation=remote_operation)
 
 
 def clear_stage_hash_records(stagehashenv):
@@ -173,7 +147,6 @@ def clear_stage_hash_records(stagehashenv):
     stagehashenv : lmdb.Environment
         db where staged data hash additions are recorded
     '''
-    print(f'removing all stage hash records')
     stagehashtxn = TxnRegister().begin_writer_txn(stagehashenv)
     with stagehashtxn.cursor() as cursor:
         positionExists = cursor.first()
@@ -199,9 +172,8 @@ def remove_stage_hash_records_from_hashenv(hashenv, stagehashenv):
 
     '''
     stageHashKeys = HashQuery(stagehashenv).list_all_hash_keys_db()
-
     hashtxn = TxnRegister().begin_writer_txn(hashenv)
     for hashKey in stageHashKeys:
-        print(f'deleting: {hashKey}')
+        logger.info(f'deleting: {hashKey}')
         hashtxn.delete(hashKey)
     TxnRegister().commit_writer_txn(hashenv)

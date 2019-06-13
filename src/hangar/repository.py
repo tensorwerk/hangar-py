@@ -1,18 +1,17 @@
 import os
 import logging
-from . import config_logging
-config_logging.setup_logging()
 
 from tqdm.auto import tqdm
 import grpc
 
-from . import config, diff, merger
+from . import merger
+from . import constants as c
 from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
-from .diagnostics import graphing
+from .diagnostics import graphing, ecosystem
 from .records import heads, parsing, summarize, commiting
 from .remote.hangar_client import HangarClient
-from .utils import is_valid_directory_path, is_ascii_alnum
+from .utils import is_valid_directory_path, is_suitable_user_key
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class Repository(object):
             logger.error(e, exc_info=False)
             raise
 
-        repo_pth = os.path.join(usr_path, config.get('hangar.repository.hangar_dir_name'))
+        repo_pth = os.path.join(usr_path, c.DIR_HANGAR)
         self._env: Environments = Environments(repo_path=repo_pth)
         self._repo_path: str = self._env.repo_path
         self._client: HangarClient = None
@@ -59,10 +58,9 @@ class Repository(object):
             required.
 
         '''
-        res = f'\
-            \n Hangar {self.__class__.__name__}\
-            \n     Repository Path  : {self._repo_path}\
-            \n     Writer-Lock Free : {heads.writer_lock_held(self._env.branchenv)}\n'
+        res = f'Hangar {self.__class__.__name__}\
+               \n    Repository Path  : {self._repo_path}\
+               \n    Writer-Lock Free : {heads.writer_lock_held(self._env.branchenv)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -598,6 +596,12 @@ class Repository(object):
         summarize.details(self._env)
         return
 
+    def _ecosystem_details(self):
+        '''DEVELOPER USER ONLY: log and return package versions on the sytem.
+        '''
+        eco = ecosystem.get_versions()
+        return eco
+
     def merge(self, message, master_branch, dev_branch):
         '''Perform a merge of the changes made on two branches.
 
@@ -653,9 +657,9 @@ class Repository(object):
             name of the branch which was created
         '''
         self.__verify_repo_initialized()
-        if not is_ascii_alnum(branch_name):
-            msg = (f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` is not allowed. '
-                   'Must only contain alpha-numeric ascii with no whitespace characters.')
+        if not is_suitable_user_key(branch_name):
+            msg = f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` invalid. '\
+                  f'Must only contain alpha-numeric or "." "_" "-" ascii characters.'
             e = ValueError(msg)
             logger.error(e, exc_info=False)
             raise e

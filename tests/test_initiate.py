@@ -14,8 +14,7 @@ def test_starting_up(managed_tmpdir):
     assert repo.list_branch_names() == ['master']
     assert os.path.isdir(repo._repo_path)
     assert repo._repo_path == os.path.join(managed_tmpdir, '__hangar')
-    # TODO: Fix failing test
-    # assert repo.status() == 'CLEAN'
+    repo._env._close_environments()
 
 
 def initial_read_checkout(managed_tmpdir):
@@ -24,6 +23,7 @@ def initial_read_checkout(managed_tmpdir):
     # TODO it should do something to indicate the issue or return a read checkout
     with pytest.raises(ValueError):
         r_checkout = repo.checkout()
+    repo._env._close_environments()
 
 
 def test_initial_dataset(managed_tmpdir, randomsizedarray):
@@ -41,6 +41,7 @@ def test_initial_dataset(managed_tmpdir, randomsizedarray):
     dset = w_checkout.datasets.init_dataset('dset', prototype=randomsizedarray)
     assert dset._dsetn == 'dset'
     w_checkout.close()
+    repo._env._close_environments()
 
 
 def test_empty_commit(managed_tmpdir, caplog):
@@ -50,3 +51,4 @@ def test_empty_commit(managed_tmpdir, caplog):
     with pytest.raises(RuntimeError):
         w_checkout.commit('this is a merge message')
     w_checkout.close()
+    repo._env._close_environments()

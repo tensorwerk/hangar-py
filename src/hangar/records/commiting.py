@@ -1,16 +1,21 @@
+import logging
 import hashlib
 import os
 import tempfile
 import time
 from os.path import join as pjoin
+import shutil
 
 import lmdb
+import yaml
 
 from . import heads, parsing
-from .. import config
+from .. import constants as c
 from ..context import TxnRegister
 from .queries import RecordQuery
+from ..utils import symlink_rel
 
+logger = logging.getLogger(__name__)
 
 '''
 Reading commit specifications and parents.
@@ -41,7 +46,6 @@ def check_commit_hash_in_history(refenv, commit_hash):
     finally:
         TxnRegister().abort_reader_txn(refenv)
     return isCommitInHistory
-
 
 
 def get_commit_spec(refenv, commit_hash):
@@ -230,11 +234,9 @@ def get_commit_ref_contents(refenv, commit_hash):
     dict
         nested dict
     '''
-    LMDB_CONFIG = config.get('hangar.lmdb')
-
     with tempfile.TemporaryDirectory() as tempD:
         tmpDF = os.path.join(tempD, 'test.lmdb')
-        tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+        tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
         unpack_commit_ref(refenv, tmpDB, commit_hash)
         outDict = RecordQuery(tmpDB).all_records()
         tmpDB.close()
@@ -263,8 +265,9 @@ def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
             cursor.putmulti(commitRefs, append=True)
         try:
             cursor.close()
-        except Exception:
-            print('could not close cursor')
+        except Exception as e:
+            logger.error('could not close cursor', e, exc_info=True)
+            raise e
     finally:
         TxnRegister().commit_writer_txn(cmtrefenv)
 
@@ -418,8 +421,12 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
         master_branch_name=merge_master,
         dev_branch_name=merge_dev)
 
-    USER_NAME = config.get('user.name')
-    USER_EMAIL = config.get('user.email')
+    user_info_pth = pjoin(repo_path, 'config_user.yml')
+    with open(user_info_pth) as f:
+        user_info = yaml.safe_load(f.read()) or {}
+
+    USER_NAME = user_info['name']
+    USER_EMAIL = user_info['email']
     if (USER_NAME is None) or (USER_EMAIL is None):
         raise RuntimeError(f'Username and Email are required. Please configure.')
 
@@ -546,34 +553,32 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
         area)
 
     '''
-    STORE_DATA_DIR = config.get('hangar.repository.store_data_dir')
-    store_dir = pjoin(repo_path, STORE_DATA_DIR)
+    store_dir = pjoin(repo_path, c.DIR_DATA_STORE)
 
-    if remote_operation:
-        REMOTE_DATA_DIR = config.get('hangar.repository.remote_data_dir')
-        process_dir = pjoin(repo_path, REMOTE_DATA_DIR)
+    if not remote_operation:
+        process_dir = pjoin(repo_path, c.DIR_DATA_STAGE)
     else:
-        STAGE_DATA_DIR = config.get('hangar.repository.stage_data_dir')
-        process_dir = pjoin(repo_path, STAGE_DATA_DIR)
+        process_dir = pjoin(repo_path, c.DIR_DATA_REMOTE)
 
-    p_schema_dirs = [x for x in os.listdir(process_dir) if x.startswith('hdf_')]
-    for p_schema_dir in p_schema_dirs:
-        schema_dir_pth = pjoin(process_dir, p_schema_dir)
-        p_files = [x for x in os.listdir(schema_dir_pth) if x.endswith('.hdf5')]
-        store_schema_dir_pth = pjoin(store_dir, p_schema_dir)
+    dirs_to_make, symlinks_to_make = [], []
+    for root, dirs, files in os.walk(process_dir):
+        for d in dirs:
+            dirs_to_make.append(os.path.relpath(pjoin(root, d), process_dir))
+        for f in files:
+            store_file_pth = pjoin(store_dir, os.path.relpath(pjoin(root, f), process_dir))
+            link_file_pth = os.path.normpath(pjoin(root, os.readlink(pjoin(root, f))))
+            symlinks_to_make.append((link_file_pth, store_file_pth))
 
-        for p_file in p_files:
-            if not os.path.isdir(store_schema_dir_pth):
-                os.makedirs(store_schema_dir_pth)
-            p_fp = pjoin(schema_dir_pth, p_file)
-            p_relpth = os.readlink(p_fp)
-            store_fp = pjoin(store_schema_dir_pth, p_file)
-            os.symlink(p_relpth, store_fp)
-            os.remove(p_fp)
+    for d in dirs_to_make:
+        dpth = pjoin(store_dir, d)
+        if not os.path.isdir(dpth):
+            os.makedirs(dpth)
+    for src, dest in symlinks_to_make:
+        symlink_rel(src, dest)
 
-        os.removedirs(schema_dir_pth)
-
-    os.makedirs(process_dir, exist_ok=True)
+    # reset before releasing control.
+    shutil.rmtree(process_dir)
+    os.makedirs(process_dir)
 
 
 def list_all_commits(refenv):

@@ -14,44 +14,13 @@ def reset_singletons(monkeypatch):
     cleanup all singleton instances anyway before each test, to ensure
     no leaked state between tests.
     '''
-    for env in hangar.context.EnvironmentsSingleton._instances.values():
-        # need to close handles to prevent file lock issues in windows
-        try:
-            env._close_environments()
-        except Exception:
-            pass
-    for fd in hangar.hdf5_store.FileHandlesSingleton._instances.values():
-        try:
-            fd.close(mode='a')
-        except Exception:
-            pass
-        try:
-            fd.close(mode='r')
-        except Exception:
-            pass
     hangar.context.TxnRegisterSingleton._instances = {}
-    hangar.context.EnvironmentsSingleton._instances = {}
-    hangar.hdf5_store.FileHandlesSingleton._instances = {}
+    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 5_000_000)
 
 
 @pytest.fixture()
 def managed_tmpdir(tmp_path):
     yield tmp_path
-    for env in hangar.context.EnvironmentsSingleton._instances.values():
-        # need to close handles to prevent file lock issues in windows
-        try:
-            env._close_environments()
-        except Exception:
-            pass
-    for fd in hangar.hdf5_store.FileHandlesSingleton._instances.values():
-        try:
-            fd.close(mode='a')
-        except Exception:
-            pass
-        try:
-            fd.close(mode='r')
-        except Exception:
-            pass
     shutil.rmtree(tmp_path)
 
 
@@ -60,12 +29,22 @@ def repo(managed_tmpdir) -> Repository:
     repo_obj = Repository(path=managed_tmpdir)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     yield repo_obj
+    repo_obj._env._close_environments()
 
 
 @pytest.fixture()
 def written_repo(repo):
     co = repo.checkout(write=True)
     co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
+    co.commit('this is a commit message')
+    co.close()
+    yield repo
+
+
+@pytest.fixture()
+def variable_shape_written_repo(repo):
+    co = repo.checkout(write=True)
+    co.datasets.init_dataset(name='_dset', shape=(10, 10), dtype=np.float64, variable_shape=True)
     co.commit('this is a commit message')
     co.close()
     yield repo

@@ -70,7 +70,7 @@ key/value pair of (`hash`, `backend_specification`).
 
   The record backend stores hash information in a separate location from the
   commit references (which associate a `(datasetname, sample name/id)` to a
-  `(sample uuid, sample_hash)`). This let's us separate the historical repository
+  `sample_hash`). This let's us separate the historical repository
   information from a particular computer's location of a data piece. All we need in
   the public history is to know that some data with a particular hash is
   associated with a commit. No one but the system which actually needs to access
@@ -141,7 +141,7 @@ the specifications of records in the repository history.*
 Now, let's unpack this for a bit. We know from`Numbers == Numbers`_ that data is
 saved to disk in some arbitrary locations with some arbitrary backend. We also
 know from `Data Is Large, We Don't Waste Space`_ that the permanent repository
-information only contains a record which links a sample name to a uuid and a
+information only contains a record which links a sample name to a
 hash. We also assert that there is also a mapping of hash to storage backend
 specification kept somewhere (doesn't matter what that mapping is for the
 moment). With those 3 pieces of information, it's obvious that once data is
@@ -169,37 +169,35 @@ unpacked on checkout!).
     Num dsets                      'a.'               -> '2'
     ---------------------------------------------------------------------------
     Name of dset -> num samples || 'a.train_images'   -> '10'
-    Name of data -> uuid & hash || 'a.train_images.0' -> 'foo_uuid_1 BAR_HASH_1'
-    Name of data -> uuid & hash || 'a.train_images.1' -> 'foo_uuid_2 BAR_HASH_2'
-    Name of data -> uuid & hash || 'a.train_images.2' -> 'foo_uuid_3 BAR_HASH_3'
-    Name of data -> uuid & hash || 'a.train_images.3' -> 'foo_uuid_4 BAR_HASH_4'
-    Name of data -> uuid & hash || 'a.train_images.4' -> 'foo_uuid_5 BAR_HASH_5'
-    Name of data -> uuid & hash || 'a.train_images.5' -> 'foo_uuid_6 BAR_HASH_6'
-    Name of data -> uuid & hash || 'a.train_images.6' -> 'foo_uuid_7 BAR_HASH_7'
-    Name of data -> uuid & hash || 'a.train_images.7' -> 'foo_uuid_8 BAR_HASH_8'
-    Name of data -> uuid & hash || 'a.train_images.8' -> 'foo_uuid_9 BAR_HASH_9'
-    Name of data -> uuid & hash || 'a.train_images.9' -> 'foo_uuid_0 BAR_HASH_0'
+    Name of data -> hash        || 'a.train_images.0' -> BAR_HASH_1'
+    Name of data -> hash        || 'a.train_images.1' -> BAR_HASH_2'
+    Name of data -> hash        || 'a.train_images.2' -> BAR_HASH_3'
+    Name of data -> hash        || 'a.train_images.3' -> BAR_HASH_4'
+    Name of data -> hash        || 'a.train_images.4' -> BAR_HASH_5'
+    Name of data -> hash        || 'a.train_images.5' -> BAR_HASH_6'
+    Name of data -> hash        || 'a.train_images.6' -> BAR_HASH_7'
+    Name of data -> hash        || 'a.train_images.7' -> BAR_HASH_8'
+    Name of data -> hash        || 'a.train_images.8' -> BAR_HASH_9'
+    Name of data -> hash        || 'a.train_images.9' -> BAR_HASH_0'
     ---------------------------------------------------------------------------
     Name of dset -> num samples || 'a.train_labels'   -> '10'
-    Name of data -> uuid & hash || 'a.train_labels.0' -> foo_uuid_11 BAR_HASH_11'
-    Name of data -> uuid & hash || 'a.train_labels.1' -> foo_uuid_12 BAR_HASH_12'
-    Name of data -> uuid & hash || 'a.train_labels.2' -> foo_uuid_13 BAR_HASH_13'
-    Name of data -> uuid & hash || 'a.train_labels.3' -> foo_uuid_14 BAR_HASH_14'
-    Name of data -> uuid & hash || 'a.train_labels.4' -> foo_uuid_15 BAR_HASH_15'
-    Name of data -> uuid & hash || 'a.train_labels.5' -> foo_uuid_16 BAR_HASH_16'
-    Name of data -> uuid & hash || 'a.train_labels.6' -> foo_uuid_17 BAR_HASH_17'
-    Name of data -> uuid & hash || 'a.train_labels.7' -> foo_uuid_18 BAR_HASH_18'
-    Name of data -> uuid & hash || 'a.train_labels.8' -> foo_uuid_19 BAR_HASH_19'
-    Name of data -> uuid & hash || 'a.train_labels.9' -> foo_uuid_10 BAR_HASH_10'
+    Name of data -> hash        || 'a.train_labels.0' -> BAR_HASH_11'
+    Name of data -> hash        || 'a.train_labels.1' -> BAR_HASH_12'
+    Name of data -> hash        || 'a.train_labels.2' -> BAR_HASH_13'
+    Name of data -> hash        || 'a.train_labels.3' -> BAR_HASH_14'
+    Name of data -> hash        || 'a.train_labels.4' -> BAR_HASH_15'
+    Name of data -> hash        || 'a.train_labels.5' -> BAR_HASH_16'
+    Name of data -> hash        || 'a.train_labels.6' -> BAR_HASH_17'
+    Name of data -> hash        || 'a.train_labels.7' -> BAR_HASH_18'
+    Name of data -> hash        || 'a.train_labels.8' -> BAR_HASH_19'
+    Name of data -> hash        || 'a.train_labels.9' -> BAR_HASH_10'
     ---------------------------------------------------------------------------
-    's.train_images'   -> '{"schema_uuid": "f0f6c35853ce11e998d18c859047adef",
-                            "schema_hash": "RM4DefFsjRs=",
+    's.train_images'   -> '{"schema_hash": "RM4DefFsjRs=",
                             "schema_dtype": 2,
                             "schema_is_var": false,
                             "schema_max_shape": [784],
                             "schema_is_named": true}'
-    's.train_labels'   ->  '{"schema_uuid": "f13d92d853ce11e983898c859047adef",
-                            "schema_hash":
+    's.train_labels'   -> '{"schema_hash":
                             "ncbHqE6Xldg=",
                             "schema_dtype": 7,
                             "schema_is_var": false,

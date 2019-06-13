@@ -166,8 +166,6 @@ Methods to interact with the branch head records
 ------------------------------------------------
 
 .. todo::
-   Some of the methods should aquire the writer lock.
-.. todo::
    Need a delete branch operation.
 '''
 
@@ -388,7 +386,7 @@ def get_branch_names(branchenv):
     list of str
         list of branch names active in the repository.
     '''
-    branchStartKey = parsing.BRCH.encode()  # TODO: This is odd, why??
+    branchStartKey = parsing.c.K_BRANCH.encode()  # TODO: This is odd, why??
     branchNames = []
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:

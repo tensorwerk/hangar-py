@@ -15,10 +15,10 @@ from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
 from .header_manipulator_client_interceptor import header_adder_interceptor
-from .. import config
-from ..context import Environments
-from ..context import TxnRegister
-from ..hdf5_store import FileHandles
+from .. import constants as c
+from ..context import Environments, TxnRegister
+from ..backends.hdf5 import HDF5_00_FileHandles
+from ..backends.selection import backend_decoder
 from ..records import commiting
 from ..records import hashs
 from ..records import heads
@@ -50,7 +50,7 @@ class HangarClient(object):
                  auth_username: str = '', auth_password: str = ''):
 
         self.env = envs
-        self.fs = FileHandles(repo_path=self.env.repo_path)
+        self.fs = HDF5_00_FileHandles(repo_path=self.env.repo_path)
         self.fs.open(self.env.repo_path, 'r')
 
         self.header_adder_int = header_adder_interceptor(auth_username, auth_password)
@@ -240,17 +240,17 @@ class HangarClient(object):
                     msg = f'HASH MANGLED, recieved: {recieved_hash} != digest: {hdigest}'
                     raise RuntimeError(msg)
 
-                hdf_instance, hdf_dset, hdf_idx = fs.add_tensor_data(
+                hdf_instance, hdf_dset, hdf_idx = fs.write_data(
                     array=tensor,
                     schema_hash=schema_hash,
                     remote_operation=True)
                 hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
-                hashVal = parsing.hash_data_db_val_from_raw_val(
-                    hdf5_file_schema=schema_hash,
-                    hdf5_schema_instance=hdf_instance,
-                    hdf5_dataset=hdf_dset,
-                    hdf5_dataset_idx=hdf_idx,
-                    data_shape=tensor.shape)
+                hashVal = backend_encoder(backend='00',
+                                          schema=schema_hash,
+                                          instance=hdf_instance,
+                                          dataset=hdf_dset,
+                                          dataset_idx=hdf_idx,
+                                          shape=tensor.shape)
                 hashTxn.put(hashKey, hashVal)
                 save_bar.update(1)
         finally:
@@ -271,9 +271,10 @@ class HangarClient(object):
                 if not hashVal:
                     raise KeyError(f'No hash record with key: {hashKey}')
 
-                hash_val = parsing.hash_data_raw_val_from_db_val(hashVal)
-                schema_hash = hash_val.hdf5_file_schema
-                data_shape = hash_val.data_shape
+                # hash_val = parsing.hash_data_raw_val_from_db_val(hashVal)
+                hash_val = backend_decoder(hashVal)
+                schema_hash = hash_val.schema
+                data_shape = hash_val.shape
                 hashSchemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
                 schemaVal = hashTxn.get(hashSchemaKey, default=False)
                 if not schemaVal:
@@ -399,10 +400,9 @@ class HangarClient(object):
 
     def push_find_missing_hash_records(self, commit):
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             s_hashset = set(queries.RecordQuery(tmpDB).data_hashes())
             s_hashes = list(s_hashset)
@@ -444,10 +444,9 @@ class HangarClient(object):
         return missing_hashs
 
     def push_find_missing_labels(self, commit):
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             c_hashset = set(queries.RecordQuery(tmpDB).metadata_hashes())
             c_hashes = list(c_hashset)
@@ -481,10 +480,9 @@ class HangarClient(object):
 
     def push_find_missing_schemas(self, commit):
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             c_schemaset = set(queries.RecordQuery(tmpDB).schema_hashes())
             c_schemas = list(c_schemaset)
