@@ -52,6 +52,8 @@ process.
 
 from collections import namedtuple
 
+import numpy as np
+
 from .hdf5 import HDF5_00_Parser, HDF5_00_FileHandles
 from .np_mmap import NUMPY_00_Parser, NUMPY_00_FileHandles
 from .remote_unknown import REMOTE_UNKNOWN_00_Parser, REMOTE_UNKNOWN_00_Handler
@@ -95,3 +97,32 @@ def backend_decoder(db_val: bytes) -> namedtuple:
     parser = BACKEND_PARSER_MAP[db_val[:2]]
     decoded = parser.decode(db_val)
     return decoded
+
+
+def backend_from_heuristics(array: np.ndarray) -> str:
+    '''Given a prototype array, attempt to select the appropriate backend.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        prototype array to determine the appropriate backend for.
+
+    Returns
+    -------
+    str
+        Backend code specification for the selected backend.
+
+    TODO
+    ----
+    Configuration of this entire module as the available backends fill out.
+    '''
+
+    # uncompressed numpy memmap data is most appropriate for data whose shape is
+    # likely small tabular row data (CSV or such...)
+    if (array.ndim == 1) and (array.size < 400):
+        backend = '01'
+    # hdf5 is the default backend for larger array sizes.
+    else:
+        backend = '00'
+
+    return backend

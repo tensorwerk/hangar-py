@@ -7,7 +7,7 @@ import numpy as np
 import lmdb
 
 from .context import TxnRegister
-from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP
+from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP, backend_from_heuristics
 from .records import parsing
 from .records.queries import RecordQuery
 from .utils import is_suitable_user_key, cm_weakref_obj_proxy
@@ -382,6 +382,17 @@ class DatasetDataWriter(DatasetDataReader):
             Name of the sample removed from the dataset (assuming operation successful)
         '''
         return self.remove(key)
+
+    @ property
+    def _backend(self) -> str:
+        '''The default backend for the dataset which can be written to
+
+        Returns
+        -------
+        str
+            numeric format code of the default backend.
+        '''
+        return self._dflt_backend
 
     def add(self, data: np.ndarray, name: str = None, **kwargs):
         '''Store a piece of data in a dataset
@@ -888,7 +899,7 @@ class Datasets(object):
         return data_name
 
     def init_dataset(self, name: str, shape=None, dtype=None, prototype=None,
-                     named_samples=True, variable_shape=False, *, backend='00'):
+                     named_samples=True, variable_shape=False, *, backend: str = None):
         '''Initializes a dataset in the repository.
 
         Datasets are groups of related data pieces (samples). All samples within
@@ -950,11 +961,14 @@ class Datasets(object):
             If rank of maximum tensor shape > 31.
         ValueError
             If zero sized dimension in `shape` argument
+        ValueError
+            If the specified backend is not valid.
         '''
 
         # ------------- Checks for argument validity --------------------------
 
         try:
+
             if not is_suitable_user_key(name):
                 raise ValueError(
                     f'Dataset name provided: `{name}` is invalid. Can only contain '
@@ -979,6 +993,12 @@ class Datasets(object):
                     f'Invalid shape specification with ndim: {prototype.ndim} and shape: '
                     f'{prototype.shape}. Array rank > 31 dimensions not allowed AND '
                     'all dimension sizes must be > 0.')
+
+            if backend is not None:
+                if backend not in BACKEND_ACCESSOR_MAP:
+                    raise ValueError(f'Backend specifier: {backend} not known')
+            else:
+                backend = backend_from_heuristics(prototype)
 
         except (ValueError, LookupError) as e:
             logger.error(e, exc_info=False)
