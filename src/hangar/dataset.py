@@ -383,13 +383,13 @@ class DatasetDataWriter(DatasetDataReader):
         '''
         return self.remove(key)
 
-    def add(self, data, name=None, **kwargs):
+    def add(self, data: np.ndarray, name: str = None, **kwargs):
         '''Store a piece of data in a dataset
 
         Parameters
         ----------
-        data : np.array
-            data to store as a sample in the dataset
+        data : np.ndarray
+            data to store as a sample in the dataset.
         name : str, optional
             name to assign to the same (assuming the dataset accepts named
             samples), by default None
@@ -414,6 +414,8 @@ class DatasetDataWriter(DatasetDataReader):
         ValueError
             If type of `data` argument is not an instance of np.ndarray.
         ValueError
+            If `data` is not "C" contiguous array layout.
+        ValueError
             If the datatype of the input data does not match the specifed data type of
             the dataset
         LookupError
@@ -425,36 +427,33 @@ class DatasetDataWriter(DatasetDataReader):
 
         try:
             if self._samples_are_named and not is_suitable_user_key(name):
-                msg = f'HANGAR VALUE ERROR:: name: {name} invalid. Must be str which '\
-                      f'only contains alpha-numeric or "." "_" "-" ascii characters.'
-                raise ValueError(msg)
+                raise ValueError(
+                    f'Data name provided: `{name}` is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
             elif not self._samples_are_named:
                 name = kwargs['bulkn'] if 'bulkn' in kwargs else parsing.generate_sample_name()
 
             if not isinstance(data, np.ndarray):
-                msg = f'HANGAR VALUE ERROR:: `data` argument type: {type(data)} != `np.ndarray`'
-                raise ValueError(msg)
+                raise ValueError(f'`data` argument type: {type(data)} != `np.ndarray`')
             elif data.dtype.num != self._schema_dtype_num:
-                msg = f'HANGAR VALUE ERROR:: data type of input data: {data.dtype} != type of '\
-                      f'specified type: {np.typeDict[self._schema_dtype_num]}.'
-                raise ValueError(msg)
+                raise ValueError(
+                    f'dtype: {data.dtype} != dset: {np.typeDict[self._schema_dtype_num]}.')
+            elif not data.flags.c_contiguous:
+                raise ValueError(f'`data` must be "C" contiguous array.')
 
             if self._schema_variable is True:
                 if data.ndim != len(self._schema_max_shape):
-                    msg = f'HANGAR VALUE ERROR:: rank of input tensor: {data.ndim} != '\
-                          f'rank specified max rank: {len(self._schema_max_shape)}'
-                    raise ValueError(msg)
-                for dataDimSize, schemaDimSize in zip(data.shape, self._schema_max_shape):
-                    if dataDimSize > schemaDimSize:
-                        msg = f'HANGAR VALUE ERROR:: dimensions of input data: {data.shape} '\
-                              f'exceed variable max dims of dset: {self._dsetn} specified '\
-                              f'max dimensions: {self._schema_max_shape}. DIM SIZE: '\
-                              f'{dataDimSize} > {schemaDimSize}'
-                        raise ValueError(msg)
+                    raise ValueError(
+                        f'`data` rank: {data.ndim} != dset rank: {len(self._schema_max_shape)}')
+                for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
+                    if dDimSize > schDimSize:
+                        raise ValueError(
+                            f'dimensions of `data`: {data.shape} exceed variable max '
+                            f'dims of dset: {self._dsetn} specified max dimensions: '
+                            f'{self._schema_max_shape}: SIZE: {dDimSize} > {schDimSize}')
             elif data.shape != self._schema_max_shape:
-                msg = f'HANGAR VALUE ERROR:: shape of input data: {data.shape} != fixed '\
-                      f'dims of dset: {self._dsetn} specified dimss: {self._schema_max_shape}'
-                raise ValueError(msg)
+                raise ValueError(
+                    f'`data` shape: {data.shape} != fixed dset shape: {self._schema_max_shape}')
 
         except ValueError as e:
             logger.error(e, exc_info=False)
@@ -476,9 +475,9 @@ class DatasetDataWriter(DatasetDataReader):
             if existingDataRecVal:
                 existingDataRec = parsing.data_record_raw_val_from_db_val(existingDataRecVal)
                 if full_hash == existingDataRec.data_hash:
-                    msg = f'HANGAR KEY EXISTS ERROR:: dataset: {self._dsetn} already contains '\
-                          f'identical object named: {name} with same hash value: {full_hash}'
-                    raise LookupError(msg)
+                    raise LookupError(
+                        f'Dataset: {self._dsetn} already contains identical object named:'
+                        f'{name} with same hash value: {full_hash}')
 
             # write new data if data hash does not exist
             existingHashVal = self._hashTxn.get(hashKey, default=False)
@@ -551,8 +550,7 @@ class DatasetDataWriter(DatasetDataReader):
         try:
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
-                msg = f'HANGAR KEY ERROR:: no sample: {name} exists in dset: {self._dsetn}'
-                raise KeyError(msg)
+                raise KeyError(f'No sample: {name} exists in dset: {self._dsetn}')
 
             dsetDataCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
             dsetDataCountVal = self._dataTxn.get(dsetDataCountKey)
@@ -734,8 +732,7 @@ class Datasets(object):
             If this is a read-only checkout, no operation is permitted.
         '''
         if self._mode == 'r':
-            msg = 'HANGAR NOT ALLOWED ERROR:: Cannot remove a dataset in read-only checkout'
-            e = PermissionError(msg)
+            e = PermissionError('Cannot remove a dataset in read-only checkout')
             logger.error(e, exc_info=False)
             raise e
         else:
@@ -813,8 +810,7 @@ class Datasets(object):
             wr = cm_weakref_obj_proxy(self._datasets[name])
             return wr
         except KeyError:
-            msg = f'HANGAR KEY ERROR:: No dataset exists with name: {name}'
-            e = KeyError(msg)
+            e = KeyError(f'No dataset exists with name: {name}')
             logger.error(e, exc_info=False)
             raise e
 
@@ -874,16 +870,17 @@ class Datasets(object):
             if tmpconman:
                 self.__enter__()
 
-            assert all([k in self._datasets for k in mapping.keys()])
+            if not all([k in self._datasets for k in mapping.keys()]):
+                raise KeyError(
+                    f'some key(s): {mapping.keys()} not in dset(s): {self._datasets.keys()}')
             data_name = parsing.generate_sample_name()
             for k, v in mapping.items():
                 self._datasets[k].add(v, bulkn=data_name)
 
-        except AssertionError:
-            msg = f'HANGAR KEY ERROR:: one of keys: {mapping.keys()} not in '\
-                  f'datasets: {self._datasets.keys()}'
-            logger.error(msg)
-            raise KeyError(msg) from None
+        except KeyError as e:
+            logger.error(e, exc_info=False)
+            raise e from None
+
         finally:
             if tmpconman:
                 self.__exit__()
@@ -945,6 +942,8 @@ class Datasets(object):
         ValueError
             If required `shape` and `dtype` arguments are not provided in absense of
             `prototype` argument.
+        ValueError
+            If `prototype` argument is not a C contiguous ndarray.
         LookupError
             If a dataset already exists with the provided name.
         ValueError
@@ -968,6 +967,8 @@ class Datasets(object):
                     raise ValueError(
                         f'If specified (not None) `prototype` argument be `np.ndarray`-like.'
                         f'Invalid value: {prototype} of type: {type(prototype)}')
+                elif not prototype.flags.c_contiguous:
+                    raise ValueError(f'`prototype` must be "C" contiguous array.')
             elif isinstance(shape, (tuple, list, int)) and (dtype is not None):
                 prototype = np.zeros(shape, dtype=dtype)
             else:

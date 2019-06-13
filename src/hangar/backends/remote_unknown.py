@@ -76,7 +76,7 @@ class REMOTE_UNKNOWN_00_Handler(object):
         return None
 
     def write_data(self, *args, **kwargs):
-        e = RuntimeError(
+        raise RuntimeError(
             f'write called for {self.__class__.__name__} backend. with '
             f'args: {args} and kwargs: {kwargs}. not allowed.')
         return self.fmtParser.encode()

@@ -1,3 +1,81 @@
+'''Local HDF5 Backend Implementation, Identifier: HDF5_00
+
+Backend Identifiers
+===================
+
+* Format Code: 01
+* Canonical Name: NUMPY_00
+
+Storage Method
+==============
+
+* Data is written to specific subarray indexes inside a numpy memmapped array on disk.
+
+* Each dataset is a zero-initialized array of
+  * dtype: {schema_dtype}; ie "np.float32" or "np.uint8"
+  * shape: (COLLECTION_SIZE, *{schema_shape}); ie "(500, 10)" or "(500, 4, 3)".
+    The first index in the dataset is refered to as a "collection index".
+
+Record Format
+=============
+
+Fields Recorded for Each Array
+------------------------------
+
+* Format Code
+* File UID
+* Alder32 Checksum
+* Collection Index (0:COLLECTION_SIZE subarray selection)
+* Subarray Shape
+
+Seperators used
+---------------
+
+* SEP_KEY
+* SEP_HSH
+* SEP_LST
+* SEP_SLC
+
+Examples
+--------
+
+Note: all examples use SEP_KEY: ":", SEP_HSH: "$", SEP_LST: " ", SEP_SLC: "*"
+
+1) Adding the first piece of data to a file:
+
+   * Array shape (Subarray Shape): (10)
+   * File UID: "NJUUUK"
+   * Alder32 Checksum: 900338819
+   * Collection Index: 2
+
+   Record Data => '01:NJUUUK$900338819$2*10'
+
+1) Adding to a piece of data to a the middle of a file:
+
+   * Array shape (Subarray Shape): (20, 2, 3)
+   * File UID: "Mk23nl"
+   * Alder32 Checksum: 2546668575
+   * Collection Index: 199
+
+   Record Data => "01:Mk23nl$2546668575$199*20 2 3"
+
+
+Technical Notes
+===============
+
+* A typical numpy memmap file persisted to disk does not retain information
+  about its datatype or shape, and as such must be provided when re-opened after
+  close. In order to persist a memmap in `.npy` format, we use the a special
+  function `open_memmap` imported from `np.lib.format` which can open a memmap
+  file and persist necessary header info to disk in `.npy` format.
+
+* On each write, an alder32 checksum is calculated. This is not for use as the
+  primary hash algorithm, but rather stored in the local record format itself to
+  serve as a quick way to verify no disk corruption occured. This is required
+  since numpy has no built in data integrity validation methods when reading
+  from disk.
+'''
+
 import logging
 import os
 import re
@@ -9,11 +87,19 @@ from typing import MutableMapping
 from zlib import adler32
 
 import numpy as np
+from numpy.lib.format import open_memmap
 
 from .. import constants as c
 from ..utils import random_string, symlink_rel
 
 logger = logging.getLogger(__name__)
+
+# ----------------------------- Configuration ---------------------------------
+
+# number of subarray contents of a single numpy memmap file
+COLLECTION_SIZE = 500
+
+# -------------------------------- Parser Implementation ----------------------
 
 
 class NUMPY_00_Parser(object):
@@ -90,6 +176,9 @@ class NUMPY_00_Parser(object):
         return raw_val
 
 
+# ------------------------- Accessor Object -----------------------------------
+
+
 class NUMPY_00_FileHandles(object):
 
     def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
@@ -104,7 +193,6 @@ class NUMPY_00_FileHandles(object):
         self.mode: str = None
         self.w_uid: str = None
         self.hIdx: int = None
-        self.hMaxSize: int = None
 
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
@@ -144,7 +232,7 @@ class NUMPY_00_FileHandles(object):
             process_uids = [psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.npy')]
             for uid in process_uids:
                 file_pth = pjoin(process_dir, f'{uid}.npy')
-                self.rFp[uid] = partial(np.lib.format.open_memmap, file_pth, 'r')
+                self.rFp[uid] = partial(open_memmap, file_pth, 'r')
 
         if not remote_operation:
             if not os.path.isdir(self.STOREDIR):
@@ -152,7 +240,7 @@ class NUMPY_00_FileHandles(object):
             store_uids = [psplitext(x)[0] for x in os.listdir(self.STOREDIR) if x.endswith('.npy')]
             for uid in store_uids:
                 file_pth = pjoin(self.STOREDIR, f'{uid}.npy')
-                self.rFp[uid] = partial(np.lib.format.open_memmap, file_pth, 'r')
+                self.rFp[uid] = partial(open_memmap, file_pth, 'r')
 
     def close(self, *args, **kwargs):
         '''Close any open file handles.
@@ -162,7 +250,6 @@ class NUMPY_00_FileHandles(object):
                 self.wFp[self.w_uid].flush()
                 self.w_uid = None
                 self.hIdx = None
-                self.hMaxSize = None
             for k in list(self.wFp.keys()):
                 del self.wFp[k]
 
@@ -212,15 +299,13 @@ class NUMPY_00_FileHandles(object):
         '''
         uid = random_string()
         file_path = pjoin(self.DATADIR, f'{uid}.npy')
-
-        m = np.lib.format.open_memmap(file_path,
-                                      mode='w+',
-                                      dtype=self.schema_dtype,
-                                      shape=(500, *self.schema_shape))
+        m = open_memmap(file_path,
+                        mode='w+',
+                        dtype=self.schema_dtype,
+                        shape=(COLLECTION_SIZE, *self.schema_shape))
         self.wFp[uid] = m
         self.w_uid = uid
         self.hIdx = 0
-        self.hMaxSize = 500  # TODO; CONFIGURE
 
         if remote_operation:
             symlink_file_path = pjoin(self.REMOTEDIR, f'{uid}.npy')
@@ -244,7 +329,26 @@ class NUMPY_00_FileHandles(object):
         Raises
         ------
         RuntimeError
-            If the recorded checksum does not match the recieved checksum value.
+            If the recorded checksum does not match the recieved checksum.
+
+        Notes
+        -----
+
+        TO AVOID DATA LOSS / CORRUPTION:
+
+        * On a read operation, we copy memmap subarray tensor data to a new
+          `np.ndarray` instance so as to prevent writes on a raw memmap result
+          slice (a `np.memmap` instance) from propogating to data on disk.
+
+        * This is an issue for reads from a write-enabled checkout where data
+          was just written, since the np flag "WRITEABLE" and "OWNDATA" will be
+          true, and writes to the returned array would be overwrite that data
+          slice on disk.
+
+        * For read-only checkouts, modifications to the resultant array would
+          perform a "copy on write"-like operation which would be propogated to
+          all future reads of the subarray from that process, but which would
+          not be persisted to disk.
         '''
         srcSlc = (self.slcExpr[int(hashVal.dataset_idx)], *(self.slcExpr[0:x] for x in hashVal.shape))
 
@@ -256,7 +360,7 @@ class NUMPY_00_FileHandles(object):
         except KeyError:
             file_pth = pjoin(self.STAGEDIR, f'{hashVal.uid}.npy')
             if (self.mode == 'a') and os.path.islink(file_pth):
-                self.rFp[hashVal.uid] = np.lib.format.open_memmap(file_pth, 'r')
+                self.rFp[hashVal.uid] = open_memmap(file_pth, 'r')
                 res = self.Fp[hashVal.uid][srcSlc]
             else:
                 raise
@@ -286,7 +390,7 @@ class NUMPY_00_FileHandles(object):
         checksum = adler32(array)
         if self.w_uid in self.wFp:
             self.hIdx += 1
-            if self.hIdx >= self.hMaxSize:
+            if self.hIdx >= COLLECTION_SIZE:
                 self.wFp[self.w_uid].flush()
                 self._create_schema(remote_operation=remote_operation)
         else:
