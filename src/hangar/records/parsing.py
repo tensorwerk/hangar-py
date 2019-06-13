@@ -167,7 +167,6 @@ RawDataRecordVal = namedtuple(
 RawDatasetSchemaVal = namedtuple(
     typename='RawDatasetSchemaVal',
     field_names=[
-        'schema_uuid',
         'schema_hash',
         'schema_dtype',
         'schema_is_var',
@@ -245,8 +244,6 @@ def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
 
     Parameters
     ----------
-    # data_uuid : string
-    #     uuid of the data sample
     data_hash : string
         hash of the data sample
 
@@ -315,7 +312,7 @@ def dataset_record_schema_db_key_from_raw_key(dset_name):
     return db_schema_key
 
 
-def dataset_record_schema_db_val_from_raw_val(schema_uuid, schema_hash,
+def dataset_record_schema_db_val_from_raw_val(schema_hash,
                                               schema_is_var, schema_max_shape,
                                               schema_dtype, schema_is_named,
                                               schema_default_backend):
@@ -323,8 +320,6 @@ def dataset_record_schema_db_val_from_raw_val(schema_uuid, schema_hash,
 
     Parameters
     ----------
-    schema_uuid : string
-        The uuid of the dataset at the time it was first initialized.
     schema_hash : string
         The hash of the schema calculated at initialization.
     schema_is_var : bool
@@ -349,7 +344,6 @@ def dataset_record_schema_db_val_from_raw_val(schema_uuid, schema_hash,
         Bytes encoded representation of the schema.
     '''
     schema_val = {
-        'schema_uuid': schema_uuid,
         'schema_hash': schema_hash,
         'schema_dtype': schema_dtype,
         'schema_is_var': schema_is_var,

@@ -1,6 +1,5 @@
 import hashlib
 from typing import Optional
-from uuid import uuid1
 import logging
 
 import numpy as np
@@ -30,8 +29,6 @@ class DatasetDataReader(object):
         name of the dataset
     schema_hashes : list of str
         list of all schemas referenced in the dataset
-    schema_uuid : str
-        uuid of the dataset instance
     samplesAreNamed : bool
         do samples have names or not.
     isVar : bool
@@ -54,7 +51,6 @@ class DatasetDataReader(object):
                  repo_pth: str,
                  dset_name: str,
                  default_schema_hash: str,
-                 schema_uuid: str,
                  samplesAreNamed: bool,
                  isVar: bool,
                  varMaxShape: list,
@@ -68,7 +64,6 @@ class DatasetDataReader(object):
         self._path = repo_pth
         self._dsetn = dset_name
         self._schema_variable = isVar
-        self._schema_uuid = schema_uuid
         self._schema_dtype_num = varDtypeNum
         self._samples_are_named = samplesAreNamed
         self._schema_max_shape = tuple(varMaxShape)
@@ -175,7 +170,6 @@ class DatasetDataReader(object):
     def _repr_pretty_(self, p, cycle):
         res = f'\n Hangar {self.__class__.__name__} \
                 \n    Dataset Name     : {self._dsetn}\
-                \n    Schema UUID      : {self._schema_uuid}\
                 \n    Schema Hash      : {self._default_schema_hash}\
                 \n    Variable Shape   : {bool(int(self._schema_variable))}\
                 \n    (max) Shape      : {self._schema_max_shape}\
@@ -190,7 +184,6 @@ class DatasetDataReader(object):
               f'repo_pth={self._path}, '\
               f'dset_name={self._dsetn}, '\
               f'default_schema_hash={self._default_schema_hash}, '\
-              f'schema_uuid={self._schema_uuid}, '\
               f'isVar={self._schema_variable}, '\
               f'varMaxShape={self._schema_max_shape}, '\
               f'varDtypeNum={self._schema_dtype_num}, '\
@@ -1006,7 +999,6 @@ class Datasets(object):
 
         # ----------- Determine schema format details -------------------------
 
-        dset_uuid = uuid1().hex
         schema_format = np.array(
             (*prototype.shape, prototype.size, prototype.dtype.num), dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
@@ -1015,7 +1007,6 @@ class Datasets(object):
         dsetCountVal = parsing.dataset_record_count_db_val_from_raw_val(0)
         dsetSchemaKey = parsing.dataset_record_schema_db_key_from_raw_key(name)
         dsetSchemaVal = parsing.dataset_record_schema_db_val_from_raw_val(
-            schema_uuid=dset_uuid,
             schema_hash=schema_hash,
             schema_is_var=variable_shape,
             schema_max_shape=prototype.shape,
@@ -1046,7 +1037,6 @@ class Datasets(object):
             repo_pth=self._repo_pth,
             dset_name=name,
             default_schema_hash=schema_hash,
-            schema_uuid=dset_uuid,
             samplesAreNamed=named_samples,
             isVar=variable_shape,
             varMaxShape=prototype.shape,
@@ -1149,7 +1139,6 @@ class Datasets(object):
                 repo_pth=repo_pth,
                 dset_name=dsetName,
                 default_schema_hash=schemaSpec.schema_hash,
-                schema_uuid=schemaSpec.schema_uuid,
                 samplesAreNamed=schemaSpec.schema_is_named,
                 isVar=schemaSpec.schema_is_var,
                 varMaxShape=schemaSpec.schema_max_shape,
@@ -1193,7 +1182,6 @@ class Datasets(object):
                 repo_pth=repo_pth,
                 dset_name=dsetName,
                 default_schema_hash=schemaSpec.schema_hash,
-                schema_uuid=schemaSpec.schema_uuid,
                 samplesAreNamed=schemaSpec.schema_is_named,
                 isVar=schemaSpec.schema_is_var,
                 varMaxShape=schemaSpec.schema_max_shape,

@@ -26,7 +26,6 @@ class TestDataset(object):
         dsetOldPath = dsetOld._path
         dsetOldDsetn = dsetOld._dsetn
         dsetOldDefaultSchemaHash = dsetOld._default_schema_hash
-        dsetOldSchemaUUID = dsetOld._schema_uuid
 
         dsetOld.add(array5by7, '1')
         co.commit('this is a commit message')
@@ -40,7 +39,6 @@ class TestDataset(object):
         assert dsetOldPath == dsetNew._path
         assert dsetOldDsetn == dsetNew._dsetn
         assert dsetOldDefaultSchemaHash == dsetNew._default_schema_hash
-        assert dsetOldSchemaUUID == dsetNew._schema_uuid
 
     @pytest.mark.parametrize("dset_backend", ['00', '01'])
     def test_remove_dataset(self, dset_backend, written_repo):

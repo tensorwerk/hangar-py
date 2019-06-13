@@ -405,7 +405,6 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
         schemaSpec = patchedRecs['datasets'][dsetn]['schema']
         schemaKey = parsing.dataset_record_schema_db_key_from_raw_key(dsetn)
         schemaVal = parsing.dataset_record_schema_db_val_from_raw_val(
-            schema_uuid=schemaSpec.schema_uuid,
             schema_hash=schemaSpec.schema_hash,
             schema_is_var=schemaSpec.schema_is_var,
             schema_max_shape=schemaSpec.schema_max_shape,
