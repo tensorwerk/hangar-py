@@ -12,6 +12,7 @@ import grpc
 import lmdb
 import msgpack
 import numpy as np
+from matplotlib import pyplot as plt
 
 from . import chunks
 from . import hangar_service_pb2
@@ -19,8 +20,8 @@ from . import hangar_service_pb2_grpc
 from .request_header_validator_interceptor import RequestHeaderValidatorInterceptor
 from . import config
 from .. import constants as c
-from ..context import Environments
-from ..context import TxnRegister
+from ..context import Environments, TxnRegister
+from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
 from ..records import heads
@@ -43,6 +44,15 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 remove_old=overwrite)
         except OSError:
             pass
+
+        self._rFs = {}
+        for backend, accessor in BACKEND_ACCESSOR_MAP.items():
+            if accessor is not None:
+                self._rFs[backend] = accessor(
+                    repo_path=self.env.repo_path,
+                    schema_shape=None,
+                    schema_dtype=None)
+                self._rFs[backend].open('r')
 
         src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
         config.ensure_file(src_path, destination=repo_path, comment=False)
@@ -161,6 +171,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             err = hangar_service_pb2.ErrorProto(code=1, message='COMMIT EXISTS')
         else:
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
+            # commiting.move_process_data_to_store(self.env.repo_path, remote_operation=True)
+
         reply = hangar_service_pb2.PushCommitReply(error=err)
         return reply
 
@@ -245,12 +257,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     yield reply
                     raise StopIteration()
                 else:
-                    schema_hash, fname = hashVal.decode().split(' ', 1)
-                    tensor = np.load(fname)
+                    spec = backend_decoder(hashVal)
+                    tensor = self._rFs[spec.backend].read_data(spec)
 
                 p = packer.pack((
                     digest,
-                    schema_hash,
                     tensor.shape,
                     tensor.dtype.num,
                     tensor.tobytes()))
@@ -265,6 +276,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     cIter = chunks.tensorChunkedIterator(
                         io_buffer=buf,
                         uncomp_nbytes=totalSize,
+                        itemsize=tensor.itemsize,
                         pb2_request=hangar_service_pb2.FetchDataReply,
                         err=err)
                     yield from cIter
@@ -287,6 +299,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 cIter = chunks.tensorChunkedIterator(
                     io_buffer=buf,
                     uncomp_nbytes=totalSize,
+                    itemsize=tensor.itemsize,
                     pb2_request=hangar_service_pb2.FetchDataReply,
                     err=err)
                 yield from cIter
@@ -314,41 +327,34 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         unpacker = msgpack.Unpacker(buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
         hashTxn = self.txnregister.begin_writer_txn(self.env.hashenv)
         try:
-            for data in unpacker:
+            for idx, data in enumerate(unpacker):
                 digest, schema_hash, dShape, dTypeN, dBytes = data
+                if idx == 0:
+                    schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
+                    schemaVal = hashTxn.get(schemaKey)
+
+                    schema_val = parsing.dataset_record_schema_raw_val_from_db_val(schemaVal)
+                    accessor = BACKEND_ACCESSOR_MAP[schema_val.schema_default_backend]
+                    backend = accessor(
+                        repo_path=self.env.repo_path,
+                        schema_shape=schema_val.schema_max_shape,
+                        schema_dtype=np.typeDict[int(schema_val.schema_dtype)])
+                    backend.open(mode='a', remote_operation=True)
                 tensor = np.frombuffer(dBytes, dtype=np.typeDict[dTypeN]).reshape(dShape)
                 recieved_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
                 if recieved_hash != digest:
                     msg = f'HASH MANGLED, recieved: {recieved_hash} != digest: {digest}'
                     err = hangar_service_pb2.ErrorProto(code=1, message=msg)
                     reply = hangar_service_pb2.PushDataReply(error=err)
+                    print(err)
                     return reply
 
+                hashVal = backend.write_data(tensor, remote_operation=True)
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
-                hashdir = os.path.join(self.data_dir, digest[:2])
-                fname = os.path.join(hashdir, f'{digest}.npy')
-                hashVal = f'{schema_hash} {fname}'.encode()
-                if not os.path.isdir(hashdir):
-                    os.makedirs(hashdir)
-
-                noPreviousHash = hashTxn.put(hashKey, hashVal, overwrite=False)
-                if noPreviousHash:
-                    try:
-                        with open(fname, 'xb') as fh:
-                            np.save(fh, tensor)
-                    except FileExistsError:
-                        hashTxn.delete(hashKey)
-                        msg = f'DATA FILE EXISTS BUT HASH NOT RECORDED: {hashKey}'
-                        err = hangar_service_pb2.ErrorProto(code=1, message=msg)
-                        reply = hangar_service_pb2.PushDataReply(error=err)
-                        return reply
-                else:
-                    msg = f'HASH EXISTS: {hashKey}'
-                    err = hangar_service_pb2.ErrorProto(code=1, message=msg)
-                    reply = hangar_service_pb2.PushDataReply(error=err)
-                    return reply
+                hashTxn.put(hashKey, hashVal)
         finally:
             self.txnregister.commit_writer_txn(self.env.hashenv)
+            backend.close()
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
@@ -474,13 +480,15 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             tmpDF = os.path.join(tempD, 'test.lmdb')
             tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
-            s_hashes = set(queries.RecordQuery(tmpDB).data_hashes())
+            s_hashes_schemas = queries.RecordQuery(tmpDB).data_hash_to_schema_hash()
+            s_hashes = set(s_hashes_schemas.keys())
             tmpDB.close()
 
         c_missing = list(s_hashes.difference(c_hashset))
+        c_hash_schemas = ((c_mis, s_hashes_schemas[c_mis]) for c_mis in c_missing)
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         response_pb = hangar_service_pb2.FindMissingHashRecordsReply
-        cIter = chunks.missingHashIterator(commit, c_missing, err, response_pb)
+        cIter = chunks.missingHashIterator(commit, c_hash_schemas, err, response_pb)
         yield from cIter
 
     def PushFindMissingHashRecords(self, request_iterator, context):

@@ -192,7 +192,6 @@ def details(env):
         print('')
         print('======================')
         print(f'Commit: {commit}')
-        print(f'File Size: {format_bytes(file_size(commitenv.path()))}')
         print('======================')
         print('')
         cmttxn = TxnRegister().begin_reader_txn(commitenv)

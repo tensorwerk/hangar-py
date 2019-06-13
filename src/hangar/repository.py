@@ -1,8 +1,10 @@
 import os
 import logging
+from collections import defaultdict
 
 from tqdm.auto import tqdm
 import grpc
+import pdb
 
 from . import merger
 from . import constants as c
@@ -259,7 +261,7 @@ class Repository(object):
             if s_branch.error.code == 0:
                 s_bcommit = s_branch.rec.commit
                 if s_bcommit == c_bcommit:
-                    logger.info(f'server head: {s_bcommit} == client head: {c_bcommit}. No-op')
+                    logger.error(f'server head: {s_bcommit} == client head: {c_bcommit}. No-op')
                     return
                 # TODO: way to reject divergences upstream
                 elif s_bcommit in c_bhistory:
@@ -269,51 +271,39 @@ class Repository(object):
         except ValueError:
             s_branch = self._client.fetch_branch_record(branch_name)
 
-        m_all_schemas, m_all_labels = [], []
+        m_all_labels = []
         res = self._client.fetch_find_missing_commits(branch_name)
         m_commits = res.commits
         for commit in m_commits:
             try:
                 schema_res = self._client.fetch_find_missing_schemas(commit)
                 missing_schemas = schema_res.schema_digests
-                m_all_schemas.extend(missing_schemas)
+                for schema in missing_schemas:
+                    self._client.fetch_schema(schema)
+
+                missing_hashes = self._client.fetch_find_missing_hash_records(commit)
+                missing_hash_schemas = dict((k, v) for k, v in missing_hashes)
+                missing_schema_hashs = defaultdict(list)
+                for hsh, schema in sorted(missing_hash_schemas.items()):
+                    missing_schema_hashs[schema].append(hsh)
+
+                for schema, hashes in missing_schema_hashs.items():
+                    ret = 'AGAIN'
+                    while ret == 'AGAIN':
+                        ret = self._client.fetch_data(schema, hashes)
             except AttributeError:
                 pass
+
             missing_labels = self._client.fetch_find_missing_labels(commit)
             m_all_labels.extend(missing_labels)
 
-        m_schemas, m_labels = set(m_all_schemas), set(m_all_labels)
-        for schema in tqdm(m_schemas, desc='Fetch Schemas:'):
-            self._client.fetch_schema(schema)
-
-        with self._client.fs as fs:
-            ret, first = 'AGAIN', True
-            while ret == 'AGAIN':
-                m_all_data = []
-                for commit in m_commits:
-                    missing_hashes = self._client.fetch_find_missing_hash_records(commit)
-                    m_all_data.extend(missing_hashes)
-
-                m_data = set(m_all_data)
-                if first is True:
-                    fetch_bar = tqdm(desc='Fetch Data:', leave=True,
-                                     unit_scale=True, unit_divisor=1024, unit='B',
-                                     bar_format='{n_fmt} / ?')
-                    save_bar = tqdm(desc='Saving Data:', leave=True, total=len(m_data))
-                    first = False
-
-                ret = self._client.fetch_data(m_data, fs, fetch_bar, save_bar)
-
-        fetch_bar.close()
-        save_bar.close()
-
-        for label in tqdm(m_labels, desc='Fetch Labels'):
+        m_labels = set(m_all_labels)
+        for label in m_labels:
             self._client.fetch_label(label)
-        for commit in tqdm(m_commits, desc='Fetch Commits'):
+        for commit in m_commits:
             self._client.fetch_commit_record(commit)
 
         commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
-
         if concat_branch_names is True:
             fetch_branch_name = f'{remote_name}/{branch_name}'
         else:
@@ -388,29 +378,32 @@ class Repository(object):
                     logger.warning(f'REJECTED: server branch has commits not present on client')
                     return False
 
-            m_all_schemas, m_all_data, m_all_labels = [], [], []
+            m_all_labels = []
             res = self._client.push_find_missing_commits(branch_name)
             m_commits = res.commits
             for commit in m_commits:
                 try:
                     schema_res = self._client.push_find_missing_schemas(commit)
-                    missing_schemas = schema_res.schema_digests
-                    m_all_schemas.extend(missing_schemas)
+                    for schema in schema_res.schema_digests:
+                        self._client.push_schema(schema)
+
+                    mis_hashes_sch = self._client.push_find_missing_hash_records(commit)
+                    missing_schema_hashs = defaultdict(list)
+                    for hsh, schema in sorted(mis_hashes_sch.items()):
+                        missing_schema_hashs[schema].append(hsh)
+
+                    for schema, hashes in missing_schema_hashs.items():
+                        self._client.push_data(schema, hashes)
+
                 except AttributeError:
                     pass
-                missing_hashes = self._client.push_find_missing_hash_records(commit)
-                m_all_data.extend(missing_hashes)
                 missing_labels = self._client.push_find_missing_labels(commit)
                 m_all_labels.extend(missing_labels)
 
-            m_schemas, m_data, m_labels = set(m_all_schemas), set(m_all_data), set(m_all_labels)
-            for schema in tqdm(m_schemas, desc='Push Schema:'):
-                self._client.push_schema(schema)
-            if len(m_data) > 0:
-                self._client.push_data(m_data)
-            for label in tqdm(m_labels, desc='Push Labels:'):
+            m_labels = set(m_all_labels)
+            for label in m_labels:
                 self._client.push_label(label)
-            for commit in tqdm(m_commits, desc='Push Commits:'):
+            for commit in m_commits:
                 self._client.push_commit_record(commit)
 
             self._client.push_branch_record(branch_name)

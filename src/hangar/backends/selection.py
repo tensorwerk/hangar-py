@@ -63,6 +63,7 @@ BACKEND_PARSER_MAP = {
     b'00': HDF5_00_Parser(),
     b'01': NUMPY_00_Parser(),
     b'02': None,               # tiledb_00 - Reserved
+    # b'03': NUMPY_01_Parser(),
     # REMOTES -> [50:100]
     b'50': REMOTE_UNKNOWN_00_Parser(),
     b'51': None,               # url_00 - Reserved
@@ -73,6 +74,7 @@ BACKEND_ACCESSOR_MAP = {
     '00': HDF5_00_FileHandles,
     '01': NUMPY_00_FileHandles,
     '02': None,               # tiledb_00 - Reserved
+    # '03': NUMPY_01_FileHandles,
     # REMOTES -> [50:100]
     '50': REMOTE_UNKNOWN_00_Handler,
     '51': None,               # url_00 - Reserved

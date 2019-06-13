@@ -51,11 +51,11 @@ def clientCommitChunkedIterator(commit, parentVal, specVal, refVal):
         yield request
 
 
-def tensorChunkedIterator(io_buffer, uncomp_nbytes, pb2_request, *, err=None):
+def tensorChunkedIterator(io_buffer, uncomp_nbytes, itemsize, pb2_request, *, err=None):
 
     io_buffer.seek(0)
     compBytes = blosc.compress(
-        io_buffer.getbuffer(), clevel=9, cname='blosclz', typesize=1, shuffle=blosc.SHUFFLE)
+        io_buffer.getbuffer(), clevel=5, cname='blosclz', typesize=itemsize, shuffle=blosc.SHUFFLE)
 
     request = pb2_request(
         comp_nbytes=len(compBytes),
