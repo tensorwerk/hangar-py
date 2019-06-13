@@ -585,7 +585,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
 
-def serve(hangar_path, overwrite=False):
+def serve(hangar_path, overwrite=False, *, channel_address=None):
     '''Start serving the GRPC server. Should only be called once.
 
     Raises:
@@ -601,7 +601,8 @@ def serve(hangar_path, overwrite=False):
 
     enable_compression = config.get('remote.server.grpc.options.enable_compression')
     optimization_target = config.get('remote.server.grpc.options.optimization_target')
-    channel_address = config.get('remote.server.grpc.channel_address')
+    if channel_address is None:
+        channel_address = config.get('remote.server.grpc.channel_address')
     max_thread_pool_workers = config.get('remote.server.grpc.max_thread_pool_workers')
     max_concurrent_rpcs = config.get('remote.server.grpc.max_concurrent_rpcs')
 
@@ -630,15 +631,7 @@ def serve(hangar_path, overwrite=False):
     hangserv = HangarServer(dest_path, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
     server.add_insecure_port(channel_address)
-    server.start()
-
-    print('started')
-    try:
-        while True:
-            time.sleep(0.1)
-    except (KeyboardInterrupt, SystemExit):
-        print('stopped')
-        server.stop(0)
+    return (server, channel_address)
 
 
 if __name__ == '__main__':

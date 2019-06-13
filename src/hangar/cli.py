@@ -20,6 +20,7 @@ import logging
 import click
 from hangar import Repository
 from hangar import serve
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,15 @@ def clone(remote, uname, email, overwrite):
 def server(overwrite):
     P = os.getcwd()
     if overwrite:
-        serve(P, True)
+        server, _ = serve(P, True)
     else:
-        serve(P, False)
+        server, _ = serve(P, False)
+
+    server.start()
+    print('started')
+    try:
+        while True:
+            time.sleep(0.1)
+    except (KeyboardInterrupt, SystemExit):
+        print('stopped')
+        server.stop(0)
