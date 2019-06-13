@@ -171,7 +171,7 @@ Implications of the Hangar Data Philosophy
 The Domain-Specific File Format Problem
 =======================================
 
-Though it may first seem counterintuitive at first, there is an incredible
+Though it may seem counterintuitive at first, there is an incredible
 amount of freedom (and power) that is gained when "you" (the user) start to
 decouple some information container from the data which it actually holds. At
 the end of the day, the algorithms and systems you use to produce insight from
@@ -321,7 +321,7 @@ client/server.
 
     There is one very important (and rather complex) property which gives Hangar
     Bookeeping massive power: **Existence of some data piece is always known to
-    Hangar and stored immutably once committed. However, the access patern, backend,
+    Hangar and stored immutably once committed. However, the access pattern, backend,
     and locating information for this data piece may (and over time, will) be unique
     in every hangar repository instance**.
 
