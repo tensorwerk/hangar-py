@@ -275,24 +275,22 @@ class Repository(object):
         res = self._client.fetch_find_missing_commits(branch_name)
         m_commits = res.commits
         for commit in m_commits:
-            try:
-                schema_res = self._client.fetch_find_missing_schemas(commit)
-                missing_schemas = schema_res.schema_digests
-                for schema in missing_schemas:
-                    self._client.fetch_schema(schema)
+            schema_res = self._client.fetch_find_missing_schemas(commit)
+            missing_schemas = schema_res.schema_digests
+            for schema in missing_schemas:
+                self._client.fetch_schema(schema)
 
-                missing_hashes = self._client.fetch_find_missing_hash_records(commit)
-                missing_hash_schemas = dict((k, v) for k, v in missing_hashes)
-                missing_schema_hashs = defaultdict(list)
-                for hsh, schema in sorted(missing_hash_schemas.items()):
-                    missing_schema_hashs[schema].append(hsh)
+            missing_hashes = self._client.fetch_find_missing_hash_records(commit)
+            missing_hash_schemas = dict((k, v) for k, v in missing_hashes)
+            missing_schema_hashs = defaultdict(list)
+            for hsh, schema in sorted(missing_hash_schemas.items()):
+                missing_schema_hashs[schema].append(hsh)
 
-                for schema, hashes in missing_schema_hashs.items():
-                    ret = 'AGAIN'
-                    while ret == 'AGAIN':
-                        ret = self._client.fetch_data(schema, hashes)
-            except AttributeError:
-                pass
+            for schema, hashes in missing_schema_hashs.items():
+                ret = 'AGAIN'
+                while ret == 'AGAIN':
+                    ret = self._client.fetch_data(schema, hashes)
+                    print(ret)
 
             missing_labels = self._client.fetch_find_missing_labels(commit)
             m_all_labels.extend(missing_labels)

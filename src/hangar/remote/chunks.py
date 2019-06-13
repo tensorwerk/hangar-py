@@ -11,15 +11,15 @@ blosc.set_nthreads(blosc.detect_number_of_cores() - 2)
 def chunk_bytes(bytesData):
     '''Slice a bytestring into subelements and store the data in a list
 
-    Args:
-        bytesData (bytes): bytestring buffer of the array data
+    Arguments
+    ---------
+        bytesData : bytes
+            bytestring buffer of the array data
 
-    Returns:
-        list: chunks of the bytestring seperated into elements of the configured
-        size.
-
-    TODO:
-        Make chunks yield in a generator.
+    Yields
+    ------
+    bytes
+        data split into 32kb chunk sizes.
     '''
     chunkSize = 32_000
     numIters = math.ceil(len(bytesData) / chunkSize)
@@ -38,7 +38,26 @@ def chunk_bytes(bytesData):
         currentEnd = currentEnd + chunkSize
 
 
-def clientCommitChunkedIterator(commit, parentVal, specVal, refVal):
+def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
+                                refVal: bytes) -> hangar_service_pb2.PushCommitRequest:
+    '''Generator splitting commit specs into chunks sent from client to server
+
+    Parameters
+    ----------
+    commit : str
+        commit hash which is being sent
+    parentVal : bytes
+        bytes representing the commits immediate parents
+    specVal : bytes
+        bytes representing the commit message/user specifications
+    refVal : bytes
+        bytes containing all records stored in the repository
+
+    Yields
+    ------
+    hangar_service_pb2.PushCommitRequest
+        Chunked generator of the PushCommitRequest protobuf.
+    '''
     commit_proto = hangar_service_pb2.CommitRecord()
     commit_proto.parent = parentVal
     commit_proto.spec = specVal
@@ -51,11 +70,11 @@ def clientCommitChunkedIterator(commit, parentVal, specVal, refVal):
         yield request
 
 
-def tensorChunkedIterator(io_buffer, uncomp_nbytes, itemsize, pb2_request, *, err=None):
+def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None):
 
-    io_buffer.seek(0)
+    buf.seek(0)
     compBytes = blosc.compress(
-        io_buffer.getbuffer(), clevel=5, cname='blosclz', typesize=itemsize, shuffle=blosc.SHUFFLE)
+        buf.getbuffer(), clevel=5, cname='blosclz', typesize=itemsize, shuffle=blosc.SHUFFLE)
 
     request = pb2_request(
         comp_nbytes=len(compBytes),

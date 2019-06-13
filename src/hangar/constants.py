@@ -40,7 +40,7 @@ SEP_HSH = '$'
 
 K_BRANCH = f'branch{SEP_KEY}'
 K_HEAD = 'head'
-K_REMOTES = 'remote{SEP_KEY}'
+K_REMOTES = f'remote{SEP_KEY}'
 K_STGARR = f'a{SEP_KEY}'
 K_STGMETA = f'l{SEP_KEY}'
 K_SCHEMA = f's{SEP_KEY}'

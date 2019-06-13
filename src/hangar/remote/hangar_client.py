@@ -192,29 +192,24 @@ class HangarClient(object):
 
     def fetch_data(self, schema_hash, digests):
 
+        totalSize = 0
         buf = io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
-        totalSize = 0
-        for digest in digests:
-            p = packer.pack(digest)
+        packed_digests = map(packer.pack, digests)
+        for p in packed_digests:
             buf.write(p)
             totalSize += len(p)
 
-        cIter = chunks.tensorChunkedIterator(
-            io_buffer=buf,
-            uncomp_nbytes=totalSize,
-            itemsize=1,
-            pb2_request=hangar_service_pb2.FetchDataRequest)
-
         try:
             ret = True
+            cIter = chunks.tensorChunkedIterator(
+                buf, totalSize, itemsize=1, pb2_request=hangar_service_pb2.FetchDataRequest)
             replies = self.stub.FetchData(cIter)
             for idx, reply in enumerate(replies):
                 if idx == 0:
                     uncomp_nbytes = reply.uncomp_nbytes
                     comp_nbytes = reply.comp_nbytes
                     dBytes, offset = bytearray(comp_nbytes), 0
-
                 size = len(reply.raw_data)
                 if size > 0:
                     dBytes[offset: offset + size] = reply.raw_data
@@ -222,7 +217,11 @@ class HangarClient(object):
 
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
+                logger.error(rpc_error.details())
                 ret = 'AGAIN'  # Sentinal indicating not all data was retrieved
+            else:
+                logger.error(rpc_error.details())
+                raise rpc_error
 
         uncompBytes = blosc.decompress(dBytes)
         if uncomp_nbytes != len(uncompBytes):
@@ -258,12 +257,12 @@ class HangarClient(object):
                     msg = f'HASH MANGLED, recieved: {recieved_hash} != digest: {hdigest}'
                     raise RuntimeError(msg)
 
-                hashVal = backend.write_data(tensor)
+                hashVal = backend.write_data(tensor, remote_operation=True)
                 hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
                 hashTxn.put(hashKey, hashVal)
         finally:
             TxnRegister().commit_writer_txn(self.env.hashenv)
-            backend.close(mode='a')
+            backend.close()
 
         return ret
 
@@ -281,8 +280,8 @@ class HangarClient(object):
                     raise KeyError(f'No hash record with key: {hashKey}')
 
                 spec = backend_decoder(hashVal)
-                tensor = self._rFs[spec.backend].read_data(spec)
-                p = packer.pack((digest, schema_hash, tensor.shape, tensor.dtype.num, tensor.tobytes()))
+                arr = self._rFs[spec.backend].read_data(spec)
+                p = packer.pack((digest, schema_hash, arr.shape, arr.dtype.num, arr.tobytes()))
                 totalSize += len(p)
                 buf.write(p)
 
@@ -290,21 +289,26 @@ class HangarClient(object):
                 # run out of RAM for large repos
                 if totalSize >= self.cfg['push_max_stream_nbytes']:
                     cIter = chunks.tensorChunkedIterator(
-                        io_buffer=buf,
+                        buf=buf,
                         uncomp_nbytes=totalSize,
-                        itemsize=tensor.itemsize,
+                        itemsize=arr.itemsize,
                         pb2_request=hangar_service_pb2.PushDataRequest)
                     response = self.stub.PushData(cIter)
                     totalSize = 0
                     buf.close()
                     buf = io.BytesIO()
+
+        except grpc.RpcError as rpc_error:
+            logger.error(rpc_error)
+            raise rpc_error
+
         finally:
             # finish sending all remaining tensors if max size hash not been hit.
             if totalSize > 0:
                 cIter = chunks.tensorChunkedIterator(
-                    io_buffer=buf,
+                    buf=buf,
                     uncomp_nbytes=totalSize,
-                    itemsize=tensor.itemsize,
+                    itemsize=arr.itemsize,
                     pb2_request=hangar_service_pb2.PushDataRequest)
                 response = self.stub.PushData(cIter)
                 buf.close()
