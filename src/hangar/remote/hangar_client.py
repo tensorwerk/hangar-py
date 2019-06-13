@@ -26,7 +26,9 @@ from ..records import parsing
 from ..records import queries
 from ..records import summarize
 
-blosc.set_nthreads(blosc.detect_number_of_cores() - 2)
+nCores = blosc.detect_number_of_cores()
+nUsed = 2 if nCores < 4 else nCores - 2
+blosc.set_nthreads(nUsed)
 
 logger = logging.getLogger(__name__)
 

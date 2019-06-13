@@ -108,9 +108,9 @@ def clone(remote, uname, email, overwrite):
 def server(overwrite):
     P = os.getcwd()
     if overwrite:
-        server, _ = serve(P, True)
+        server = serve(P, True)
     else:
-        server, _ = serve(P, False)
+        server = serve(P, False)
 
     server.start()
     print('started')

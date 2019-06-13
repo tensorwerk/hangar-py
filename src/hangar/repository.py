@@ -316,7 +316,6 @@ class Repository(object):
                 branch_name=fetch_branch_name,
                 commit_hash=s_branch.rec.commit)
 
-        self._client.channel.close()
         return fetch_branch_name
 
     def push(self, remote_name: str, branch_name: str, *,
@@ -407,9 +406,6 @@ class Repository(object):
                 raise PermissionError(msg)
             else:
                 raise
-
-        finally:
-            self._client.channel.close()
 
         return True
 

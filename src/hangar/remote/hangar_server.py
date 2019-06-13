@@ -28,7 +28,9 @@ from ..records import parsing
 from ..records import queries
 from ..records import summarize
 
-blosc.set_nthreads(blosc.detect_number_of_cores() - 2)
+nCores = blosc.detect_number_of_cores()
+nUsed = 2 if nCores < 4 else nCores - 2
+blosc.set_nthreads(nUsed)
 
 
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
@@ -631,7 +633,7 @@ def serve(hangar_path, overwrite=False, *, channel_address=None):
     hangserv = HangarServer(dest_path, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
     server.add_insecure_port(channel_address)
-    return (server, channel_address)
+    return server
 
 
 if __name__ == '__main__':
