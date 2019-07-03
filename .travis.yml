@@ -38,14 +38,14 @@ matrix:
         - SEGFAULT_SIGNALS=all
         - TOXENV=py37-nocov
     - os: osx
-      osx_image: xcode10.2
+      osx_image: xcode9.2
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
         - TR_PYTHON_VERSION="3.6"
         - TOXENV=py36-nocov
     - os: osx
-      osx_image: xcode10.2
+      osx_image: xcode9.2
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
@@ -60,10 +60,13 @@ before_install:
       bash miniconda.sh -b -p $CONDA_INSTALL_LOCN
       export PATH=${CONDA_INSTALL_LOCN}/bin:$PATH
       conda config --set always_yes true
-      conda install python=${TR_PYTHON_VERSION}
+      conda update conda
+      conda install -c conda-forge python=${TR_PYTHON_VERSION} python-blosc blosc
+      conda clean --all
       # ensure we have the latest version of pip installed
       python -m pip install -U pip
-      python -m easy_install -U setuptools
+      python -m pip install -U setuptools
+      python -m pip install -U wheel
       # To ease debugging, list installed packages
       conda info -a
       conda list

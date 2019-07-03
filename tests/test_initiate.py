@@ -17,7 +17,7 @@ def test_starting_up(managed_tmpdir):
     repo._env._close_environments()
 
 
-def initial_read_checkout(managed_tmpdir):
+def test_initial_read_checkout(managed_tmpdir):
     repo = Repository(path=managed_tmpdir)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     # TODO it should do something to indicate the issue or return a read checkout

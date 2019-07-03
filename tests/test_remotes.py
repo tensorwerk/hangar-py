@@ -4,29 +4,25 @@ import time
 from os.path import join as pjoin
 from os import mkdir
 from random import randint
-import socket
+import platform
 
 
 @pytest.fixture()
 def server_instance(managed_tmpdir, worker_id):
     from hangar import serve
 
-    tcp_socket = socket.socket(socket.AF_INET)
-    tcp_socket.bind(('', 0))
-    address_tuple = tcp_socket.getsockname()
-    address = f'localhost:{address_tuple[1]}'
+    address = f'localhost:{randint(50000, 59999)}'
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
     mkdir(base_tmpdir)
-
     server, hangserver = serve(base_tmpdir, overwrite=True, channel_address=address)
     server.start()
-    time.sleep(randint(100, 200) * 0.01)
     yield address
 
     hangserver.env._close_environments()
-    tcp_socket.close()
     server.stop(0.0)
-    time.sleep(randint(100, 200) * 0.01)
+    if platform.system() == 'Windows':
+        # time for open file handles to close before tmp dir can be removed.
+        time.sleep(0.5)
 
 
 @pytest.fixture()

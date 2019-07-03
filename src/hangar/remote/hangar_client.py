@@ -4,6 +4,7 @@ import io
 import os
 import tempfile
 import threading
+import time
 
 import blosc
 import grpc
@@ -47,14 +48,30 @@ class HangarClient(object):
         credentials to use for authentication.
     auth_password : str, optional, kwarg-only, by default ''.
         credentials to use for authentication, by default ''.
+    wait_for_ready : bool, optional, kwarg-only, be default True.
+        If the client should wait before erroring for a short period of time
+        while a server is `UNAVAILABLE`, typically due to it just starting up
+        at the time the connection was made
+    wait_for_read_timeout : float, optional, kwarg-only, by default 5.
+        If `wait_for_ready` is True, the time in seconds which the client should
+        wait before raising an error. Must be positive value (greater than 0)
     '''
 
     def __init__(self,
                  envs: Environments, address: str, *,
-                 auth_username: str = '', auth_password: str = ''):
+                 auth_username: str = '', auth_password: str = '',
+                 wait_for_ready: bool = True, wait_for_ready_timeout: float = 5):
 
-        self.env = envs
+        self.cfg = {}
         self._rFs = {}
+        self.env = envs
+        self.address: str = address
+        self.channel: grpc.Channel = None
+        self.wait_ready = wait_for_ready
+        self.wait_ready_timeout = abs(wait_for_ready_timeout + 0.001)
+        self.stub: hangar_service_pb2_grpc.HangarServiceStub = None
+        self.header_adder_int = header_adder_interceptor(auth_username, auth_password)
+
         for backend, accessor in BACKEND_ACCESSOR_MAP.items():
             if accessor is not None:
                 self._rFs[backend] = accessor(
@@ -63,11 +80,6 @@ class HangarClient(object):
                     schema_dtype=None)
                 self._rFs[backend].open(mode='r')
 
-        self.cfg = {}
-        self.address: str = address
-        self.channel: grpc.Channel = None
-        self.stub: hangar_service_pb2_grpc.HangarServiceStub = None
-        self.header_adder_int = header_adder_interceptor(auth_username, auth_password)
         self._setup_client_channel_config()
 
     def _setup_client_channel_config(self):
@@ -76,8 +88,25 @@ class HangarClient(object):
         tmp_insec_channel = grpc.insecure_channel(self.address)
         tmp_channel = grpc.intercept_channel(tmp_insec_channel, self.header_adder_int)
         tmp_stub = hangar_service_pb2_grpc.HangarServiceStub(tmp_channel)
-        request = hangar_service_pb2.GetClientConfigRequest()
-        response = tmp_stub.GetClientConfig(request)
+
+        t_init, t_tot = time.time(), 0
+        while t_tot < self.wait_ready_timeout:
+            try:
+                request = hangar_service_pb2.GetClientConfigRequest()
+                response = tmp_stub.GetClientConfig(request)
+            except grpc.RpcError as err:
+                if not (err.code() == grpc.StatusCode.UNAVAILABLE) and (self.wait_ready is True):
+                    logger.error(err)
+                    raise err
+            else:
+                break
+            logger.debug(f'Wait-for-ready: {self.wait_for_ready}, time elapsed: {t_tot}')
+            time.sleep(0.05)
+            t_tot = time.time() - t_init
+        else:
+            err = TimeoutError(f'Server did not connect after: {self.wait_ready_timeout} sec.')
+            logger.error(err)
+            raise err
 
         self.cfg['push_max_stream_nbytes'] = int(response.config['push_max_stream_nbytes'])
         self.cfg['enable_compression'] = bool(int(response.config['enable_compression']))
@@ -96,6 +125,7 @@ class HangarClient(object):
     def close(self):
         for backend_accessor in self._rFs.values():
             backend_accessor.close()
+        self.channel.close()
 
     def ping_pong(self):
         request = hangar_service_pb2.PingRequest()
