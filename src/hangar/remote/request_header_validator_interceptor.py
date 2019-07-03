@@ -17,6 +17,7 @@ import grpc
 from os.path import split
 
 SERVICE_METHOD_TYPES = {
+    'PING': 'uu',
     'GetClientConfig': 'uu',
     'FetchBranchRecord': 'uu',
     'FetchData': 'ss',

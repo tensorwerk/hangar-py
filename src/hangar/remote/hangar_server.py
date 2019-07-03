@@ -360,8 +360,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
                 hashTxn.put(hashKey, hashVal)
         finally:
-            backend.close()
             self.txnregister.commit_writer_txn(self.env.hashenv)
+            backend.close()
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)

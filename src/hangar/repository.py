@@ -317,7 +317,7 @@ class Repository(object):
                     commit_hash=s_branch.rec.commit)
 
         finally:
-            self._client.close(mode='r')
+            self._client.close()
 
         return fetch_branch_name
 
