@@ -415,6 +415,35 @@ class Repository(object):
 
         return True
 
+    def _ping_server(self, remote_name: str, *, username: str = '', password: str = '') -> str:
+        '''ping the remote server with provided name.
+
+        Parameters
+        ----------
+        remote_name : str
+            name of the remote repository to make the push on.
+        auth_username : str, optional, kwarg-only
+            credentials to use for authentication if repository push restrictions
+            are enabled, by default ''.
+        auth_password : str, optional, kwarg-only
+            credentials to use for authentication if repository push restrictions
+            are enabled, by default ''.
+
+        Returns
+        -------
+        string
+            if success, should result in "PONG"
+        '''
+        self.__verify_repo_initialized()
+        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
+        try:
+            self._client = HangarClient(
+                envs=self._env, address=address, auth_username=username, auth_password=password)
+            res = self._client.ping_pong()
+        finally:
+            self._client.close()
+        return res
+
     def add_remote(self, remote_name: str, remote_address: str) -> bool:
         '''Add a remote to the repository accessible by `name` at `address`.
 

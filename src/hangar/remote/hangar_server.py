@@ -65,6 +65,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
     # -------------------- Client Config --------------------------------------
 
+    def PING(self, request, context):
+        reply = hangar_service_pb2.PingReply(result='PONG')
+        return reply
+
     def GetClientConfig(self, request, context):
 
         push_max_stream_nbytes = str(config.get('remote.client.app.push_max_stream_nbytes'))

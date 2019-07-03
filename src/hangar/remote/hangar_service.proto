@@ -6,6 +6,7 @@ option optimize_for = SPEED;
 
 service HangarService {
 
+    rpc PING (PingRequest) returns (PingReply) {}
     rpc GetClientConfig (GetClientConfigRequest) returns (GetClientConfigReply) {}
 
     rpc FetchBranchRecord (FetchBranchRecordRequest) returns (FetchBranchRecordReply) {}
@@ -95,6 +96,13 @@ message SchemaRecord {
 | Client Config from Server
 -------------------------------------------------------------------------------
 */
+
+message PingRequest {}
+
+message PingReply {
+    string result = 1;
+}
+
 
 message GetClientConfigRequest {}
 

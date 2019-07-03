@@ -14,6 +14,11 @@ class HangarServiceStub(object):
     Args:
       channel: A grpc.Channel.
     """
+    self.PING = channel.unary_unary(
+        '/hangar.HangarService/PING',
+        request_serializer=hangar__service__pb2.PingRequest.SerializeToString,
+        response_deserializer=hangar__service__pb2.PingReply.FromString,
+        )
     self.GetClientConfig = channel.unary_unary(
         '/hangar.HangarService/GetClientConfig',
         request_serializer=hangar__service__pb2.GetClientConfigRequest.SerializeToString,
@@ -114,6 +119,13 @@ class HangarServiceStub(object):
 class HangarServiceServicer(object):
   # missing associated documentation comment in .proto file
   pass
+
+  def PING(self, request, context):
+    # missing associated documentation comment in .proto file
+    pass
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
 
   def GetClientConfig(self, request, context):
     # missing associated documentation comment in .proto file
@@ -251,6 +263,11 @@ class HangarServiceServicer(object):
 
 def add_HangarServiceServicer_to_server(servicer, server):
   rpc_method_handlers = {
+      'PING': grpc.unary_unary_rpc_method_handler(
+          servicer.PING,
+          request_deserializer=hangar__service__pb2.PingRequest.FromString,
+          response_serializer=hangar__service__pb2.PingReply.SerializeToString,
+      ),
       'GetClientConfig': grpc.unary_unary_rpc_method_handler(
           servicer.GetClientConfig,
           request_deserializer=hangar__service__pb2.GetClientConfigRequest.FromString,

@@ -108,9 +108,9 @@ def clone(remote, uname, email, overwrite):
 def server(overwrite):
     P = os.getcwd()
     if overwrite:
-        server, _ = serve(P, True)
+        server, hangserver = serve(P, True)
     else:
-        server, _ = serve(P, False)
+        server, hangserver = serve(P, False)
 
     server.start()
     print('started')
@@ -119,4 +119,5 @@ def server(overwrite):
             time.sleep(0.1)
     except (KeyboardInterrupt, SystemExit):
         print('stopped')
+        hangserver.env._close_environments()
         server.stop(0)

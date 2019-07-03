@@ -97,6 +97,11 @@ class HangarClient(object):
         for backend_accessor in self._rFs.values():
             backend_accessor.close()
 
+    def ping_pong(self):
+        request = hangar_service_pb2.PingRequest()
+        response = self.stub.PING(request)
+        return response.result
+
     def push_branch_record(self, name):
         head = heads.get_branch_head_commit(self.env.branchenv, name)
         rec = hangar_service_pb2.BranchRecord(name=name, commit=head)
