@@ -93,6 +93,10 @@ class HangarClient(object):
         self.channel = grpc.intercept_channel(insec_channel, self.header_adder_int)
         self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
 
+    def close(self):
+        for backend_accessor in self._rFs.values():
+            backend_accessor.close()
+
     def push_branch_record(self, name):
         head = heads.get_branch_head_commit(self.env.branchenv, name)
         rec = hangar_service_pb2.BranchRecord(name=name, commit=head)

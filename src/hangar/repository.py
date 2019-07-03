@@ -251,70 +251,73 @@ class Repository(object):
         '''
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
-        self._client = HangarClient(envs=self._env, address=address)
-
         try:
-            c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
-            c_bhistory = summarize.list_history(
-                self._env.refenv, self._env.branchenv, branch_name=branch_name)
-            s_branch = self._client.fetch_branch_record(branch_name)
+            self._client = HangarClient(envs=self._env, address=address)
+            try:
+                c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
+                c_bhistory = summarize.list_history(
+                    self._env.refenv, self._env.branchenv, branch_name=branch_name)
+                s_branch = self._client.fetch_branch_record(branch_name)
 
-            if s_branch.error.code == 0:
-                s_bcommit = s_branch.rec.commit
-                if s_bcommit == c_bcommit:
-                    logger.error(f'server HEAD: {s_bcommit} == client HEAD: {c_bcommit}. No-op')
-                    return
-                elif s_bcommit in c_bhistory:
-                    logger.warning(f'REJECTED: server HEAD: {s_bcommit} in client history')
-                    return
+                if s_branch.error.code == 0:
+                    s_bcommit = s_branch.rec.commit
+                    if s_bcommit == c_bcommit:
+                        logger.error(f'server HEAD: {s_bcommit} == client HEAD: {c_bcommit}. No-op')
+                        return
+                    elif s_bcommit in c_bhistory:
+                        logger.warning(f'REJECTED: server HEAD: {s_bcommit} in client history')
+                        return
 
-        except ValueError:
-            s_branch = self._client.fetch_branch_record(branch_name)
+            except ValueError:
+                s_branch = self._client.fetch_branch_record(branch_name)
 
-        m_labels = set()
-        res = self._client.fetch_find_missing_commits(branch_name)
-        m_commits = res.commits
+            m_labels = set()
+            res = self._client.fetch_find_missing_commits(branch_name)
+            m_commits = res.commits
 
-        for commit in m_commits:
-            m_labels.update(self._client.fetch_find_missing_labels(commit))
+            for commit in m_commits:
+                m_labels.update(self._client.fetch_find_missing_labels(commit))
 
-            schema_res = self._client.fetch_find_missing_schemas(commit)
-            missing_schemas = schema_res.schema_digests
-            for schema in missing_schemas:
-                self._client.fetch_schema(schema)
+                schema_res = self._client.fetch_find_missing_schemas(commit)
+                missing_schemas = schema_res.schema_digests
+                for schema in missing_schemas:
+                    self._client.fetch_schema(schema)
 
-            m_hashes = self._client.fetch_find_missing_hash_records(commit)
-            m_hash_schemas = dict((k, v) for k, v in m_hashes)
-            m_schema_hashs = defaultdict(list)
-            for hsh, schema in m_hash_schemas.items():
-                m_schema_hashs[schema].append(hsh)
+                m_hashes = self._client.fetch_find_missing_hash_records(commit)
+                m_hash_schemas = dict((k, v) for k, v in m_hashes)
+                m_schema_hashs = defaultdict(list)
+                for hsh, schema in m_hash_schemas.items():
+                    m_schema_hashs[schema].append(hsh)
 
-            for schema, hashes in m_schema_hashs.items():
-                ret = 'AGAIN'
-                while ret == 'AGAIN':
-                    ret = self._client.fetch_data(schema, hashes)
+                for schema, hashes in m_schema_hashs.items():
+                    ret = 'AGAIN'
+                    while ret == 'AGAIN':
+                        ret = self._client.fetch_data(schema, hashes)
 
-        for label in m_labels:
-            self._client.fetch_label(label)
-        for commit in m_commits:
-            self._client.fetch_commit_record(commit)
+            for label in m_labels:
+                self._client.fetch_label(label)
+            for commit in m_commits:
+                self._client.fetch_commit_record(commit)
 
-        commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
-        if concat_branch_names is True:
-            fetch_branch_name = f'{remote_name}/{branch_name}'
-        else:
-            fetch_branch_name = f'{branch_name}'
+            commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
+            if concat_branch_names is True:
+                fetch_branch_name = f'{remote_name}/{branch_name}'
+            else:
+                fetch_branch_name = f'{branch_name}'
 
-        try:
-            heads.create_branch(
-                branchenv=self._env.branchenv,
-                branch_name=fetch_branch_name,
-                base_commit=s_branch.rec.commit)
-        except ValueError:
-            heads.set_branch_head_commit(
-                branchenv=self._env.branchenv,
-                branch_name=fetch_branch_name,
-                commit_hash=s_branch.rec.commit)
+            try:
+                heads.create_branch(
+                    branchenv=self._env.branchenv,
+                    branch_name=fetch_branch_name,
+                    base_commit=s_branch.rec.commit)
+            except ValueError:
+                heads.set_branch_head_commit(
+                    branchenv=self._env.branchenv,
+                    branch_name=fetch_branch_name,
+                    commit_hash=s_branch.rec.commit)
+
+        finally:
+            self._client.close(mode='r')
 
         return fetch_branch_name
 
@@ -352,8 +355,8 @@ class Repository(object):
             True if the operation succeeded, Otherwise False
         '''
         self.__verify_repo_initialized()
+        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
         try:
-            address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
             self._client = HangarClient(
                 envs=self._env, address=address, auth_username=username, auth_password=password)
 
@@ -406,6 +409,9 @@ class Repository(object):
                 raise PermissionError(msg)
             else:
                 raise
+
+        finally:
+            self._client.close()
 
         return True
 

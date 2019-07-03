@@ -6,7 +6,7 @@ import time
 @pytest.fixture(scope='function')
 def server_instance(managed_tmpdir):
     from hangar import serve
-    server = serve(managed_tmpdir, overwrite=False)
+    server = serve(managed_tmpdir, overwrite=True)
     server.start()
     yield 'localhost:50051'
     server.stop(0.2)
