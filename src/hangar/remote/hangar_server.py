@@ -591,7 +591,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
 
-def serve(hangar_path, overwrite=False, *, channel_address=None):
+def serve(hangar_path: os.PathLike,
+          overwrite: bool = False,
+          *,
+          channel_address: str = None) -> tuple:
     '''Start serving the GRPC server. Should only be called once.
 
     Raises:

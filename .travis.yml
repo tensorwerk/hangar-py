@@ -38,14 +38,14 @@ matrix:
         - SEGFAULT_SIGNALS=all
         - TOXENV=py37-nocov
     - os: osx
-      osx_image: xcode9.4
+      osx_image: xcode10.2
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
         - TR_PYTHON_VERSION="3.6"
         - TOXENV=py36-nocov
     - os: osx
-      osx_image: xcode9.4
+      osx_image: xcode10.2
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"

@@ -258,13 +258,12 @@ class Repository(object):
                 c_bhistory = summarize.list_history(
                     self._env.refenv, self._env.branchenv, branch_name=branch_name)
                 s_branch = self._client.fetch_branch_record(branch_name)
-
                 if s_branch.error.code == 0:
                     s_bcommit = s_branch.rec.commit
                     if s_bcommit == c_bcommit:
-                        logger.error(f'server HEAD: {s_bcommit} == client HEAD: {c_bcommit}. No-op')
+                        logger.warning(f'server HEAD: {s_bcommit} == client HEAD: {c_bcommit}. No-op')
                         return
-                    elif s_bcommit in c_bhistory:
+                    elif s_bcommit in c_bhistory['order']:
                         logger.warning(f'REJECTED: server HEAD: {s_bcommit} in client history')
                         return
 
