@@ -31,16 +31,13 @@ def server_instance(managed_tmpdir, worker_id):
     tcp_socket.close()
 
 
-@pytest.mark.parametrize('it', range(5))
-def test_server_is_started_multiple_times_via_ping_pong(server_instance, written_repo, it):
+def test_server_is_started_multiple_times_via_ping_pong(server_instance, written_repo):
     # start multiple times and test that pings go through multiple times
     written_repo.add_remote('origin', server_instance)
-    for i in range(it):
-        assert written_repo._ping_server('origin') == 'PONG'
+    assert written_repo._ping_server('origin') == 'PONG'
 
 
-@pytest.mark.parametrize('nCommits', [1, 3, 10])
-@pytest.mark.parametrize('nSamples', [20, 50])
+@pytest.mark.parametrize('nCommits,nSamples', [[1, 10], [10, 10]])
 def test_push_master_linear_history_multiple_commits(server_instance, repo, array5by7, nCommits, nSamples):
 
     cmtList = []
@@ -66,8 +63,7 @@ def test_push_master_linear_history_multiple_commits(server_instance, repo, arra
     assert push1 is True
 
 
-@pytest.mark.parametrize('nCommits', [1, 3, 10])
-@pytest.mark.parametrize('nSamples', [20, 50])
+@pytest.mark.parametrize('nCommits,nSamples', [[1, 10], [10, 10]])
 def test_push_clone_master_linear_history_multiple_commits(
         server_instance, repo, managed_tmpdir, array5by7, nCommits, nSamples):
     from hangar import Repository
@@ -110,10 +106,8 @@ def test_push_clone_master_linear_history_multiple_commits(
     newRepo._env._close_environments()
 
 
-@pytest.mark.parametrize('nMasterCommits', [1, 7])
-@pytest.mark.parametrize('nMasterSamples', [20, 50])
-@pytest.mark.parametrize('nDevCommits', [1, 5])
-@pytest.mark.parametrize('nDevSamples', [15, 45])
+@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 10], [10, 10]])
+@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 5], [5, 5]])
 def test_server_push_second_branch_with_new_commit(server_instance, repo,
                                                    array5by7, nMasterCommits,
                                                    nMasterSamples, nDevCommits,
@@ -160,10 +154,8 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
     assert push2 is True
 
 
-@pytest.mark.parametrize('nMasterCommits', [1, 7])
-@pytest.mark.parametrize('nMasterSamples', [20, 50])
-@pytest.mark.parametrize('nDevCommits', [1, 5])
-@pytest.mark.parametrize('nDevSamples', [15, 45])
+@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 10], [10, 10]])
+@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 5], [5, 5]])
 def test_server_push_clone_second_branch_with_new_commit(
         server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
         nMasterSamples, nDevCommits, nDevSamples):
