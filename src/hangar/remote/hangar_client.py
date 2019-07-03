@@ -260,8 +260,8 @@ class HangarClient(object):
                 hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
                 hashTxn.put(hashKey, hashVal)
         finally:
-            TxnRegister().commit_writer_txn(self.env.hashenv)
             backend.close()
+            TxnRegister().commit_writer_txn(self.env.hashenv)
 
         return ret
 
