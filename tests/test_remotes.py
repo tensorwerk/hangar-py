@@ -23,7 +23,7 @@ def server_instance(managed_tmpdir, worker_id):
 
     server, hangserver = serve(base_tmpdir, overwrite=True, channel_address=address)
     server.start()
-    time.sleep(randint(20, 50) * 0.01)
+    time.sleep(randint(100, 200) * 0.01)
     yield address
 
     hangserver.env._close_environments()
