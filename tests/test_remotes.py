@@ -6,9 +6,10 @@ import time
 @pytest.fixture(scope='function')
 def server_instance(managed_tmpdir):
     from hangar import serve
-    server = serve(managed_tmpdir, overwrite=True)
+    server, hangserver = serve(managed_tmpdir, overwrite=True)
     server.start()
     yield 'localhost:50051'
+    hangserver.env._close_environments()
     server.stop(0.2)
     time.sleep(0.2)
 

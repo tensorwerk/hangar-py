@@ -633,7 +633,7 @@ def serve(hangar_path, overwrite=False, *, channel_address=None):
     hangserv = HangarServer(dest_path, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
     server.add_insecure_port(channel_address)
-    return server
+    return (server, hangserv)
 
 
 if __name__ == '__main__':
