@@ -61,7 +61,7 @@ before_install:
       export PATH=${CONDA_INSTALL_LOCN}/bin:$PATH
       conda config --set always_yes true
       conda update conda
-      conda install -c conda-forge python=${TR_PYTHON_VERSION} python-blosc blosc
+      conda install python=${TR_PYTHON_VERSION}
       conda clean --all
       # ensure we have the latest version of pip installed
       python -m pip install -U pip

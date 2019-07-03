@@ -230,3 +230,34 @@ def test_fetch_newer_disk_repo_makes_no_modifications(written_two_cmt_server_rep
     co.close()
     success = repo.fetch('origin', 'master')
     assert not success
+
+
+def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_tmpdir):
+    from hangar import Repository
+
+    repo_2_br_no_conf.add_remote('origin', server_instance)
+    push1 = repo_2_br_no_conf.push('origin', 'master')
+    assert push1 is True
+    push2 = repo_2_br_no_conf.push('origin', 'testbranch')
+    assert push2 is True
+
+    test_head = repo_2_br_no_conf.log(branch_name='testbranch', return_contents=True)['head']
+    master_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
+
+    merge_cmt = repo_2_br_no_conf.merge('merge commit', 'master', 'testbranch')
+    merge_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
+    merge_order = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['order']
+    merge_push = repo_2_br_no_conf.push('origin', 'master')
+    assert merge_push is True
+    assert merge_head != master_head
+    assert merge_head != test_head
+
+    new_tmpdir = pjoin(managed_tmpdir, 'new')
+    mkdir(new_tmpdir)
+    newRepo = Repository(path=new_tmpdir)
+    newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+
+    clone_head = newRepo.log(branch_name='master', return_contents=True)['head']
+    clone_order = newRepo.log(branch_name='master', return_contents=True)['order']
+    assert clone_head == merge_head == merge_cmt
+    assert merge_order == clone_order
