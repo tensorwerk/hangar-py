@@ -57,11 +57,12 @@ before_install:
       # Install and set up miniconda.
       wget http://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh
       bash miniconda.sh -b -p $CONDA_INSTALL_LOCN
+      # c-blosc libraries are having trouble building on travis osx machines.
+      # temporarily disabling the build steps until it's cleared out upstream
       export CC=gcc
       export CXX=g++
-      export DISABLE_BLOSC_SSE2=0
       export INCLUDE_ZSTD=0
-      export INCLUDE_ZLIB=0
+      export DISABLE_BLOSC_SSE2=0
       export PATH=${CONDA_INSTALL_LOCN}/bin:$PATH
       conda config --set always_yes true
       conda update conda
