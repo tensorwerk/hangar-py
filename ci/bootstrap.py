@@ -34,7 +34,6 @@ if __name__ == "__main__":
         os.execv(python_executable, [python_executable, __file__])
 
     import jinja2
-
     import matrix
 
     jinja = jinja2.Environment(
