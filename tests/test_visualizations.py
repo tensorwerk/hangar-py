@@ -59,7 +59,7 @@ def test_three_way_merge_graph(capfd):
         show_user=False)
 
     real = '*   074f81d6b9fa5fa856175d47c7cc95cc4a839965 (master) : adding in the new testing datasets\n'\
-           '|\  \n'\
+           '|\\  \n'\
            '| * 3c9530ac0da1106c0acbe1201900c51548bbcdd9 (add-test) : added testing labels only\n'\
            '| * fed88489ab6e59913aee935169b15fe68755d82c : added testing images only\n'\
            '* | e5ea58dd9c7ffacd45fb128ddc00aced08d13889 (add-validation) : commit adding validation images and labels\n'\
