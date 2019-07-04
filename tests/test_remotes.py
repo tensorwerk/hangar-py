@@ -261,3 +261,4 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
     clone_order = newRepo.log(branch_name='master', return_contents=True)['order']
     assert clone_head == merge_head == merge_cmt
     assert merge_order == clone_order
+    newRepo._env._close_environments()
