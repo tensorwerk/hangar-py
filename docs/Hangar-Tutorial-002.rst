@@ -24,7 +24,7 @@ Making the Initial Commit
 
 Let’s initialize a new repository and see how branching works in Hangar
 
-.. code::
+.. code:: python
 
    >>> from hangar import Repository
    >>> import numpy as np
@@ -36,7 +36,7 @@ Let’s initialize a new repository and see how branching works in Hangar
 
 When a repository is first initialized, it has no history, no commits.
 
-.. code::
+.. code:: python
 
    >>> repo.log() # -> returns None
    None
@@ -44,7 +44,7 @@ When a repository is first initialized, it has no history, no commits.
 Though the repository is essentially empty at this point in time, there is one
 thing which is present: A branch with the name: ``"master"``.
 
-.. code::
+.. code:: python
 
    >>> repo.list_branch_names()
    ['master']
@@ -61,13 +61,13 @@ One of the only options available at this point in time is to create a
 write-enabled checkout on the ``"master"`` branch and begin to add data so we
 can make a commit. let’s do that now:
 
-.. code::
+.. code:: python
 
    >>> co = repo.checkout(write=True)
 
 As expected, there are no datasets or metadata samples recorded in the checkout
 
-.. code::
+.. code:: python
 
    >>> print(f'number of metadata keys: {len(co.metadata)}')
    number of metadata keys: 0
@@ -80,7 +80,7 @@ Let’s add a dummy array just to put something in the repository history to
 commit. We'll then close the checkout so we can explore some useful tools which
 depend on having at least on historical record (commit) in the repo.
 
-.. code::
+.. code:: python
 
    >>> dummy = np.arange(10, dtype=np.uint16)
    >>> dset = co.datasets.init_dataset(name='dummy_dataset', prototype=dummy)
@@ -94,7 +94,7 @@ depend on having at least on historical record (commit) in the repo.
 If we check the history now, we can see our first commit hash, and that it is
 labeled with the branch name ``"master"``
 
-.. code::
+.. code:: python
 
    >>> repo.log()
    * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) : first commit with a single sample added to a dummy dataset
@@ -163,7 +163,7 @@ In hangar, branch must always have a ``name`` and a ``base_commit``. However, If
 no ``base_commit`` is specified, the current writer branch ``HEAD`` ``commit``
 is used as the ``base_commit`` hash for the branch automatically.
 
-.. code::
+.. code:: python
 
    >>> branch_1 = repo.create_branch(branch_name='testbranch')
    >>> branch_1
@@ -172,7 +172,7 @@ is used as the ``base_commit`` hash for the branch automatically.
 viewing the log, we see that a new branch named: ``testbranch`` is pointing to
 our initial commit
 
-.. code::
+.. code:: python
 
    >>> print(f'branch names: {repo.list_branch_names()} \n')
    branch names: ['master', 'testbranch']
@@ -185,7 +185,7 @@ If instead, we do actually specify the base commit (with a different branch
 name) we see we do actually get a third branch. pointing to the same commit as
 ``"master"`` and ``"testbranch"``
 
-.. code::
+.. code:: python
 
    >>> branch_2 = repo.create_branch(branch_name='new', base_commit=initialCommitHash)
    >>> branch_2
@@ -202,7 +202,7 @@ Let’s make some changes on the ``"new"`` branch to see how things work. We can
 see that the data we added previously is still here (``dummy`` dataset containing
 one sample labeled ``0``)
 
-.. code::
+.. code:: python
 
    >>> co = repo.checkout(write=True, branch_name='new')
    >>> co.datasets
@@ -228,7 +228,7 @@ one sample labeled ``0``)
 
 Let’s add another sample to the ``dummy_dataset`` called ``1``
 
-.. code::
+.. code:: python
 
    >>> arr = np.arange(10, dtype=np.uint16)
    >>> # let's increment values so that `0` and `1` aren't set to the same thing
@@ -238,7 +238,7 @@ Let’s add another sample to the ``dummy_dataset`` called ``1``
 We can see that in this checkout, there are indeed, two samples in the
 ``dummy_dataset``
 
-.. code::
+.. code:: python
 
    >>> len(co.datasets['dummy_dataset'])
    2
@@ -246,7 +246,7 @@ We can see that in this checkout, there are indeed, two samples in the
 That’s all the changes we'll make for now, let’s commit this and be done with
 that branch.
 
-.. code::
+.. code:: python
 
    >>> co.commit('commit on `new` branch adding a sample to dummy_dataset')
    Commit completed. Commit hash: 0cdd8c833f654d18ddc2b089fabee93c32c9c155
@@ -259,7 +259,7 @@ How do changes appear when made on a branch?
 If we look at the log, we see that the branch we were on (``new``) is a commit
 ahead of ``master`` and ``testbranch``
 
-.. code::
+.. code:: python
 
    >>> repo.log()
    * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (new) : commit on `new` branch adding a sample to dummy_dataset
@@ -300,7 +300,7 @@ were introduced.
 For other situations, a more complicated **Three Way Merge** is required. This
 merge method will be explained a bit more later in this tutorail
 
-.. code::
+.. code:: python
 
    >>> co = repo.checkout(write=True, branch_name='master')
 
@@ -314,7 +314,7 @@ compute the results.
 
 As a user, merging in Hangar is a one-liner!
 
-.. code::
+.. code:: python
 
    >>> digest = co.merge(message='message for commit (not used for FF merge)', dev_branch='new')
    Selected Fast-Forward Merge Stratagy
@@ -325,7 +325,7 @@ As a user, merging in Hangar is a one-liner!
 
 Let’s check the log!
 
-.. code::
+.. code:: python
 
    >>> repo.log()
    * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (master) (new) : commit on `new` branch adding a sample to dummy_dataset
@@ -360,7 +360,7 @@ Making a changes to introduce diverged histories
 Let’s now go back to our ``"testbranch"`` branch and make some changes there so
 we can see what happens when changes don’t follow a linear history.
 
-.. code::
+.. code:: python
 
    >>> co = repo.checkout(write=True, branch_name='testbranch')
    >>> co.datasets
@@ -383,7 +383,7 @@ we can see what happens when changes don’t follow a linear history.
 
 We will start by mutating sample ``0`` in ``dummy_dataset`` to a different value
 
-.. code::
+.. code:: python
 
    >>> dummy_dset = co.datasets['dummy_dataset']
    >>> old_arr = dummy_dset['0']
@@ -396,7 +396,7 @@ We will start by mutating sample ``0`` in ``dummy_dataset`` to a different value
 let’s make a commit here, then add some metadata and make a new commit (all on
 the ``testbranch`` branch)
 
-.. code::
+.. code:: python
 
    >>> digest = co.commit('mutated sample `0` of `dummy_dataset` to new value')
    Commit operation requested with message: mutated sample `0` of `dummy_dataset` to new value
@@ -426,7 +426,7 @@ the ``testbranch`` branch)
 Looking at our history how, we see that none of the original branches reference
 our first commit anymore
 
-.. code::
+.. code:: python
 
    >>> repo.log()
    * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hellow world metadata
@@ -436,7 +436,7 @@ our first commit anymore
 We can check the history of the ``"master"`` branch by specifying it as
 an argument to the ``log()`` method
 
-.. code::
+.. code:: python
 
    >>> repo.log('master')
    * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (master) (new) : commit on `new` branch adding a sample to dummy_dataset
@@ -459,14 +459,14 @@ Create a new ``commit`` containing the merge results reference both branch
 ``HEAD``\ s as parents of the new ``commit``, and update the ``base`` branch
 ``HEAD`` to that new ``commit``\ ’s ``commit_hash``
 
-.. code::
+.. code:: python
 
    >>> co = repo.checkout(write=True, branch_name='master')
 
 Once again, as a user, the details are completly irrelevent, and the operation
 occurs from the same one-liner call we used before for the FF Merge.
 
-.. code::
+.. code:: python
 
    >>> co.merge(message='merge of testbranch into master', dev_branch='testbranch')
    Selected 3-Way Merge Strategy
@@ -478,7 +478,7 @@ If we now look at the log, we see that this has a much different look then
 before. The three way merge results in a history which references changes made
 in both diverged branches, and unifies them in a single ``commit``
 
-.. code::
+.. code:: python
 
    >>> repo.log()
    *  dea1aa627933b3efffa03c743c201ee1b41142c8 (master) : merge of testbranch into master
@@ -501,7 +501,7 @@ mutated in ``"testbranch"`` and unchanged in ``"master"``, so the update from
 There should be one metadata sample with they key ``"hello"`` and the value
 ``"world"``
 
-.. code::
+.. code:: python
 
    >>> co.datasets
     Hangar Datasets
@@ -581,7 +581,7 @@ Automated conflict resolution will be introduced in a future version of Hangar,
 for now it is up to the user to manually resolve conflicts by making any
 necessary changes in each branch before reattempting a merge operation.
 
-.. code::
+.. code:: python
 
    >>> co = repo.checkout(write=True, branch_name='new')
    >>> co.metadata['hello'] = 'foo conflict... BOO!'
@@ -600,7 +600,7 @@ necessary changes in each branch before reattempting a merge operation.
 
 **When we attempt the merge, an exception is thrown telling us there is a conflict**
 
-.. code::
+.. code:: python
 
    >>> co.merge(message='this merge should not happen', dev_branch='testbranch')
    Selected 3-Way Merge Strategy
@@ -616,7 +616,7 @@ Checking for Conflicts
 
 Alternatively, use the diff methods on a checkout to test for conflicts before attempting a merge
 
-.. code::
+.. code:: python
 
    >>> merge_results, conflicts_found = co.diff.branch('testbranch')
    >>> print(conflicts_found)
@@ -645,7 +645,7 @@ are as follow:
 Remove the Conflict Manually to Resolve Merging
 -----------------------------------------------
 
-.. code::
+.. code:: python
 
    >>> del co.metadata['hello']
    >>> co.metadata['resolved'] = 'conflict by removing hello key'
@@ -664,7 +664,7 @@ Remove the Conflict Manually to Resolve Merging
 
 We can verify that history looks as we would expect via the log!
 
-.. code::
+.. code:: python
 
    >>> repo.log()
    *  3550984bd91afe39d9462f7299c2542e7d45444d (new) : this merge succeeds as it no longer has a conflict
