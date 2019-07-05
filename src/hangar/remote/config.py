@@ -39,7 +39,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 '''
 
 import os
-import threading
 from functools import lru_cache
 from os import makedirs
 
@@ -47,7 +46,6 @@ import yaml
 
 no_default = '__no_default__'
 global_config = config = {}
-config_lock = threading.Lock()
 defaults = []
 
 
@@ -207,89 +205,6 @@ def ensure_file(source, destination=None, comment=False):
         pass
 
 
-class conf_set(object):
-    ''' Temporarily set configuration values within a context manager
-
-    Examples
-    --------
-    >>> import hangar
-    >>> with hangar.config.set({'foo': 123}):
-    ...     pass
-
-    See Also
-    --------
-    hangar.config.get
-    '''
-    def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
-        get.cache_clear()
-        if arg and not kwargs:
-            kwargs = arg
-
-        with lock:
-            self.config = config
-            self.old = {}
-
-            for key, value in kwargs.items():
-                self._assign(key.split('.'), value, config, old=self.old)
-
-    def __enter__(self):
-        get.cache_clear()
-        return self.config
-
-    def __exit__(self, type, value, traceback):
-        get.cache_clear()
-        for keys, value in self.old.items():
-            if value == '--delete--':
-                d = self.config
-                try:
-                    while len(keys) > 1:
-                        d = d[keys[0]]
-                        keys = keys[1:]
-                    del d[keys[0]]
-                except KeyError:
-                    pass
-            else:
-                self._assign(keys, value, self.config)
-
-    @classmethod
-    def _assign(cls, keys, value, d, old=None, path=[]):
-        ''' Assign value into a nested configuration dictionary
-
-        Optionally record the old values in old
-
-        Parameters
-        ----------
-        keys: Sequence[str]
-            The nested path of keys to assign the value, similar to toolz.put_in
-        value: object
-        d: dict
-            The part of the nested dictionary into which we want to assign the
-            value
-        old: dict, optional
-            If provided this will hold the old values
-        path: List[str]
-            Used internally to hold the path of old values
-        '''
-        get.cache_clear()
-        # key = normalize_key(keys[0])
-        key = keys[0]
-        if len(keys) == 1:
-            if old is not None:
-                path_key = tuple(path + [key])
-                if key in d:
-                    old[path_key] = d[key]
-                else:
-                    old[path_key] = '--delete--'
-            d[key] = value
-        else:
-            if key not in d:
-                d[key] = {}
-                if old is not None:
-                    old[tuple(path + [key])] = '--delete--'
-                old = None
-            cls._assign(keys[1:], value, d[key], path=path + [key], old=old)
-
-
 def collect(paths=[], env=None):
     '''
     Collect configuration from paths and environment variables
@@ -374,37 +289,3 @@ def get(key, default=no_default, config=config):
             else:
                 raise
     return result
-
-
-def rename(aliases, config=config):
-    ''' Rename old keys to new keys
-
-    This helps migrate older configuration versions over time
-    '''
-    get.cache_clear()
-    old = list()
-    new = dict()
-    for o, n in aliases.items():
-        value = get(o, None, config=config)
-        if value is not None:
-            old.append(o)
-            new[n] = value
-
-    for k in old:
-        del config[k]  # TODO: support nested keys
-
-    conf_set(new, config=config)
-
-
-def update_defaults(new, config=config, defaults=defaults):
-    '''Add a new set of defaults to the configuration
-
-    It does two things:
-
-    1.  Add the defaults to a global collection to be used by refresh later
-    2.  Updates the global config with the new configuration
-        prioritizing older values over newer ones
-    '''
-    get.cache_clear()
-    defaults.append(new)
-    update(config, new, priority='old')

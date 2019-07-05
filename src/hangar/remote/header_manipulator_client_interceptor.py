@@ -11,13 +11,49 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Interceptor that adds headers to outgoing requests."""
-
 import collections
 
 import grpc
 
-from . import generic_client_interceptor
+
+class _GenericClientInterceptor(
+        grpc.UnaryUnaryClientInterceptor, grpc.UnaryStreamClientInterceptor,
+        grpc.StreamUnaryClientInterceptor, grpc.StreamStreamClientInterceptor):
+    """Base class for interceptors that operate on all RPC types."""
+
+    def __init__(self, interceptor_function):
+        self._fn = interceptor_function
+
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+        new_details, new_request_iterator, postprocess = self._fn(
+            client_call_details, iter((request,)), False, False)
+        response = continuation(new_details, next(new_request_iterator))
+        return postprocess(response) if postprocess else response
+
+    def intercept_unary_stream(self, continuation, client_call_details,
+                               request):
+        new_details, new_request_iterator, postprocess = self._fn(
+            client_call_details, iter((request,)), False, True)
+        response_it = continuation(new_details, next(new_request_iterator))
+        return postprocess(response_it) if postprocess else response_it
+
+    def intercept_stream_unary(self, continuation, client_call_details,
+                               request_iterator):
+        new_details, new_request_iterator, postprocess = self._fn(
+            client_call_details, request_iterator, True, False)
+        response = continuation(new_details, new_request_iterator)
+        return postprocess(response) if postprocess else response
+
+    def intercept_stream_stream(self, continuation, client_call_details,
+                                request_iterator):
+        new_details, new_request_iterator, postprocess = self._fn(
+            client_call_details, request_iterator, True, True)
+        response_it = continuation(new_details, new_request_iterator)
+        return postprocess(response_it) if postprocess else response_it
+
+
+def create_client_interceptor(intercept_call):
+    return _GenericClientInterceptor(intercept_call)
 
 
 class _ClientCallDetails(
@@ -29,6 +65,7 @@ class _ClientCallDetails(
 
 
 def header_adder_interceptor(header, value):
+    """Interceptor that adds headers to outgoing requests."""
 
     def intercept_call(client_call_details, request_iterator, request_streaming,
                        response_streaming):
@@ -48,4 +85,4 @@ def header_adder_interceptor(header, value):
             client_call_details.credentials)
         return client_call_details, request_iterator, None
 
-    return generic_client_interceptor.create(intercept_call)
+    return create_client_interceptor(intercept_call)

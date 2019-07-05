@@ -13,11 +13,11 @@ import lmdb
 import msgpack
 import numpy as np
 
+from . import config
 from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
-from .request_header_validator_interceptor import RequestHeaderValidatorInterceptor
-from . import config
+from . import request_header_validator_interceptor
 from .. import constants as c
 from ..context import Environments, TxnRegister
 from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
@@ -684,7 +684,7 @@ def serve(hangar_path: os.PathLike, overwrite: bool = False,
     admin_password = config.get('remote.server.admin.password')
     msg = 'PERMISSION ERROR: PUSH OPERATIONS RESTRICTED FOR CALLER'
     code = grpc.StatusCode.PERMISSION_DENIED
-    interc = RequestHeaderValidatorInterceptor(
+    interc = request_header_validator_interceptor.RequestHeaderValidatorInterceptor(
         admin_restrict_push, admin_username, admin_password, code, msg)
 
     # ---------------- Start the thread pool for the grpc server --------------
