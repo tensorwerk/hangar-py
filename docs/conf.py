@@ -36,8 +36,11 @@ author = 'Richard Izzo'
 copyright = '{0}, {1}'.format(year, author)
 version = release = '0.1.1'
 
-pygments_style = 'trac'
-pygments_lexer = 'python3'
+pygments_style = 'sphinx'
+pygments_lexer = 'pycon'
+highlight_options = {
+    'python3': True
+}
 templates_path = ['.']
 exclude_patterns = ['_build', '**.ipynb_checkpoints']
 extlinks = {
