@@ -124,7 +124,7 @@ def select_merge_algorithm(message,
                 repo_path=repo_path)
 
     except ValueError as e:
-        raise e
+        raise e from None
 
     finally:
         if writer_uuid == 'MERGE_PROCESS':
@@ -332,7 +332,7 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     confs = cmtDiffer.determine_conflicts()
     if confs['conflict_found'] is True:
         msg = f'HANGAR VALUE ERROR:: Merge ABORTED with conflict: {confs}'
-        raise ValueError(msg)
+        raise ValueError(msg) from None
 
     # merging: dataset schemas
     m_schema_dict = {}
