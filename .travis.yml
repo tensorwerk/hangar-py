@@ -26,15 +26,6 @@ matrix:
       env:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
-        - TOXENV=py37-nocov
-    - os: linux
-      dist: xenial
-      language: python
-      python: '3.7'
-      cache: pip
-      env:
-        - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
-        - SEGFAULT_SIGNALS=all
         - TOXENV=py37-cover,report
       after_success:
         - codecov
@@ -51,7 +42,9 @@ matrix:
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
         - TR_PYTHON_VERSION="3.7"
-        - TOXENV=py37-nocov
+        - TOXENV=py37-cover,report
+      after_success:
+        - codecov
 before_install:
   - |
     if [ "$TRAVIS_OS_NAME" == "osx" ]; then
@@ -82,7 +75,8 @@ before_install:
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then lsb_release -a; fi
 
 install:
-  - pip install tox codecov
+  - pip install tox
+  - pip install codecov
   - virtualenv --version
   - easy_install --version
   - pip --version
