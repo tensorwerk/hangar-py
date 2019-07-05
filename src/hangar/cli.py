@@ -44,6 +44,47 @@ def summary(b, c):
         click.echo(repo.summary())
 
 
+@main.command(
+    name='db-view',
+    help='display the key/value record pair details from the lmdb database')
+@click.option('-a', is_flag=True, help='display all dbs in the repository')
+@click.option('-b', is_flag=True, help='display the branch/heads db')
+@click.option('-r', is_flag=True, help='display the references db')
+@click.option('-d', is_flag=True, help='display the data hash db')
+@click.option('-m', is_flag=True, help='display the metadat hash db')
+@click.option('-s', is_flag=True, help='display the stage record db')
+@click.option('-z', is_flag=True, help='display the staged hash record db')
+@click.option('--limit', default=50, help='limit the amount of records diplayed before truncation')
+def lmdb_record_details(a, b, r, d, m, s, z, limit):
+    from hangar.context import Environments
+    from hangar.records.summarize import details
+    from hangar import constants as c
+    P = os.getcwd()
+    if os.path.isdir(os.path.join(P, c.DIR_HANGAR_SERVER)):
+        repo_path = os.path.join(P, c.DIR_HANGAR_SERVER)
+    elif os.path.isdir(os.path.join(P, c.DIR_HANGAR)):
+        repo_path = os.path.join(P, c.DIR_HANGAR)
+    else:
+        click.echo(f'NO HANGAR INSTALLATION AT PATH: {P}')
+        return
+
+    envs = Environments(repo_path=repo_path)
+    if a:
+        b, r, d, m, s, z = True, True, True, True, True, True
+    if b:
+        click.echo(details(envs.branchenv, line_limit=limit).getvalue())
+    if r:
+        click.echo(details(envs.refenv, line_limit=limit).getvalue())
+    if d:
+        click.echo(details(envs.hashenv, line_limit=limit).getvalue())
+    if m:
+        click.echo(details(envs.labelenv, line_limit=limit).getvalue())
+    if s:
+        click.echo(details(envs.stageenv, line_limit=limit).getvalue())
+    if z:
+        click.echo(details(envs.stagehashenv, line_limit=limit).getvalue())
+
+
 @main.command(help='show the commit log')
 @click.option('-b', required=False, default=None, help='branch name')
 def log(b):
@@ -105,19 +146,25 @@ def clone(remote, uname, email, overwrite):
 
 @main.command(help='start a hangar server at the given location')
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite the hangar server instance if it exists at the current path.')
-def server(overwrite):
+@click.option('--ip', default='localhost', help='the ip to start the server on. default is `localhost`')
+@click.option('--port', default='50051', help='port to start the server on. default in `50051`')
+def server(overwrite, ip, port):
     P = os.getcwd()
+    ip_port = f'{ip}:{port}'
     if overwrite:
-        server, hangserver = serve(P, True)
+        server, hangserver, channel_address = serve(P, True, channel_address=ip_port)
     else:
-        server, hangserver = serve(P, False)
+        server, hangserver, channel_address = serve(P, False, channel_address=ip_port)
 
     server.start()
-    print('started')
+    click.echo(f'Hangar Server Started')
+    click.echo(f'* Start Time: {time.asctime()}')
+    click.echo(f'* Base Directory Path: {P}')
+    click.echo(f'* Operating on `IP_ADDRESS:PORT`: {channel_address}')
     try:
         while True:
             time.sleep(0.1)
     except (KeyboardInterrupt, SystemExit):
-        print('stopped')
+        click.echo(f'Server Stopped at Time: {time.asctime()}')
         hangserver.env._close_environments()
         server.stop(0)

@@ -1,5 +1,7 @@
 import time
 from io import StringIO
+import lmdb
+import os
 
 from . import heads
 from . import commiting
@@ -62,150 +64,49 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
     return res
 
 
-'''
-interaction
---------------
-'''
+def details(env: lmdb.Environment, line_limit=100) -> StringIO:
+    '''Print the details of an lmdb environment to stdout
 
+    Parameters
+    ----------
+    env : lmdb.Environment
+        environment handle to print records of
+    line_limit : int, optional
+        limit to the amount of record lines printed, by default 100
 
-def details(env):
-
-    print('')
-    print('======================')
-    print('Branch')
-    print(f'File Size: {format_bytes(file_size(env.branchenv.path()))}')
-    print('======================')
-    print('')
-    branchtxn = TxnRegister().begin_reader_txn(env.branchenv)
-    with branchtxn.cursor() as cursor:
-        count = 0
-        for key, value in cursor:
-            if count >= 100:
-                break
-            print(key, value)
-            count += 1
-    cursor.close()
-    TxnRegister().abort_reader_txn(env.branchenv)
-
-    print('')
-    print('======================')
-    print('Label')
-    print(f'File Size: {format_bytes(file_size(env.labelenv.path()))}')
-    print('======================')
-    print('')
-    labeltxn = TxnRegister().begin_reader_txn(env.labelenv)
-    with labeltxn.cursor() as cursor:
-        count = 0
-        for key, value in cursor:
-            if count >= 200:
-                break
-            if len(value) >= 100:
-                print(key, 'long binary')
-            else:
-                print(key, value)
-            count += 1
-    cursor.close()
-    TxnRegister().abort_reader_txn(env.labelenv)
-
-    print('')
-    print('======================')
-    print('HASH')
-    print(f'File Size: {format_bytes(file_size(env.hashenv.path()))}')
-    print('======================')
-    print('')
-    hashtxn = TxnRegister().begin_reader_txn(env.hashenv)
-    entries = hashtxn.stat()['entries'] - 10
-    with hashtxn.cursor() as cursor:
+    Returns
+    -------
+    StringIO
+        buffer containing detail data.
+    '''
+    buf = StringIO()
+    buf.write('\n======================\n')
+    buf.write(f'{os.path.basename(env.path())}')
+    try:
+        buf.write(f'File Size: {format_bytes(file_size(env.path()))}\n')
+    except FileNotFoundError:
+        pass
+    buf.write('======================\n\n')
+    txn = TxnRegister().begin_reader_txn(env)
+    entries = txn.stat()['entries'] - 10
+    with txn.cursor() as cursor:
         count, once = 0, False
         for key, value in cursor:
-            if (count >= 100) and (count < entries):
+            if (count >= line_limit) and (count < entries):
                 count += 1
                 if (once is False) and (count < entries):
                     once = True
-                    print('...\n...\n...')
+                    buf.write('...\n...\n...\n')
                 continue
-            print(key, value)
-            count += 1
-    cursor.close()
-    TxnRegister().abort_reader_txn(env.hashenv)
-
-    print('')
-    print('======================')
-    print('STAGE HASH')
-    print(f'File Size: {format_bytes(file_size(env.stagehashenv.path()))}')
-    print('======================')
-    print('')
-    stagehashtxn = TxnRegister().begin_reader_txn(env.stagehashenv)
-    entries = stagehashtxn.stat()['entries'] - 10
-    with stagehashtxn.cursor() as cursor:
-        count, once = 0, False
-        for key, value in cursor:
-            if (count >= 100) and (count < entries):
-                count += 1
-                if (once is False) and (count < entries):
-                    once = True
-                    print('...')
-                continue
-            print(key, value)
-            count += 1
-    cursor.close()
-    TxnRegister().abort_reader_txn(env.stagehashenv)
-
-    print('')
-    print('======================')
-    print('Commit')
-    print(f'File Size: {format_bytes(file_size(env.refenv.path()))}')
-    print('======================')
-    print('')
-    reftxn = TxnRegister().begin_reader_txn(env.refenv)
-    with reftxn.cursor() as cursor:
-        count = 0
-        for key, value in cursor:
-            if count >= 200:
-                break
-            if len(value) >= 100:
-                print(key, 'long binary')
             else:
-                print(key, value)
+                if len(value) >= 100:
+                    buf.write(f'{key} long binary\n')
+                else:
+                    buf.write(f'{key} {value}\n')
             count += 1
     cursor.close()
-    TxnRegister().abort_reader_txn(env.refenv)
-
-    print('')
-    print('======================')
-    print('Stage')
-    print(f'File Size: {format_bytes(file_size(env.stageenv.path()))}')
-    print('======================')
-    print('')
-    stagetxn = TxnRegister().begin_reader_txn(env.stageenv)
-    with stagetxn.cursor() as cursor:
-        count = 0
-        for key, value in cursor:
-            if count >= 100:
-                break
-            print(key, value)
-            count += 1
-    cursor.close()
-    TxnRegister().abort_reader_txn(env.stageenv)
-
-    for commit, commitenv in env.cmtenv.items():
-        print('')
-        print('======================')
-        print(f'Commit: {commit}')
-        print('======================')
-        print('')
-        cmttxn = TxnRegister().begin_reader_txn(commitenv)
-        with cmttxn.cursor() as cursor:
-            count = 0
-            for key, value in cursor:
-                if count >= 100:
-                    break
-                print(key, value)
-                count += 1
-        cursor.close()
-        TxnRegister().abort_reader_txn(commitenv)
-
-    return
+    TxnRegister().abort_reader_txn(env)
+    return buf
 
 
 def summary(env, *, branch_name='', commit=''):

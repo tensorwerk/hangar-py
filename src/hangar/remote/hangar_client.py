@@ -3,7 +3,6 @@ import hashlib
 import io
 import os
 import tempfile
-import threading
 import time
 
 import blosc
@@ -26,10 +25,9 @@ from ..records import heads
 from ..records import parsing
 from ..records import queries
 from ..records import summarize
+from ..utils import set_blosc_nthreads
 
-nCores = blosc.detect_number_of_cores()
-nUsed = 2 if nCores < 4 else nCores - 2
-blosc.set_nthreads(nUsed)
+set_blosc_nthreads()
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +98,7 @@ class HangarClient(object):
                     raise err
             else:
                 break
-            logger.debug(f'Wait-for-ready: {self.wait_for_ready}, time elapsed: {t_tot}')
+            logger.debug(f'Wait-for-ready: {self.wait_ready}, time elapsed: {t_tot}')
             time.sleep(0.05)
             t_tot = time.time() - t_init
         else:

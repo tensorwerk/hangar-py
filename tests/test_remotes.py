@@ -14,7 +14,7 @@ def server_instance(managed_tmpdir, worker_id):
     address = f'localhost:{randint(50000, 59999)}'
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
     mkdir(base_tmpdir)
-    server, hangserver = serve(base_tmpdir, overwrite=True, channel_address=address)
+    server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
     server.start()
     yield address
 
@@ -31,6 +31,27 @@ def written_two_cmt_server_repo(server_instance, written_two_cmt_repo) -> tuple:
     success = written_two_cmt_repo.push('origin', 'master')
     assert success is True
     yield (server_instance, written_two_cmt_repo)
+
+
+def test_cannot_add_remote_twice_with_same_name(repo):
+    remote_name = repo.add_remote('origin', 'test')
+    assert remote_name == 'origin'
+    with pytest.raises(ValueError):
+        repo.add_remote('origin', 'new')
+
+
+def test_remote_remote_which_does_not_exist_fails(repo):
+    with pytest.raises(ValueError):
+        repo.remove_remote('origin')
+
+
+def test_can_update_remote_after_removal(repo):
+    remote_name = repo.add_remote('origin', 'test')
+    assert remote_name == 'origin'
+    channel_address_removed = repo.remove_remote('origin')
+    assert channel_address_removed == 'test'
+    new_name = repo.add_remote('origin', 'test2')
+    assert new_name == 'origin'
 
 
 def test_server_is_started_multiple_times_via_ping_pong(server_instance, written_repo):

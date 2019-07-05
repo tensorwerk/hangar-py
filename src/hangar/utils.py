@@ -9,9 +9,26 @@ from datetime import timedelta
 from functools import partial
 from numbers import Number
 
+import blosc
 import wrapt
 
 logger = logging.getLogger(__name__)
+
+
+def set_blosc_nthreads() -> int:
+    '''set the blosc library to two less than the core count on the system.
+
+    If less than 2 cores are ncores-2, we set the value to two.
+
+    Returns
+    -------
+    int
+        ncores blosc will use on the system
+    '''
+    nCores = blosc.detect_number_of_cores()
+    nUsed = 2 if nCores < 4 else nCores - 2
+    blosc.set_nthreads(nUsed)
+    return nUsed
 
 
 def random_string(stringLength=6):

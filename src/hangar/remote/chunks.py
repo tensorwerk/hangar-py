@@ -4,10 +4,9 @@ import blosc
 import msgpack
 
 from . import hangar_service_pb2
+from ..utils import set_blosc_nthreads
 
-nCores = blosc.detect_number_of_cores()
-nUsed = 2 if nCores < 4 else nCores - 2
-blosc.set_nthreads(nUsed)
+set_blosc_nthreads()
 
 
 def chunk_bytes(bytesData):
