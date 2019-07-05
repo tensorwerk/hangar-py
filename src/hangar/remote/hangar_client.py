@@ -436,6 +436,21 @@ class HangarClient(object):
 
         uncompBytes = blosc.decompress(hBytes)
         missing_hashs = msgpack.unpackb(uncompBytes, raw=False, use_list=False)
+
+        accessor = BACKEND_ACCESSOR_MAP['50']
+        remote_backend = accessor(
+            repo_path=self.env.repo_path, schema_shape=None, schema_dtype=None)
+        remote_backend.open(mode='a', remote_operation=True)
+        hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
+        try:
+            for digest, schema_hash in missing_hashs:
+                hashKey = parsing.hash_data_db_key_from_raw_key(digest)
+                hashVal = remote_backend.write_data(schema_hash)
+                hashTxn.put(hashKey, hashVal)
+        finally:
+            remote_backend.close()
+            TxnRegister().commit_writer_txn(self.env.hashenv)
+
         return missing_hashs
 
     def push_find_missing_hash_records(self, commit):

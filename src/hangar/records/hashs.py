@@ -99,10 +99,15 @@ class HashQuery(object):
         recs = self._traverse_all_hash_records(keys=True, vals=False)
         return recs
 
-    def list_all_hash_values(self):
+    def list_all_hash_values_raw(self):
         recs = self._traverse_all_hash_records(keys=False, vals=True)
         formatted = map(backend_decoder, recs)
         return formatted
+
+    def map_all_hash_keys_raw_to_values_raw(self):
+        keys = self.list_all_hash_keys_raw()
+        vals = self.list_all_hash_values_raw()
+        return dict(zip(keys, vals))
 
     def list_all_schema_keys_raw(self):
         recs = self._traverse_all_schema_records(keys=True, vals=False)

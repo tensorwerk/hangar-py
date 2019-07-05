@@ -10,7 +10,7 @@ from . import constants as c
 from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
 from .diagnostics import graphing, ecosystem
-from .records import heads, parsing, summarize, commiting
+from .records import heads, parsing, summarize, commiting, queries, hashs
 from .remote.hangar_client import HangarClient
 from .utils import is_valid_directory_path, is_suitable_user_key
 
@@ -227,6 +227,31 @@ class Repository(object):
         co.close()
         return branch_name
 
+    def fetch_data(self, remote_name: str, commit_hash: str) -> str:
+        self.__verify_repo_initialized()
+        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
+        self._client = HangarClient(envs=self._env, address=address)
+
+        with closing(self._client) as client:
+            client: HangarClient  # type hinting for development
+            commit_hash = self._env.checkout_commit(commit=commit_hash)
+            cmtData_hashs = set(queries.RecordQuery(self._env.cmtenv[commit_hash]).data_hashes())
+
+            hashQuery = hashs.HashQuery(self._env.hashenv)
+            hashMap = hashQuery.map_all_hash_keys_raw_to_values_raw()
+            m_schema_hash_map = defaultdict(list)
+            for digest in cmtData_hashs:
+                hashSpec = hashMap[digest]
+                if hashSpec.backend == '50':
+                    m_schema_hash_map[hashSpec.schema_hash].append(digest)
+
+            for schema, hashes in m_schema_hash_map.items():
+                ret = 'AGAIN'
+                while ret == 'AGAIN':
+                    ret = client.fetch_data(schema, hashes)
+
+            commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
+
     def fetch(self, remote_name: str, branch_name: str,
               *, concat_branch_names: bool = True) -> str:
         '''Retrieve new commits made on a remote repository branch.
@@ -280,7 +305,6 @@ class Repository(object):
                 schema_res = client.fetch_find_missing_schemas(commit)
                 for schema in schema_res.schema_digests:
                     client.fetch_schema(schema)
-
                 m_hashes = client.fetch_find_missing_hash_records(commit)
                 m_hash_schemas = dict((k, v) for k, v in m_hashes)
                 m_schema_hashs = defaultdict(list)
@@ -296,7 +320,6 @@ class Repository(object):
                 client.fetch_label(label)
             for commit in m_commits:
                 client.fetch_commit_record(commit)
-            commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
 
             bHEAD = s_branch.rec.commit
             bName = f'{remote_name}/{branch_name}' if concat_branch_names else branch_name
