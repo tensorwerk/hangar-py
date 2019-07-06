@@ -91,6 +91,20 @@ class DatasetDataReader(object):
                     schema_dtype=np.typeDict[self._schema_dtype_num])
                 self._fs[backend].open(self._mode)
 
+        self._sspecs = {}
+        self.__enter__()
+        try:
+            for name in self.keys():
+                ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
+                data_ref = self._dataTxn.get(ref_key, default=False)
+
+                dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
+                hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
+                hash_ref = self._hashTxn.get(hashKey)
+                self._sspecs[name] = backend_decoder(hash_ref)
+        finally:
+            self.__exit__()
+
     def __enter__(self):
         self._is_conman = True
         self._hashTxn = self._TxnRegister.begin_reader_txn(self._hashenv)
@@ -278,29 +292,11 @@ class DatasetDataReader(object):
             if the dataset does not contain data with the provided name
         '''
         try:
-            tmpconman = False if self._is_conman else True
-            if tmpconman:
-                self.__enter__()
+            spec = self._sspecs[name]
+        except KeyError:
+            raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
 
-            ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
-            data_ref = self._dataTxn.get(ref_key, default=False)
-            if data_ref is False:
-                raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
-
-            dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
-            hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
-            hash_ref = self._hashTxn.get(hashKey)
-            spec = backend_decoder(hash_ref)
-            data = self._fs[spec.backend].read_data(spec)
-
-        except KeyError as e:
-            logger.error(e, exc_info=False)
-            raise
-
-        finally:
-            if tmpconman:
-                self.__exit__()
-
+        data = self._fs[spec.backend].read_data(spec)
         return data
 
     def get_batch(self, names):
@@ -321,32 +317,8 @@ class DatasetDataReader(object):
         KeyError
             if the dataset does not contain data with the provided name
         '''
-        try:
-            tmpconman = False if self._is_conman else True
-            if tmpconman:
-                self.__enter__()
-
-            specs = []
-            for name in names:
-                ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
-                data_ref = self._dataTxn.get(ref_key, default=False)
-                if data_ref is False:
-                    raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
-
-                dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
-                hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
-                hash_ref = self._hashTxn.get(hashKey)
-                spec = backend_decoder(hash_ref)
-                specs.append(spec)
-        except KeyError as e:
-            logger.error(e, exc_info=False)
-            raise
-        finally:
-            if tmpconman:
-                self.__exit__()
-
+        specs = (self._sspecs[name] for name in names)
         data = Parallel(n_jobs=4)(delayed(self._fs[spec.backend].read_data)(spec) for spec in specs)
-
         return data
 
 
@@ -537,6 +509,9 @@ class DatasetDataWriter(DatasetDataReader):
                 hashVal = self._fs[self._dflt_backend].write_data(data)
                 self._hashTxn.put(hashKey, hashVal)
                 self._stageHashTxn.put(hashKey, hashVal)
+                self._sspecs[name] = backend_decoder(hashVal)
+            else:
+                self._sspecs[name] = backend_decoder(existingHashVal)
 
             # add the record to the db
             dataRecVal = parsing.data_record_db_val_from_raw_val(full_hash)
@@ -603,6 +578,7 @@ class DatasetDataWriter(DatasetDataReader):
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
                 raise KeyError(f'No sample: {name} exists in dset: {self._dsetn}')
+            del self._sspecs[name]
 
             dsetDataCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
             dsetDataCountVal = self._dataTxn.get(dsetDataCountKey)
