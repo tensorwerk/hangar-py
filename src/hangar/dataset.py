@@ -13,6 +13,8 @@ from .utils import is_suitable_user_key, cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
 
+from joblib import Parallel, delayed
+
 
 class DatasetDataReader(object):
     '''Class implementing get access to data in a dataset
@@ -298,6 +300,52 @@ class DatasetDataReader(object):
         finally:
             if tmpconman:
                 self.__exit__()
+
+        return data
+
+    def get_batch(self, names):
+        '''Retrieve a dataset data sample with the provided sample name
+
+        Parameters
+        ----------
+        name : str
+            name of the sample to retrieve
+
+        Returns
+        -------
+        np.array
+            tensor data stored in the dataset archived with provided name
+
+        Raises
+        ------
+        KeyError
+            if the dataset does not contain data with the provided name
+        '''
+        try:
+            tmpconman = False if self._is_conman else True
+            if tmpconman:
+                self.__enter__()
+
+            specs = []
+            for name in names:
+                ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
+                data_ref = self._dataTxn.get(ref_key, default=False)
+                if data_ref is False:
+                    raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
+
+                dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
+                hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
+                hash_ref = self._hashTxn.get(hashKey)
+                spec = backend_decoder(hash_ref)
+                specs.append(spec)
+        except KeyError as e:
+            logger.error(e, exc_info=False)
+            raise
+        finally:
+            if tmpconman:
+                self.__exit__()
+
+        data = Parallel(n_jobs=4)(delayed(self._fs[spec.backend].read_data)(spec) for spec in specs)
 
         return data
 
