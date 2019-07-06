@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='hangar',
   syntax='proto3',
   serialized_options=_b('H\001'),
-  serialized_pb=_b('\n\x14hangar_service.proto\x12\x06hangar\"+\n\nErrorProto\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x03\x12\x0f\n\x07message\x18\x02 \x01(\t\",\n\x0c\x42ranchRecord\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06\x63ommit\x18\x02 \x01(\t\"*\n\nHashRecord\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x0e\n\x06\x64igest\x18\x02 \x01(\t\"9\n\x0c\x43ommitRecord\x12\x0e\n\x06parent\x18\x01 \x01(\x0c\x12\x0b\n\x03ref\x18\x02 \x01(\x0c\x12\x0c\n\x04spec\x18\x03 \x01(\x0c\"B\n\tLabelData\x12\x0e\n\x06\x64igest\x18\x01 \x01(\t\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\",\n\x0cSchemaRecord\x12\x0e\n\x06\x64igest\x18\x01 \x01(\t\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\"\x18\n\x16GetClientConfigRequest\"\xa2\x01\n\x14GetClientConfigReply\x12\x38\n\x06\x63onfig\x18\x01 \x03(\x0b\x32(.hangar.GetClientConfigReply.ConfigEntry\x12!\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x12.hangar.ErrorProto\x1a-\n\x0b\x43onfigEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"=\n\x18\x46\x65tchBranchRecordRequest\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.BranchRecord\"^\n\x16\x46\x65tchBranchRecordReply\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.BranchRecord\x12!\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x12.hangar.ErrorProto\"s\n\x10\x46\x65tchDataRequest\x12\x10\n\x08raw_data\x18\x01 \x01(\x0c\x12\x13\n\x0b\x63omp_nbytes\x18\x02 \x01(\x03\x12\x15\n\runcomp_nbytes\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"q\n\x0e\x46\x65tchDataReply\x12\x10\n\x08raw_data\x18\x01 \x01(\x0c\x12\x13\n\x0b\x63omp_nbytes\x18\x02 \x01(\x03\x12\x15\n\runcomp_nbytes\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"4\n\x11\x46\x65tchLabelRequest\x12\x1f\n\x03rec\x18\x01 \x01(\x0b\x32\x12.hangar.HashRecord\"c\n\x0f\x46\x65tchLabelReply\x12\x1f\n\x03rec\x18\x01 \x01(\x0b\x32\x12.hangar.HashRecord\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\x12!\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x12.hangar.ErrorProto\"$\n\x12\x46\x65tchCommitRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\"\x84\x01\n\x10\x46\x65tchCommitReply\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\x17\n\x0ftotal_byte_size\x18\x02 \x01(\x03\x12$\n\x06record\x18\x03 \x01(\x0b\x32\x14.hangar.CommitRecord\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"7\n\x12\x46\x65tchSchemaRequest\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.SchemaRecord\"X\n\x10\x46\x65tchSchemaReply\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.SchemaRecord\x12!\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x12.hangar.ErrorProto\"<\n\x17PushBranchRecordRequest\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.BranchRecord\":\n\x15PushBranchRecordReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"r\n\x0fPushDataRequest\x12\x10\n\x08raw_data\x18\x01 \x01(\x0c\x12\x13\n\x0b\x63omp_nbytes\x18\x02 \x01(\x03\x12\x15\n\runcomp_nbytes\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"2\n\rPushDataReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"A\n\x10PushLabelRequest\x12\x1f\n\x03rec\x18\x01 \x01(\x0b\x32\x12.hangar.HashRecord\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\"3\n\x0ePushLabelReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"b\n\x11PushCommitRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\x17\n\x0ftotal_byte_size\x18\x02 \x01(\x03\x12$\n\x06record\x18\x03 \x01(\x0b\x32\x14.hangar.CommitRecord\"4\n\x0fPushCommitReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"6\n\x11PushSchemaRequest\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.SchemaRecord\"4\n\x0fPushSchemaReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"R\n\x19\x46indMissingCommitsRequest\x12\x0f\n\x07\x63ommits\x18\x01 \x03(\t\x12$\n\x06\x62ranch\x18\x02 \x01(\x0b\x32\x14.hangar.BranchRecord\"s\n\x17\x46indMissingCommitsReply\x12\x0f\n\x07\x63ommits\x18\x01 \x03(\t\x12$\n\x06\x62ranch\x18\x02 \x01(\x0b\x32\x14.hangar.BranchRecord\x12!\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x12.hangar.ErrorProto\"W\n\x1d\x46indMissingHashRecordsRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\r\n\x05hashs\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\"x\n\x1b\x46indMissingHashRecordsReply\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\r\n\x05hashs\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"R\n\x18\x46indMissingLabelsRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\r\n\x05hashs\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\"s\n\x16\x46indMissingLabelsReply\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\r\n\x05hashs\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"C\n\x19\x46indMissingSchemasRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\x16\n\x0eschema_digests\x18\x02 \x03(\t\"d\n\x17\x46indMissingSchemasReply\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\x16\n\x0eschema_digests\x18\x02 \x03(\t\x12!\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x12.hangar.ErrorProto2\xdb\x0c\n\rHangarService\x12Q\n\x0fGetClientConfig\x12\x1e.hangar.GetClientConfigRequest\x1a\x1c.hangar.GetClientConfigReply\"\x00\x12W\n\x11\x46\x65tchBranchRecord\x12 .hangar.FetchBranchRecordRequest\x1a\x1e.hangar.FetchBranchRecordReply\"\x00\x12\x43\n\tFetchData\x12\x18.hangar.FetchDataRequest\x1a\x16.hangar.FetchDataReply\"\x00(\x01\x30\x01\x12\x42\n\nFetchLabel\x12\x19.hangar.FetchLabelRequest\x1a\x17.hangar.FetchLabelReply\"\x00\x12G\n\x0b\x46\x65tchCommit\x12\x1a.hangar.FetchCommitRequest\x1a\x18.hangar.FetchCommitReply\"\x00\x30\x01\x12\x45\n\x0b\x46\x65tchSchema\x12\x1a.hangar.FetchSchemaRequest\x1a\x18.hangar.FetchSchemaReply\"\x00\x12T\n\x10PushBranchRecord\x12\x1f.hangar.PushBranchRecordRequest\x1a\x1d.hangar.PushBranchRecordReply\"\x00\x12>\n\x08PushData\x12\x17.hangar.PushDataRequest\x1a\x15.hangar.PushDataReply\"\x00(\x01\x12?\n\tPushLabel\x12\x18.hangar.PushLabelRequest\x1a\x16.hangar.PushLabelReply\"\x00\x12\x44\n\nPushCommit\x12\x19.hangar.PushCommitRequest\x1a\x17.hangar.PushCommitReply\"\x00(\x01\x12\x42\n\nPushSchema\x12\x19.hangar.PushSchemaRequest\x1a\x17.hangar.PushSchemaReply\"\x00\x12_\n\x17\x46\x65tchFindMissingCommits\x12!.hangar.FindMissingCommitsRequest\x1a\x1f.hangar.FindMissingCommitsReply\"\x00\x12o\n\x1b\x46\x65tchFindMissingHashRecords\x12%.hangar.FindMissingHashRecordsRequest\x1a#.hangar.FindMissingHashRecordsReply\"\x00(\x01\x30\x01\x12`\n\x16\x46\x65tchFindMissingLabels\x12 .hangar.FindMissingLabelsRequest\x1a\x1e.hangar.FindMissingLabelsReply\"\x00(\x01\x30\x01\x12_\n\x17\x46\x65tchFindMissingSchemas\x12!.hangar.FindMissingSchemasRequest\x1a\x1f.hangar.FindMissingSchemasReply\"\x00\x12^\n\x16PushFindMissingCommits\x12!.hangar.FindMissingCommitsRequest\x1a\x1f.hangar.FindMissingCommitsReply\"\x00\x12n\n\x1aPushFindMissingHashRecords\x12%.hangar.FindMissingHashRecordsRequest\x1a#.hangar.FindMissingHashRecordsReply\"\x00(\x01\x30\x01\x12_\n\x15PushFindMissingLabels\x12 .hangar.FindMissingLabelsRequest\x1a\x1e.hangar.FindMissingLabelsReply\"\x00(\x01\x30\x01\x12^\n\x16PushFindMissingSchemas\x12!.hangar.FindMissingSchemasRequest\x1a\x1f.hangar.FindMissingSchemasReply\"\x00\x42\x02H\x01\x62\x06proto3')
+  serialized_pb=_b('\n\x14hangar_service.proto\x12\x06hangar\"+\n\nErrorProto\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x03\x12\x0f\n\x07message\x18\x02 \x01(\t\",\n\x0c\x42ranchRecord\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06\x63ommit\x18\x02 \x01(\t\"*\n\nHashRecord\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x0e\n\x06\x64igest\x18\x02 \x01(\t\"9\n\x0c\x43ommitRecord\x12\x0e\n\x06parent\x18\x01 \x01(\x0c\x12\x0b\n\x03ref\x18\x02 \x01(\x0c\x12\x0c\n\x04spec\x18\x03 \x01(\x0c\"B\n\tLabelData\x12\x0e\n\x06\x64igest\x18\x01 \x01(\t\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\",\n\x0cSchemaRecord\x12\x0e\n\x06\x64igest\x18\x01 \x01(\t\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\"\r\n\x0bPingRequest\"\x1b\n\tPingReply\x12\x0e\n\x06result\x18\x01 \x01(\t\"\x18\n\x16GetClientConfigRequest\"\xa2\x01\n\x14GetClientConfigReply\x12\x38\n\x06\x63onfig\x18\x01 \x03(\x0b\x32(.hangar.GetClientConfigReply.ConfigEntry\x12!\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x12.hangar.ErrorProto\x1a-\n\x0b\x43onfigEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"=\n\x18\x46\x65tchBranchRecordRequest\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.BranchRecord\"^\n\x16\x46\x65tchBranchRecordReply\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.BranchRecord\x12!\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x12.hangar.ErrorProto\"s\n\x10\x46\x65tchDataRequest\x12\x10\n\x08raw_data\x18\x01 \x01(\x0c\x12\x13\n\x0b\x63omp_nbytes\x18\x02 \x01(\x03\x12\x15\n\runcomp_nbytes\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"q\n\x0e\x46\x65tchDataReply\x12\x10\n\x08raw_data\x18\x01 \x01(\x0c\x12\x13\n\x0b\x63omp_nbytes\x18\x02 \x01(\x03\x12\x15\n\runcomp_nbytes\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"4\n\x11\x46\x65tchLabelRequest\x12\x1f\n\x03rec\x18\x01 \x01(\x0b\x32\x12.hangar.HashRecord\"c\n\x0f\x46\x65tchLabelReply\x12\x1f\n\x03rec\x18\x01 \x01(\x0b\x32\x12.hangar.HashRecord\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\x12!\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x12.hangar.ErrorProto\"$\n\x12\x46\x65tchCommitRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\"\x84\x01\n\x10\x46\x65tchCommitReply\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\x17\n\x0ftotal_byte_size\x18\x02 \x01(\x03\x12$\n\x06record\x18\x03 \x01(\x0b\x32\x14.hangar.CommitRecord\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"7\n\x12\x46\x65tchSchemaRequest\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.SchemaRecord\"X\n\x10\x46\x65tchSchemaReply\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.SchemaRecord\x12!\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x12.hangar.ErrorProto\"<\n\x17PushBranchRecordRequest\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.BranchRecord\":\n\x15PushBranchRecordReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"r\n\x0fPushDataRequest\x12\x10\n\x08raw_data\x18\x01 \x01(\x0c\x12\x13\n\x0b\x63omp_nbytes\x18\x02 \x01(\x03\x12\x15\n\runcomp_nbytes\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"2\n\rPushDataReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"A\n\x10PushLabelRequest\x12\x1f\n\x03rec\x18\x01 \x01(\x0b\x32\x12.hangar.HashRecord\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\"3\n\x0ePushLabelReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"b\n\x11PushCommitRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\x17\n\x0ftotal_byte_size\x18\x02 \x01(\x03\x12$\n\x06record\x18\x03 \x01(\x0b\x32\x14.hangar.CommitRecord\"4\n\x0fPushCommitReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"6\n\x11PushSchemaRequest\x12!\n\x03rec\x18\x01 \x01(\x0b\x32\x14.hangar.SchemaRecord\"4\n\x0fPushSchemaReply\x12!\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x12.hangar.ErrorProto\"R\n\x19\x46indMissingCommitsRequest\x12\x0f\n\x07\x63ommits\x18\x01 \x03(\t\x12$\n\x06\x62ranch\x18\x02 \x01(\x0b\x32\x14.hangar.BranchRecord\"s\n\x17\x46indMissingCommitsReply\x12\x0f\n\x07\x63ommits\x18\x01 \x03(\t\x12$\n\x06\x62ranch\x18\x02 \x01(\x0b\x32\x14.hangar.BranchRecord\x12!\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x12.hangar.ErrorProto\"W\n\x1d\x46indMissingHashRecordsRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\r\n\x05hashs\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\"x\n\x1b\x46indMissingHashRecordsReply\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\r\n\x05hashs\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"R\n\x18\x46indMissingLabelsRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\r\n\x05hashs\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\"s\n\x16\x46indMissingLabelsReply\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\r\n\x05hashs\x18\x02 \x01(\x0c\x12\x17\n\x0ftotal_byte_size\x18\x03 \x01(\x03\x12!\n\x05\x65rror\x18\x04 \x01(\x0b\x32\x12.hangar.ErrorProto\"C\n\x19\x46indMissingSchemasRequest\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\x16\n\x0eschema_digests\x18\x02 \x03(\t\"d\n\x17\x46indMissingSchemasReply\x12\x0e\n\x06\x63ommit\x18\x01 \x01(\t\x12\x16\n\x0eschema_digests\x18\x02 \x03(\t\x12!\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x12.hangar.ErrorProto2\x8d\r\n\rHangarService\x12\x30\n\x04PING\x12\x13.hangar.PingRequest\x1a\x11.hangar.PingReply\"\x00\x12Q\n\x0fGetClientConfig\x12\x1e.hangar.GetClientConfigRequest\x1a\x1c.hangar.GetClientConfigReply\"\x00\x12W\n\x11\x46\x65tchBranchRecord\x12 .hangar.FetchBranchRecordRequest\x1a\x1e.hangar.FetchBranchRecordReply\"\x00\x12\x43\n\tFetchData\x12\x18.hangar.FetchDataRequest\x1a\x16.hangar.FetchDataReply\"\x00(\x01\x30\x01\x12\x42\n\nFetchLabel\x12\x19.hangar.FetchLabelRequest\x1a\x17.hangar.FetchLabelReply\"\x00\x12G\n\x0b\x46\x65tchCommit\x12\x1a.hangar.FetchCommitRequest\x1a\x18.hangar.FetchCommitReply\"\x00\x30\x01\x12\x45\n\x0b\x46\x65tchSchema\x12\x1a.hangar.FetchSchemaRequest\x1a\x18.hangar.FetchSchemaReply\"\x00\x12T\n\x10PushBranchRecord\x12\x1f.hangar.PushBranchRecordRequest\x1a\x1d.hangar.PushBranchRecordReply\"\x00\x12>\n\x08PushData\x12\x17.hangar.PushDataRequest\x1a\x15.hangar.PushDataReply\"\x00(\x01\x12?\n\tPushLabel\x12\x18.hangar.PushLabelRequest\x1a\x16.hangar.PushLabelReply\"\x00\x12\x44\n\nPushCommit\x12\x19.hangar.PushCommitRequest\x1a\x17.hangar.PushCommitReply\"\x00(\x01\x12\x42\n\nPushSchema\x12\x19.hangar.PushSchemaRequest\x1a\x17.hangar.PushSchemaReply\"\x00\x12_\n\x17\x46\x65tchFindMissingCommits\x12!.hangar.FindMissingCommitsRequest\x1a\x1f.hangar.FindMissingCommitsReply\"\x00\x12o\n\x1b\x46\x65tchFindMissingHashRecords\x12%.hangar.FindMissingHashRecordsRequest\x1a#.hangar.FindMissingHashRecordsReply\"\x00(\x01\x30\x01\x12`\n\x16\x46\x65tchFindMissingLabels\x12 .hangar.FindMissingLabelsRequest\x1a\x1e.hangar.FindMissingLabelsReply\"\x00(\x01\x30\x01\x12_\n\x17\x46\x65tchFindMissingSchemas\x12!.hangar.FindMissingSchemasRequest\x1a\x1f.hangar.FindMissingSchemasReply\"\x00\x12^\n\x16PushFindMissingCommits\x12!.hangar.FindMissingCommitsRequest\x1a\x1f.hangar.FindMissingCommitsReply\"\x00\x12n\n\x1aPushFindMissingHashRecords\x12%.hangar.FindMissingHashRecordsRequest\x1a#.hangar.FindMissingHashRecordsReply\"\x00(\x01\x30\x01\x12_\n\x15PushFindMissingLabels\x12 .hangar.FindMissingLabelsRequest\x1a\x1e.hangar.FindMissingLabelsReply\"\x00(\x01\x30\x01\x12^\n\x16PushFindMissingSchemas\x12!.hangar.FindMissingSchemasRequest\x1a\x1f.hangar.FindMissingSchemasReply\"\x00\x42\x02H\x01\x62\x06proto3')
 )
 
 
@@ -268,6 +268,61 @@ _SCHEMARECORD = _descriptor.Descriptor(
 )
 
 
+_PINGREQUEST = _descriptor.Descriptor(
+  name='PingRequest',
+  full_name='hangar.PingRequest',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=340,
+  serialized_end=353,
+)
+
+
+_PINGREPLY = _descriptor.Descriptor(
+  name='PingReply',
+  full_name='hangar.PingReply',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='result', full_name='hangar.PingReply.result', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=355,
+  serialized_end=382,
+)
+
+
 _GETCLIENTCONFIGREQUEST = _descriptor.Descriptor(
   name='GetClientConfigRequest',
   full_name='hangar.GetClientConfigRequest',
@@ -287,8 +342,8 @@ _GETCLIENTCONFIGREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=340,
-  serialized_end=364,
+  serialized_start=384,
+  serialized_end=408,
 )
 
 
@@ -325,8 +380,8 @@ _GETCLIENTCONFIGREPLY_CONFIGENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=484,
-  serialized_end=529,
+  serialized_start=528,
+  serialized_end=573,
 )
 
 _GETCLIENTCONFIGREPLY = _descriptor.Descriptor(
@@ -362,8 +417,8 @@ _GETCLIENTCONFIGREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=367,
-  serialized_end=529,
+  serialized_start=411,
+  serialized_end=573,
 )
 
 
@@ -393,8 +448,8 @@ _FETCHBRANCHRECORDREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=531,
-  serialized_end=592,
+  serialized_start=575,
+  serialized_end=636,
 )
 
 
@@ -431,8 +486,8 @@ _FETCHBRANCHRECORDREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=594,
-  serialized_end=688,
+  serialized_start=638,
+  serialized_end=732,
 )
 
 
@@ -483,8 +538,8 @@ _FETCHDATAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=690,
-  serialized_end=805,
+  serialized_start=734,
+  serialized_end=849,
 )
 
 
@@ -535,8 +590,8 @@ _FETCHDATAREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=807,
-  serialized_end=920,
+  serialized_start=851,
+  serialized_end=964,
 )
 
 
@@ -566,8 +621,8 @@ _FETCHLABELREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=922,
-  serialized_end=974,
+  serialized_start=966,
+  serialized_end=1018,
 )
 
 
@@ -611,8 +666,8 @@ _FETCHLABELREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=976,
-  serialized_end=1075,
+  serialized_start=1020,
+  serialized_end=1119,
 )
 
 
@@ -642,8 +697,8 @@ _FETCHCOMMITREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1077,
-  serialized_end=1113,
+  serialized_start=1121,
+  serialized_end=1157,
 )
 
 
@@ -694,8 +749,8 @@ _FETCHCOMMITREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1116,
-  serialized_end=1248,
+  serialized_start=1160,
+  serialized_end=1292,
 )
 
 
@@ -725,8 +780,8 @@ _FETCHSCHEMAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1250,
-  serialized_end=1305,
+  serialized_start=1294,
+  serialized_end=1349,
 )
 
 
@@ -763,8 +818,8 @@ _FETCHSCHEMAREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1307,
-  serialized_end=1395,
+  serialized_start=1351,
+  serialized_end=1439,
 )
 
 
@@ -794,8 +849,8 @@ _PUSHBRANCHRECORDREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1397,
-  serialized_end=1457,
+  serialized_start=1441,
+  serialized_end=1501,
 )
 
 
@@ -825,8 +880,8 @@ _PUSHBRANCHRECORDREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1459,
-  serialized_end=1517,
+  serialized_start=1503,
+  serialized_end=1561,
 )
 
 
@@ -877,8 +932,8 @@ _PUSHDATAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1519,
-  serialized_end=1633,
+  serialized_start=1563,
+  serialized_end=1677,
 )
 
 
@@ -908,8 +963,8 @@ _PUSHDATAREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1635,
-  serialized_end=1685,
+  serialized_start=1679,
+  serialized_end=1729,
 )
 
 
@@ -946,8 +1001,8 @@ _PUSHLABELREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1687,
-  serialized_end=1752,
+  serialized_start=1731,
+  serialized_end=1796,
 )
 
 
@@ -977,8 +1032,8 @@ _PUSHLABELREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1754,
-  serialized_end=1805,
+  serialized_start=1798,
+  serialized_end=1849,
 )
 
 
@@ -1022,8 +1077,8 @@ _PUSHCOMMITREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1807,
-  serialized_end=1905,
+  serialized_start=1851,
+  serialized_end=1949,
 )
 
 
@@ -1053,8 +1108,8 @@ _PUSHCOMMITREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1907,
-  serialized_end=1959,
+  serialized_start=1951,
+  serialized_end=2003,
 )
 
 
@@ -1084,8 +1139,8 @@ _PUSHSCHEMAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1961,
-  serialized_end=2015,
+  serialized_start=2005,
+  serialized_end=2059,
 )
 
 
@@ -1115,8 +1170,8 @@ _PUSHSCHEMAREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2017,
-  serialized_end=2069,
+  serialized_start=2061,
+  serialized_end=2113,
 )
 
 
@@ -1153,8 +1208,8 @@ _FINDMISSINGCOMMITSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2071,
-  serialized_end=2153,
+  serialized_start=2115,
+  serialized_end=2197,
 )
 
 
@@ -1198,8 +1253,8 @@ _FINDMISSINGCOMMITSREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2155,
-  serialized_end=2270,
+  serialized_start=2199,
+  serialized_end=2314,
 )
 
 
@@ -1243,8 +1298,8 @@ _FINDMISSINGHASHRECORDSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2272,
-  serialized_end=2359,
+  serialized_start=2316,
+  serialized_end=2403,
 )
 
 
@@ -1295,8 +1350,8 @@ _FINDMISSINGHASHRECORDSREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2361,
-  serialized_end=2481,
+  serialized_start=2405,
+  serialized_end=2525,
 )
 
 
@@ -1340,8 +1395,8 @@ _FINDMISSINGLABELSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2483,
-  serialized_end=2565,
+  serialized_start=2527,
+  serialized_end=2609,
 )
 
 
@@ -1392,8 +1447,8 @@ _FINDMISSINGLABELSREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2567,
-  serialized_end=2682,
+  serialized_start=2611,
+  serialized_end=2726,
 )
 
 
@@ -1430,8 +1485,8 @@ _FINDMISSINGSCHEMASREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2684,
-  serialized_end=2751,
+  serialized_start=2728,
+  serialized_end=2795,
 )
 
 
@@ -1475,8 +1530,8 @@ _FINDMISSINGSCHEMASREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2753,
-  serialized_end=2853,
+  serialized_start=2797,
+  serialized_end=2897,
 )
 
 _GETCLIENTCONFIGREPLY_CONFIGENTRY.containing_type = _GETCLIENTCONFIGREPLY
@@ -1517,6 +1572,8 @@ DESCRIPTOR.message_types_by_name['HashRecord'] = _HASHRECORD
 DESCRIPTOR.message_types_by_name['CommitRecord'] = _COMMITRECORD
 DESCRIPTOR.message_types_by_name['LabelData'] = _LABELDATA
 DESCRIPTOR.message_types_by_name['SchemaRecord'] = _SCHEMARECORD
+DESCRIPTOR.message_types_by_name['PingRequest'] = _PINGREQUEST
+DESCRIPTOR.message_types_by_name['PingReply'] = _PINGREPLY
 DESCRIPTOR.message_types_by_name['GetClientConfigRequest'] = _GETCLIENTCONFIGREQUEST
 DESCRIPTOR.message_types_by_name['GetClientConfigReply'] = _GETCLIENTCONFIGREPLY
 DESCRIPTOR.message_types_by_name['FetchBranchRecordRequest'] = _FETCHBRANCHRECORDREQUEST
@@ -1590,6 +1647,20 @@ SchemaRecord = _reflection.GeneratedProtocolMessageType('SchemaRecord', (_messag
   # @@protoc_insertion_point(class_scope:hangar.SchemaRecord)
   ))
 _sym_db.RegisterMessage(SchemaRecord)
+
+PingRequest = _reflection.GeneratedProtocolMessageType('PingRequest', (_message.Message,), dict(
+  DESCRIPTOR = _PINGREQUEST,
+  __module__ = 'hangar_service_pb2'
+  # @@protoc_insertion_point(class_scope:hangar.PingRequest)
+  ))
+_sym_db.RegisterMessage(PingRequest)
+
+PingReply = _reflection.GeneratedProtocolMessageType('PingReply', (_message.Message,), dict(
+  DESCRIPTOR = _PINGREPLY,
+  __module__ = 'hangar_service_pb2'
+  # @@protoc_insertion_point(class_scope:hangar.PingReply)
+  ))
+_sym_db.RegisterMessage(PingReply)
 
 GetClientConfigRequest = _reflection.GeneratedProtocolMessageType('GetClientConfigRequest', (_message.Message,), dict(
   DESCRIPTOR = _GETCLIENTCONFIGREQUEST,
@@ -1819,13 +1890,22 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   file=DESCRIPTOR,
   index=0,
   serialized_options=None,
-  serialized_start=2856,
-  serialized_end=4483,
+  serialized_start=2900,
+  serialized_end=4577,
   methods=[
+  _descriptor.MethodDescriptor(
+    name='PING',
+    full_name='hangar.HangarService.PING',
+    index=0,
+    containing_service=None,
+    input_type=_PINGREQUEST,
+    output_type=_PINGREPLY,
+    serialized_options=None,
+  ),
   _descriptor.MethodDescriptor(
     name='GetClientConfig',
     full_name='hangar.HangarService.GetClientConfig',
-    index=0,
+    index=1,
     containing_service=None,
     input_type=_GETCLIENTCONFIGREQUEST,
     output_type=_GETCLIENTCONFIGREPLY,
@@ -1834,7 +1914,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchBranchRecord',
     full_name='hangar.HangarService.FetchBranchRecord',
-    index=1,
+    index=2,
     containing_service=None,
     input_type=_FETCHBRANCHRECORDREQUEST,
     output_type=_FETCHBRANCHRECORDREPLY,
@@ -1843,7 +1923,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchData',
     full_name='hangar.HangarService.FetchData',
-    index=2,
+    index=3,
     containing_service=None,
     input_type=_FETCHDATAREQUEST,
     output_type=_FETCHDATAREPLY,
@@ -1852,7 +1932,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchLabel',
     full_name='hangar.HangarService.FetchLabel',
-    index=3,
+    index=4,
     containing_service=None,
     input_type=_FETCHLABELREQUEST,
     output_type=_FETCHLABELREPLY,
@@ -1861,7 +1941,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchCommit',
     full_name='hangar.HangarService.FetchCommit',
-    index=4,
+    index=5,
     containing_service=None,
     input_type=_FETCHCOMMITREQUEST,
     output_type=_FETCHCOMMITREPLY,
@@ -1870,7 +1950,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchSchema',
     full_name='hangar.HangarService.FetchSchema',
-    index=5,
+    index=6,
     containing_service=None,
     input_type=_FETCHSCHEMAREQUEST,
     output_type=_FETCHSCHEMAREPLY,
@@ -1879,7 +1959,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushBranchRecord',
     full_name='hangar.HangarService.PushBranchRecord',
-    index=6,
+    index=7,
     containing_service=None,
     input_type=_PUSHBRANCHRECORDREQUEST,
     output_type=_PUSHBRANCHRECORDREPLY,
@@ -1888,7 +1968,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushData',
     full_name='hangar.HangarService.PushData',
-    index=7,
+    index=8,
     containing_service=None,
     input_type=_PUSHDATAREQUEST,
     output_type=_PUSHDATAREPLY,
@@ -1897,7 +1977,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushLabel',
     full_name='hangar.HangarService.PushLabel',
-    index=8,
+    index=9,
     containing_service=None,
     input_type=_PUSHLABELREQUEST,
     output_type=_PUSHLABELREPLY,
@@ -1906,7 +1986,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushCommit',
     full_name='hangar.HangarService.PushCommit',
-    index=9,
+    index=10,
     containing_service=None,
     input_type=_PUSHCOMMITREQUEST,
     output_type=_PUSHCOMMITREPLY,
@@ -1915,7 +1995,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushSchema',
     full_name='hangar.HangarService.PushSchema',
-    index=10,
+    index=11,
     containing_service=None,
     input_type=_PUSHSCHEMAREQUEST,
     output_type=_PUSHSCHEMAREPLY,
@@ -1924,7 +2004,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchFindMissingCommits',
     full_name='hangar.HangarService.FetchFindMissingCommits',
-    index=11,
+    index=12,
     containing_service=None,
     input_type=_FINDMISSINGCOMMITSREQUEST,
     output_type=_FINDMISSINGCOMMITSREPLY,
@@ -1933,7 +2013,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchFindMissingHashRecords',
     full_name='hangar.HangarService.FetchFindMissingHashRecords',
-    index=12,
+    index=13,
     containing_service=None,
     input_type=_FINDMISSINGHASHRECORDSREQUEST,
     output_type=_FINDMISSINGHASHRECORDSREPLY,
@@ -1942,7 +2022,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchFindMissingLabels',
     full_name='hangar.HangarService.FetchFindMissingLabels',
-    index=13,
+    index=14,
     containing_service=None,
     input_type=_FINDMISSINGLABELSREQUEST,
     output_type=_FINDMISSINGLABELSREPLY,
@@ -1951,7 +2031,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='FetchFindMissingSchemas',
     full_name='hangar.HangarService.FetchFindMissingSchemas',
-    index=14,
+    index=15,
     containing_service=None,
     input_type=_FINDMISSINGSCHEMASREQUEST,
     output_type=_FINDMISSINGSCHEMASREPLY,
@@ -1960,7 +2040,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushFindMissingCommits',
     full_name='hangar.HangarService.PushFindMissingCommits',
-    index=15,
+    index=16,
     containing_service=None,
     input_type=_FINDMISSINGCOMMITSREQUEST,
     output_type=_FINDMISSINGCOMMITSREPLY,
@@ -1969,7 +2049,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushFindMissingHashRecords',
     full_name='hangar.HangarService.PushFindMissingHashRecords',
-    index=16,
+    index=17,
     containing_service=None,
     input_type=_FINDMISSINGHASHRECORDSREQUEST,
     output_type=_FINDMISSINGHASHRECORDSREPLY,
@@ -1978,7 +2058,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushFindMissingLabels',
     full_name='hangar.HangarService.PushFindMissingLabels',
-    index=17,
+    index=18,
     containing_service=None,
     input_type=_FINDMISSINGLABELSREQUEST,
     output_type=_FINDMISSINGLABELSREPLY,
@@ -1987,7 +2067,7 @@ _HANGARSERVICE = _descriptor.ServiceDescriptor(
   _descriptor.MethodDescriptor(
     name='PushFindMissingSchemas',
     full_name='hangar.HangarService.PushFindMissingSchemas',
-    index=18,
+    index=19,
     containing_service=None,
     input_type=_FINDMISSINGSCHEMASREQUEST,
     output_type=_FINDMISSINGSCHEMASREPLY,

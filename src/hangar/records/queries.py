@@ -279,6 +279,25 @@ class RecordQuery(object):
             all_schema_hashes.extend(schema_hashs)
         return all_schema_hashes
 
+    def data_hash_to_schema_hash(self):
+        '''For all hashs in the commit, map sample hash to schema hash.
+
+        Returns
+        -------
+        dict
+            mapping of sample hash to dset_schema_hash
+        '''
+        dsetns = self.dataset_names()
+        odict = {}
+        for dsetn in dsetns:
+            dset_hashs = set(self.dataset_data_hashes(dsetn))
+            dset_schema_spec = self.dataset_schema_spec(dsetn)
+            dset_schema_hash = dset_schema_spec.schema_hash
+            for dset_hash in dset_hashs:
+                odict[dset_hash] = dset_schema_hash
+
+        return odict
+
 # --------------------------- process metadata ------------------------------------------
 
     def metadata_names(self):

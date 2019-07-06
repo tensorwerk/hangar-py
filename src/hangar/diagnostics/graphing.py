@@ -251,7 +251,10 @@ class Graph(object):
             br = ' '
             if cmt in branch:
                 for branchName in branch[cmt]:
-                    br = f'{br}({COLOR_BOLD_RED}{branchName}{COLOR_RESET}) '
+                    if self.use_color is True:
+                        br = f'{br}({COLOR_BOLD_RED}{branchName}{COLOR_RESET}) '
+                    else:
+                        br = f'{br}({branchName}) '
             fmtSpec[cmt] = f'{cmt}{br}{t}{u}: {m}'
 
         for rev in order:

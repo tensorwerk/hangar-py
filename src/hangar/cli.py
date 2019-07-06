@@ -15,18 +15,47 @@ Why does this file exist, and why not put this in __main__?
     Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
 import os
-import logging
+import time
 
 import click
+
 from hangar import Repository
 from hangar import serve
-
-logger = logging.getLogger(__name__)
 
 
 @click.group()
 def main():
     pass
+
+
+@main.command(help='initialize environment')
+@click.option('--name', prompt='User Name', help='first and last name of user')
+@click.option('--email', prompt='User Email', help='email address of the user')
+@click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
+def init(name, email, overwrite):
+    P = os.getcwd()
+    repo = Repository(path=P)
+    try:
+        repo.init(user_name=name, user_email=email, remove_old=overwrite)
+        click.echo(f'Hangar repository initialized at {P}')
+    except OSError as e:
+        click.echo(e)
+
+
+@main.command(help='clone an environment into the given path')
+@click.option('--name', prompt='User Name', help='first and last name of user')
+@click.option('--email', prompt='User Email', help='email address of the user')
+@click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
+@click.argument('remote', nargs=1, required=True)
+def clone(remote, name, email, overwrite):
+    P = os.getcwd()
+    repo = Repository(path=P)
+    repo.clone(
+        user_name=name,
+        user_email=email,
+        remote_address=remote,
+        remove_old=overwrite)
+    click.echo(f'Hangar repository initialized at {P}')
 
 
 @main.command(help='show a summary of the repository')
@@ -55,58 +84,73 @@ def log(b):
 @click.option('-l', is_flag=True, help='list the branches in the repository')
 @click.option('-b', nargs=1, required=False, help='create branch from HEAD commit with provided name')
 def branch(l, b):
+    P = os.getcwd()
+    repo = Repository(path=P)
     if l:
-        P = os.getcwd()
-        repo = Repository(path=P)
         click.echo(repo.list_branch_names())
-    if b:
-        P = os.getcwd()
-        repo = Repository(path=P)
+    elif b:
         succ = repo.create_branch(b)
         click.echo(f'create branch operation success: {succ}')
 
 
-@main.command(help='initialize environment')
-@click.option('-uname', nargs=2, required=False, default='', help='first and last name of user')
-@click.option('-email', nargs=1, required=False, default='', help='email of the user')
-@click.option('--overwrite', is_flag=True, help='overwrite a repository if it exists at the current path')
-def init(uname, email, overwrite):
-    P = os.getcwd()
-    if isinstance(uname, (list, tuple)):
-        uname = ' '.join(uname)
-    repo = Repository(path=P)
-    if overwrite:
-        repoDir = repo.init(user_name=uname, user_email=email, remove_old=True)
-    else:
-        try:
-            repoDir = repo.init(user_name=uname, user_email=email, remove_old=False)
-        except OSError as e:
-            click.echo(e)
-
-
-@main.command(help='clone an environment into the given path')
-@click.option('-uname', nargs=2, required=False, default='', help='first and last name of user')
-@click.option('-email', nargs=1, required=False, default='', help='email of the user')
-@click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
-@click.argument('remote', nargs=1, required=True)
-def clone(remote, uname, email, overwrite):
-    if isinstance(uname, (list, tuple)):
-        uname = ' '.join(uname)
-    P = os.getcwd()
-    repo = Repository(path=P)
-    repo.clone(
-        user_name=uname,
-        user_email=email,
-        remote_address=remote,
-        remove_old=overwrite)
-    click.echo(f'Hangar repository initialized at {P}')
-
-
 @main.command(help='start a hangar server at the given location')
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite the hangar server instance if it exists at the current path.')
-def server(overwrite):
+@click.option('--ip', default='localhost', help='the ip to start the server on. default is `localhost`')
+@click.option('--port', default='50051', help='port to start the server on. default in `50051`')
+def server(overwrite, ip, port):
     P = os.getcwd()
-    if overwrite:
-        serve(P, True)
+    ip_port = f'{ip}:{port}'
+    server, hangserver, channel_address = serve(P, overwrite, channel_address=ip_port)
+    server.start()
+    click.echo(f'Hangar Server Started')
+    click.echo(f'* Start Time: {time.asctime()}')
+    click.echo(f'* Base Directory Path: {P}')
+    click.echo(f'* Operating on `IP_ADDRESS:PORT`: {channel_address}')
+    try:
+        while True:
+            time.sleep(0.1)
+    except (KeyboardInterrupt, SystemExit):
+        click.echo(f'Server Stopped at Time: {time.asctime()}')
+        hangserver.env._close_environments()
+        server.stop(0)
+
+
+@main.command(
+    name='db-view',
+    help='display the key/value record pair details from the lmdb database')
+@click.option('-a', is_flag=True, help='display all dbs in the repository')
+@click.option('-b', is_flag=True, help='display the branch/heads db')
+@click.option('-r', is_flag=True, help='display the references db')
+@click.option('-d', is_flag=True, help='display the data hash db')
+@click.option('-m', is_flag=True, help='display the metadat hash db')
+@click.option('-s', is_flag=True, help='display the stage record db')
+@click.option('-z', is_flag=True, help='display the staged hash record db')
+@click.option('--limit', default=30, help='limit the amount of records diplayed before truncation')
+def lmdb_record_details(a, b, r, d, m, s, z, limit):
+    from hangar.context import Environments
+    from hangar.records.summarize import details
+    from hangar import constants as c
+    P = os.getcwd()
+    if os.path.isdir(os.path.join(P, c.DIR_HANGAR_SERVER)):
+        repo_path = os.path.join(P, c.DIR_HANGAR_SERVER)
+    elif os.path.isdir(os.path.join(P, c.DIR_HANGAR)):
+        repo_path = os.path.join(P, c.DIR_HANGAR)
     else:
-        serve(P, False)
+        click.echo(f'NO HANGAR INSTALLATION AT PATH: {P}')
+        return
+
+    envs = Environments(repo_path=repo_path)
+    if a:
+        b, r, d, m, s, z = True, True, True, True, True, True
+    if b:
+        click.echo(details(envs.branchenv, line_limit=limit).getvalue())
+    if r:
+        click.echo(details(envs.refenv, line_limit=limit).getvalue())
+    if d:
+        click.echo(details(envs.hashenv, line_limit=limit).getvalue())
+    if m:
+        click.echo(details(envs.labelenv, line_limit=limit).getvalue())
+    if s:
+        click.echo(details(envs.stageenv, line_limit=limit).getvalue())
+    if z:
+        click.echo(details(envs.stagehashenv, line_limit=limit).getvalue())

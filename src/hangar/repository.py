@@ -1,7 +1,8 @@
 import os
 import logging
+from collections import defaultdict
+from contextlib import closing
 
-from tqdm.auto import tqdm
 import grpc
 
 from . import merger
@@ -221,6 +222,9 @@ class Repository(object):
         self.init(user_name=user_name, user_email=user_email, remove_old=remove_old)
         self.add_remote(remote_name='origin', remote_address=remote_address)
         branch_name = self.fetch(remote_name='origin', branch_name='master', concat_branch_names=False)
+        co = self.checkout(write=True, branch_name='master')
+        co.reset_staging_area()
+        co.close()
         return branch_name
 
     def fetch(self, remote_name: str, branch_name: str,
@@ -250,88 +254,59 @@ class Repository(object):
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
         self._client = HangarClient(envs=self._env, address=address)
 
-        try:
-            c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
-            c_bhistory = summarize.list_history(self._env.refenv, self._env.branchenv, branch_name=branch_name)
-            c_bhistory['order']
-
-            s_branch = self._client.fetch_branch_record(branch_name)
-            if s_branch.error.code == 0:
-                s_bcommit = s_branch.rec.commit
-                if s_bcommit == c_bcommit:
-                    logger.info(f'server head: {s_bcommit} == client head: {c_bcommit}. No-op')
-                    return
-                # TODO: way to reject divergences upstream
-                elif s_bcommit in c_bhistory:
-                    logger.warning(f'REJECTED: server head: {s_bcommit} in client history')
-                    return False
-
-        except ValueError:
-            s_branch = self._client.fetch_branch_record(branch_name)
-
-        m_all_schemas, m_all_labels = [], []
-        res = self._client.fetch_find_missing_commits(branch_name)
-        m_commits = res.commits
-        for commit in m_commits:
+        with closing(self._client) as client:
+            client: HangarClient  # type hinting for development
             try:
-                schema_res = self._client.fetch_find_missing_schemas(commit)
-                missing_schemas = schema_res.schema_digests
-                m_all_schemas.extend(missing_schemas)
-            except AttributeError:
-                pass
-            missing_labels = self._client.fetch_find_missing_labels(commit)
-            m_all_labels.extend(missing_labels)
+                c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
+                c_bhistory = summarize.list_history(
+                    self._env.refenv, self._env.branchenv, branch_name=branch_name)
+                s_branch = client.fetch_branch_record(branch_name)
+                if s_branch.error.code == 0:
+                    s_bcommit = s_branch.rec.commit
+                    if s_bcommit == c_bcommit:
+                        logger.warning(f'NoOp: serv HEAD {s_bcommit} == client HEAD {c_bcommit}')
+                        return
+                    elif s_bcommit in c_bhistory['order']:
+                        logger.warning(f'REJECTED: server HEAD {s_bcommit} in client history')
+                        return
+            except ValueError:
+                s_branch = client.fetch_branch_record(branch_name)
 
-        m_schemas, m_labels = set(m_all_schemas), set(m_all_labels)
-        for schema in tqdm(m_schemas, desc='Fetch Schemas:'):
-            self._client.fetch_schema(schema)
+            res = client.fetch_find_missing_commits(branch_name)
+            m_commits = res.commits
+            m_labels = set()
+            for commit in m_commits:
+                m_labels.update(client.fetch_find_missing_labels(commit))
+                schema_res = client.fetch_find_missing_schemas(commit)
+                for schema in schema_res.schema_digests:
+                    client.fetch_schema(schema)
 
-        with self._client.fs as fs:
-            ret, first = 'AGAIN', True
-            while ret == 'AGAIN':
-                m_all_data = []
-                for commit in m_commits:
-                    missing_hashes = self._client.fetch_find_missing_hash_records(commit)
-                    m_all_data.extend(missing_hashes)
+                m_hashes = client.fetch_find_missing_hash_records(commit)
+                m_hash_schemas = dict((k, v) for k, v in m_hashes)
+                m_schema_hashs = defaultdict(list)
+                for hsh, schema in m_hash_schemas.items():
+                    m_schema_hashs[schema].append(hsh)
+                for schema in list(m_schema_hashs.keys()):
+                    hashes = m_schema_hashs[schema]
+                    while len(hashes) > 0:
+                        ret = client.fetch_data(schema, hashes)
+                        hashes = list(set(hashes).difference(set(ret)))
 
-                m_data = set(m_all_data)
-                if first is True:
-                    fetch_bar = tqdm(desc='Fetch Data:', leave=True,
-                                     unit_scale=True, unit_divisor=1024, unit='B',
-                                     bar_format='{n_fmt} / ?')
-                    save_bar = tqdm(desc='Saving Data:', leave=True, total=len(m_data))
-                    first = False
+            for label in m_labels:
+                client.fetch_label(label)
+            for commit in m_commits:
+                client.fetch_commit_record(commit)
+            commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
 
-                ret = self._client.fetch_data(m_data, fs, fetch_bar, save_bar)
-
-        fetch_bar.close()
-        save_bar.close()
-
-        for label in tqdm(m_labels, desc='Fetch Labels'):
-            self._client.fetch_label(label)
-        for commit in tqdm(m_commits, desc='Fetch Commits'):
-            self._client.fetch_commit_record(commit)
-
-        commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
-
-        if concat_branch_names is True:
-            fetch_branch_name = f'{remote_name}/{branch_name}'
-        else:
-            fetch_branch_name = f'{branch_name}'
-
-        try:
-            heads.create_branch(
-                branchenv=self._env.branchenv,
-                branch_name=fetch_branch_name,
-                base_commit=s_branch.rec.commit)
-        except ValueError:
-            heads.set_branch_head_commit(
-                branchenv=self._env.branchenv,
-                branch_name=fetch_branch_name,
-                commit_hash=s_branch.rec.commit)
-
-        self._client.channel.close()
-        return fetch_branch_name
+            bHEAD = s_branch.rec.commit
+            bName = f'{remote_name}/{branch_name}' if concat_branch_names else branch_name
+            try:
+                heads.create_branch(
+                    self._env.branchenv, branch_name=bName, base_commit=bHEAD)
+            except ValueError:
+                heads.set_branch_head_commit(
+                    self._env.branchenv, branch_name=bName, commit_hash=bHEAD)
+            return bName
 
     def push(self, remote_name: str, branch_name: str, *,
              username: str = '', password: str = '') -> bool:
@@ -367,68 +342,80 @@ class Repository(object):
             True if the operation succeeded, Otherwise False
         '''
         self.__verify_repo_initialized()
-        try:
-            address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
-            self._client = HangarClient(envs=self._env, address=address,
-                                        auth_username=username, auth_password=password)
+        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
+        self._client = HangarClient(
+            envs=self._env, address=address, auth_username=username, auth_password=password)
 
+        with closing(self._client) as client:
+            client: HangarClient  # type hinting for development
             c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
             c_bhistory = summarize.list_history(
-                refenv=self._env.refenv,
-                branchenv=self._env.branchenv,
-                branch_name=branch_name)
-
-            s_branch = self._client.fetch_branch_record(branch_name)
+                refenv=self._env.refenv, branchenv=self._env.branchenv, branch_name=branch_name)
+            s_branch = client.fetch_branch_record(branch_name)
             if s_branch.error.code == 0:
                 s_bcommit = s_branch.rec.commit
                 if s_bcommit == c_bcommit:
-                    logger.warning(f'server head: {s_bcommit} == client head: {c_bcommit}. No-op')
+                    logger.warning(f'NoOp: serv HEAD {s_bcommit} == client HEAD {c_bcommit}')
                     return False
                 elif (s_bcommit not in c_bhistory['order']) and (s_bcommit != ''):
-                    logger.warning(f'REJECTED: server branch has commits not present on client')
+                    logger.warning(f'REJECTED: server branch has commits not on client')
                     return False
 
-            m_all_schemas, m_all_data, m_all_labels = [], [], []
-            res = self._client.push_find_missing_commits(branch_name)
-            m_commits = res.commits
+            try:
+                res = client.push_find_missing_commits(branch_name)
+            except grpc.RpcError as rpc_error:
+                if rpc_error.code() == grpc.StatusCode.PERMISSION_DENIED:
+                    raise PermissionError(f'{rpc_error.code()}: {rpc_error.details()}')
+                else:
+                    raise rpc_error
+
+            m_labels, m_commits = set(), res.commits
             for commit in m_commits:
-                try:
-                    schema_res = self._client.push_find_missing_schemas(commit)
-                    missing_schemas = schema_res.schema_digests
-                    m_all_schemas.extend(missing_schemas)
-                except AttributeError:
-                    pass
-                missing_hashes = self._client.push_find_missing_hash_records(commit)
-                m_all_data.extend(missing_hashes)
-                missing_labels = self._client.push_find_missing_labels(commit)
-                m_all_labels.extend(missing_labels)
+                schema_res = client.push_find_missing_schemas(commit)
+                for schema in schema_res.schema_digests:
+                    client.push_schema(schema)
+                mis_hashes_sch = client.push_find_missing_hash_records(commit)
+                missing_schema_hashs = defaultdict(list)
+                for hsh, schema in mis_hashes_sch.items():
+                    missing_schema_hashs[schema].append(hsh)
+                for schema, hashes in missing_schema_hashs.items():
+                    client.push_data(schema, hashes)
+                missing_labels = client.push_find_missing_labels(commit)
+                m_labels.update(missing_labels)
 
-            m_schemas, m_data, m_labels = set(m_all_schemas), set(m_all_data), set(m_all_labels)
-            for schema in tqdm(m_schemas, desc='Push Schema:'):
-                self._client.push_schema(schema)
-            if len(m_data) > 0:
-                self._client.push_data(m_data)
-            for label in tqdm(m_labels, desc='Push Labels:'):
-                self._client.push_label(label)
-            for commit in tqdm(m_commits, desc='Push Commits:'):
-                self._client.push_commit_record(commit)
+            for label in m_labels:
+                client.push_label(label)
+            for commit in m_commits:
+                client.push_commit_record(commit)
+            client.push_branch_record(branch_name)
+            return True
 
-            self._client.push_branch_record(branch_name)
+    def _ping_server(self, remote_name: str, *, username: str = '', password: str = '') -> str:
+        '''ping the remote server with provided name.
 
-        except grpc.RpcError as rpc_error:
-            if rpc_error.code() == grpc.StatusCode.PERMISSION_DENIED:
-                # For expected case (not authorized). raise a standard python error
-                # instead of making users catch at grpc one.
-                msg = f'{rpc_error.code()}: {rpc_error.details()}'
-                logger.error(msg)
-                raise PermissionError(msg)
-            else:
-                raise
+        Parameters
+        ----------
+        remote_name : str
+            name of the remote repository to make the push on.
+        auth_username : str, optional, kwarg-only
+            credentials to use for authentication if repository push restrictions
+            are enabled, by default ''.
+        auth_password : str, optional, kwarg-only
+            credentials to use for authentication if repository push restrictions
+            are enabled, by default ''.
 
-        finally:
-            self._client.channel.close()
-
-        return True
+        Returns
+        -------
+        string
+            if success, should result in "PONG"
+        '''
+        self.__verify_repo_initialized()
+        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
+        self._client = HangarClient(
+            envs=self._env, address=address, auth_username=username, auth_password=password)
+        with closing(self._client) as client:
+            res = client.ping_pong()
+            return res
 
     def add_remote(self, remote_name: str, remote_address: str) -> bool:
         '''Add a remote to the repository accessible by `name` at `address`.
@@ -443,16 +430,27 @@ class Repository(object):
 
         Returns
         -------
-        bool
-            True if successful, False if a remote already exists with the
-            provided name
+        str
+            The name of the remote added to the client's server list.
+
+        Raises
+        ------
+        ValueError
+            If a remote with the provided name is already listed on this client,
+            No-Op. In order to update a remote server address, it must be
+            removed and then re-added with the desired address.
         '''
         self.__verify_repo_initialized()
         succ = heads.add_remote(
             branchenv=self._env.branchenv,
             name=remote_name,
             address=remote_address)
-        return succ
+
+        if succ is False:
+            raise ValueError(
+                f'Remote with name: {remote_name} has been previously added.'
+                f'No operation (update to the server channel address) was saved.')
+        return remote_name
 
     def remove_remote(self, remote_name: str) -> str:
         '''Remove a remote repository from the branch records
@@ -464,7 +462,7 @@ class Repository(object):
 
         Raises
         ------
-        KeyError
+        ValueError
             If a remote with the provided name does not exist
 
         Returns
@@ -478,7 +476,7 @@ class Repository(object):
                 branchenv=self._env.branchenv, name=remote_name)
         except KeyError:
             err = f'No remote reference with name: {remote_name}'
-            raise KeyError(err)
+            raise ValueError(err)
 
         return rm_address
 
@@ -593,7 +591,14 @@ class Repository(object):
     def _details(self):
         '''DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
         '''
-        summarize.details(self._env)
+        print(summarize.details(self._env.branchenv).getvalue())
+        print(summarize.details(self._env.refenv).getvalue())
+        print(summarize.details(self._env.hashenv).getvalue())
+        print(summarize.details(self._env.labelenv).getvalue())
+        print(summarize.details(self._env.stageenv).getvalue())
+        print(summarize.details(self._env.stagehashenv).getvalue())
+        for commit, commitenv in self._env.cmtenv.items():
+            print(summarize.details(commitenv).getvalue())
         return
 
     def _ecosystem_details(self):

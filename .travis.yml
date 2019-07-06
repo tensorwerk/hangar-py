@@ -9,11 +9,6 @@ matrix:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
         - TOXENV=docs
-    # - os: linux
-    #   dist: xenial
-    #   python: '3.6'
-    #   env:
-    #     - TOXENV=py36-cover,report
     - os: linux
       dist: xenial
       language: python
@@ -23,11 +18,6 @@ matrix:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
         - TOXENV=py36-nocov
-    # - os: linux
-    #   dist: xenial
-    #   python: '3.7'
-    #   env:
-    #     - TOXENV=py37-cover,report
     - os: linux
       dist: xenial
       language: python
@@ -36,7 +26,9 @@ matrix:
       env:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
-        - TOXENV=py37-nocov
+        - TOXENV=py37-cover,report
+      after_success:
+        - codecov
     - os: osx
       osx_image: xcode9.4
       language: generic
@@ -50,20 +42,30 @@ matrix:
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
         - TR_PYTHON_VERSION="3.7"
-        - TOXENV=py37-nocov
-
+        - TOXENV=py37-cover,report
+      after_success:
+        - codecov
 before_install:
   - |
     if [ "$TRAVIS_OS_NAME" == "osx" ]; then
       # Install and set up miniconda.
       wget http://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh
       bash miniconda.sh -b -p $CONDA_INSTALL_LOCN
+      # c-blosc libraries are having trouble building on travis osx machines.
+      # temporarily disabling the build steps until it's cleared out upstream
+      export CC=gcc
+      export CXX=g++
+      export INCLUDE_ZSTD=0
+      export DISABLE_BLOSC_SSE2=0
       export PATH=${CONDA_INSTALL_LOCN}/bin:$PATH
       conda config --set always_yes true
-      conda install python=${TR_PYTHON_VERSION}
+      conda update conda
+      conda install python=${TR_PYTHON_VERSION} zstd zlib
+      conda clean --all
       # ensure we have the latest version of pip installed
       python -m pip install -U pip
-      python -m easy_install -U setuptools
+      python -m pip install -U setuptools
+      python -m pip install -U wheel
       # To ease debugging, list installed packages
       conda info -a
       conda list
@@ -74,6 +76,7 @@ before_install:
 
 install:
   - pip install tox
+  - pip install codecov
   - virtualenv --version
   - easy_install --version
   - pip --version

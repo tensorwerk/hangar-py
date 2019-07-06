@@ -574,20 +574,36 @@ class HDF5_00_FileHandles(object):
 
         srcSlc = (self.slcExpr[dsetIdx], *(self.slcExpr[0:x] for x in hashVal.shape))
         destSlc = None
-        destArr = np.empty((hashVal.shape), self.schema_dtype)
 
-        try:
-            self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
-        except TypeError:
-            self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
-            self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
-        except KeyError:
-            file_pth = pjoin(self.STAGEDIR, f'{hashVal.uid}.hdf5')
-            if (self.mode == 'a') and os.path.islink(file_pth):
-                self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
+        if self.schema_dtype is not None:
+            destArr = np.empty((hashVal.shape), self.schema_dtype)
+            try:
                 self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
-            else:
-                raise
+            except TypeError:
+                self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
+                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+            except KeyError:
+                process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
+                file_pth = pjoin(process_dir, f'{hashVal.uid}.hdf5')
+                if os.path.islink(file_pth):
+                    self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
+                    self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+                else:
+                    raise
+        else:
+            try:
+                destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
+            except TypeError:
+                self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
+                destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
+            except KeyError:
+                process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
+                file_pth = pjoin(process_dir, f'{hashVal.uid}.hdf5')
+                if os.path.islink(file_pth):
+                    self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
+                    destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
+                else:
+                    raise
 
         return destArr
 

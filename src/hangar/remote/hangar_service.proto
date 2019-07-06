@@ -6,6 +6,7 @@ option optimize_for = SPEED;
 
 service HangarService {
 
+    rpc PING (PingRequest) returns (PingReply) {}
     rpc GetClientConfig (GetClientConfigRequest) returns (GetClientConfigReply) {}
 
     rpc FetchBranchRecord (FetchBranchRecordRequest) returns (FetchBranchRecordReply) {}
@@ -96,6 +97,13 @@ message SchemaRecord {
 -------------------------------------------------------------------------------
 */
 
+message PingRequest {}
+
+message PingReply {
+    string result = 1;
+}
+
+
 message GetClientConfigRequest {}
 
 message GetClientConfigReply {
@@ -131,13 +139,10 @@ message FetchDataRequest {
     int64 comp_nbytes = 2;
     // total size of the uncompressed raw data
     int64 uncomp_nbytes = 3;
-    // // hash of the data schema
     // string schema_hash = 4;
     ErrorProto error = 4;
-
 }
 message FetchDataReply {
-    // HashRecord rec = 1;
     // data container for the tensor
     bytes raw_data = 1;
     // total size of the split tensorprotos
@@ -146,8 +151,6 @@ message FetchDataReply {
     int64 uncomp_nbytes = 3;
     // success or not
     ErrorProto error = 4;
-    // // hash of the data schema
-    // string schema_hash = 5;
 }
 
 
@@ -209,17 +212,14 @@ message PushBranchRecordReply {
 }
 
 message PushDataRequest {
-    // HashRecord rec = 1;
     // data container for the tensor
     bytes raw_data = 1;
     // total size of the split tensorprotos
     int64 comp_nbytes = 2;
     // total size of the uncompressed raw data
     int64 uncomp_nbytes = 3;
-    // // hash of the data schema
-    // string schema_hash = 4;
+    // success or not
     ErrorProto error = 4;
-
 }
 message PushDataReply {
     // success or not

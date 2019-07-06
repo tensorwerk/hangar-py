@@ -1,4 +1,4 @@
-'''Local HDF5 Backend Implementation, Identifier: HDF5_00
+'''Local Numpy Memmap Backend Implementation, Identifier: NUMPY_00
 
 Backend Identifiers
 ===================
@@ -358,8 +358,9 @@ class NUMPY_00_FileHandles(object):
             self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
             res = self.Fp[hashVal.uid][srcSlc]
         except KeyError:
-            file_pth = pjoin(self.STAGEDIR, f'{hashVal.uid}.npy')
-            if (self.mode == 'a') and os.path.islink(file_pth):
+            process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
+            file_pth = pjoin(process_dir, f'{hashVal.uid}.npy')
+            if os.path.islink(file_pth):
                 self.rFp[hashVal.uid] = open_memmap(file_pth, 'r')
                 res = self.Fp[hashVal.uid][srcSlc]
             else:

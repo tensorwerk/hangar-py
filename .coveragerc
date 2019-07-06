@@ -7,8 +7,16 @@ source =
     src
     tests
 parallel = true
+omit =
+    src/hangar/remote/hangar_service_pb2.py
+    src/hangar/remote/hangar_service_pb2_grpc.py
+    src/hangar/remote/run_proto_codegen.py
 
 [report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    def _repr_pretty_
 show_missing = true
 precision = 2
 omit = *migrations*
