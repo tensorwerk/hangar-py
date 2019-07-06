@@ -329,3 +329,4 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
         for sIdx, samp in enumerate(sampList):
             assert np.allclose(nco.datasets['dset'][str(sIdx)], samp)
         nco.close()
+    newRepo._env._close_environments()
