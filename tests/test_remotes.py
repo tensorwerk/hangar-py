@@ -283,3 +283,49 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
     assert clone_head == merge_head == merge_cmt
     assert merge_order == clone_order
     newRepo._env._close_environments()
+
+
+def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, managed_tmpdir):
+    from hangar.remote import config
+    from hangar import Repository
+
+    config.config['server']['grpc']['fetch_max_nbytes'] = 100_000
+    config.config['client']['grpc']['push_max_nbytes'] = 100_000
+
+    # Push master branch test
+    masterCmtList = []
+    co = repo.checkout(write=True)
+    co.datasets.init_dataset(name='dset', shape=(50, 20), dtype=np.float32)
+    for cIdx in range(4):
+        if cIdx != 0:
+            co = repo.checkout(write=True)
+        masterSampList = []
+        with co.datasets['dset'] as d:
+            for prevKey in list(d.keys())[1:]:
+                d.remove(prevKey)
+            for sIdx in range(70):
+                arr = np.random.randn(50, 20).astype(np.float32)
+                d[str(sIdx)] = arr
+                masterSampList.append(arr)
+        cmt = co.commit(f'master commit number: {cIdx}')
+        masterCmtList.append((cmt, masterSampList))
+        co.close()
+
+    repo.add_remote('origin', server_instance)
+    push1 = repo.push('origin', 'master')
+    assert push1 is True
+
+    # Clone test (master branch)
+    new_tmpdir = pjoin(managed_tmpdir, 'new')
+    mkdir(new_tmpdir)
+    newRepo = Repository(path=new_tmpdir)
+    newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+    assert newRepo.list_branch_names() == ['master']
+    for cmt, sampList in masterCmtList:
+        nco = newRepo.checkout(commit=cmt)
+        assert len(nco.datasets) == 1
+        assert 'dset' in nco.datasets
+        assert len(nco.datasets['dset']) == 70
+        for sIdx, samp in enumerate(sampList):
+            assert np.allclose(nco.datasets['dset'][str(sIdx)], samp)
+        nco.close()

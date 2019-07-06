@@ -73,14 +73,14 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     def GetClientConfig(self, request, context):
         '''Return parameters to the client to set up channel options as desired by the server.
         '''
-        push_max_stream_nbytes = str(config.get('remote.client.app.push_max_stream_nbytes'))
-        enable_compression = config.get('remote.client.options.enable_compression')
+        push_max_nbytes = str(config.get('client.grpc.push_max_nbytes'))
+        enable_compression = config.get('client.grpc.enable_compression')
         enable_compression = str(1) if enable_compression is True else str(0)
-        optimization_target = config.get('remote.client.options.optimization_target')
+        optimization_target = config.get('client.grpc.optimization_target')
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.GetClientConfigReply(error=err)
-        reply.config['push_max_stream_nbytes'] = push_max_stream_nbytes
+        reply.config['push_max_nbytes'] = push_max_nbytes
         reply.config['enable_compression'] = enable_compression
         reply.config['optimization_target'] = optimization_target
         return reply
@@ -287,7 +287,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         buf = io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
         hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
-        fetch_max_stream_nbytes = config.get('remote.server.app.fetch_max_stream_nbytes')
+        fetch_max_nbytes = config.get('server.grpc.fetch_max_nbytes')
         try:
             for digest in unpacker:
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
@@ -310,7 +310,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 buf.write(p)
                 totalSize += len(p)
 
-                if totalSize >= fetch_max_stream_nbytes:
+                if totalSize >= fetch_max_nbytes:
                     err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                     cIter = chunks.tensorChunkedIterator(
                         buf=buf,
@@ -672,16 +672,16 @@ def serve(hangar_path: os.PathLike, overwrite: bool = False,
     config.ensure_file(src_path, destination=dest_path, comment=False)
     config.refresh(paths=[dest_path])
 
-    enable_compression = config.get('remote.server.grpc.options.enable_compression')
-    optimization_target = config.get('remote.server.grpc.options.optimization_target')
+    enable_compression = config.get('server.grpc.enable_compression')
+    optimization_target = config.get('server.grpc.optimization_target')
     if channel_address is None:
-        channel_address = config.get('remote.server.grpc.channel_address')
-    max_thread_pool_workers = config.get('remote.server.grpc.max_thread_pool_workers')
-    max_concurrent_rpcs = config.get('remote.server.grpc.max_concurrent_rpcs')
+        channel_address = config.get('server.grpc.channel_address')
+    max_thread_pool_workers = config.get('server.grpc.max_thread_pool_workers')
+    max_concurrent_rpcs = config.get('server.grpc.max_concurrent_rpcs')
 
-    admin_restrict_push = config.get('remote.server.admin.restrict_push')
-    admin_username = config.get('remote.server.admin.username')
-    admin_password = config.get('remote.server.admin.password')
+    admin_restrict_push = config.get('server.admin.restrict_push')
+    admin_username = config.get('server.admin.username')
+    admin_password = config.get('server.admin.password')
     msg = 'PERMISSION ERROR: PUSH OPERATIONS RESTRICTED FOR CALLER'
     code = grpc.StatusCode.PERMISSION_DENIED
     interc = request_header_validator_interceptor.RequestHeaderValidatorInterceptor(

@@ -286,10 +286,11 @@ class Repository(object):
                 m_schema_hashs = defaultdict(list)
                 for hsh, schema in m_hash_schemas.items():
                     m_schema_hashs[schema].append(hsh)
-                for schema, hashes in m_schema_hashs.items():
-                    ret = 'AGAIN'
-                    while ret == 'AGAIN':
+                for schema in list(m_schema_hashs.keys()):
+                    hashes = m_schema_hashs[schema]
+                    while len(hashes) > 0:
                         ret = client.fetch_data(schema, hashes)
+                        hashes = list(set(hashes).difference(set(ret)))
 
             for label in m_labels:
                 client.fetch_label(label)

@@ -105,7 +105,7 @@ class HangarClient(object):
             logger.error(err)
             raise err
 
-        self.cfg['push_max_stream_nbytes'] = int(response.config['push_max_stream_nbytes'])
+        self.cfg['push_max_nbytes'] = int(response.config['push_max_nbytes'])
         self.cfg['enable_compression'] = bool(int(response.config['enable_compression']))
         self.cfg['optimization_target'] = response.config['optimization_target']
 
@@ -252,8 +252,7 @@ class HangarClient(object):
 
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
-                logger.error(rpc_error.details())
-                ret = 'AGAIN'  # Sentinal indicating not all data was retrieved
+                logger.info(rpc_error.details())
             else:
                 logger.error(rpc_error.details())
                 raise rpc_error
@@ -282,6 +281,7 @@ class HangarClient(object):
             schema_dtype=np.typeDict[int(schema_val.schema_dtype)])
         backend.open(mode='a', remote_operation=True)
 
+        saved_digests = []
         hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
         try:
             for data in unpacker:
@@ -295,11 +295,12 @@ class HangarClient(object):
                 hashVal = backend.write_data(tensor, remote_operation=True)
                 hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
                 hashTxn.put(hashKey, hashVal)
+                saved_digests.append(recieved_hash)
         finally:
             backend.close()
             TxnRegister().commit_writer_txn(self.env.hashenv)
 
-        return ret
+        return saved_digests
 
     def push_data(self, schema_hash, digests):
 
@@ -322,7 +323,7 @@ class HangarClient(object):
 
                 # only send a group of tensors <= Max Size so that the server does not
                 # run out of RAM for large repos
-                if totalSize >= self.cfg['push_max_stream_nbytes']:
+                if totalSize >= self.cfg['push_max_nbytes']:
                     cIter = chunks.tensorChunkedIterator(
                         buf=buf,
                         uncomp_nbytes=totalSize,
