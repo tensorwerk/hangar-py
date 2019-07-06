@@ -18,6 +18,7 @@ from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
 from . import request_header_validator_interceptor
+from .content import ContentWriter
 from .. import constants as c
 from ..context import Environments, TxnRegister
 from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
@@ -61,6 +62,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         self.txnregister = TxnRegister()
         self.repo_path = self.env.repo_path
         self.data_dir = pjoin(self.repo_path, c.DIR_DATA)
+        self.CW = ContentWriter(self.env)
 
     # -------------------- Client Config --------------------------------------
 
@@ -171,18 +173,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             refBytes[offset: offset + size] = request.record.ref
             offset += size
 
-        commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit)
-        commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit)
-        commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit)
-        refTxn = self.txnregister.begin_writer_txn(self.env.refenv)
-        try:
-            cmtParExists = refTxn.put(commitParentKey, parentVal, overwrite=False)
-            cmtRefExists = refTxn.put(commitRefKey, refBytes, overwrite=False)
-            cmtSpcExists = refTxn.put(commitSpecKey, specVal, overwrite=False)
-        finally:
-            self.txnregister.commit_writer_txn(self.env.refenv)
-
-        if not all([cmtParExists, cmtRefExists, cmtSpcExists]):
+        digest = self.CW.commit(commit, parentVal, specVal, refBytes)
+        if not digest:
             err = hangar_service_pb2.ErrorProto(code=1, message='COMMIT EXISTS')
         else:
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
@@ -223,19 +215,13 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         schema_hash = request.rec.digest
         schema_val = request.rec.blob
 
-        schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
-        hashTxn = self.txnregister.begin_writer_txn(self.env.hashenv)
-        try:
-            newSchema = hashTxn.put(schemaKey, schema_val, overwrite=False)
-            if newSchema is True:
-                print(f'created new: {schema_val}')
-                err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-            else:
-                print(f'exists: {schema_val}')
-                err = hangar_service_pb2.ErrorProto(code=1, message='ALREADY EXISTS')
-        finally:
-            self.txnregister.commit_writer_txn(self.env.hashenv)
-
+        digest = self.CW.schema(schema_hash, schema_val)
+        if not digest:
+            print(f'exists: {schema_val}')
+            err = hangar_service_pb2.ErrorProto(code=1, message='ALREADY EXISTS')
+        else:
+            print(f'created new: {schema_val}')
+            err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushSchemaReply(error=err)
         return reply
 
@@ -304,8 +290,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     spec = backend_decoder(hashVal)
                     tensor = self._rFs[spec.backend].read_data(spec)
 
-                p = packer.pack(
-                    (digest, tensor.shape, tensor.dtype.num, tensor.tobytes()))
+                p = packer.pack((digest, tensor.shape, tensor.dtype.num, tensor.tobytes()))
                 buf.seek(totalSize)
                 buf.write(p)
                 totalSize += len(p)
@@ -313,11 +298,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 if totalSize >= fetch_max_nbytes:
                     err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                     cIter = chunks.tensorChunkedIterator(
-                        buf=buf,
-                        uncomp_nbytes=totalSize,
-                        itemsize=tensor.itemsize,
-                        pb2_request=hangar_service_pb2.FetchDataReply,
-                        err=err)
+                        buf=buf, uncomp_nbytes=totalSize, itemsize=tensor.itemsize,
+                        pb2_request=hangar_service_pb2.FetchDataReply, err=err)
                     yield from cIter
                     time.sleep(0.1)
                     msg = 'HANGAR REQUESTED RETRY: developer enforced limit on returned '\
@@ -372,41 +354,21 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         buff = io.BytesIO(uncompBytes)
         unpacker = msgpack.Unpacker(
             buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
-        hashTxn = self.txnregister.begin_writer_txn(self.env.hashenv)
-        try:
-            for idx, data in enumerate(unpacker):
-                digest, schema_hash, dShape, dTypeN, dBytes = data
-                if idx == 0:
-                    schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
-                    schemaVal = hashTxn.get(schemaKey)
-                    schema_val = parsing.dataset_record_schema_raw_val_from_db_val(schemaVal)
-
-                    # TODO: The choice of backend here does not need to follow the same heuristics
-                    # as on the client computer. Optomize / extract this logic.
-                    accessor = BACKEND_ACCESSOR_MAP[schema_val.schema_default_backend]
-                    backend = accessor(
-                        repo_path=self.env.repo_path,
-                        schema_shape=schema_val.schema_max_shape,
-                        schema_dtype=np.typeDict[int(schema_val.schema_dtype)])
-                    backend.open(mode='a', remote_operation=True)
-
-                tensor = np.frombuffer(dBytes, dtype=np.typeDict[dTypeN]).reshape(dShape)
-                recieved_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
-                if recieved_hash != digest:
-                    msg = f'HASH MANGLED, recieved: {recieved_hash} != expected digest: {digest}'
-                    context.set_details(msg)
-                    context.set_code(grpc.StatusCode.DATA_LOSS)
-                    err = hangar_service_pb2.ErrorProto(code=1, message=msg)
-                    reply = hangar_service_pb2.PushDataReply(error=err)
-                    return reply
-
-                hashVal = backend.write_data(tensor, remote_operation=True)
-                hashKey = parsing.hash_data_db_key_from_raw_key(digest)
-                hashTxn.put(hashKey, hashVal)
-        finally:
-            self.txnregister.commit_writer_txn(self.env.hashenv)
-            backend.close()
-
+        # hashTxn = self.txnregister.begin_writer_txn(self.env.hashenv)
+        recieved_data = []
+        for data in unpacker:
+            digest, schema_hash, dShape, dTypeN, dBytes = data
+            tensor = np.frombuffer(dBytes, dtype=np.typeDict[dTypeN]).reshape(dShape)
+            recieved_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
+            if recieved_hash != digest:
+                msg = f'HASH MANGLED, recieved: {recieved_hash} != expected digest: {digest}'
+                context.set_details(msg)
+                context.set_code(grpc.StatusCode.DATA_LOSS)
+                err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+                reply = hangar_service_pb2.PushDataReply(error=err)
+                return reply
+            recieved_data.append((recieved_hash, tensor))
+        saved_digests = self.CW.data(schema_hash, recieved_data)
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
         return reply
@@ -444,31 +406,22 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         Like data tensors, the cryptographic hash of each value is verified
         before the data is actually placed on the server file system.
         '''
-        digest = request.rec.digest
+        req_digest = request.rec.digest
 
         uncompBlob = blosc.decompress(request.blob)
         recieved_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
-        try:
-            assert recieved_hash == digest
-            err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-        except AssertionError:
-            msg = f'HASH MANGED: recieved_hash: {recieved_hash} != digest: {digest}'
+        if recieved_hash != req_digest:
+            msg = f'HASH MANGED: recieved_hash: {recieved_hash} != digest: {req_digest}'
             err = hangar_service_pb2.ErrorProto(code=1, message=msg)
             reply = hangar_service_pb2.PushLabelReply(error=err)
             return reply
 
-        labelHashKey = parsing.hash_meta_db_key_from_raw_key(digest)
-        labelTxn = self.txnregister.begin_writer_txn(self.env.labelenv)
-        try:
-            succ = labelTxn.put(labelHashKey, uncompBlob, overwrite=False)
-            if succ is False:
-                msg = f'HASH ALREADY EXISTS: {labelHashKey}'
-                err = hangar_service_pb2.ErrorProto(code=1, message=msg)
-            else:
-                err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-        finally:
-            self.txnregister.commit_writer_txn(self.env.labelenv)
-
+        digest = self.CW.label(recieved_hash, uncompBlob)
+        if not digest:
+            msg = f'HASH ALREADY EXISTS: {req_digest}'
+            err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+        else:
+            err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushLabelReply(error=err)
         return reply
 

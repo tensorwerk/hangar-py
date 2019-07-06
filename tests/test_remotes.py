@@ -93,6 +93,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     assert newRepo.list_branch_names() == ['master']
     for cmt, sampList in cmtList:
+        newRepo.fetch_data('origin', cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
@@ -181,7 +182,7 @@ def test_server_push_clone_second_branch_with_new_commit(
     push1 = repo.push('origin', 'master')
     assert push1 is True
 
-    # Plush dev branch test
+    # Push dev branch test
     devCmtList = []
     branch = repo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
@@ -208,6 +209,7 @@ def test_server_push_clone_second_branch_with_new_commit(
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     assert newRepo.list_branch_names() == ['master']
     for cmt, sampList in masterCmtList:
+        newRepo.fetch_data('origin', cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
@@ -221,6 +223,7 @@ def test_server_push_clone_second_branch_with_new_commit(
     assert fetch == f'origin/{branch}'
     assert newRepo.list_branch_names() == ['master', f'origin/{branch}']
     for cmt, sampList in devCmtList:
+        newRepo.fetch_data('origin', cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
@@ -322,6 +325,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     assert newRepo.list_branch_names() == ['master']
     for cmt, sampList in masterCmtList:
+        newRepo.fetch_data('origin', cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert 'dset' in nco.datasets

@@ -535,3 +535,38 @@ def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
 
     remote_address = parsing.remote_raw_val_from_db_val(dbVal)
     return remote_address
+
+
+def get_remote_names(branchenv):
+    '''get a list of all remotes in the repository.
+
+    Parameters
+    ----------
+    branchenv : lmdb.Environment`
+        lmdb environment storing the branch records.
+
+    Returns
+    -------
+    list of str
+        list of remote names active in the repository.
+    '''
+    remoteStartKey = parsing.c.K_REMOTES.encode()  # TODO: This is odd, why??
+    remoteNames = []
+    branchTxn = TxnRegister().begin_reader_txn(branchenv)
+    try:
+        with branchTxn.cursor() as cursor:
+            cursor.first()
+            remoteRangeExists = cursor.set_range(remoteStartKey)
+            while remoteRangeExists:
+                remoteKey = cursor.key()
+                if remoteKey.startswith(remoteStartKey):
+                    name = parsing.remote_raw_key_from_db_key(remoteKey)
+                    remoteNames.append(name)
+                    remoteRangeExists = cursor.next()
+                else:
+                    remoteRangeExists = False
+        cursor.close()
+    finally:
+        TxnRegister().abort_reader_txn(branchenv)
+
+    return remoteNames

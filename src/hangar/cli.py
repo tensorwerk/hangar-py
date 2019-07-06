@@ -12,7 +12,7 @@ Why does this file exist, and why not put this in __main__?
     - When you import __main__ it will get executed again (as a module) because
       there's no ``hangar.__main__`` in ``sys.modules``.
 
-    Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
+    Also see (1) from http://click.pocoo.org/7/setuptools/#setuptools-integration
 """
 import os
 import time
@@ -28,11 +28,13 @@ def main():
     pass
 
 
-@main.command(help='initialize environment')
+@main.command()
 @click.option('--name', prompt='User Name', help='first and last name of user')
 @click.option('--email', prompt='User Email', help='email address of the user')
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
 def init(name, email, overwrite):
+    '''Initialize an empty remository at the current path
+    '''
     P = os.getcwd()
     repo = Repository(path=P)
     try:
@@ -42,12 +44,14 @@ def init(name, email, overwrite):
         click.echo(e)
 
 
-@main.command(help='clone an environment into the given path')
+@main.command()
 @click.option('--name', prompt='User Name', help='first and last name of user')
 @click.option('--email', prompt='User Email', help='email address of the user')
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
 @click.argument('remote', nargs=1, required=True)
 def clone(remote, name, email, overwrite):
+    '''Initialize a repository at the current path and fetch data records from REMOTE server.
+    '''
     P = os.getcwd()
     repo = Repository(path=P)
     repo.clone(
@@ -56,6 +60,79 @@ def clone(remote, name, email, overwrite):
         remote_address=remote,
         remove_old=overwrite)
     click.echo(f'Hangar repository initialized at {P}')
+
+
+@main.command(name='fetch')
+@click.argument('remote', nargs=1, required=True)  # help='name of the remote server')
+@click.argument('branch', nargs=1, required=True)  # help='branch name to fetch')
+def fetch_records(remote, branch):
+    '''Retrieve the commit history records for BRANCH from the REMOTE server.
+
+    This method does not fetch the data associated with the commits. See
+    `fetch-data` to download the tensor data corresponding to a commit.
+    '''
+    P = os.getcwd()
+    repo = Repository(path=P)
+    bName = repo.fetch(remote_name=remote, branch_name=branch)
+    click.echo(f'Fetch to Branch Name: {bName}')
+
+
+@main.command(name='fetch-data')
+@click.argument('remote', nargs=1, required=True)  # help='name of the remote server')
+@click.argument('commit', nargs=1, required=True)  # help='commit hash for which data should be retrieved')
+def fetch_data(remote, commit):
+    '''Download the tensor data from the REMOTE server referenced by COMMIT.
+    '''
+    P = os.getcwd()
+    repo = Repository(path=P)
+    commit_hash = repo.fetch_data(remote_name=remote, commit_hash=commit)
+    click.echo(f'Retrieved data for commit hash: {commit_hash}')
+
+
+@main.command()
+@click.argument('remote', nargs=1, required=True)  # help='name of the remote server')
+@click.argument('branch', nargs=1, required=True)  # help='branch name to push')
+def push(remote, branch):
+    '''Upload local BRANCH commit history / data to REMOTE server.
+    '''
+    P = os.getcwd()
+    repo = Repository(path=P)
+    commit_hash = repo.push(remote_name=remote, branch_name=branch)
+    click.echo(f'Retrieved data for commit hash: {commit_hash}')
+
+
+@main.group()
+def remote():
+    pass
+
+@remote.command(name='list')
+def list_remotes():
+    '''List all recorded remotes.
+    '''
+    P = os.getcwd()
+    repo = Repository(path=P)
+    click.echo(repo.list_remote_names())
+
+
+@remote.command(name='add')
+@click.argument('name', nargs=1, required=True)  # help='name of the remote repository')
+@click.argument('address', nargs=1, required=True)  # help='location where the remote can be accessed')
+def add_remote(name, address):
+    '''Add a new remote server NAME with url ADDRESS to the local client.
+    '''
+    P = os.getcwd()
+    repo = Repository(path=P)
+    click.echo(repo.add_remote(remote_name=name, remote_address=address))
+
+
+@remote.command(name='remove')
+@click.argument('name', nargs=1, required=True)  # help='name of the remote repository')
+def remove_remote(name):
+    '''Remove the remote server NAME from the local client.
+    '''
+    P = os.getcwd()
+    repo = Repository(path=P)
+    click.echo(repo.remove_remote(remote_name=name))
 
 
 @main.command(help='show a summary of the repository')
@@ -72,7 +149,7 @@ def summary(b, c):
         click.echo(repo.summary())
 
 
-@main.command(help='show the commit log')
+@main.command(help='show the commit log graph')
 @click.option('-b', required=False, default=None, help='branch name')
 def log(b):
     P = os.getcwd()

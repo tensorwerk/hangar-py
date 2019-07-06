@@ -12,6 +12,7 @@ from .context import Environments
 from .diagnostics import graphing, ecosystem
 from .records import heads, parsing, summarize, commiting, queries, hashs
 from .remote.hangar_client import HangarClient
+from .remote.content import ContentWriter, ContentReader
 from .utils import is_valid_directory_path, is_suitable_user_key
 
 logger = logging.getLogger(__name__)
@@ -228,15 +229,31 @@ class Repository(object):
         return branch_name
 
     def fetch_data(self, remote_name: str, commit_hash: str) -> str:
+        '''Partial clone fetch data operation.
+
+        Parameters
+        ----------
+        remote_name : str
+            name of the remote server
+        commit_hash : str
+            commit hash to retrieve data for
+
+        Returns
+        -------
+        str
+            commit hash of the data which was returned.
+        '''
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
         self._client = HangarClient(envs=self._env, address=address)
+        CW = ContentWriter(self._env)
 
         with closing(self._client) as client:
             client: HangarClient  # type hinting for development
+
+            # TODO: Should not have to get all data hashs
             commit_hash = self._env.checkout_commit(commit=commit_hash)
             cmtData_hashs = set(queries.RecordQuery(self._env.cmtenv[commit_hash]).data_hashes())
-
             hashQuery = hashs.HashQuery(self._env.hashenv)
             hashMap = hashQuery.map_all_hash_keys_raw_to_values_raw()
             m_schema_hash_map = defaultdict(list)
@@ -245,12 +262,16 @@ class Repository(object):
                 if hashSpec.backend == '50':
                     m_schema_hash_map[hashSpec.schema_hash].append(digest)
 
-            for schema, hashes in m_schema_hash_map.items():
-                ret = 'AGAIN'
-                while ret == 'AGAIN':
+            for schema in list(m_schema_hash_map.keys()):
+                hashes = m_schema_hash_map[schema]
+                while len(hashes) > 0:
                     ret = client.fetch_data(schema, hashes)
+                    saved_digests = CW.data(schema, ret)
+                    hashes = list(set(hashes).difference(set(saved_digests)))
 
             commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
+
+        return commit_hash
 
     def fetch(self, remote_name: str, branch_name: str,
               *, concat_branch_names: bool = True) -> str:
@@ -278,6 +299,7 @@ class Repository(object):
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
         self._client = HangarClient(envs=self._env, address=address)
+        CW = ContentWriter(self._env)
 
         with closing(self._client) as client:
             client: HangarClient  # type hinting for development
@@ -304,22 +326,22 @@ class Repository(object):
                 m_labels.update(client.fetch_find_missing_labels(commit))
                 schema_res = client.fetch_find_missing_schemas(commit)
                 for schema in schema_res.schema_digests:
-                    client.fetch_schema(schema)
+                    schema_hash, schemaVal = client.fetch_schema(schema)
+                    CW.schema(schema_hash, schemaVal)
+
                 m_hashes = client.fetch_find_missing_hash_records(commit)
-                m_hash_schemas = dict((k, v) for k, v in m_hashes)
-                m_schema_hashs = defaultdict(list)
-                for hsh, schema in m_hash_schemas.items():
-                    m_schema_hashs[schema].append(hsh)
-                for schema in list(m_schema_hashs.keys()):
-                    hashes = m_schema_hashs[schema]
-                    while len(hashes) > 0:
-                        ret = client.fetch_data(schema, hashes)
-                        hashes = list(set(hashes).difference(set(ret)))
+                m_schema_hash_map = defaultdict(list)
+                for digest, schema_hash in m_hashes:
+                    m_schema_hash_map[schema_hash].append((digest, schema_hash))
+                for schema_hash, recieved_data in m_schema_hash_map.items():
+                    CW.data(schema_hash, recieved_data, backend='50')
 
             for label in m_labels:
-                client.fetch_label(label)
+                recieved_hash, labelVal = client.fetch_label(label)
+                CW.label(recieved_hash, labelVal)
             for commit in m_commits:
-                client.fetch_commit_record(commit)
+                cmt, parentVal, specVal, refVal = client.fetch_commit_record(commit)
+                CW.commit(cmt, parentVal, specVal, refVal)
 
             bHEAD = s_branch.rec.commit
             bName = f'{remote_name}/{branch_name}' if concat_branch_names else branch_name
@@ -368,9 +390,11 @@ class Repository(object):
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
         self._client = HangarClient(
             envs=self._env, address=address, auth_username=username, auth_password=password)
+        CR = ContentReader(self._env)
 
         with closing(self._client) as client:
             client: HangarClient  # type hinting for development
+
             c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
             c_bhistory = summarize.list_history(
                 refenv=self._env.refenv, branchenv=self._env.branchenv, branch_name=branch_name)
@@ -396,7 +420,11 @@ class Repository(object):
             for commit in m_commits:
                 schema_res = client.push_find_missing_schemas(commit)
                 for schema in schema_res.schema_digests:
-                    client.push_schema(schema)
+                    schemaVal = CR.schema(schema)
+                    if not schemaVal:
+                        raise KeyError(f'no schema with hash: {schema} exists')
+                    client.push_schema(schema, schemaVal)
+
                 mis_hashes_sch = client.push_find_missing_hash_records(commit)
                 missing_schema_hashs = defaultdict(list)
                 for hsh, schema in mis_hashes_sch.items():
@@ -407,10 +435,22 @@ class Repository(object):
                 m_labels.update(missing_labels)
 
             for label in m_labels:
-                client.push_label(label)
+                labelVal = CR.label(label)
+                if not labelVal:
+                    raise KeyError(f'no label with hash: {label} exists')
+                client.push_label(label, labelVal)
+
             for commit in m_commits:
-                client.push_commit_record(commit)
-            client.push_branch_record(branch_name)
+                cmtContent = CR.commit(commit)
+                if not cmtContent:
+                    raise KeyError(f'no commit with hash: {commit} exists')
+                client.push_commit_record(commit=cmtContent.commit,
+                                          parentVal=cmtContent.cmtParentVal,
+                                          specVal=cmtContent.cmtSpecVal,
+                                          refVal=cmtContent.cmtRefVal)
+
+            branchHead = heads.get_branch_head_commit(self._env.branchenv, branch_name)
+            client.push_branch_record(branch_name, branchHead)
             return True
 
     def _ping_server(self, remote_name: str, *, username: str = '', password: str = '') -> str:
@@ -502,6 +542,18 @@ class Repository(object):
             raise ValueError(err)
 
         return rm_address
+
+    def list_remote_names(self):
+        '''List names of all remotes recorded in the repo
+
+        Returns
+        -------
+        list
+            list of str containing all remotes listed in the repo.
+        '''
+        self.__verify_repo_initialized()
+        remotes = heads.get_remote_names(self._env.branchenv)
+        return remotes
 
     def init(self, user_name, user_email, remove_old=False):
         '''Initialize a Hangar repositor at the specified directory path.
