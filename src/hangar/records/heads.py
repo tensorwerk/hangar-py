@@ -166,8 +166,6 @@ Methods to interact with the branch head records
 ------------------------------------------------
 
 .. todo::
-   Some of the methods should aquire the writer lock.
-.. todo::
    Need a delete branch operation.
 '''
 
@@ -388,7 +386,7 @@ def get_branch_names(branchenv):
     list of str
         list of branch names active in the repository.
     '''
-    branchStartKey = parsing.BRCH.encode()  # TODO: This is odd, why??
+    branchStartKey = parsing.c.K_BRANCH.encode()  # TODO: This is odd, why??
     branchNames = []
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
@@ -516,7 +514,7 @@ def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
 
     Raises
     ------
-    KeyError
+    ValueError
         if a remote with the provided name does not exist
 
     Returns
@@ -533,7 +531,7 @@ def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
 
     if dbVal is None:
         msg = f'No remote with the name: {name} exists in the repo.'
-        raise KeyError(msg)
+        raise ValueError(msg)
 
     remote_address = parsing.remote_raw_val_from_db_val(dbVal)
     return remote_address

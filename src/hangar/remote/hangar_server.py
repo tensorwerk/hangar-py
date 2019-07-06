@@ -13,21 +13,23 @@ import lmdb
 import msgpack
 import numpy as np
 
+from . import config
 from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
-from .request_header_validator_interceptor import RequestHeaderValidatorInterceptor
-from .. import config
-from ..context import Environments
-from ..context import TxnRegister
+from . import request_header_validator_interceptor
+from .. import constants as c
+from ..context import Environments, TxnRegister
+from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
 from ..records import heads
 from ..records import parsing
 from ..records import queries
 from ..records import summarize
+from ..utils import set_blosc_nthreads
 
-blosc.set_nthreads(blosc.detect_number_of_cores() - 2)
+set_blosc_nthreads()
 
 
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
@@ -43,26 +45,42 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         except OSError:
             pass
 
-        src_path = pjoin(os.path.dirname(__file__), 'config_server.yml')
+        self._rFs = {}
+        for backend, accessor in BACKEND_ACCESSOR_MAP.items():
+            if accessor is not None:
+                self._rFs[backend] = accessor(
+                    repo_path=self.env.repo_path,
+                    schema_shape=None,
+                    schema_dtype=None)
+                self._rFs[backend].open('r')
+
+        src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
         config.ensure_file(src_path, destination=repo_path, comment=False)
         config.refresh(paths=[repo_path])
 
         self.txnregister = TxnRegister()
         self.repo_path = self.env.repo_path
-        self.data_dir = pjoin(self.repo_path, config.get('hangar.repository.data_dir'))
+        self.data_dir = pjoin(self.repo_path, c.DIR_DATA)
 
     # -------------------- Client Config --------------------------------------
 
-    def GetClientConfig(self, request, context):
+    def PING(self, request, context):
+        '''Test function. PING -> PONG!
+        '''
+        reply = hangar_service_pb2.PingReply(result='PONG')
+        return reply
 
-        push_max_stream_nbytes = str(config.get('remote.client.app.push_max_stream_nbytes'))
-        enable_compression = config.get('remote.client.options.enable_compression')
+    def GetClientConfig(self, request, context):
+        '''Return parameters to the client to set up channel options as desired by the server.
+        '''
+        push_max_nbytes = str(config.get('client.grpc.push_max_nbytes'))
+        enable_compression = config.get('client.grpc.enable_compression')
         enable_compression = str(1) if enable_compression is True else str(0)
-        optimization_target = config.get('remote.client.options.optimization_target')
+        optimization_target = config.get('client.grpc.optimization_target')
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.GetClientConfigReply(error=err)
-        reply.config['push_max_stream_nbytes'] = push_max_stream_nbytes
+        reply.config['push_max_nbytes'] = push_max_nbytes
         reply.config['enable_compression'] = enable_compression
         reply.config['optimization_target'] = optimization_target
         return reply
@@ -70,6 +88,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # -------------------- Branch Record --------------------------------------
 
     def FetchBranchRecord(self, request, context):
+        '''Return the current HEAD commit of a particular branch
+        '''
         branch_name = request.rec.name
         try:
             head = heads.get_branch_head_commit(self.env.branchenv, branch_name)
@@ -82,6 +102,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushBranchRecord(self, request, context):
+        '''Update the HEAD commit of a branch, creating the record if not previously existing.
+        '''
         branch_name = request.rec.name
         commit = request.rec.commit
         branch_names = heads.get_branch_names(self.env.branchenv)
@@ -102,6 +124,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # -------------------------- Commit Record --------------------------------
 
     def FetchCommit(self, request, context):
+        '''Return raw data representing contents, spec, and parents of a commit hash.
+        '''
         commit = request.commit
         commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit)
         commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit)
@@ -126,15 +150,17 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             commit_proto = hangar_service_pb2.CommitRecord()
             commit_proto.parent = commitParentVal
             commit_proto.spec = commitSpecVal
-            reply = hangar_service_pb2.FetchCommitReply(
-                commit=commit,
-                total_byte_size=bsize)
+            reply = hangar_service_pb2.FetchCommitReply(commit=commit, total_byte_size=bsize)
             for chunk in raw_data_chunks:
                 commit_proto.ref = chunk
                 reply.record.CopyFrom(commit_proto)
                 yield reply
 
     def PushCommit(self, request_iterator, context):
+        '''Record the contents of a new commit sent to the server.
+
+        Will not overwrite data if a commit hash is already recorded on the server.
+        '''
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -156,16 +182,20 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         finally:
             self.txnregister.commit_writer_txn(self.env.refenv)
 
-        if cmtParExists is False:
+        if not all([cmtParExists, cmtRefExists, cmtSpcExists]):
             err = hangar_service_pb2.ErrorProto(code=1, message='COMMIT EXISTS')
         else:
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
+            commiting.move_process_data_to_store(self.env.repo_path, remote_operation=True)
+
         reply = hangar_service_pb2.PushCommitReply(error=err)
         return reply
 
     # --------------------- Schema Record -------------------------------------
 
     def FetchSchema(self, request, context):
+        '''Return the raw byte specification of a particular schema with requested hash.
+        '''
         schema_hash = request.rec.digest
         schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
         hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
@@ -186,6 +216,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushSchema(self, request, context):
+        '''Add a new schema byte specification record.
+
+        Will not overwrite a schema hash which already exists on the server.
+        '''
         schema_hash = request.rec.digest
         schema_val = request.rec.blob
 
@@ -208,6 +242,12 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # ---------------------------- Data ---------------------------------------
 
     def FetchData(self, request_iterator, context):
+        '''Return a packed byte representation of samples corresponding to a digest.
+
+        Please see comments below which explain why not all requests are
+        guarrenteed to fully complete in one operation.
+        '''
+
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 uncomp_nbytes = request.uncomp_nbytes
@@ -219,51 +259,63 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
         uncompBytes = blosc.decompress(dBytes)
         if uncomp_nbytes != len(uncompBytes):
-            msg = f'ERROR: uncomp_nbytes sent: {uncomp_nbytes} != recieved {comp_nbytes}'
+            msg = f'Expected nbytes data sent: {uncomp_nbytes} != recieved {comp_nbytes}'
+            context.set_details(msg)
+            context.set_code(grpc.StatusCode.DATA_LOSS)
             err = hangar_service_pb2.ErrorProto(code=1, message=msg)
             reply = hangar_service_pb2.FetchDataReply(error=err)
             yield reply
             raise StopIteration()
 
         buff = io.BytesIO(uncompBytes)
-        unpacker = msgpack.Unpacker(buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
+        unpacker = msgpack.Unpacker(
+            buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
+
+        # We recieve a list of digests to send to the client. One consideration
+        # we have is that there is no way to know how much memory will be used
+        # when the data is read from disk. Samples are compressed against
+        # eachother before going over the wire, which means its preferable to
+        # read in as much as possible. However, since we don't want to overload
+        # the client system when the binary blob is decompressed into individual
+        # tensors, we set some maximum size which tensors can occupy when
+        # uncompressed. When we recieve a list of digests whose data size is in
+        # excess of this limit, we just say sorry to the client, send the chunk
+        # of digests/tensors off to them as is (incomplete), and request that
+        # the client figure out what it still needs and ask us again.
 
         totalSize = 0
         buf = io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
         hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
-        fetch_max_stream_nbytes = config.get('remote.server.app.fetch_max_stream_nbytes')
+        fetch_max_nbytes = config.get('server.grpc.fetch_max_nbytes')
         try:
             for digest in unpacker:
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
                 hashVal = hashTxn.get(hashKey, default=False)
                 if hashVal is False:
                     msg = f'HASH DOES NOT EXIST: {hashKey}'
+                    context.set_details(msg)
+                    context.set_code(grpc.StatusCode.NOT_FOUND)
                     err = hangar_service_pb2.ErrorProto(code=1, message=msg)
                     reply = hangar_service_pb2.FetchDataReply(error=err)
                     yield reply
                     raise StopIteration()
                 else:
-                    schema_hash, fname = hashVal.decode().split(' ', 1)
-                    tensor = np.load(fname)
+                    spec = backend_decoder(hashVal)
+                    tensor = self._rFs[spec.backend].read_data(spec)
 
-                p = packer.pack((
-                    digest,
-                    schema_hash,
-                    tensor.shape,
-                    tensor.dtype.num,
-                    tensor.tobytes()))
+                p = packer.pack(
+                    (digest, tensor.shape, tensor.dtype.num, tensor.tobytes()))
                 buf.seek(totalSize)
                 buf.write(p)
                 totalSize += len(p)
 
-                # only send a group of tensors <= Max Size so that the server does not
-                # run out of RAM for large repos
-                if totalSize >= fetch_max_stream_nbytes:
+                if totalSize >= fetch_max_nbytes:
                     err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                     cIter = chunks.tensorChunkedIterator(
-                        io_buffer=buf,
+                        buf=buf,
                         uncomp_nbytes=totalSize,
+                        itemsize=tensor.itemsize,
                         pb2_request=hangar_service_pb2.FetchDataReply,
                         err=err)
                     yield from cIter
@@ -284,8 +336,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             if totalSize > 0:
                 err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                 cIter = chunks.tensorChunkedIterator(
-                    io_buffer=buf,
+                    buf=buf,
                     uncomp_nbytes=totalSize,
+                    itemsize=tensor.itemsize,
                     pb2_request=hangar_service_pb2.FetchDataReply,
                     err=err)
                 yield from cIter
@@ -293,6 +346,13 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             self.txnregister.abort_reader_txn(self.env.hashenv)
 
     def PushData(self, request_iterator, context):
+        '''Recieve compressed streams of binary data from the client.
+
+        In order to prevent errors or malicious behavior, the cryptographic hash
+        of every tensor is calculated and compared to what the client "said" it
+        is. If an error is detected, no sample in the entire stream will be
+        saved to disk.
+        '''
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 uncomp_nbytes = request.uncomp_nbytes
@@ -310,44 +370,42 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             return reply
 
         buff = io.BytesIO(uncompBytes)
-        unpacker = msgpack.Unpacker(buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
+        unpacker = msgpack.Unpacker(
+            buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
         hashTxn = self.txnregister.begin_writer_txn(self.env.hashenv)
         try:
-            for data in unpacker:
+            for idx, data in enumerate(unpacker):
                 digest, schema_hash, dShape, dTypeN, dBytes = data
+                if idx == 0:
+                    schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
+                    schemaVal = hashTxn.get(schemaKey)
+                    schema_val = parsing.dataset_record_schema_raw_val_from_db_val(schemaVal)
+
+                    # TODO: The choice of backend here does not need to follow the same heuristics
+                    # as on the client computer. Optomize / extract this logic.
+                    accessor = BACKEND_ACCESSOR_MAP[schema_val.schema_default_backend]
+                    backend = accessor(
+                        repo_path=self.env.repo_path,
+                        schema_shape=schema_val.schema_max_shape,
+                        schema_dtype=np.typeDict[int(schema_val.schema_dtype)])
+                    backend.open(mode='a', remote_operation=True)
+
                 tensor = np.frombuffer(dBytes, dtype=np.typeDict[dTypeN]).reshape(dShape)
                 recieved_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
                 if recieved_hash != digest:
-                    msg = f'HASH MANGLED, recieved: {recieved_hash} != digest: {digest}'
+                    msg = f'HASH MANGLED, recieved: {recieved_hash} != expected digest: {digest}'
+                    context.set_details(msg)
+                    context.set_code(grpc.StatusCode.DATA_LOSS)
                     err = hangar_service_pb2.ErrorProto(code=1, message=msg)
                     reply = hangar_service_pb2.PushDataReply(error=err)
                     return reply
 
+                hashVal = backend.write_data(tensor, remote_operation=True)
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
-                hashdir = os.path.join(self.data_dir, digest[:2])
-                fname = os.path.join(hashdir, f'{digest}.npz')
-                hashVal = f'{schema_hash} {fname}'.encode()
-                if not os.path.isdir(hashdir):
-                    os.makedirs(hashdir)
-
-                noPreviousHash = hashTxn.put(hashKey, hashVal, overwrite=False)
-                if noPreviousHash:
-                    try:
-                        with open(fname, 'xb') as fh:
-                            np.save(fh, tensor)
-                    except FileExistsError:
-                        hashTxn.delete(hashKey)
-                        msg = f'DATA FILE EXISTS BUT HASH NOT RECORDED: {hashKey}'
-                        err = hangar_service_pb2.ErrorProto(code=1, message=msg)
-                        reply = hangar_service_pb2.PushDataReply(error=err)
-                        return reply
-                else:
-                    msg = f'HASH EXISTS: {hashKey}'
-                    err = hangar_service_pb2.ErrorProto(code=1, message=msg)
-                    reply = hangar_service_pb2.PushDataReply(error=err)
-                    return reply
+                hashTxn.put(hashKey, hashVal)
         finally:
             self.txnregister.commit_writer_txn(self.env.hashenv)
+            backend.close()
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
@@ -356,6 +414,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # ----------------------------- Label Data --------------------------------
 
     def FetchLabel(self, request, context):
+        '''Retrieve the metadata value corresponding to some particular hash digests
+        '''
         digest = request.rec.digest
         digest_type = request.rec.type
         rec = hangar_service_pb2.HashRecord(digest=digest, type=digest_type)
@@ -379,6 +439,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushLabel(self, request, context):
+        '''Add a metadata key/value pair to the server with a particular digest.
+
+        Like data tensors, the cryptographic hash of each value is verified
+        before the data is actually placed on the server file system.
+        '''
         digest = request.rec.digest
 
         uncompBlob = blosc.decompress(request.blob)
@@ -410,6 +475,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # ------------------------ Fetch Find Missing -----------------------------------
 
     def FetchFindMissingCommits(self, request, context):
+        '''Determine commit digests existing on the server which are not present on the client.
+        '''
         c_branch_name = request.branch.name
         c_ordered_commits = request.commits
 
@@ -438,6 +505,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushFindMissingCommits(self, request, context):
+        '''Determine commit digests existing on the client which are not present on the server.
+        '''
         c_branch_name = request.branch.name
         c_head_commit = request.branch.commit
         c_ordered_commits = request.commits
@@ -459,6 +528,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def FetchFindMissingHashRecords(self, request_iterator, context):
+        '''Determine data tensor hash records existing on the server and not on the client.
+        '''
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -466,24 +537,28 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             size = len(request.hashs)
             hBytes[offset: offset + size] = request.hashs
             offset += size
+
         uncompBytes = blosc.decompress(hBytes)
         c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=False))
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
-            s_hashes = set(queries.RecordQuery(tmpDB).data_hashes())
+            s_hashes_schemas = queries.RecordQuery(tmpDB).data_hash_to_schema_hash()
+            s_hashes = set(s_hashes_schemas.keys())
             tmpDB.close()
 
         c_missing = list(s_hashes.difference(c_hashset))
+        c_hash_schemas = [(c_mis, s_hashes_schemas[c_mis]) for c_mis in c_missing]
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         response_pb = hangar_service_pb2.FindMissingHashRecordsReply
-        cIter = chunks.missingHashIterator(commit, c_missing, err, response_pb)
+        cIter = chunks.missingHashIterator(commit, c_hash_schemas, err, response_pb)
         yield from cIter
 
     def PushFindMissingHashRecords(self, request_iterator, context):
+        '''Determine data tensor hash records existing on the client and not on the server.
+        '''
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -491,11 +566,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             size = len(request.hashs)
             hBytes[offset: offset + size] = request.hashs
             offset += size
+
         uncompBytes = blosc.decompress(hBytes)
         c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=False))
-
         s_hashset = set(hashs.HashQuery(self.env.hashenv).list_all_hash_keys_raw())
-
         s_missing = list(c_hashset.difference(s_hashset))
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         response_pb = hangar_service_pb2.FindMissingHashRecordsReply
@@ -503,6 +577,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         yield from cIter
 
     def FetchFindMissingLabels(self, request_iterator, context):
+        '''Determine metadata hash digest records existing on the server and not on the client.
+        '''
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -513,10 +589,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         uncompBytes = blosc.decompress(hBytes)
         c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=False))
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             s_hashes = set(queries.RecordQuery(tmpDB).metadata_hashes())
             tmpDB.close()
@@ -528,6 +603,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         yield from cIter
 
     def PushFindMissingLabels(self, request_iterator, context):
+        '''Determine metadata hash digest records existing on the client and not on the server.
+        '''
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -548,13 +625,14 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         yield from cIter
 
     def FetchFindMissingSchemas(self, request, context):
+        '''Determine schema hash digest records existing on the server and not on the client.
+        '''
         commit = request.commit
         c_schemas = set(request.schema_digests)
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
             s_schemas = set(queries.RecordQuery(tmpDB).schema_hashes())
             tmpDB.close()
@@ -566,9 +644,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushFindMissingSchemas(self, request, context):
+        '''Determine schema hash digest records existing on the client and not on the server.
+        '''
         commit = request.commit
         c_schemas = set(request.schema_digests)
-
         s_schemas = set(hashs.HashQuery(self.env.hashenv).list_all_schema_keys_raw())
         s_missing = list(c_schemas.difference(s_schemas))
 
@@ -578,7 +657,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
 
-def serve(hangar_path, overwrite=False):
+def serve(hangar_path: os.PathLike, overwrite: bool = False,
+          *, channel_address: str = None) -> tuple:
     '''Start serving the GRPC server. Should only be called once.
 
     Raises:
@@ -588,22 +668,23 @@ def serve(hangar_path, overwrite=False):
     # ------------------- Configure Server ------------------------------------
 
     src_path = pjoin(os.path.dirname(__file__), 'config_server.yml')
-    dest_path = pjoin(hangar_path, config.get('hangar.repository.hangar_server_dir_name'))
+    dest_path = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
     config.ensure_file(src_path, destination=dest_path, comment=False)
     config.refresh(paths=[dest_path])
 
-    enable_compression = config.get('remote.server.grpc.options.enable_compression')
-    optimization_target = config.get('remote.server.grpc.options.optimization_target')
-    channel_address = config.get('remote.server.grpc.channel_address')
-    max_thread_pool_workers = config.get('remote.server.grpc.max_thread_pool_workers')
-    max_concurrent_rpcs = config.get('remote.server.grpc.max_concurrent_rpcs')
+    enable_compression = config.get('server.grpc.enable_compression')
+    optimization_target = config.get('server.grpc.optimization_target')
+    if channel_address is None:
+        channel_address = config.get('server.grpc.channel_address')
+    max_thread_pool_workers = config.get('server.grpc.max_thread_pool_workers')
+    max_concurrent_rpcs = config.get('server.grpc.max_concurrent_rpcs')
 
-    admin_restrict_push = config.get('remote.server.admin.restrict_push')
-    admin_username = config.get('remote.server.admin.username')
-    admin_password = config.get('remote.server.admin.password')
+    admin_restrict_push = config.get('server.admin.restrict_push')
+    admin_username = config.get('server.admin.username')
+    admin_password = config.get('server.admin.password')
     msg = 'PERMISSION ERROR: PUSH OPERATIONS RESTRICTED FOR CALLER'
     code = grpc.StatusCode.PERMISSION_DENIED
-    interc = RequestHeaderValidatorInterceptor(
+    interc = request_header_validator_interceptor.RequestHeaderValidatorInterceptor(
         admin_restrict_push, admin_username, admin_password, code, msg)
 
     # ---------------- Start the thread pool for the grpc server --------------
@@ -623,15 +704,7 @@ def serve(hangar_path, overwrite=False):
     hangserv = HangarServer(dest_path, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
     server.add_insecure_port(channel_address)
-    server.start()
-
-    print('started')
-    try:
-        while True:
-            time.sleep(0.1)
-    except (KeyboardInterrupt, SystemExit):
-        print('stopped')
-        server.stop(0)
+    return (server, hangserv, channel_address)
 
 
 if __name__ == '__main__':

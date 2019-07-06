@@ -26,7 +26,6 @@ class TestDataset(object):
         dsetOldPath = dsetOld._path
         dsetOldDsetn = dsetOld._dsetn
         dsetOldDefaultSchemaHash = dsetOld._default_schema_hash
-        dsetOldSchemaUUID = dsetOld._schema_uuid
 
         dsetOld.add(array5by7, '1')
         co.commit('this is a commit message')
@@ -40,15 +39,15 @@ class TestDataset(object):
         assert dsetOldPath == dsetNew._path
         assert dsetOldDsetn == dsetNew._dsetn
         assert dsetOldDefaultSchemaHash == dsetNew._default_schema_hash
-        assert dsetOldSchemaUUID == dsetNew._schema_uuid
 
-    def test_remove_dataset(self, written_repo):
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_remove_dataset(self, dset_backend, written_repo):
         co = written_repo.checkout(write=True)
         co.datasets.remove_dset('_dset')
         with pytest.raises(KeyError):
             co.datasets.remove_dset('_dset')
 
-        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
+        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64, backend=dset_backend)
         assert len(co.datasets) == 1
         co.datasets.remove_dset('_dset')
         co.commit('this is a commit message')
@@ -57,7 +56,7 @@ class TestDataset(object):
         co = written_repo.checkout(write=True)
         assert len(co.datasets) == 0
 
-        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
+        co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64, backend=dset_backend)
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout(write=True)
@@ -67,31 +66,34 @@ class TestDataset(object):
         co.commit('this is a commit message')
         co.close()
 
-    def test_init_again(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_init_again(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        co.datasets.init_dataset('dset', prototype=randomsizedarray)
+        co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         with pytest.raises(LookupError):
-            co.datasets.init_dataset('dset', prototype=randomsizedarray)
+            co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         co.close()
 
-    def test_dataset_with_more_dimension(self, repo):
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_dataset_with_more_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
         with pytest.raises(ValueError):
-            co.datasets.init_dataset('dset', shape=shape, dtype=np.int)
+            co.datasets.init_dataset('dset', shape=shape, dtype=np.int, backend=dset_backend)
         shape = [1] * 31
-        dset = co.datasets.init_dataset('dset1', shape=shape, dtype=np.int)
+        dset = co.datasets.init_dataset('dset1', shape=shape, dtype=np.int, backend=dset_backend)
         assert len(dset._schema_max_shape) == 31
         shape = [1] * 32
         with pytest.raises(ValueError):
             # maximum tensor rank must be <= 31
-            co.datasets.init_dataset('dset2', shape=shape, dtype=np.int)
+            co.datasets.init_dataset('dset2', shape=shape, dtype=np.int, backend=dset_backend)
         co.close()
 
-    def test_dataset_with_empty_dimension(self, repo):
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_dataset_with_empty_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.array(1, dtype=np.int64)
-        dset = co.datasets.init_dataset('dset1', shape=(), dtype=np.int64)
+        dset = co.datasets.init_dataset('dset1', shape=(), dtype=np.int64, backend=dset_backend)
         dset['1'] = arr
         co.commit('this is a commit message')
         dset = co.datasets.init_dataset('dset2', prototype=arr)
@@ -105,30 +107,53 @@ class TestDataset(object):
         assert np.allclose(dset2['1'], arr)
 
 
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_dataset_with_int_specifier_as_dimension(self, dset_backend, repo):
+        co = repo.checkout(write=True)
+        arr = np.arange(10, dtype=np.int64)
+        dset = co.datasets.init_dataset('dset1', shape=10, dtype=np.int64, backend=dset_backend)
+        dset['1'] = arr
+        co.commit('this is a commit message')
+        arr2 = np.array(53, dtype=np.int64)
+        dset = co.datasets.init_dataset('dset2', prototype=arr2)
+        dset['1'] = arr2
+        co.commit('this is a commit message')
+        co.close()
+        co = repo.checkout()
+        dset1 = co.datasets['dset1']
+        dset2 = co.datasets['dset2']
+        assert np.allclose(dset1['1'], arr)
+        assert np.allclose(dset2['1'], arr2)
+
+
 class TestDataWithFixedSizedDataset(object):
 
-    def test_iterating_over(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset3_backend", ['00', '01'])
+    def test_iterating_over(self, dset1_backend, dset2_backend, dset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
-        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
-        dset2 = co.datasets.init_dataset('dset2', shape=(2, 2), dtype=np.int)
-        dset3 = co.datasets.init_dataset('dset3', shape=(3, 4), dtype=np.float32)
+        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray, backend=dset1_backend)
+        dset2 = co.datasets.init_dataset('dset2', shape=(2, 2), dtype=np.int, backend=dset2_backend)
+        dset3 = co.datasets.init_dataset('dset3', shape=(3, 4), dtype=np.float32, backend=dset3_backend)
 
-        with dset1, dset2, dset3:
-            dset1['1'] = randomsizedarray
-            dset1['2'] = np.zeros_like(randomsizedarray)
-            dset1['3'] = np.zeros_like(randomsizedarray) + 5
-            all_tensors.extend([dset1['1'], dset1['2'], dset1['3']])
+        with dset1 as d1, dset2 as d2, dset3 as d3:
+            d1['1'] = randomsizedarray
+            d1['2'] = np.zeros_like(randomsizedarray)
+            d1['3'] = np.zeros_like(randomsizedarray) + 5
 
-            dset2['1'] = np.ones((2, 2), dtype=np.int)
-            dset2['2'] = np.ones((2, 2), dtype=np.int) * 5
-            dset2['3'] = np.zeros((2, 2), dtype=np.int)
-            all_tensors.extend([dset2['1'], dset2['2'], dset2['3']])
+            d2['1'] = np.ones((2, 2), dtype=np.int)
+            d2['2'] = np.ones((2, 2), dtype=np.int) * 5
+            d2['3'] = np.zeros((2, 2), dtype=np.int)
 
-            dset3['1'] = np.ones((3, 4), dtype=np.float32)
-            dset3['2'] = np.ones((3, 4), dtype=np.float32) * 7
-            dset3['3'] = np.zeros((3, 4), dtype=np.float32)
-            all_tensors.extend([dset3['1'], dset3['2'], dset3['3']])
+            d3['1'] = np.ones((3, 4), dtype=np.float32)
+            d3['2'] = np.ones((3, 4), dtype=np.float32) * 7
+            d3['3'] = np.zeros((3, 4), dtype=np.float32)
+
+        all_tensors.extend([dset1['1'], dset1['2'], dset1['3']])
+        all_tensors.extend([dset2['1'], dset2['2'], dset2['3']])
+        all_tensors.extend([dset3['1'], dset3['2'], dset3['3']])
 
         co.commit('this is a commit message')
         co.close()
@@ -152,6 +177,7 @@ class TestDataWithFixedSizedDataset(object):
         for dset in co.datasets.values():
             for sample in dset.values():
                 assert np.allclose(sample, next(tensors_in_the_order))
+        co.close()
 
     def test_get_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
@@ -180,6 +206,7 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(
             co.datasets['_dset']['1'],
             co.datasets['_dset']['2'])
+        co.close()
 
     def test_add_with_wrong_argument_order(self, w_checkout, array5by7):
         dset = w_checkout.datasets['_dset']
@@ -288,11 +315,14 @@ class TestDataWithFixedSizedDataset(object):
         co.close()
         co = written_repo.checkout()
         assert np.allclose(co.datasets['_dset']['1'], array5by7)
+        co.close()
 
-    def test_multiple_datasets_single_commit(self, written_repo, randomsizedarray):
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    def test_multiple_datasets_single_commit(self, dset1_backend, dset2_backend, written_repo, randomsizedarray):
         co = written_repo.checkout(write=True)
-        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
-        dset2 = co.datasets.init_dataset('dset2', prototype=randomsizedarray)
+        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray, backend=dset1_backend)
+        dset2 = co.datasets.init_dataset('dset2', prototype=randomsizedarray, backend=dset2_backend)
         dset1['arr'] = randomsizedarray
         dset2['arr'] = randomsizedarray
         co.commit('this is a commit message')
@@ -302,11 +332,15 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(co.datasets['dset2']['arr'], randomsizedarray)
         co.close()
 
-    def test_prototype_and_shape(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    def test_prototype_and_shape(self, dset1_backend, dset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray)
+        dset1 = co.datasets.init_dataset(
+            'dset1', prototype=randomsizedarray, backend=dset1_backend)
         dset2 = co.datasets.init_dataset(
-            'dset2', shape=randomsizedarray.shape, dtype=randomsizedarray.dtype)
+            'dset2', shape=randomsizedarray.shape, dtype=randomsizedarray.dtype, backend=dset2_backend)
+
         newarray = np.random.random(randomsizedarray.shape).astype(randomsizedarray.dtype)
         dset1['arr1'] = newarray
         dset2['arr'] = newarray
@@ -327,7 +361,7 @@ class TestDataWithFixedSizedDataset(object):
         dset_no_name = co.datasets.init_dataset(
             'dset_no_name',
             prototype=randomsizedarray,
-            samples_are_named=False)
+            named_samples=False)
         dset_no_name.add(randomsizedarray)
         assert np.allclose(next(dset_no_name.values()), randomsizedarray)
         co.close()
@@ -351,9 +385,10 @@ class TestDataWithFixedSizedDataset(object):
             dset['3'] = newarr
         co.close()
 
-    def test_adding_same_data_again_with_same_name(self, repo, array5by7):
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_adding_same_data_again_with_same_name(self, dset_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        dset = co.datasets.init_dataset('dset', prototype=array5by7)
+        dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset_backend)
         dset['1'] = array5by7
         with pytest.raises(LookupError):
             # raises before commit
@@ -369,9 +404,10 @@ class TestDataWithFixedSizedDataset(object):
             # raises in another checkout
             dset['1'] = array5by7
 
-    def test_writer_context_manager_dataset_add_sample(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_writer_context_manager_dataset_add_sample(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray)
+        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         with co.datasets['dset'] as dset:
             dset.add(randomsizedarray, '1')
         co.commit('this is a commit message')
@@ -388,9 +424,10 @@ class TestDataWithFixedSizedDataset(object):
         co = repo.checkout()
         assert co.metadata['key'] == 'val'
 
-    def test_dataset_context_manager_dset_sample_and_metadata_add(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    def test_dataset_context_manager_dset_sample_and_metadata_add(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray)
+        dset = co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         with co.datasets['dset'] as dset:
             dset.add(randomsizedarray, '1')
             co.metadata['hello'] = 'world'
@@ -407,16 +444,20 @@ class TestDataWithFixedSizedDataset(object):
         assert co.metadata['key'] == 'val'
         assert co.metadata.get('hello') == 'world'
 
-    def test_bulk_add(self, repo, randomsizedarray):
+    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    def test_bulk_add(self, dset1_backend, dset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.datasets.init_dataset(
             'dset_no_name1',
             prototype=randomsizedarray,
-            samples_are_named=False)
+            named_samples=False,
+            backend=dset1_backend)
         co.datasets.init_dataset(
             'dset_no_name2',
             prototype=randomsizedarray,
-            samples_are_named=False)
+            named_samples=False,
+            backend=dset2_backend)
         co.commit('this is a commit message')
 
         # dummy additino with wrong key
@@ -444,6 +485,7 @@ class TestDataWithFixedSizedDataset(object):
         data2 = next(co.datasets['dset_no_name2'].values())
         assert np.allclose(data1, randomsizedarray)
         assert np.allclose(data2, randomsizedarray / 255)
+        co.close()
 
     def test_writer_dataset_properties_are_correct(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
@@ -466,6 +508,144 @@ class TestDataWithFixedSizedDataset(object):
         assert d.named_samples is True
         assert d.iswriteable is False
 
-@pytest.mark.skip(reason='not implemented')
+
 class TestVariableSizedDataset(object):
-    pass
+
+    @pytest.mark.parametrize(
+        'test_shapes,shape',
+        [[[(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10)],
+         [[(10,), (1,), (5,)], (10,)],
+         [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]])
+    @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
+    @pytest.mark.parametrize('backend', ['00', '01'])
+    def test_writer_can_create_variable_size_dataset(self, written_repo, dtype, test_shapes, shape, backend):
+        repo = written_repo
+        wco = repo.checkout(write=True)
+        wco.datasets.init_dataset('vardset', shape=shape, dtype=dtype, variable_shape=True, backend=backend)
+        d = wco.datasets['vardset']
+
+        arrdict = {}
+        for idx, shape in enumerate(test_shapes):
+            arr = (np.random.random_sample(shape) * 10).astype(dtype)
+            arrdict[str(idx)] = arr
+            d[str(idx)] = arr
+
+        for k, v in arrdict.items():
+            # make sure they are good before committed
+            assert np.allclose(d[k], v)
+
+        wco.commit('first')
+
+        for k, v in arrdict.items():
+            # make sure they can work after commit
+            assert np.allclose(d[k], v)
+        wco.close()
+
+    @pytest.mark.parametrize('test_shapes,shape', [
+        [[(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10)],
+        [[(10,), (1,), (5,)], (10,)],
+        [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]
+    ])
+    @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
+    @pytest.mark.parametrize('backend', ['00', '01'])
+    def test_reader_recieves_expected_values_for_variable_size_dataset(self, written_repo, dtype, test_shapes, shape, backend):
+        repo = written_repo
+        wco = repo.checkout(write=True)
+        wco.datasets.init_dataset('vardset', shape=shape, dtype=dtype, variable_shape=True, backend=backend)
+        wd = wco.datasets['vardset']
+
+        arrdict = {}
+        for idx, shape in enumerate(test_shapes):
+            arr = (np.random.random_sample(shape) * 10).astype(dtype)
+            arrdict[str(idx)] = arr
+            wd[str(idx)] = arr
+
+        for k, v in arrdict.items():
+            # make sure they are good before committed
+            assert np.allclose(wd[k], v)
+
+        wco.commit('first')
+        rco = repo.checkout()
+        rd = rco.datasets['vardset']
+
+        for k, v in arrdict.items():
+            # make sure they can work after commit
+            assert np.allclose(wd[k], v)
+            assert np.allclose(rd[k], v)
+
+    @pytest.mark.parametrize('dset_specs', [
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '00', np.uint8]
+         ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+         ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+         ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+         ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '00', np.float32]
+         ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+         ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+         ],
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+         ]])
+    def test_writer_reader_can_create_read_multiple_variable_size_dataset(self, written_repo, dset_specs):
+        repo = written_repo
+        wco = repo.checkout(write=True)
+        arrdict = {}
+        for dset_spec in dset_specs:
+            dset_name, test_shapes, max_shape, backend, dtype = dset_spec
+            wco.datasets.init_dataset(dset_name, shape=max_shape, dtype=dtype, variable_shape=True, backend=backend)
+
+            arrdict[dset_name] = {}
+            for idx, shape in enumerate(test_shapes):
+                arr = (np.random.random_sample(shape) * 10).astype(dtype)
+                arrdict[dset_name][str(idx)] = arr
+                wco.datasets[dset_name][str(idx)] = arr
+
+        for dset_k in arrdict.keys():
+            for samp_k, v in arrdict[dset_k].items():
+                # make sure they are good before committed
+                assert np.allclose(wco.datasets[dset_k][samp_k], v)
+
+        wco.commit('first')
+        rco = repo.checkout()
+
+        for dset_k in arrdict.keys():
+            for samp_k, v in arrdict[dset_k].items():
+                # make sure they are good before committed
+                assert np.allclose(wco.datasets[dset_k][samp_k], v)
+                assert np.allclose(rco.datasets[dset_k][samp_k], v)
+        wco.close()
+        rco.close()
+
+    def test_writer_dataset_properties_are_correct(self, variable_shape_written_repo):
+        co = variable_shape_written_repo.checkout(write=True)
+        d = co.datasets['_dset']
+        assert d.name == '_dset'
+        assert d.dtype == np.float64
+        assert np.allclose(d.shape, (10, 10))
+        assert d.variable_shape is True
+        assert d.named_samples is True
+        assert d.iswriteable is True
+        co.close()
+
+    def test_reader_dataset_properties_are_correct(self, variable_shape_written_repo):
+        co = variable_shape_written_repo.checkout(write=False)
+        d = co.datasets['_dset']
+        assert d.name == '_dset'
+        assert d.dtype == np.float64
+        assert np.allclose(d.shape, (10, 10))
+        assert d.variable_shape is True
+        assert d.named_samples is True
+        assert d.iswriteable is False
+        co.close()

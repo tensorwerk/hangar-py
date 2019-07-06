@@ -2,7 +2,6 @@ import logging
 
 import lmdb
 
-from .context import TxnRegister
 from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
 from .records import commiting, hashs, heads, parsing
 
@@ -176,7 +175,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
             branchenv=branchenv, branch_name=master_branch, commit_hash=new_masterHEAD)
         heads.set_staging_branch_head(branchenv=branchenv, branch_name=master_branch)
 
-        hashs.remove_unused_dataset_hdf5(repo_path=repo_path, stagehashenv=stagehashenv)
+        hashs.delete_in_process_data(repo_path=repo_path)
         hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
 
     except ValueError as e:
@@ -241,7 +240,7 @@ def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
         raise e from None
 
     fmtCont = _merge_dict_to_lmdb_tuples(patchedRecs=mergeContents)
-    hashs.remove_unused_dataset_hdf5(repo_path=repo_path, stagehashenv=stagehashenv)
+    hashs.delete_in_process_data(repo_path=repo_path)
     commiting.replace_staging_area_with_refs(stageenv=stageenv, sorted_content=fmtCont)
 
     commit_hash = commiting.commit_records(
@@ -406,12 +405,12 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
         schemaSpec = patchedRecs['datasets'][dsetn]['schema']
         schemaKey = parsing.dataset_record_schema_db_key_from_raw_key(dsetn)
         schemaVal = parsing.dataset_record_schema_db_val_from_raw_val(
-            schema_uuid=schemaSpec.schema_uuid,
             schema_hash=schemaSpec.schema_hash,
             schema_is_var=schemaSpec.schema_is_var,
             schema_max_shape=schemaSpec.schema_max_shape,
             schema_dtype=schemaSpec.schema_dtype,
-            schema_is_named=schemaSpec.schema_is_named)
+            schema_is_named=schemaSpec.schema_is_named,
+            schema_default_backend=schemaSpec.schema_default_backend)
         entries.append((schemaKey, schemaVal))
 
         dataRecs = patchedRecs['datasets'][dsetn]['data']

@@ -1,11 +1,41 @@
+import logging
 import os
+import random
+import re
+import string
 import weakref
-from functools import partial
 from contextlib import contextmanager
 from datetime import timedelta
+from functools import partial
 from numbers import Number
 
+import blosc
 import wrapt
+
+logger = logging.getLogger(__name__)
+
+
+def set_blosc_nthreads() -> int:
+    '''set the blosc library to two less than the core count on the system.
+
+    If less than 2 cores are ncores-2, we set the value to two.
+
+    Returns
+    -------
+    int
+        ncores blosc will use on the system
+    '''
+    nCores = blosc.detect_number_of_cores()
+    nUsed = 2 if nCores < 4 else nCores - 2
+    blosc.set_nthreads(nUsed)
+    return nUsed
+
+
+def random_string(stringLength=6):
+    '''Generate a random string of fixed length
+    '''
+    letters = ''.join([string.ascii_letters, string.digits])
+    return ''.join(random.choice(letters) for i in range(stringLength))
 
 
 def cm_weakref_obj_proxy(obj):
@@ -36,8 +66,25 @@ def cm_weakref_obj_proxy(obj):
     return obj_proxy
 
 
-def is_ascii_alnum(str_data: str):
-    '''Checks if string contains only alpha-numeric ascii chars (no whitespace)
+def symlink_rel(src: os.PathLike, dst: os.PathLike):
+    '''Create symbolic links which actually work like they should
+
+    Parameters
+    ----------
+    src : os.PathLike
+        create a symbolic link pointic to src
+    dst : os.PathLike
+        create a link named dst
+    '''
+    rel_path_src = os.path.relpath(src, os.path.dirname(dst))
+    os.symlink(rel_path_src, dst)
+
+
+SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)
+
+
+def is_suitable_user_key(str_data: str) -> bool:
+    '''Checks if string contains only alpha-numeric ascii chars or ['.', '-' '_'] (no whitespace)
 
     Necessary because python 3.6 does not have a str.isascii() method.
 
@@ -52,10 +99,8 @@ def is_ascii_alnum(str_data: str):
         True if only ascii characters in the string, else False.
     '''
     try:
-        str_data.encode('ascii')
-        asciiStrIsAlnum = False if any(c.isspace() for c in str_data) else True
-        return asciiStrIsAlnum
-    except UnicodeEncodeError:
+        return bool(SuitableCharRE.match(str_data))
+    except TypeError:
         return False
 
 
@@ -257,27 +302,6 @@ def ignoring(*exceptions):
         yield
     except exceptions as e:
         pass
-
-
-def asciitable(columns, rows):
-    """Formats an ascii table for given columns and rows.
-    Parameters
-    ----------
-    columns : list
-        The column names
-    rows : list of tuples
-        The rows in the table. Each tuple must be the same length as
-        ``columns``.
-    """
-    rows = [tuple(str(i) for i in r) for r in rows]
-    columns = tuple(str(i) for i in columns)
-    widths = tuple(max(max(map(len, x)), len(c))
-                   for x, c in zip(zip(*rows), columns))
-    row_template = ('|' + (' %%-%ds |' * len(columns))) % widths
-    header = row_template % tuple(columns)
-    bar = '+%s+' % '+'.join('-' * (w + 2) for w in widths)
-    data = '\n'.join(row_template % r for r in rows)
-    return '\n'.join([bar, header, bar, data, bar])
 
 
 def format_bytes(n):

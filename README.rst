@@ -11,7 +11,7 @@ Overview
       - |docs|
     * - tests
       - | |travis| |appveyor|
-        |
+        | |codecov|
     * - package
       - | |version| |wheel| |supported-versions| |supported-implementations|
         | |commits-since|
@@ -26,6 +26,10 @@ Overview
 .. |appveyor| image:: https://ci.appveyor.com/api/projects/status/github/tensorwerk/hangar-py?branch=master&svg=true
     :alt: AppVeyor Build Status
     :target: https://ci.appveyor.com/project/rlizzo/hangar-py
+
+.. |codecov| image:: https://codecov.io/gh/tensorwerk/hangar-py/branch/master/graph/badge.svg
+   :alt: Code Coverage
+   :target: https://codecov.io/gh/tensorwerk/hangar-py
 
 .. |version| image:: https://img.shields.io/pypi/v/hangar.svg
     :alt: PyPI Package latest release

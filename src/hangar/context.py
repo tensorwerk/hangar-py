@@ -5,14 +5,12 @@ import platform
 import tempfile
 from typing import MutableMapping
 from collections import Counter
-from os.path import dirname
 from os.path import join as pjoin
 
 import lmdb
 import yaml
 
-from . import config
-from .diagnostics.ecosystem import get_versions
+from . import constants as c
 
 logger = logging.getLogger(__name__)
 
@@ -174,16 +172,7 @@ if they aren't right now, we get circular imports...
 from .records import commiting, heads
 
 
-class EnvironmentsSingleton(type):
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        repo_path = kwargs['repo_path']
-        if repo_path not in cls._instances:
-            cls._instances[repo_path] = super(EnvironmentsSingleton, cls).__call__(*args, **kwargs)
-        return cls._instances[repo_path]
-
-
-class Environments(metaclass=EnvironmentsSingleton):
+class Environments(object):
 
     def __init__(self, repo_path: str):
 
@@ -229,7 +218,6 @@ class Environments(metaclass=EnvironmentsSingleton):
             logger.warning(msg)
             return False
 
-        config.refresh(paths=[self.repo_path])
         self._open_environments()
         return True
 
@@ -263,28 +251,15 @@ class Environments(metaclass=EnvironmentsSingleton):
             else:
                 raise OSError(f'invariant dir: {self.repo_path} already exists')
 
-        os.makedirs(pjoin(self.repo_path, config.get('hangar.repository.store_data_dir')))
-        os.makedirs(pjoin(self.repo_path, config.get('hangar.repository.stage_data_dir')))
-        os.makedirs(pjoin(self.repo_path, config.get('hangar.repository.remote_data_dir')))
-        os.makedirs(pjoin(self.repo_path, config.get('hangar.repository.data_dir')))
+        os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STORE))
+        os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STAGE))
+        os.makedirs(pjoin(self.repo_path, c.DIR_DATA_REMOTE))
+        os.makedirs(pjoin(self.repo_path, c.DIR_DATA))
         logger.info(f'Hangar Repo initialized at: {self.repo_path}')
 
-        config.ensure_file(
-            source=pjoin(dirname(__file__), 'config_hangar.yml'), destination=self.repo_path)
-        config.ensure_file(
-            source=pjoin(dirname(__file__), 'config_user.yml'), destination=self.repo_path)
-
-        with open(pjoin(self.repo_path, 'config_user.yml')) as f:
-            userConf = yaml.safe_load(f)
-
-        userConf['user']['name'] = user_name
-        userConf['user']['email'] = user_email
-
-        with open(os.path.join(self.repo_path, 'config_user.yml'), 'w') as f:
+        userConf = {'name': user_name, 'email': user_email}
+        with open(os.path.join(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
             yaml.safe_dump(userConf, f, default_flow_style=False)
-
-        config.refresh(paths=[self.repo_path])
-        logger.debug(f'{get_versions()}')
 
         self._open_environments()
         heads.create_branch(self.branchenv, 'master', '')
@@ -327,19 +302,18 @@ class Environments(metaclass=EnvironmentsSingleton):
         # is interacting with it. While the CM form is cleaner, this hack allows
         # similar usage on Windows platforms.
 
-        LMDB_CONFIG = config.get('hangar.lmdb')
         if platform.system() != 'Windows':
             with tempfile.TemporaryDirectory() as tempD:
                 tmpDF = os.path.join(tempD, f'{commit_hash}.lmdb')
                 logger.debug(f'checkout creating temp in CM: {tmpDF}')
-                tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+                tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
                 commiting.unpack_commit_ref(self.refenv, tmpDB, commit_hash)
                 self.cmtenv[commit_hash] = tmpDB
         else:
             tempD = tempfile.mkdtemp()
             tmpDF = os.path.join(tempD, f'{commit_hash}.lmdb')
             logger.debug(f'checkout creating temp: {tmpDF}')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_CONFIG)
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.refenv, tmpDB, commit_hash)
             self.cmtenv[commit_hash] = tmpDB
 
@@ -350,21 +324,12 @@ class Environments(metaclass=EnvironmentsSingleton):
 
         If any commits are checked out (in an unpacked state), read those in as well.
         '''
-        LMDB_CONFIG = config.get('hangar.lmdb')
-
-        BRANCH_DB_PTH = config.get('hangar.repository.branch_db_pth')
-        HASH_DB_PTH = config.get('hangar.repository.hash_db_pth')
-        LABEL_DB_PTH = config.get('hangar.repository.label_db_pth')
-        REF_DB_PTH = config.get('hangar.repository.ref_db_pth')
-        STAGE_DB_PTH = config.get('hangar.repository.stage_db_pth')
-        STAGE_HASH_DB_PTH = config.get('hangar.repository.stage_hash_db_pth')
-
-        self.refenv = lmdb.open(path=pjoin(self.repo_path, REF_DB_PTH), **LMDB_CONFIG)
-        self.hashenv = lmdb.open(path=pjoin(self.repo_path, HASH_DB_PTH), **LMDB_CONFIG)
-        self.stageenv = lmdb.open(path=pjoin(self.repo_path, STAGE_DB_PTH), **LMDB_CONFIG)
-        self.branchenv = lmdb.open(path=pjoin(self.repo_path, BRANCH_DB_PTH), **LMDB_CONFIG)
-        self.labelenv = lmdb.open(path=pjoin(self.repo_path, LABEL_DB_PTH), **LMDB_CONFIG)
-        self.stagehashenv = lmdb.open(path=pjoin(self.repo_path, STAGE_HASH_DB_PTH), **LMDB_CONFIG)
+        self.refenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_REF_NAME), **c.LMDB_SETTINGS)
+        self.hashenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_HASH_NAME), **c.LMDB_SETTINGS)
+        self.stageenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_STAGE_REF_NAME), **c.LMDB_SETTINGS)
+        self.branchenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_BRANCH_NAME), **c.LMDB_SETTINGS)
+        self.labelenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_META_NAME), **c.LMDB_SETTINGS)
+        self.stagehashenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_STAGE_HASH_NAME), **c.LMDB_SETTINGS)
 
     def _close_environments(self):
 
