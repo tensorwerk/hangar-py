@@ -1,9 +1,10 @@
 import hashlib
-from typing import Optional
 import logging
+from typing import Optional
 
-import numpy as np
 import lmdb
+import numpy as np
+from joblib import Parallel, delayed, cpu_count
 
 from .context import TxnRegister
 from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP, backend_from_heuristics
@@ -12,8 +13,6 @@ from .records.queries import RecordQuery
 from .utils import is_suitable_user_key, cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
-
-from joblib import Parallel, delayed
 
 
 class DatasetDataReader(object):
@@ -71,14 +70,14 @@ class DatasetDataReader(object):
         self._schema_max_shape = tuple(varMaxShape)
         self._default_schema_hash = default_schema_hash
 
-        self._dataenv: lmdb.Environment = dataenv
-        self._hashenv: lmdb.Environment = hashenv
-        self._hashTxn: Optional[lmdb.Transaction] = None
-        self._dataTxn: Optional[lmdb.Transaction] = None
-        self._TxnRegister = TxnRegister()
-        self._Query = RecordQuery(self._dataenv)
+        # self._dataenv: lmdb.Environment = dataenv
+        # self._hashenv: lmdb.Environment = hashenv
+        # self._hashTxn: Optional[lmdb.Transaction] = None
+        # self._dataTxn: Optional[lmdb.Transaction] = None
+        # self._TxnRegister = TxnRegister()
+        # self._Query = RecordQuery(self._dataenv)
 
-        self._is_conman = False
+        # self._is_conman = False
         self._index_expr_factory = np.s_
         self._index_expr_factory.maketuple = False
 
@@ -92,29 +91,36 @@ class DatasetDataReader(object):
                 self._fs[backend].open(self._mode)
 
         self._sspecs = {}
-        self.__enter__()
+        # self.__enter__()
+        _TxnRegister = TxnRegister()
+        hashTxn = _TxnRegister.begin_reader_txn(hashenv)
+        dataTxn = _TxnRegister.begin_reader_txn(dataenv)
         try:
-            for name in self.keys():
+            data_names = RecordQuery(dataenv).dataset_data_names(self._dsetn)
+            for name in data_names:
                 ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
-                data_ref = self._dataTxn.get(ref_key, default=False)
+                data_ref = dataTxn.get(ref_key, default=False)
 
                 dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
                 hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
-                hash_ref = self._hashTxn.get(hashKey)
+                hash_ref = hashTxn.get(hashKey)
                 self._sspecs[name] = backend_decoder(hash_ref)
         finally:
-            self.__exit__()
+            _TxnRegister.abort_reader_txn(hashenv)
+            _TxnRegister.abort_reader_txn(dataenv)
+            # self.__exit__()
 
     def __enter__(self):
-        self._is_conman = True
-        self._hashTxn = self._TxnRegister.begin_reader_txn(self._hashenv)
-        self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+        # self._is_conman = True
+        # self._hashTxn = self._TxnRegister.begin_reader_txn(self._hashenv)
+        # self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
         return self
 
     def __exit__(self, *exc):
-        self._is_conman = False
-        self._hashTxn = self._TxnRegister.abort_reader_txn(self._hashenv)
-        self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+        pass
+        # self._is_conman = False
+        # self._hashTxn = self._TxnRegister.abort_reader_txn(self._hashenv)
+        # self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
     def __getitem__(self, key):
         '''Retrieve a sample with a given key. Convenience method for dict style access.
@@ -144,18 +150,7 @@ class DatasetDataReader(object):
         int
             number of samples the dataset contains
         '''
-        if not self._is_conman:
-            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
-
-        try:
-            dsetCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
-            dsetCountVal = self._dataTxn.get(dsetCountKey, default='0'.encode())
-            dset_count = parsing.dataset_record_count_raw_val_from_db_val(dsetCountVal)
-        finally:
-            if not self._is_conman:
-                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
-
-        return dset_count
+        return len(self._sspecs)
 
     def __contains__(self, key):
         '''Determine if a key is a valid sample name in the dataset
@@ -170,18 +165,8 @@ class DatasetDataReader(object):
         bool
             True if key exists, else False
         '''
-        if not self._is_conman:
-            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
-
-        try:
-            ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, key)
-            data_ref = self._dataTxn.get(ref_key, default=False)
-            keyExists = bool(data_ref)
-        finally:
-            if not self._is_conman:
-                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
-
-        return keyExists
+        exists = key in self._sspecs
+        return exists
 
     def _repr_pretty_(self, p, cycle):
         res = f'\n Hangar {self.__class__.__name__} \
@@ -203,9 +188,9 @@ class DatasetDataReader(object):
               f'isVar={self._schema_variable}, '\
               f'varMaxShape={self._schema_max_shape}, '\
               f'varDtypeNum={self._schema_dtype_num}, '\
-              f'dataenv={self._dataenv}, '\
-              f'hashenv={self._hashenv}, '\
               f'mode={self._mode})'
+        #   f'dataenv={self._dataenv}, '\
+        #   f'hashenv={self._hashenv}, '\
         return res
 
     def _open(self):
@@ -255,36 +240,50 @@ class DatasetDataReader(object):
     def keys(self):
         '''generator which yields the names of every sample in the dataset
         '''
-        data_names = self._Query.dataset_data_names(self._dsetn)
-        for name in data_names:
+        # data_names = self._Query.dataset_data_names(self._dsetn)
+        for name in self._sspecs:
             yield name
 
     def values(self):
         '''generator which yields the tensor data for every sample in the dataset
         '''
-        data_names = self._Query.dataset_data_names(self._dsetn)
-        for name in data_names:
+        # data_names = self._Query.dataset_data_names(self._dsetn)
+        for name in self._sspecs:
             yield self.get(name)
 
     def items(self):
         '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
         '''
-        data_names = self._Query.dataset_data_names(self._dsetn)
-        for name in data_names:
+        # data_names = self._Query.dataset_data_names(self._dsetn)
+        for name in self._sspecs:
             yield (name, self.get(name))
 
-    def get(self, name):
-        '''Retrieve a dataset data sample with the provided sample name
+    def get(self, name: str) -> np.ndarray:
+        '''Retrieve a sample in the dataset with a specific name.
+
+        The method is thread/process safe IF used in a read only checkout. Use
+        this if the calling application wants to manually manage multiprocess
+        logic for data retrieval. Otherwise, hangar includes the ``batch_get``
+        method to retrieve multiple data samples simultaneously. This method
+        uses multiprocess pool of workers (managed by hangar) to drastically
+        increase access speed and simplifly application developer workflows.
+
+        .. note::
+
+            in most situations, we have observed little to no performance
+            improvements when using multithreading. However, access time can be
+            nearly linearly decreased with the number of CPU cores / workers if
+            multiprocessing is used.
 
         Parameters
         ----------
         name : str
-            name of the sample to retrieve
+            Name of the sample to retrieve data for.
 
         Returns
         -------
         np.array
-            tensor data stored in the dataset archived with provided name
+            Tensor data stored in the dataset archived with provided name(s).
 
         Raises
         ------
@@ -293,33 +292,56 @@ class DatasetDataReader(object):
         '''
         try:
             spec = self._sspecs[name]
+            data = self._fs[spec.backend].read_data(spec)
+            return data
         except KeyError:
             raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
 
-        data = self._fs[spec.backend].read_data(spec)
-        return data
+    def get_batch(self, names: list, *, n_cpus: int = None) -> list:
+        '''Retrieve a batch of sample data with the provided names.
 
-    def get_batch(self, names):
-        '''Retrieve a dataset data sample with the provided sample name
+        This method is (technically) thread & process safe, though it should not
+        be called in parallel via multithread/process application code; This
+        method has been seen to drastically decrease retrieval time of sample
+        batches (as compared to looping over single sample names sequentially).
+        Internally it implements a multiprocess pool of workers (managed by
+        hangar) to simplifly application developer workflows.
 
         Parameters
         ----------
-        name : str
-            name of the sample to retrieve
+        name : list, tuple
+            list/tuple of sample names to retrieve data for.
+        n_cpus : int, kwarg-only
+            if not None, uses num_cpus / 2 of the system for retrieval. Setting
+            this value to ``1`` will not use a multiprocess pool to perform the
+            work.
 
         Returns
         -------
-        np.array
-            tensor data stored in the dataset archived with provided name
+        list(np.ndarray)
+            Tensor data stored in the dataset archived with provided name(s).
+
+            If a single sample name is passed in as th, the corresponding
+            np.array data will be returned.
+
+            If a list/tuple of sample names are pass in the ``names`` argument,
+            a tuple of size ``len(names)`` will be returned where each element
+            is an np.array containing data at the position it's name listed in
+            the ``names`` parameter.
 
         Raises
         ------
         KeyError
             if the dataset does not contain data with the provided name
         '''
-        specs = (self._sspecs[name] for name in names)
-        data = Parallel(n_jobs=4)(delayed(self._fs[spec.backend].read_data)(spec) for spec in specs)
-        return data
+        try:
+            n_jobs = n_cpus if isinstance(n_cpus, int) else int(cpu_count() / 2)
+            specs = (self._sspecs[name] for name in names)
+            with Parallel(n_jobs=n_jobs) as parallel:
+                data = parallel(delayed(self._fs[spec.backend].read_data)(spec) for spec in specs)
+            return data
+        except KeyError:
+            raise KeyError(f'HANGAR KEY ERROR:: data {names} not in dset: {self._dsetn}')
 
 
 class DatasetDataWriter(DatasetDataReader):
@@ -338,9 +360,19 @@ class DatasetDataWriter(DatasetDataReader):
     '''
 
     def __init__(self, stagehashenv, default_schema_backend, *args, **kwargs):
+
         super().__init__(*args, **kwargs)
+
+        self._is_conman = False
         self._stagehashenv = stagehashenv
-        self._dflt_backend = default_schema_backend
+        self._dataenv: lmdb.Environment = kwargs['dataenv']
+        self._hashenv: lmdb.Environment = kwargs['hashenv']
+        self._dflt_backend: lmdb.Environment = default_schema_backend
+
+        self._hashTxn: Optional[lmdb.Transaction] = None
+        self._dataTxn: Optional[lmdb.Transaction] = None
+        self._TxnRegister = TxnRegister()
+        self._Query = RecordQuery(self._dataenv)
 
     def __enter__(self):
         self._is_conman = True
