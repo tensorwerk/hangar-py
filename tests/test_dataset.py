@@ -653,12 +653,13 @@ class TestVariableSizedDataset(object):
 
 class TestMultiprocessDatasetReads(object):
 
-    def test_external_multi_process_pool(self, repo):
+    @pytest.mark.parametrize('backend', ['00', '01'])
+    def test_external_multi_process_pool(self, repo, backend):
         from multiprocessing import get_context
 
         masterCmtList = []
         co = repo.checkout(write=True)
-        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32)
+        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
         for cIdx in range(2):
             if cIdx != 0:
@@ -670,6 +671,7 @@ class TestMultiprocessDatasetReads(object):
                     sName = str(sIdx + kstart)
                     d[sName] = arr
                     masterSampList.append(arr)
+            assert d._backend == backend
             cmt = co.commit(f'master commit number: {cIdx}')
             masterCmtList.append((cmt, list(masterSampList)))
             co.close()
@@ -686,11 +688,11 @@ class TestMultiprocessDatasetReads(object):
             cmtIdx += 1
             nco.close()
 
-    def test_batch_get_multi_process_pool(self, repo):
+    @pytest.mark.parametrize('backend', ['00', '01'])
+    def test_batch_get_multi_process_pool(self, repo, backend):
         masterCmtList = []
-
         co = repo.checkout(write=True)
-        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32)
+        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
         for cIdx in range(2):
             if cIdx != 0:
@@ -702,6 +704,7 @@ class TestMultiprocessDatasetReads(object):
                     sName = str(sIdx + kstart)
                     d[sName] = arr
                     masterSampList.append(arr)
+                assert d._backend == backend
             cmt = co.commit(f'master commit number: {cIdx}')
             masterCmtList.append((cmt, list(masterSampList)))
             co.close()
@@ -717,21 +720,24 @@ class TestMultiprocessDatasetReads(object):
             cmtIdx += 1
             nco.close()
 
-    def test_batch_get_fails_on_superset_of_keys_and_succeeds_on_subset(self, repo):
+    @pytest.mark.parametrize('backend', ['00', '01'])
+    def test_batch_get_fails_on_superset_of_keys_and_succeeds_on_subset(self, repo, backend):
         co = repo.checkout(write=True)
-        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32)
+        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
-        for sIdx in range(100):
-            with co.datasets['_dset'] as d:
+        with co.datasets['_dset'] as d:
+            for sIdx in range(100):
                 arr = np.random.randn(20, 20).astype(np.float32) * 100
                 sName = str(sIdx)
                 d[sName] = arr
                 masterSampList.append(arr)
+            assert d._backend == backend
         cmt = co.commit(f'master commit number one')
         co.close()
 
         nco = repo.checkout(write=False, commit=cmt)
         ds = nco.datasets['_dset']
+
         # superset of keys fails
         with pytest.raises(KeyError):
             keys = [str(i) for i in range(104)]
