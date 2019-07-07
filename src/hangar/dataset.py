@@ -1,10 +1,10 @@
 import hashlib
 import logging
 from typing import Optional
+from multiprocessing import Pool, get_context, cpu_count
 
 import lmdb
 import numpy as np
-from joblib import Parallel, delayed, cpu_count
 
 from .context import TxnRegister
 from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP, backend_from_heuristics
@@ -45,7 +45,6 @@ class DatasetDataReader(object):
     mode : str, optional
         mode to open the file handles in. 'r' for read only, 'a' for read/write, defaults
         to 'r'
-
     '''
 
     def __init__(self,
@@ -59,7 +58,7 @@ class DatasetDataReader(object):
                  dataenv: lmdb.Environment,
                  hashenv: lmdb.Environment,
                  mode: str,
-                 **kwargs):
+                 *args, **kwargs):
 
         self._mode = mode
         self._path = repo_pth
@@ -70,16 +69,11 @@ class DatasetDataReader(object):
         self._schema_max_shape = tuple(varMaxShape)
         self._default_schema_hash = default_schema_hash
 
-        # self._dataenv: lmdb.Environment = dataenv
-        # self._hashenv: lmdb.Environment = hashenv
-        # self._hashTxn: Optional[lmdb.Transaction] = None
-        # self._dataTxn: Optional[lmdb.Transaction] = None
-        # self._TxnRegister = TxnRegister()
-        # self._Query = RecordQuery(self._dataenv)
-
-        # self._is_conman = False
+        self._is_conman = False
         self._index_expr_factory = np.s_
         self._index_expr_factory.maketuple = False
+
+        # ------------------------ backend setup ------------------------------
 
         self._fs = {}
         for backend, accessor in BACKEND_ACCESSOR_MAP.items():
@@ -90,8 +84,9 @@ class DatasetDataReader(object):
                     schema_dtype=np.typeDict[self._schema_dtype_num])
                 self._fs[backend].open(self._mode)
 
+        # -------------- Sample backend specification parsing -----------------
+
         self._sspecs = {}
-        # self.__enter__()
         _TxnRegister = TxnRegister()
         hashTxn = _TxnRegister.begin_reader_txn(hashenv)
         dataTxn = _TxnRegister.begin_reader_txn(dataenv)
@@ -108,19 +103,14 @@ class DatasetDataReader(object):
         finally:
             _TxnRegister.abort_reader_txn(hashenv)
             _TxnRegister.abort_reader_txn(dataenv)
-            # self.__exit__()
 
     def __enter__(self):
-        # self._is_conman = True
-        # self._hashTxn = self._TxnRegister.begin_reader_txn(self._hashenv)
-        # self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+        self._is_conman = True
         return self
 
     def __exit__(self, *exc):
-        pass
-        # self._is_conman = False
-        # self._hashTxn = self._TxnRegister.abort_reader_txn(self._hashenv)
-        # self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+        self._is_conman = False
+        return
 
     def __getitem__(self, key):
         '''Retrieve a sample with a given key. Convenience method for dict style access.
@@ -189,8 +179,6 @@ class DatasetDataReader(object):
               f'varMaxShape={self._schema_max_shape}, '\
               f'varDtypeNum={self._schema_dtype_num}, '\
               f'mode={self._mode})'
-        #   f'dataenv={self._dataenv}, '\
-        #   f'hashenv={self._hashenv}, '\
         return res
 
     def _open(self):
@@ -240,21 +228,18 @@ class DatasetDataReader(object):
     def keys(self):
         '''generator which yields the names of every sample in the dataset
         '''
-        # data_names = self._Query.dataset_data_names(self._dsetn)
         for name in self._sspecs:
             yield name
 
     def values(self):
         '''generator which yields the tensor data for every sample in the dataset
         '''
-        # data_names = self._Query.dataset_data_names(self._dsetn)
         for name in self._sspecs:
             yield self.get(name)
 
     def items(self):
         '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
         '''
-        # data_names = self._Query.dataset_data_names(self._dsetn)
         for name in self._sspecs:
             yield (name, self.get(name))
 
@@ -297,7 +282,8 @@ class DatasetDataReader(object):
         except KeyError:
             raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
 
-    def get_batch(self, names: list, *, n_cpus: int = None) -> list:
+    def get_batch(self, names: list,
+                  *, n_cpus: int = None, start_method: str = 'spawn') -> list:
         '''Retrieve a batch of sample data with the provided names.
 
         This method is (technically) thread & process safe, though it should not
@@ -314,7 +300,11 @@ class DatasetDataReader(object):
         n_cpus : int, kwarg-only
             if not None, uses num_cpus / 2 of the system for retrieval. Setting
             this value to ``1`` will not use a multiprocess pool to perform the
-            work.
+            work. Default is None
+        start_method : str, kwarg-only
+            One of 'spawn', 'fork', 'forkserver' specifying the process pool
+            start method. Not all options are available on all platforms. see
+            python multiprocess docs for details. Default is 'spawn'.
 
         Returns
         -------
@@ -334,14 +324,10 @@ class DatasetDataReader(object):
         KeyError
             if the dataset does not contain data with the provided name
         '''
-        try:
-            n_jobs = n_cpus if isinstance(n_cpus, int) else int(cpu_count() / 2)
-            specs = (self._sspecs[name] for name in names)
-            with Parallel(n_jobs=n_jobs) as parallel:
-                data = parallel(delayed(self._fs[spec.backend].read_data)(spec) for spec in specs)
-            return data
-        except KeyError:
-            raise KeyError(f'HANGAR KEY ERROR:: data {names} not in dset: {self._dsetn}')
+        n_jobs = n_cpus if isinstance(n_cpus, int) else int(cpu_count() / 2)
+        with get_context(start_method).Pool(n_jobs) as p:
+            data = p.map(self.get, names)
+        return data
 
 
 class DatasetDataWriter(DatasetDataReader):
@@ -363,16 +349,15 @@ class DatasetDataWriter(DatasetDataReader):
 
         super().__init__(*args, **kwargs)
 
-        self._is_conman = False
         self._stagehashenv = stagehashenv
+        self._dflt_backend: str = default_schema_backend
         self._dataenv: lmdb.Environment = kwargs['dataenv']
         self._hashenv: lmdb.Environment = kwargs['hashenv']
-        self._dflt_backend: lmdb.Environment = default_schema_backend
 
-        self._hashTxn: Optional[lmdb.Transaction] = None
-        self._dataTxn: Optional[lmdb.Transaction] = None
         self._TxnRegister = TxnRegister()
         self._Query = RecordQuery(self._dataenv)
+        self._hashTxn: Optional[lmdb.Transaction] = None
+        self._dataTxn: Optional[lmdb.Transaction] = None
 
     def __enter__(self):
         self._is_conman = True
@@ -672,8 +657,11 @@ class Datasets(object):
     hashenv : lmdb.Environment
         environment handle for hash records
     dataenv : lmdb.Environment
-        environment handle for the unpacked records (stage for
-        write-enabled, cmtrefenv for read-only)
+        environment handle for the unpacked records. `data` is means to refer to
+        the fact that the stageenv is passed in for for write-enabled, and a
+        cmtrefenv for read-only checkouts.
+    stagehashenv : lmdb.Environment
+        environment handle for newly added staged data hash records.
     mode : str
         one of 'r' or 'a' to indicate read or write mode
     '''
@@ -682,12 +670,12 @@ class Datasets(object):
         self._mode = mode
         self._hashenv = hashenv
         self._dataenv = dataenv
-        self._stagehashenv = stagehashenv
         self._repo_pth = repo_pth
         self._datasets = datasets
+        self._stagehashenv = stagehashenv
+
         self._is_conman = False
         self._Query = RecordQuery(self._dataenv)
-
         self.__setup()
 
     def __setup(self):
@@ -714,7 +702,7 @@ class Datasets(object):
         res = f'\n Hangar {self.__class__.__name__}\
                 \n     Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n     Dataset Names:\
-                \n       - ' + '\n       - '.join(self._datasets.keys())
+                \n       - '                             + '\n       - '.join(self._datasets.keys())
         p.text(res)
 
     def __repr__(self):

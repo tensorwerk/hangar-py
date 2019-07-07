@@ -71,7 +71,6 @@ setup(
         'pyyaml',
         'tqdm',
         'wrapt',
-        'joblib',
     ],
     extras_require={},
     entry_points={

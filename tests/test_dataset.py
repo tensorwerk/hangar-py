@@ -649,3 +649,97 @@ class TestVariableSizedDataset(object):
         assert d.named_samples is True
         assert d.iswriteable is False
         co.close()
+
+
+class TestMultiprocessDatasetReads(object):
+
+    def test_external_multi_process_pool(self, repo):
+        from multiprocessing import get_context
+
+        masterCmtList = []
+        co = repo.checkout(write=True)
+        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32)
+        masterSampList = []
+        for cIdx in range(2):
+            if cIdx != 0:
+                co = repo.checkout(write=True)
+            with co.datasets['_dset'] as d:
+                kstart = 100 * cIdx
+                for sIdx in range(100):
+                    arr = np.random.randn(20, 20).astype(np.float32) * 100
+                    sName = str(sIdx + kstart)
+                    d[sName] = arr
+                    masterSampList.append(arr)
+            cmt = co.commit(f'master commit number: {cIdx}')
+            masterCmtList.append((cmt, list(masterSampList)))
+            co.close()
+
+        cmtIdx = 0
+        for cmt, sampList in masterCmtList:
+            nco = repo.checkout(write=False, commit=cmt)
+            ds = nco.datasets['_dset']
+            keys = [str(i) for i in range(100 + (100*cmtIdx))]
+            with get_context('spawn').Pool(2) as P:
+                cmtData = P.map(ds.get, keys)
+            for data, sampData in zip(cmtData, sampList):
+                assert np.allclose(data, sampData) is True
+            cmtIdx += 1
+            nco.close()
+
+    def test_batch_get_multi_process_pool(self, repo):
+        masterCmtList = []
+
+        co = repo.checkout(write=True)
+        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32)
+        masterSampList = []
+        for cIdx in range(2):
+            if cIdx != 0:
+                co = repo.checkout(write=True)
+            with co.datasets['_dset'] as d:
+                kstart = 100 * cIdx
+                for sIdx in range(100):
+                    arr = np.random.randn(20, 20).astype(np.float32) * 100
+                    sName = str(sIdx + kstart)
+                    d[sName] = arr
+                    masterSampList.append(arr)
+            cmt = co.commit(f'master commit number: {cIdx}')
+            masterCmtList.append((cmt, list(masterSampList)))
+            co.close()
+
+        cmtIdx = 0
+        for cmt, sampList in masterCmtList:
+            nco = repo.checkout(write=False, commit=cmt)
+            ds = nco.datasets['_dset']
+            keys = [str(i) for i in range(100 + (100*cmtIdx))]
+            cmtData = ds.get_batch(keys, n_cpus=2)
+            for data, sampData in zip(cmtData, sampList):
+                assert np.allclose(data, sampData) is True
+            cmtIdx += 1
+            nco.close()
+
+    def test_batch_get_fails_on_superset_of_keys_and_succeeds_on_subset(self, repo):
+        co = repo.checkout(write=True)
+        co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32)
+        masterSampList = []
+        for sIdx in range(100):
+            with co.datasets['_dset'] as d:
+                arr = np.random.randn(20, 20).astype(np.float32) * 100
+                sName = str(sIdx)
+                d[sName] = arr
+                masterSampList.append(arr)
+        cmt = co.commit(f'master commit number one')
+        co.close()
+
+        nco = repo.checkout(write=False, commit=cmt)
+        ds = nco.datasets['_dset']
+        # superset of keys fails
+        with pytest.raises(KeyError):
+            keys = [str(i) for i in range(104)]
+            ds.get_batch(keys, n_cpus=2)
+
+        # subset of keys works
+        keys = [str(i) for i in range(20, 40)]
+        cmtData = ds.get_batch(keys, n_cpus=2)
+        for idx, data in enumerate(cmtData):
+            assert np.allclose(data, masterSampList[20+idx]) is True
+        nco.close()

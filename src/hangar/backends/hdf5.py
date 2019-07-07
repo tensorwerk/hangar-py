@@ -136,21 +136,21 @@ if filter_options['default']['complib'].startswith('blosc'):
 
 # -------------------------------- Parser Implementation ----------------------
 
+DataHashSpec = namedtuple(
+    typename='DataHashSpec',
+    field_names=['backend', 'uid', 'dataset', 'dataset_idx', 'shape'])
+
 
 class HDF5_00_Parser(object):
 
-    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE', 'DataHashSpec']
+    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE']
 
     def __init__(self):
 
         self.FmtCode = '00'
-
         # match and remove the following characters: '['   ']'   '('   ')'   ','
         self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
         self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
-        self.DataHashSpec = namedtuple(
-            typename='DataHashSpec',
-            field_names=['backend', 'uid', 'dataset', 'dataset_idx', 'shape'])
 
     def encode(self, uid, dataset, dataset_idx, shape) -> bytes:
         '''converts the hdf5 data has spec to an appropriate db value
@@ -202,11 +202,11 @@ class HDF5_00_Parser(object):
         # empty strings from the result. So long as c.SEP_LST = ' ' this will
         # work
         shape = tuple(int(x) for x in shape_vs.split())
-        raw_val = self.DataHashSpec(backend=self.FmtCode,
-                                    uid=uid,
-                                    dataset=dataset,
-                                    dataset_idx=dataset_idx,
-                                    shape=shape)
+        raw_val = DataHashSpec(backend=self.FmtCode,
+                               uid=uid,
+                               dataset=dataset,
+                               dataset_idx=dataset_idx,
+                               shape=shape)
         return raw_val
 
 
@@ -556,7 +556,7 @@ class HDF5_00_FileHandles(object):
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
 
-    def read_data(self, hashVal: HDF5_00_Parser.DataHashSpec) -> np.ndarray:
+    def read_data(self, hashVal) -> np.ndarray:
         '''Read data from an hdf5 file handle at the specified locations
 
         Parameters
@@ -604,7 +604,6 @@ class HDF5_00_FileHandles(object):
                     destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
                 else:
                     raise
-
         return destArr
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:

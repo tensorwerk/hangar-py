@@ -7,15 +7,15 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+DataHashSpec = namedtuple('DataHashSpec', field_names=['backend'])
+
+
 class REMOTE_UNKNOWN_00_Parser(object):
 
-    __slots__ = ['FmtCode', 'RemoteHashSpec']
+    __slots__ = ['FmtCode']
 
     def __init__(self):
-
         self.FmtCode = '50'
-        RemoteHashSpec = namedtuple('DataHashSpec', field_names=['backend'])
-        self.RemoteHashSpec = RemoteHashSpec(backend=self.FmtCode)
 
     def encode(self) -> bytes:
         '''returns an db value saying that this hash exists somewhere on a remote
@@ -40,7 +40,7 @@ class REMOTE_UNKNOWN_00_Parser(object):
         namedtuple
             hash specification containing an identifies: `backend`
         '''
-        return self.RemoteHashSpec
+        return DataHashSpec(self.FmtCode)
 
 
 class REMOTE_UNKNOWN_00_Handler(object):
@@ -49,7 +49,6 @@ class REMOTE_UNKNOWN_00_Handler(object):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
-
         self.fmtParser = REMOTE_UNKNOWN_00_Parser()
 
     def __enter__(self):
