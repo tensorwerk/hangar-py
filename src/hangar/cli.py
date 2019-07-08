@@ -73,7 +73,7 @@ def fetch_records(remote, branch):
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    bName = repo.fetch(remote_name=remote, branch_name=branch)
+    bName = repo.remote.fetch(remote=remote, branch=branch)
     click.echo(f'Fetch to Branch Name: {bName}')
 
 
@@ -85,7 +85,7 @@ def fetch_data(remote, commit):
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    commit_hash = repo.fetch_data(remote_name=remote, commit_hash=commit)
+    commit_hash = repo.remote.fetch_data(remote=remote, commit=commit)
     click.echo(f'Retrieved data for commit hash: {commit_hash}')
 
 
@@ -97,7 +97,7 @@ def push(remote, branch):
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    commit_hash = repo.push(remote_name=remote, branch_name=branch)
+    commit_hash = repo.remote.push(remote=remote, branch=branch)
     click.echo(f'Retrieved data for commit hash: {commit_hash}')
 
 
@@ -111,7 +111,7 @@ def list_remotes():
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    click.echo(repo.list_remotes())
+    click.echo(repo.remote.list_all())
 
 
 @remote.command(name='add')
@@ -122,7 +122,7 @@ def add_remote(name, address):
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    click.echo(repo.add_remote(remote_name=name, remote_address=address))
+    click.echo(repo.remote.add(name=name, address=address))
 
 
 @remote.command(name='remove')
@@ -132,7 +132,7 @@ def remove_remote(name):
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    click.echo(repo.remove_remote(remote_name=name))
+    click.echo(repo.remote.remove(name=name))
 
 
 @main.command(help='show a summary of the repository')

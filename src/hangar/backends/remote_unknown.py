@@ -10,17 +10,16 @@ from .. import constants as c
 logger = logging.getLogger(__name__)
 
 
-DataHashSpec = namedtuple('DataHashSpec', field_names=['backend'])
+DataHashSpec = namedtuple('DataHashSpec', field_names=['backend', 'schema_hash'])
 
 
 class REMOTE_UNKNOWN_00_Parser(object):
 
-    __slots__ = ['FmtCode', 'RemoteHashSpec', 'SplitDecoderRE']
+    __slots__ = ['FmtCode', 'SplitDecoderRE']
 
     def __init__(self):
         self.FmtCode = '50'
         self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
-        self.RemoteHashSpec = namedtuple('DataHashSpec', field_names=['backend', 'schema_hash'])
 
     def encode(self, schema_hash: str = '') -> bytes:
         '''returns an db value saying that this hash exists somewhere on a remote
@@ -47,7 +46,7 @@ class REMOTE_UNKNOWN_00_Parser(object):
         '''
         db_str = db_val.decode()
         _, schema_hash = self.SplitDecoderRE.split(db_str)
-        raw_val = self.RemoteHashSpec(backend=self.FmtCode, schema_hash=schema_hash)
+        raw_val = DataHashSpec(backend=self.FmtCode, schema_hash=schema_hash)
         return raw_val
 
 

@@ -229,13 +229,14 @@ class HangarClient(object):
             recieved_data.append((recieved_hash, tensor))
         return recieved_data
 
-    def push_data(self, schema_hash, digests):
+    def push_data(self, schema_hash, digests, pbar=None):
 
         totalSize, buf = 0, io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
         hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
         try:
             for digest in digests:
+                pbar.update(1)
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
                 hashVal = hashTxn.get(hashKey, default=False)
                 if not hashVal:

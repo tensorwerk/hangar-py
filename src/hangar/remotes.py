@@ -2,25 +2,27 @@ import os
 import time
 import logging
 import tempfile
+import warnings
 from typing import List
 from collections import defaultdict, namedtuple
 from contextlib import closing
 
 import grpc
 import lmdb
+from tqdm import tqdm
 
 from . import constants as c
 from .context import Environments
 from .remote.client import HangarClient
 from .remote.content import ContentWriter, ContentReader
-from .records import heads, parsing, summarize, commiting, queries, hashs
+from .records import heads, summarize, commiting, queries, hashs
 
 logger = logging.getLogger(__name__)
 
 RemoteInfo = namedtuple(typename='RemoteInfo', field_names=['name', 'address'])
 
 
-class Remote(object):
+class Remotes(object):
 
     def __init__(self, env: Environments):
 
@@ -94,8 +96,7 @@ class Remote(object):
         try:
             address = heads.remove_remote(branchenv=self._env.branchenv, name=name)
         except KeyError:
-            err = f'No remote reference with name: {name}'
-            raise ValueError(err)
+            raise ValueError(f'No remote reference with name: {name}')
         return RemoteInfo(name=name, address=address)
 
     def list_all(self) -> List[RemoteInfo]:
@@ -202,10 +203,12 @@ class Remote(object):
 
                 # verify histories are intact and should be synced
                 if sHEAD == cHEAD:
-                    logger.warning(f'NoOp:  {sHEAD} == client HEAD {cHEAD}')
+                    warnings.warn(f'NoOp:  {sHEAD} == client HEAD {cHEAD}', UserWarning)
                     return branch
                 elif sHEAD in c_bhistory['order']:
-                    logger.warning(f'REJECTED: remote HEAD: {sHEAD} behind local HEAD: {cHEAD}')
+                    warnings.warn(
+                        f'REJECTED: remote HEAD: {sHEAD} behind local HEAD: {cHEAD}',
+                        UserWarning)
                     return branch
 
             # ------------------- get data ------------------------------------
@@ -314,7 +317,12 @@ class Remote(object):
         commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
         return cmt
 
-    def push(self, remote: str, branch: str, *, username: str = '', password: str = '') -> bool:
+    def push(self,
+             remote: str,
+             branch: str,
+             *,
+             username: str = '',
+             password: str = '') -> bool:
         '''push changes made on a local repository to a remote repository.
 
         This method is symantically identical to a ``git push`` operation.
@@ -373,10 +381,14 @@ class Remote(object):
             else:
                 sHEAD = s_branch.rec.commit
                 if sHEAD == cHEAD:
-                    logger.warning(f'NoOp: server HEAD: {sHEAD} == client HEAD: {cHEAD}')
+                    warnings.warn(
+                        f'NoOp: server HEAD: {sHEAD} == client HEAD: {cHEAD}',
+                        UserWarning)
                     return branch
                 elif (sHEAD not in c_bhistory['order']) and (sHEAD != ''):
-                    logger.warning(f'REJECTED: server branch has commits not on client')
+                    warnings.warn(
+                        f'REJECTED: server branch has commits not on client',
+                        UserWarning)
                     return branch
 
             # verify user permissions if push restricted (NOT SECURE)
@@ -394,19 +406,19 @@ class Remote(object):
             with tempfile.TemporaryDirectory() as tempD:
                 tmpDF = os.path.join(tempD, 'test.lmdb')
                 tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-                for commit in m_commits:
+                for commit in tqdm(m_commits, desc='counting objects'):
                     with tmpDB.begin(write=True) as txn:
                         with txn.cursor() as curs:
-                            isEmpty = curs.first()
-                            while not isEmpty:
-                                isEmpty = curs.delete()
-                    commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
+                            notEmpty = curs.first()
+                            while notEmpty:
+                                notEmpty = curs.delete()
+                    commiting.unpack_commit_ref(self._env.refenv, tmpDB, commit)
                     # schemas
-                    schema_res = client.push_find_missing_schemas(commit, tmpDb=tmpDB)
+                    schema_res = client.push_find_missing_schemas(commit, tmpDB=tmpDB)
                     m_schemas.update(schema_res.schema_digests)
                     # data hashs
                     m_cmt_schema_hashs = defaultdict(list)
-                    mis_hashes_sch = client.push_find_missing_hash_records(commit, tmpDb=tmpDB)
+                    mis_hashes_sch = client.push_find_missing_hash_records(commit, tmpDB=tmpDB)
                     for hsh, schema in mis_hashes_sch:
                         m_cmt_schema_hashs[schema].append(hsh)
                     for schema, hashes in m_cmt_schema_hashs.items():
@@ -416,22 +428,26 @@ class Remote(object):
                     m_labels.update(missing_labels)
                 tmpDB.close()
 
+            # schemas
             for m_schema in m_schemas:
                 schemaVal = CR.schema(m_schema)
                 if not schemaVal:
                     raise KeyError(f'no schema with hash: {m_schema} exists')
                 client.push_schema(m_schema, schemaVal)
-
-            for dataSchema, dataHashes in m_schema_hashs.items():
-                client.push_data(dataSchema, dataHashes)
-
+            # data
+            total_data = sum([len(v) for v in m_schema_hashs.values()])
+            with tqdm(total=total_data, desc='pushing data') as p:
+                for dataSchema, dataHashes in m_schema_hashs.items():
+                    client.push_data(dataSchema, dataHashes, pbar=p)
+                    p.update(1)
+            # labels/metadata
             for label in m_labels:
                 labelVal = CR.label(label)
                 if not labelVal:
                     raise KeyError(f'no label with hash: {label} exists')
                 client.push_label(label, labelVal)
-
-            for commit in m_commits:
+            # commit refs
+            for commit in tqdm(m_commits, desc='pushing refs'):
                 cmtContent = CR.commit(commit)
                 if not cmtContent:
                     raise KeyError(f'no commit with hash: {commit} exists')

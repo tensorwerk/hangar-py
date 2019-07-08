@@ -27,37 +27,42 @@ def server_instance(managed_tmpdir, worker_id):
 
 @pytest.fixture()
 def written_two_cmt_server_repo(server_instance, written_two_cmt_repo) -> tuple:
-    written_two_cmt_repo.add_remote('origin', server_instance)
-    success = written_two_cmt_repo.push('origin', 'master')
+    written_two_cmt_repo.remote.add('origin', server_instance)
+    success = written_two_cmt_repo.remote.push('origin', 'master')
     assert success is True
     yield (server_instance, written_two_cmt_repo)
 
 
 def test_cannot_add_remote_twice_with_same_name(repo):
-    remote_name = repo.add_remote('origin', 'test')
-    assert remote_name == 'origin'
+    remote_spec = repo.remote.add('origin', 'test')
+    assert remote_spec.name == 'origin'
+    assert remote_spec.address == 'test'
     with pytest.raises(ValueError):
-        repo.add_remote('origin', 'new')
+        repo.remote.add('origin', 'new')
 
 
 def test_remote_remote_which_does_not_exist_fails(repo):
     with pytest.raises(ValueError):
-        repo.remove_remote('origin')
+        repo.remote.remove('origin')
 
 
 def test_can_update_remote_after_removal(repo):
-    remote_name = repo.add_remote('origin', 'test')
-    assert remote_name == 'origin'
-    channel_address_removed = repo.remove_remote('origin')
-    assert channel_address_removed == 'test'
-    new_name = repo.add_remote('origin', 'test2')
-    assert new_name == 'origin'
+    remote_spec = repo.remote.add('origin', 'test')
+    assert remote_spec.name == 'origin'
+    assert remote_spec.address == 'test'
+    channel_address_removed = repo.remote.remove('origin')
+    assert channel_address_removed.name == 'origin'
+    assert channel_address_removed.address == 'test'
+    new_name = repo.remote.add('origin', 'test2')
+    assert new_name.name == 'origin'
+    assert new_name.address == 'test2'
 
 
 def test_server_is_started_multiple_times_via_ping_pong(server_instance, written_repo):
     # start multiple times and test that pings go through multiple times
-    written_repo.add_remote('origin', server_instance)
-    assert written_repo._ping_server('origin') == 'PONG'
+    written_repo.remote.add('origin', server_instance)
+    roundTripTime = written_repo.remote.ping('origin')
+    assert isinstance(roundTripTime, float)
 
 
 @pytest.mark.parametrize('nCommits,nSamples', [[1, 10], [10, 10]])
@@ -83,17 +88,17 @@ def test_push_and_clone_master_linear_history_multiple_commits(
         cmtList.append((cmt, sampList))
         co.close()
 
-    repo.add_remote('origin', server_instance)
-    push1 = repo.push('origin', 'master')
+    repo.remote.add('origin', server_instance)
+    push1 = repo.remote.push('origin', 'master')
     assert push1 is True
 
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
-    assert newRepo.list_branches() == ['master']
+    assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in cmtList:
-        newRepo.fetch_data('origin', cmt)
+        newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
@@ -129,8 +134,8 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
         masterCmtList.append((cmt, masterSampList))
         co.close()
 
-    repo.add_remote('origin', server_instance)
-    push1 = repo.push('origin', 'master')
+    repo.remote.add('origin', server_instance)
+    push1 = repo.remote.push('origin', 'master')
     assert push1 is True
 
     branch = repo.create_branch('testbranch')
@@ -148,7 +153,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
         devCmtList.append((cmt, devSampList))
         co.close()
 
-    push2 = repo.push('origin', branch)
+    push2 = repo.remote.push('origin', branch)
     assert push2 is True
 
 
@@ -178,8 +183,8 @@ def test_server_push_clone_second_branch_with_new_commit(
         masterCmtList.append((cmt, masterSampList))
         co.close()
 
-    repo.add_remote('origin', server_instance)
-    push1 = repo.push('origin', 'master')
+    repo.remote.add('origin', server_instance)
+    push1 = repo.remote.push('origin', 'master')
     assert push1 is True
 
     # Push dev branch test
@@ -199,7 +204,7 @@ def test_server_push_clone_second_branch_with_new_commit(
         devCmtList.append((cmt, devSampList))
         co.close()
 
-    push2 = repo.push('origin', branch)
+    push2 = repo.remote.push('origin', branch)
     assert push2 is True
 
     # Clone test (master branch)
@@ -207,9 +212,9 @@ def test_server_push_clone_second_branch_with_new_commit(
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
-    assert newRepo.list_branches() == ['master']
+    assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in masterCmtList:
-        newRepo.fetch_data('origin', cmt)
+        newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
@@ -219,11 +224,11 @@ def test_server_push_clone_second_branch_with_new_commit(
         nco.close()
 
     # Fetch test
-    fetch = newRepo.fetch('origin', branch)
+    fetch = newRepo.remote.fetch('origin', branch=branch)
     assert fetch == f'origin/{branch}'
-    assert newRepo.list_branches() == ['master', f'origin/{branch}']
+    assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch}']
     for cmt, sampList in devCmtList:
-        newRepo.fetch_data('origin', cmt)
+        newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
@@ -236,14 +241,16 @@ def test_server_push_clone_second_branch_with_new_commit(
 
 def test_push_unchanged_repo_makes_no_modifications(written_two_cmt_server_repo):
     _, repo = written_two_cmt_server_repo
-    success = repo.push('origin', 'master')
-    assert not success
+    with pytest.warns(UserWarning):
+        branchName = repo.remote.push('origin', 'master')
+    assert branchName == 'master'
 
 
 def test_fetch_unchanged_repo_makes_no_modifications(written_two_cmt_server_repo):
     _, repo = written_two_cmt_server_repo
-    success = repo.fetch('origin', 'master')
-    assert not success
+    with pytest.warns(UserWarning):
+        branchName = repo.remote.fetch('origin', 'master')
+    assert branchName == 'master'
 
 
 def test_fetch_newer_disk_repo_makes_no_modifications(written_two_cmt_server_repo):
@@ -252,17 +259,18 @@ def test_fetch_newer_disk_repo_makes_no_modifications(written_two_cmt_server_rep
     co.metadata['new_foo_abc'] = 'bar'
     co.commit('newer commit')
     co.close()
-    success = repo.fetch('origin', 'master')
-    assert not success
+    with pytest.warns(UserWarning):
+        branchName = repo.remote.fetch('origin', 'master')
+    assert branchName == 'master'
 
 
 def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_tmpdir):
     from hangar import Repository
 
-    repo_2_br_no_conf.add_remote('origin', server_instance)
-    push1 = repo_2_br_no_conf.push('origin', 'master')
+    repo_2_br_no_conf.remote.add('origin', server_instance)
+    push1 = repo_2_br_no_conf.remote.push('origin', 'master')
     assert push1 is True
-    push2 = repo_2_br_no_conf.push('origin', 'testbranch')
+    push2 = repo_2_br_no_conf.remote.push('origin', 'testbranch')
     assert push2 is True
 
     test_head = repo_2_br_no_conf.log(branch_name='testbranch', return_contents=True)['head']
@@ -271,7 +279,7 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
     merge_cmt = repo_2_br_no_conf.merge('merge commit', 'master', 'testbranch')
     merge_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
     merge_order = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['order']
-    merge_push = repo_2_br_no_conf.push('origin', 'master')
+    merge_push = repo_2_br_no_conf.remote.push('origin', 'master')
     assert merge_push is True
     assert merge_head != master_head
     assert merge_head != test_head
@@ -314,8 +322,8 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
         masterCmtList.append((cmt, masterSampList))
         co.close()
 
-    repo.add_remote('origin', server_instance)
-    push1 = repo.push('origin', 'master')
+    repo.remote.add('origin', server_instance)
+    push1 = repo.remote.push('origin', 'master')
     assert push1 is True
 
     # Clone test (master branch)
@@ -323,9 +331,9 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
-    assert newRepo.list_branches() == ['master']
+    assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in masterCmtList:
-        newRepo.fetch_data('origin', cmt)
+        newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert 'dset' in nco.datasets

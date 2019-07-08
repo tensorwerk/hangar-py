@@ -1,18 +1,15 @@
 import os
 import logging
-from collections import defaultdict
-from contextlib import closing
-
-import grpc
+import weakref
+from typing import Union, Optional
 
 from . import merger
 from . import constants as c
+from .remotes import Remotes
 from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
 from .diagnostics import graphing, ecosystem
-from .records import heads, parsing, summarize, commiting, queries, hashs
-from .remote.client import HangarClient
-from .remote.content import ContentWriter, ContentReader
+from .records import heads, parsing, summarize
 from .utils import is_valid_directory_path, is_suitable_user_key
 
 logger = logging.getLogger(__name__)
@@ -44,8 +41,8 @@ class Repository(object):
 
         repo_pth = os.path.join(usr_path, c.DIR_HANGAR)
         self._env: Environments = Environments(repo_path=repo_pth)
-        self._repo_path: str = self._env.repo_path
-        self._client: HangarClient = None
+        self._repo_path: os.PathLike = self._env.repo_path
+        self._remote: Remotes = Remotes(self._env)
 
     def _repr_pretty_(self, p, cycle):
         '''provide a pretty-printed repr for ipython based user interaction.
@@ -98,6 +95,13 @@ class Repository(object):
             raise RuntimeError(msg)
 
     @property
+    def remote(self) -> Remotes:
+        '''Accessor to the methods controlling remote interactions
+        '''
+        proxy = weakref.proxy(self._remote)
+        return proxy
+
+    @property
     def repo_path(self):
         '''Return the path to the repository on disk, read-only attribute
 
@@ -120,7 +124,11 @@ class Repository(object):
         self.__verify_repo_initialized()
         return not heads.writer_lock_held(self._env.branchenv)
 
-    def checkout(self, write=False, *, branch_name='master', commit=''):
+    def checkout(self,
+                 write: bool = False,
+                 *,
+                 branch_name: str = 'master',
+                 commit: str = '') -> Union[ReaderCheckout, WriterCheckout]:
         '''Checkout the repo at some point in time in either `read` or `write` mode.
 
         Only one writer instance can exist at a time. Write enabled checkout
@@ -221,341 +229,17 @@ class Repository(object):
             Name of the master branch for the newly cloned repository.
         '''
         self.init(user_name=user_name, user_email=user_email, remove_old=remove_old)
-        self.add_remote(remote_name='origin', remote_address=remote_address)
-        branch_name = self.fetch(remote_name='origin', branch_name='master', concat_branch_names=False)
+        self._remote.add(name='origin', address=remote_address)
+        branch = self._remote.fetch(remote='origin', branch='master')
+        HEAD = heads.get_branch_head_commit(self._env.branchenv, branch_name=branch)
+        heads.set_branch_head_commit(self._env.branchenv, 'master', HEAD)
         co = self.checkout(write=True, branch_name='master')
         co.reset_staging_area()
         co.close()
-        return branch_name
+        return 'master'
 
-    def fetch_data(self, remote_name: str, commit_hash: str) -> str:
-        '''Partial clone fetch data operation.
-
-        Parameters
-        ----------
-        remote_name : str
-            name of the remote server
-        commit_hash : str
-            commit hash to retrieve data for
-
-        Returns
-        -------
-        str
-            commit hash of the data which was returned.
-        '''
-        self.__verify_repo_initialized()
-        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
-        self._client = HangarClient(envs=self._env, address=address)
-        CW = ContentWriter(self._env)
-
-        with closing(self._client) as client:
-            client: HangarClient  # type hint
-
-            # TODO: Should not have to get all data hashs
-            commit_hash = self._env.checkout_commit(commit=commit_hash)
-            cmtData_hashs = set(queries.RecordQuery(self._env.cmtenv[commit_hash]).data_hashes())
-            hashQuery = hashs.HashQuery(self._env.hashenv)
-            hashMap = hashQuery.map_all_hash_keys_raw_to_values_raw()
-            m_schema_hash_map = defaultdict(list)
-            for digest in cmtData_hashs:
-                hashSpec = hashMap[digest]
-                if hashSpec.backend == '50':
-                    m_schema_hash_map[hashSpec.schema_hash].append(digest)
-
-            for schema in list(m_schema_hash_map.keys()):
-                hashes = m_schema_hash_map[schema]
-                while len(hashes) > 0:
-                    ret = client.fetch_data(schema, hashes)
-                    saved_digests = CW.data(schema, ret)
-                    hashes = list(set(hashes).difference(set(saved_digests)))
-
-            commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
-
-        return commit_hash
-
-    def fetch(self, remote_name: str, branch_name: str,
-              *, concat_branch_names: bool = True) -> str:
-        '''Retrieve new commits made on a remote repository branch.
-
-        This is symantecally identical to a `git fetch` command. Any new commits
-        along the branch will be retrived, but placed on an isolated branch to
-        the local copy (ie. ``remote_name/branch_name``). In order to unify
-        histories, simply merge the remote branch into the local branch.
-
-        Parameters
-        ----------
-        remote_name : str
-            name of the remote repository to fetch from (ie. ``origin``)
-        branch_name : str
-            name of the branch to fetch the commit references for.
-        concat_branch_names : bool, optional, kwarg only
-            DEVELOPER USE ONLY! TODO: remove this...
-
-        Returns
-        -------
-        str
-            Name of the branch which stores the retrieved commits.
-        '''
-        self.__verify_repo_initialized()
-        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
-        self._client = HangarClient(envs=self._env, address=address)
-        CW = ContentWriter(self._env)
-
-        with closing(self._client) as client:
-            client: HangarClient  # type hinting for development
-            try:
-                c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
-                c_bhistory = summarize.list_history(
-                    self._env.refenv, self._env.branchenv, branch_name=branch_name)
-                s_branch = client.fetch_branch_record(branch_name)
-                if s_branch.error.code == 0:
-                    s_bcommit = s_branch.rec.commit
-                    if s_bcommit == c_bcommit:
-                        logger.warning(f'NoOp: serv HEAD {s_bcommit} == client HEAD {c_bcommit}')
-                        return
-                    elif s_bcommit in c_bhistory['order']:
-                        logger.warning(f'REJECTED: server HEAD {s_bcommit} in client history')
-                        return
-            except ValueError:
-                s_branch = client.fetch_branch_record(branch_name)
-
-            res = client.fetch_find_missing_commits(branch_name)
-            m_commits = res.commits
-            m_labels = set()
-            for commit in m_commits:
-                m_labels.update(client.fetch_find_missing_labels(commit))
-                schema_res = client.fetch_find_missing_schemas(commit)
-                for schema in schema_res.schema_digests:
-                    schema_hash, schemaVal = client.fetch_schema(schema)
-                    CW.schema(schema_hash, schemaVal)
-
-                m_hashes = client.fetch_find_missing_hash_records(commit)
-                m_schema_hash_map = defaultdict(list)
-                for digest, schema_hash in m_hashes:
-                    m_schema_hash_map[schema_hash].append((digest, schema_hash))
-                for schema_hash, recieved_data in m_schema_hash_map.items():
-                    CW.data(schema_hash, recieved_data, backend='50')
-
-            for label in m_labels:
-                recieved_hash, labelVal = client.fetch_label(label)
-                CW.label(recieved_hash, labelVal)
-            for commit in m_commits:
-                cmt, parentVal, specVal, refVal = client.fetch_commit_record(commit)
-                CW.commit(cmt, parentVal, specVal, refVal)
-
-            bHEAD = s_branch.rec.commit
-            bName = f'{remote_name}/{branch_name}' if concat_branch_names else branch_name
-            try:
-                heads.create_branch(
-                    self._env.branchenv, branch_name=bName, base_commit=bHEAD)
-            except ValueError:
-                heads.set_branch_head_commit(
-                    self._env.branchenv, branch_name=bName, commit_hash=bHEAD)
-            return bName
-
-    def push(self, remote_name: str, branch_name: str, *,
-             username: str = '', password: str = '') -> bool:
-        '''push changes made on a local repository to a remote repository.
-
-        This method is symantically identical to a ``git push`` operation.
-        Any local updates will be sent to the remote repository.
-
-        .. note::
-
-            The current implementation is not capable of performing a
-            ``force push`` operation. As such, remote branches with diverged
-            histories to the local repo must be retrieved, locally merged,
-            then re-pushed. This feature will be added in the near future.
-
-        Parameters
-        ----------
-        remote_name : str
-            name of the remote repository to make the push on.
-        branch_name : str
-            Name of the branch to push to the remote. If the branch name does
-            not exist on the remote, the it will be created
-        auth_username : str, optional, kwarg-only
-            credentials to use for authentication if repository push restrictions
-            are enabled, by default ''.
-        auth_password : str, optional, kwarg-only
-            credentials to use for authentication if repository push restrictions
-            are enabled, by default ''.
-
-        Returns
-        -------
-        bool
-            True if the operation succeeded, Otherwise False
-        '''
-        self.__verify_repo_initialized()
-        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
-        self._client = HangarClient(
-            envs=self._env, address=address, auth_username=username, auth_password=password)
-        CR = ContentReader(self._env)
-
-        with closing(self._client) as client:
-            client: HangarClient  # type hinting for development
-
-            c_bcommit = heads.get_branch_head_commit(self._env.branchenv, branch_name)
-            c_bhistory = summarize.list_history(
-                refenv=self._env.refenv, branchenv=self._env.branchenv, branch_name=branch_name)
-            s_branch = client.fetch_branch_record(branch_name)
-            if s_branch.error.code == 0:
-                s_bcommit = s_branch.rec.commit
-                if s_bcommit == c_bcommit:
-                    logger.warning(f'NoOp: serv HEAD {s_bcommit} == client HEAD {c_bcommit}')
-                    return False
-                elif (s_bcommit not in c_bhistory['order']) and (s_bcommit != ''):
-                    logger.warning(f'REJECTED: server branch has commits not on client')
-                    return False
-
-            try:
-                res = client.push_find_missing_commits(branch_name)
-            except grpc.RpcError as rpc_error:
-                if rpc_error.code() == grpc.StatusCode.PERMISSION_DENIED:
-                    raise PermissionError(f'{rpc_error.code()}: {rpc_error.details()}')
-                else:
-                    raise rpc_error
-
-            m_labels, m_commits = set(), res.commits
-            for commit in m_commits:
-                schema_res = client.push_find_missing_schemas(commit)
-                for schema in schema_res.schema_digests:
-                    schemaVal = CR.schema(schema)
-                    if not schemaVal:
-                        raise KeyError(f'no schema with hash: {schema} exists')
-                    client.push_schema(schema, schemaVal)
-
-                mis_hashes_sch = client.push_find_missing_hash_records(commit)
-                missing_schema_hashs = defaultdict(list)
-                for hsh, schema in mis_hashes_sch.items():
-                    missing_schema_hashs[schema].append(hsh)
-                for schema, hashes in missing_schema_hashs.items():
-                    client.push_data(schema, hashes)
-                missing_labels = client.push_find_missing_labels(commit)
-                m_labels.update(missing_labels)
-
-            for label in m_labels:
-                labelVal = CR.label(label)
-                if not labelVal:
-                    raise KeyError(f'no label with hash: {label} exists')
-                client.push_label(label, labelVal)
-
-            for commit in m_commits:
-                cmtContent = CR.commit(commit)
-                if not cmtContent:
-                    raise KeyError(f'no commit with hash: {commit} exists')
-                client.push_commit_record(commit=cmtContent.commit,
-                                          parentVal=cmtContent.cmtParentVal,
-                                          specVal=cmtContent.cmtSpecVal,
-                                          refVal=cmtContent.cmtRefVal)
-
-            branchHead = heads.get_branch_head_commit(self._env.branchenv, branch_name)
-            client.push_branch_record(branch_name, branchHead)
-            return True
-
-    def _ping_server(self, remote_name: str, *, username: str = '', password: str = '') -> str:
-        '''ping the remote server with provided name.
-
-        Parameters
-        ----------
-        remote_name : str
-            name of the remote repository to make the push on.
-        auth_username : str, optional, kwarg-only
-            credentials to use for authentication if repository push restrictions
-            are enabled, by default ''.
-        auth_password : str, optional, kwarg-only
-            credentials to use for authentication if repository push restrictions
-            are enabled, by default ''.
-
-        Returns
-        -------
-        string
-            if success, should result in "PONG"
-        '''
-        self.__verify_repo_initialized()
-        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote_name)
-        self._client = HangarClient(
-            envs=self._env, address=address, auth_username=username, auth_password=password)
-        with closing(self._client) as client:
-            res = client.ping_pong()
-            return res
-
-    def add_remote(self, remote_name: str, remote_address: str) -> bool:
-        '''Add a remote to the repository accessible by `name` at `address`.
-
-        Parameters
-        ----------
-        remote_name : str
-            the name which should be used to refer to the remote server (ie:
-            'origin')
-        remote_address : str
-            the IP:PORT where the hangar server is running
-
-        Returns
-        -------
-        str
-            The name of the remote added to the client's server list.
-
-        Raises
-        ------
-        ValueError
-            If a remote with the provided name is already listed on this client,
-            No-Op. In order to update a remote server address, it must be
-            removed and then re-added with the desired address.
-        '''
-        self.__verify_repo_initialized()
-        succ = heads.add_remote(
-            branchenv=self._env.branchenv,
-            name=remote_name,
-            address=remote_address)
-
-        if succ is False:
-            raise ValueError(
-                f'Remote with name: {remote_name} has been previously added.'
-                f'No operation (update to the server channel address) was saved.')
-        return remote_name
-
-    def remove_remote(self, remote_name: str) -> str:
-        '''Remove a remote repository from the branch records
-
-        Parameters
-        ----------
-        remote_name : str
-            name of the remote to remove the reference to
-
-        Raises
-        ------
-        ValueError
-            If a remote with the provided name does not exist
-
-        Returns
-        -------
-        str
-            The channel address which was removed at the given remote name
-        '''
-        self.__verify_repo_initialized()
-        try:
-            rm_address = heads.remove_remote(
-                branchenv=self._env.branchenv, name=remote_name)
-        except KeyError:
-            err = f'No remote reference with name: {remote_name}'
-            raise ValueError(err)
-
-        return rm_address
-
-    def list_remotes(self):
-        '''List names of all remotes recorded in the repo
-
-        Returns
-        -------
-        list
-            list of str containing all remotes listed in the repo.
-        '''
-        self.__verify_repo_initialized()
-        remotes = heads.get_remote_names(self._env.branchenv)
-        return remotes
-
-    def init(self, user_name, user_email, remove_old=False):
+    def init(self, user_name: str, user_email: str,
+             remove_old: bool = False) -> os.PathLike:
         '''Initialize a Hangar repositor at the specified directory path.
 
         This function must be called before a checkout can be performed.
@@ -572,7 +256,7 @@ class Repository(object):
 
         Returns
         -------
-        str
+        os.PathLike
             the full directory path where the Hangar repository was
             initialized on disk.
         '''
@@ -580,8 +264,13 @@ class Repository(object):
             user_name=user_name, user_email=user_email, remove_old=remove_old)
         return pth
 
-    def log(self, branch_name=None, commit_hash=None,
-            *, return_contents=False, show_time=False, show_user=False):
+    def log(self,
+            branch_name: str = None,
+            commit_hash: str = None,
+            *,
+            return_contents: bool = False,
+            show_time: bool = False,
+            show_user: bool = False) -> Optional[dict]:
         '''Displays a pretty printed commit log graph to the terminal.
 
         .. note::
@@ -632,7 +321,11 @@ class Repository(object):
                 show_time=show_time,
                 show_user=show_user)
 
-    def summary(self, *, branch_name='', commit='', return_contents=False):
+    def summary(self,
+                *,
+                branch_name: str = '',
+                commit: str = '',
+                return_contents: bool = False) -> Optional[dict]:
         '''Print a summary of the repository contents to the terminal
 
         .. note::
@@ -663,7 +356,7 @@ class Repository(object):
         else:
             print(ppbuf.getvalue())
 
-    def _details(self):
+    def _details(self) -> None:
         '''DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
         '''
         print(summarize.details(self._env.branchenv).getvalue())
@@ -676,7 +369,7 @@ class Repository(object):
             print(summarize.details(commitenv).getvalue())
         return
 
-    def _ecosystem_details(self):
+    def _ecosystem_details(self) -> dict:
         '''DEVELOPER USER ONLY: log and return package versions on the sytem.
         '''
         eco = ecosystem.get_versions()
