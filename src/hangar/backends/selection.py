@@ -7,11 +7,28 @@ specification.
 Identifiation
 -------------
 
-A two digit code identifies which backend some record belongs to. In general,
-the codes are split with the following pattern:
+A two character ascii code identifies which backend some record belongs to.
+Valid characters are the union of ascii_lowercase, ascii_uppercase, and
+ascii_digits:
 
-    * [00 : 49] -> backends handeling data residing on the local disk
-    * [50 : 99] -> backends refereing to data residing on a remote server
+    ``abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789``
+
+Though stored as bytes in the backend, we use human readable characters (and not
+unprintable bytes) to aid in human tasks like developer database dumps and
+debugging
+
+The number of codes possible (a 2-choice permutaion with repetion) is: 3844
+which we anticipate to be more then sufficient long into the future. As a
+convention, the first digit of the code can be used to identify the storage
+medium:
+
+    * Lowercase ascii letters & digits [0, 1, 2, 3, 4] -> reserved for
+      backends handeling data on the local disk.
+    * Uppercase ascii letters & digits [5, 6, 7, 8, 9] -> reserved for
+      backends refereing to data residing on a remote server.
+
+This is not a hard and fast rule though, and can be changed in the future if the
+need arises.
 
 Process & Guarrentees
 ---------------------
