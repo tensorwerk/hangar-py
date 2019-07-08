@@ -261,10 +261,10 @@ class HDF5_00_FileHandles(object):
     def __getstate__(self):
         '''ensure multiprocess operations can pickle relevant data. need tests'''
         self.close()
-        time.sleep(0.05)  # buffer time
+        time.sleep(0.1)  # buffer time
         state = self.__dict__.copy()
-        state['rFp'] = {}
-        state['wFp'] = {}
+        del state['rFp']
+        del state['wFp']
         del state['Fp']
         del state['fmtParser']
         return state
@@ -272,6 +272,8 @@ class HDF5_00_FileHandles(object):
     def __setstate__(self, state):
         '''ensure multiprocess operations can pickle relevant data. need tests'''
         self.__dict__.update(state)
+        self.rFp = {}
+        self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
         self.fmtParser = HDF5_00_Parser()
         self.open(self.mode)
