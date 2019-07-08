@@ -88,6 +88,7 @@ import logging
 import math
 import os
 import re
+import time
 from collections import namedtuple, ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
@@ -256,6 +257,24 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
             self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
             self.wFp[self.w_uid].flush()
+
+    def __getstate__(self):
+        '''ensure multiprocess operations can pickle relevant data. need tests'''
+        self.close()
+        time.sleep(0.05)  # buffer time
+        state = self.__dict__.copy()
+        state['rFp'] = {}
+        state['wFp'] = {}
+        del state['Fp']
+        del state['fmtParser']
+        return state
+
+    def __setstate__(self, state):
+        '''ensure multiprocess operations can pickle relevant data. need tests'''
+        self.__dict__.update(state)
+        self.Fp = ChainMap(self.rFp, self.wFp)
+        self.fmtParser = HDF5_00_Parser()
+        self.open(self.mode)
 
     def open(self, mode: str, *, remote_operation: bool = False):
         '''Open an hdf5 file handle in the Handler Singleton
