@@ -15,7 +15,7 @@ def test_starting_up(managed_tmpdir):
     assert os.path.isdir(repo._repo_path)
     assert repo._repo_path == os.path.join(managed_tmpdir, '__hangar')
     co = repo.checkout(write=True)
-    assert co._differ.status() == 'CLEAN'
+    assert co.diff.status() == 'CLEAN'
     co.close()
     repo._env._close_environments()
 

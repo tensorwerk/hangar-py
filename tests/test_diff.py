@@ -297,8 +297,42 @@ class TestReaderDiff:
 
 class TestWriterDiff:
 
-    def test_status(self, repo_1_br_no_conf):
+    def test_status_samples(self, written_repo):
+        dummyData = np.zeros((5, 7))
+        repo = written_repo
+        co = repo.checkout()
+        with pytest.raises(AttributeError):
+            co.diff.status()  # Read checkout doesn't have status()
+
+        co = repo.checkout(write=True)
+        co.datasets['_dset']['45'] = dummyData
+        assert co.diff.status() == 'DIRTY'
+        co.commit('adding')
+        assert co.diff.status() == 'CLEAN'
+
+    def test_status_dset(self):
         pass
 
-    def test_staged(self):
+    def test_status_meta(self):
+        pass
+
+    def test_staged_samples(self, written_repo):
+        dummyData = np.zeros((5, 7))
+        repo = written_repo
+        co = repo.checkout()
+
+        co = repo.checkout(write=True)
+        co.datasets['_dset']['45'] = dummyData
+        diffs = co.diff.staged()[0]
+        # TODO: diff from staged doesn't have master and dev
+        for key in diffs['samples']['master']['_dset']['additions'].keys():
+            assert key.data_name == '45'
+
+    def test_staged_dset(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        co.datasets.init_dataset('sampledset', shape=(2, 3), dtype=np.float)
+        diff = co.diff.staged()[0]
+
+    def test_staged_meta(self):
         pass
