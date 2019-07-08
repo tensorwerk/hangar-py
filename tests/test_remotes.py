@@ -91,7 +91,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
-    assert newRepo.list_branch_names() == ['master']
+    assert newRepo.list_branches() == ['master']
     for cmt, sampList in cmtList:
         newRepo.fetch_data('origin', cmt)
         nco = newRepo.checkout(commit=cmt)
@@ -207,7 +207,7 @@ def test_server_push_clone_second_branch_with_new_commit(
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
-    assert newRepo.list_branch_names() == ['master']
+    assert newRepo.list_branches() == ['master']
     for cmt, sampList in masterCmtList:
         newRepo.fetch_data('origin', cmt)
         nco = newRepo.checkout(commit=cmt)
@@ -221,7 +221,7 @@ def test_server_push_clone_second_branch_with_new_commit(
     # Fetch test
     fetch = newRepo.fetch('origin', branch)
     assert fetch == f'origin/{branch}'
-    assert newRepo.list_branch_names() == ['master', f'origin/{branch}']
+    assert newRepo.list_branches() == ['master', f'origin/{branch}']
     for cmt, sampList in devCmtList:
         newRepo.fetch_data('origin', cmt)
         nco = newRepo.checkout(commit=cmt)
@@ -323,7 +323,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
-    assert newRepo.list_branch_names() == ['master']
+    assert newRepo.list_branches() == ['master']
     for cmt, sampList in masterCmtList:
         newRepo.fetch_data('origin', cmt)
         nco = newRepo.checkout(commit=cmt)

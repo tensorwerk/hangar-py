@@ -111,7 +111,7 @@ def list_remotes():
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    click.echo(repo.list_remote_names())
+    click.echo(repo.list_remotes())
 
 
 @remote.command(name='add')
@@ -164,7 +164,7 @@ def branch(l, b):
     P = os.getcwd()
     repo = Repository(path=P)
     if l:
-        click.echo(repo.list_branch_names())
+        click.echo(repo.list_branches())
     elif b:
         succ = repo.create_branch(b)
         click.echo(f'create branch operation success: {succ}')

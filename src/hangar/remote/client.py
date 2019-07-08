@@ -101,7 +101,7 @@ class HangarClient(object):
             time.sleep(0.05)
             t_tot = time.time() - t_init
         else:
-            err = TimeoutError(f'Server did not connect after: {self.wait_ready_timeout} sec.')
+            err = ConnectionError(f'Server did not connect after: {self.wait_ready_timeout} sec.')
             logger.error(err)
             raise err
 
@@ -304,7 +304,7 @@ class HangarClient(object):
         return reply
 
     def push_find_missing_commits(self, branch_name):
-
+        # TODO: THIS PROCESSING SHOULD NOT BE DONE HERE
         branch_head = heads.get_branch_head_commit(self.env.branchenv, branch_name)
         branch_rec = hangar_service_pb2.BranchRecord(name=branch_name, commit=branch_head)
         branch_commits = summarize.list_history(
@@ -337,15 +337,19 @@ class HangarClient(object):
         recieved_data = [(digest, schema_hash) for digest, schema_hash in missing_hashs]
         return recieved_data
 
-    def push_find_missing_hash_records(self, commit):
+    def push_find_missing_hash_records(self, commit, tmpDB: lmdb.Environment = None):
 
-        with tempfile.TemporaryDirectory() as tempD:
-            tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-            commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
+        if tmpDB is None:
+            with tempfile.TemporaryDirectory() as tempD:
+                tmpDF = os.path.join(tempD, 'test.lmdb')
+                tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
+                commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
+                c_hashs_schemas = queries.RecordQuery(tmpDB).data_hash_to_schema_hash()
+                c_hashes = list(set(c_hashs_schemas.keys()))
+                tmpDB.close()
+        else:
             c_hashs_schemas = queries.RecordQuery(tmpDB).data_hash_to_schema_hash()
             c_hashes = list(set(c_hashs_schemas.keys()))
-            tmpDB.close()
 
         pb2_func = hangar_service_pb2.FindMissingHashRecordsRequest
         cIter = chunks.missingHashRequestIterator(commit, c_hashes, pb2_func)
@@ -360,7 +364,7 @@ class HangarClient(object):
 
         uncompBytes = blosc.decompress(hBytes)
         s_missing_hashs = msgpack.unpackb(uncompBytes, raw=False, use_list=False)
-        s_mis_hsh_sch = dict((s_hsh, c_hashs_schemas[s_hsh]) for s_hsh in s_missing_hashs)
+        s_mis_hsh_sch = [(s_hsh, c_hashs_schemas[s_hsh]) for s_hsh in s_missing_hashs]
         return s_mis_hsh_sch
 
     def fetch_find_missing_labels(self, commit):
@@ -383,14 +387,19 @@ class HangarClient(object):
         missing_hashs = msgpack.unpackb(uncompBytes, raw=False, use_list=False)
         return missing_hashs
 
-    def push_find_missing_labels(self, commit):
-        with tempfile.TemporaryDirectory() as tempD:
-            tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-            commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
+    def push_find_missing_labels(self, commit, tmpDB: lmdb.Environment = None):
+
+        if tmpDB is None:
+            with tempfile.TemporaryDirectory() as tempD:
+                tmpDF = os.path.join(tempD, 'test.lmdb')
+                tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
+                commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
+                c_hashset = set(queries.RecordQuery(tmpDB).metadata_hashes())
+                c_hashes = list(c_hashset)
+                tmpDB.close()
+        else:
             c_hashset = set(queries.RecordQuery(tmpDB).metadata_hashes())
             c_hashes = list(c_hashset)
-            tmpDB.close()
 
         pb2_func = hangar_service_pb2.FindMissingLabelsRequest
         cIter = chunks.missingHashRequestIterator(commit, c_hashes, pb2_func)
@@ -418,15 +427,19 @@ class HangarClient(object):
         response = self.stub.FetchFindMissingSchemas(request)
         return response
 
-    def push_find_missing_schemas(self, commit):
+    def push_find_missing_schemas(self, commit, tmpDB: lmdb.Environment = None):
 
-        with tempfile.TemporaryDirectory() as tempD:
-            tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-            commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
+        if tmpDB is None:
+            with tempfile.TemporaryDirectory() as tempD:
+                tmpDF = os.path.join(tempD, 'test.lmdb')
+                tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
+                commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
+                c_schemaset = set(queries.RecordQuery(tmpDB).schema_hashes())
+                c_schemas = list(c_schemaset)
+                tmpDB.close()
+        else:
             c_schemaset = set(queries.RecordQuery(tmpDB).schema_hashes())
             c_schemas = list(c_schemaset)
-            tmpDB.close()
 
         request = hangar_service_pb2.FindMissingSchemasRequest()
         request.commit = commit

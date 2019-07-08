@@ -11,7 +11,7 @@ from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
 from .diagnostics import graphing, ecosystem
 from .records import heads, parsing, summarize, commiting, queries, hashs
-from .remote.hangar_client import HangarClient
+from .remote.client import HangarClient
 from .remote.content import ContentWriter, ContentReader
 from .utils import is_valid_directory_path, is_suitable_user_key
 
@@ -205,7 +205,7 @@ class Repository(object):
             permenantly in any commits created.
         remote_address : str
             location where the
-            :class:`hangar.remote.hangar_server.HangarServer` process is
+            :class:`hangar.remote.server.HangarServer` process is
             running and accessable by the clone user.
         remove_old : bool, optional, kwarg only
             DANGER! DEVELOPMENT USE ONLY! If enabled, a
@@ -249,7 +249,7 @@ class Repository(object):
         CW = ContentWriter(self._env)
 
         with closing(self._client) as client:
-            client: HangarClient  # type hinting for development
+            client: HangarClient  # type hint
 
             # TODO: Should not have to get all data hashs
             commit_hash = self._env.checkout_commit(commit=commit_hash)
@@ -543,7 +543,7 @@ class Repository(object):
 
         return rm_address
 
-    def list_remote_names(self):
+    def list_remotes(self):
         '''List names of all remotes recorded in the repo
 
         Returns
@@ -754,7 +754,7 @@ class Repository(object):
         '''
         raise NotImplementedError()
 
-    def list_branch_names(self):
+    def list_branches(self):
         '''list all branch names created in the repository.
 
         Returns

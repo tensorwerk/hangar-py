@@ -11,7 +11,7 @@ def test_imports():
 def test_starting_up(managed_tmpdir):
     repo = Repository(path=managed_tmpdir)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
-    assert repo.list_branch_names() == ['master']
+    assert repo.list_branches() == ['master']
     assert os.path.isdir(repo._repo_path)
     assert repo._repo_path == os.path.join(managed_tmpdir, '__hangar')
     co = repo.checkout(write=True)

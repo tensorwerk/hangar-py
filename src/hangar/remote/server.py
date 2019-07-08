@@ -99,7 +99,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
             reply = hangar_service_pb2.FetchBranchRecordReply(rec=rec, error=err)
         except ValueError:
-            err = hangar_service_pb2.ErrorProto(code=1, message='BRANCH DOES NOT EXIST')
+            msg = f'BRANCH: {branch_name} DOES NOT EXIST ON SERVER.'
+            context.set_details(msg)
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            err = hangar_service_pb2.ErrorProto(code=5, message=msg)
             reply = hangar_service_pb2.FetchBranchRecordReply(error=err)
         return reply
 
@@ -115,7 +118,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         else:
             current_head = heads.get_branch_head_commit(self.env.branchenv, branch_name)
             if current_head == commit:
-                err = hangar_service_pb2.ErrorProto(code=1, message='NO CHANGE TO BRANCH HEAD')
+                msg = f'NO CHANGE TO BRANCH: {branch_name} WITH HEAD: {current_head}'
+                context.set_details(msg)
+                context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+                err = hangar_service_pb2.ErrorProto(code=6, message=msg)
             else:
                 heads.set_branch_head_commit(self.env.branchenv, branch_name, commit)
                 err = hangar_service_pb2.ErrorProto(code=0, message='OK')
