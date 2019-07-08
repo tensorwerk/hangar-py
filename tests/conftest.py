@@ -100,6 +100,7 @@ def repo_1_br_no_conf(request, repo):
         dummyData[:] = idx
         co1.datasets['dummy'][str(idx)] = dummyData
     co1.metadata['hello'] = 'world'
+    co1.metadata['somemetadatakey'] = 'somemetadatavalue'
     co1.commit('first commit adding dummy data and hello meta')
     co1.close()
 

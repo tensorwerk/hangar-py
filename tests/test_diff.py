@@ -2,18 +2,6 @@ import pytest
 import numpy as np
 
 
-@pytest.fixture()
-def repo_2_br_with_conf(repo_2_br_no_conf):
-    dummyData = np.arange(50)
-    repo = repo_2_br_no_conf
-    dummyData[:] = 1234
-    co = repo.checkout(write=True, branch_name='master')
-    co.datasets['dummy']['15'] = dummyData
-    co.commit('final commit on master, making a conflict')
-    co.close()
-    return repo
-
-
 class TestReaderDiff:
 
     def test_diff_by_commit_and_branch(self, repo_2_br_no_conf):
@@ -101,15 +89,6 @@ class TestReaderDiff:
         for mutated in diffs['samples']['dev']['dummy']['mutations']:
             mutated.data_name == 1
 
-    def test_basic_sample_conflict(self, repo_2_br_with_conf):
-        repo = repo_2_br_with_conf
-        co = repo.checkout()
-        diffdata = co.diff.branch('testbranch')
-        conflict_data = diffdata[1]
-        assert conflict_data['conflict_found'] is True
-        assert conflict_data['sample']['dummy'].t1[0].data_name == '15'
-        assert conflict_data['sample']['dummy'].t1[0].dset_name == 'dummy'
-
     def test_sample_addition_conflict(self, repo_1_br_no_conf):
         # t1
         repo = repo_1_br_no_conf
@@ -179,3 +158,147 @@ class TestReaderDiff:
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts['sample']['dummy'].t3) == 1
         assert conflicts['sample']['dummy'].t3[0].data_name == '7'
+
+    def test_dset_addition_conflict(self, written_repo):
+        # t1
+        repo = written_repo
+
+        repo.create_branch('testbranch')
+        co = repo.checkout(write=True)
+        co.datasets.init_dataset(name='testing_dset', shape=(5, 7), dtype=np.float64)
+        co.commit('dset init in master')
+        co.close()
+
+        co = repo.checkout(write=True, branch_name='testbranch')
+        co.datasets.init_dataset(name='testing_dset', shape=(7, 7), dtype=np.float64)
+        co.commit('dset init in dev')
+        co.close()
+
+        co = repo.checkout()
+        conflicts = co.diff.branch('testbranch')[1]
+        assert len(conflicts['dset'].t1) == 1
+        assert conflicts['dset'].t1[0] == 'testing_dset'
+
+    def test_dset_removal_conflict(self, written_repo):
+        # t21 and t22
+        repo = written_repo
+        co = repo.checkout(write=True)
+        co.datasets.init_dataset(name='testing_dset1', shape=(5, 7), dtype=np.float64)
+        co.datasets.init_dataset(name='testing_dset2', shape=(5, 7), dtype=np.float64)
+        co.commit('added dsets')
+        co.close()
+        repo.create_branch('testbranch')
+
+        co = repo.checkout(write=True)
+        del co.datasets['testing_dset1']
+        del co.datasets['testing_dset2']
+        co.datasets.init_dataset(name='testing_dset2', shape=(5, 7), dtype=np.float32)
+        co.commit('mutation and removal from master')
+        co.close()
+
+        co = repo.checkout(write=True, branch_name='testbranch')
+        del co.datasets['testing_dset1']
+        del co.datasets['testing_dset2']
+        co.datasets.init_dataset(name='testing_dset1', shape=(5, 7), dtype=np.float32)
+        co.commit('mutation and removal from dev')
+        co.close()
+
+        co = repo.checkout()
+        conflicts = co.diff.branch('testbranch')[1]
+        assert len(conflicts['dset'].t21) == 1
+        assert len(conflicts['dset'].t22) == 1
+        assert conflicts['dset'].t21[0] == 'testing_dset1'
+        assert conflicts['dset'].t22[0] == 'testing_dset2'
+
+    def test_dset_mutation_conflict(self, written_repo):
+        # t3
+        repo = written_repo
+        co = repo.checkout(write=True)
+        co.datasets.init_dataset(name='testing_dset', shape=(5, 7), dtype=np.float64)
+        co.commit('added dset')
+        co.close()
+        repo.create_branch('testbranch')
+
+        co = repo.checkout(write=True)
+        del co.datasets['testing_dset']
+        co.datasets.init_dataset(name='testing_dset', shape=(7, 7), dtype=np.float64)
+        co.commit('mutation from master')
+        co.close()
+
+        co = repo.checkout(write=True, branch_name='testbranch')
+        del co.datasets['testing_dset']
+        co.datasets.init_dataset(name='testing_dset', shape=(5, 7), dtype=np.float32)
+        co.commit('mutation from dev')
+        co.close()
+
+        co = repo.checkout()
+        conflicts = co.diff.branch('testbranch')[1]
+        assert len(conflicts['dset'].t3) == 1
+        assert conflicts['dset'].t3[0] == 'testing_dset'
+
+    def test_meta_addition_conflict(self, repo_1_br_no_conf):
+        # t1
+        repo = repo_1_br_no_conf
+        co = repo.checkout(write=True, branch_name='testbranch')
+        co.metadata['metatest'] = 'value1'
+        co.commit('metadata addition')
+        co.close()
+
+        co = repo.checkout(write=True)
+        co.metadata['metatest'] = 'value2'
+        co.commit('metadata addition')
+        co.close()
+
+        co = repo.checkout()
+        conflicts = co.diff.branch('testbranch')[1]
+        assert conflicts['meta'].t1[0] == 'metatest'
+        assert len(conflicts['meta'].t1) == 1
+
+    def test_meta_removal_conflict(self, repo_1_br_no_conf):
+        # t21 and t22
+        repo = repo_1_br_no_conf
+        co = repo.checkout(write=True, branch_name='testbranch')
+        co.metadata['hello'] = 'again'  # this is world in master
+        del co.metadata['somemetadatakey']
+        co.commit('removed & mutated')
+        co.close()
+
+        co = repo.checkout(write=True)
+        del co.metadata['hello']
+        co.metadata['somemetadatakey'] = 'somemetadatavalue - not anymore'
+        co.commit('removed & mutation')
+        co.close()
+
+        co = repo.checkout()
+        conflicts = co.diff.branch('testbranch')[1]
+        assert conflicts['meta'].t21[0] == 'hello'
+        assert len(conflicts['meta'].t21) == 1
+        assert conflicts['meta'].t22[0] == 'somemetadatakey'
+        assert len(conflicts['meta'].t22) == 1
+
+    def test_meta_mutation_conflict(self, repo_1_br_no_conf):
+        # t3
+        repo = repo_1_br_no_conf
+        co = repo.checkout(write=True, branch_name='testbranch')
+        co.metadata['hello'] = 'again'  # this is world in master
+        co.commit('mutated')
+        co.close()
+
+        co = repo.checkout(write=True)
+        co.metadata['hello'] = 'again and again'
+        co.commit('mutation')
+        co.close()
+
+        co = repo.checkout()
+        conflicts = co.diff.branch('testbranch')[1]
+        assert conflicts['meta'].t3[0] == 'hello'
+        assert len(conflicts['meta'].t3) == 1
+
+
+class TestWriterDiff:
+
+    def test_status(self, repo_1_br_no_conf):
+        pass
+
+    def test_staged(self):
+        pass
