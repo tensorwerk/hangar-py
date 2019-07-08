@@ -626,8 +626,8 @@ class ThreeWayCommitDiffer(object):
         # addition conflicts
         addition_keys = self.am_dsetD.additions.intersection(self.ad_dsetD.additions)
         for dsetn in addition_keys:
-            m_srec = _schema_dict_to_nt(self.am_dsetD.d_data[dsetn])
-            d_srec = _schema_dict_to_nt(self.ad_dsetD.d_data[dsetn])
+            m_srec = _schema_dict_to_nt({dsetn: self.am_dsetD.d_data[dsetn]})
+            d_srec = _schema_dict_to_nt({dsetn: self.ad_dsetD.d_data[dsetn]})
             if m_srec != d_srec:
                 tempt1.append(dsetn)
         out['t1'] = tempt1
@@ -639,8 +639,8 @@ class ThreeWayCommitDiffer(object):
         # mutation conflicts
         mutation_keys = self.am_dsetD.mutations.intersection(self.ad_dsetD.mutations)
         for dsetn in mutation_keys:
-            m_srec = _schema_dict_to_nt(self.am_dsetD.d_data[dsetn])
-            d_srec = _schema_dict_to_nt(self.ad_dsetD.d_data[dsetn])
+            m_srec = _schema_dict_to_nt({dsetn: self.am_dsetD.d_data[dsetn]})
+            d_srec = _schema_dict_to_nt({dsetn: self.ad_dsetD.d_data[dsetn]})
             if m_srec != d_srec:
                 tempt3.append(dsetn)
         out['t3'] = tempt3
