@@ -40,6 +40,7 @@ def written_repo(repo):
     co.close()
     yield repo
 
+
 @pytest.fixture()
 def variable_shape_written_repo(repo):
     co = repo.checkout(write=True)
@@ -66,6 +67,7 @@ def randomsizedarray():
     a = random.randint(2, 8)
     b = random.randint(2, 8)
     return np.random.random((a, b))
+
 
 @pytest.fixture()
 def written_two_cmt_repo(repo, array5by7):
