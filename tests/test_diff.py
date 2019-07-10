@@ -297,7 +297,7 @@ class TestReaderDiff:
 
 class TestWriterDiff:
 
-    def test_status_samples(self, written_repo):
+    def test_status_and_staged_samples(self, written_repo):
         dummyData = np.zeros((5, 7))
         repo = written_repo
         co = repo.checkout()
@@ -307,32 +307,29 @@ class TestWriterDiff:
         co = repo.checkout(write=True)
         co.datasets['_dset']['45'] = dummyData
         assert co.diff.status() == 'DIRTY'
+        diffs = co.diff.staged()[0]
+        for key in diffs['samples']['master']['_dset']['additions'].keys():
+            assert key.data_name == '45'
         co.commit('adding')
         assert co.diff.status() == 'CLEAN'
 
-    def test_status_dset(self):
-        pass
-
-    def test_status_meta(self):
-        pass
-
-    def test_staged_samples(self, written_repo):
-        dummyData = np.zeros((5, 7))
-        repo = written_repo
-        co = repo.checkout()
-
-        co = repo.checkout(write=True)
-        co.datasets['_dset']['45'] = dummyData
-        diffs = co.diff.staged()[0]
-        # TODO: diff from staged doesn't have master and dev
-        for key in diffs['samples']['master']['_dset']['additions'].keys():
-            assert key.data_name == '45'
-
-    def test_staged_dset(self, written_repo):
+    def test_status_and_staged_dset(self, written_repo):
         repo = written_repo
         co = repo.checkout(write=True)
-        co.datasets.init_dataset('sampledset', shape=(2, 3), dtype=np.float)
+        co.datasets.init_dataset(name='sampledset', shape=(3, 5), dtype=np.float32)
+        assert co.diff.status() == 'DIRTY'
         diff = co.diff.staged()[0]
+        assert 'sampledset' in diff['datasets']['master']['additions'].keys()
+        assert '_dset' in diff['datasets']['master']['unchanged'].keys()
+        co.commit('init dset')
+        assert co.diff.status() == 'CLEAN'
 
-    def test_staged_meta(self):
-        pass
+    def test_status_and_staged_meta(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        co.metadata['hello_from_test'] = 'hai to test'
+        assert co.diff.status() == 'DIRTY'
+        diff = co.diff.staged()[0]
+        assert 'hello_from_test' in diff['metadata']['master']['additions']
+        co.commit('init metadata')
+        assert co.diff.status() == 'CLEAN'
