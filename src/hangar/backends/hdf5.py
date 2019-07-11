@@ -88,6 +88,7 @@ import logging
 import math
 import os
 import re
+import time
 from collections import namedtuple, ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
@@ -136,21 +137,21 @@ if filter_options['default']['complib'].startswith('blosc'):
 
 # -------------------------------- Parser Implementation ----------------------
 
+DataHashSpec = namedtuple(
+    typename='DataHashSpec',
+    field_names=['backend', 'uid', 'dataset', 'dataset_idx', 'shape'])
+
 
 class HDF5_00_Parser(object):
 
-    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE', 'DataHashSpec']
+    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE']
 
     def __init__(self):
 
         self.FmtCode = '00'
-
         # match and remove the following characters: '['   ']'   '('   ')'   ','
         self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
         self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
-        self.DataHashSpec = namedtuple(
-            typename='DataHashSpec',
-            field_names=['backend', 'uid', 'dataset', 'dataset_idx', 'shape'])
 
     def encode(self, uid, dataset, dataset_idx, shape) -> bytes:
         '''converts the hdf5 data has spec to an appropriate db value
@@ -202,11 +203,11 @@ class HDF5_00_Parser(object):
         # empty strings from the result. So long as c.SEP_LST = ' ' this will
         # work
         shape = tuple(int(x) for x in shape_vs.split())
-        raw_val = self.DataHashSpec(backend=self.FmtCode,
-                                    uid=uid,
-                                    dataset=dataset,
-                                    dataset_idx=dataset_idx,
-                                    shape=shape)
+        raw_val = DataHashSpec(backend=self.FmtCode,
+                               uid=uid,
+                               dataset=dataset,
+                               dataset_idx=dataset_idx,
+                               shape=shape)
         return raw_val
 
 
@@ -256,6 +257,26 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
             self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
             self.wFp[self.w_uid].flush()
+
+    def __getstate__(self):
+        '''ensure multiprocess operations can pickle relevant data. need tests'''
+        self.close()
+        time.sleep(0.1)  # buffer time
+        state = self.__dict__.copy()
+        del state['rFp']
+        del state['wFp']
+        del state['Fp']
+        del state['fmtParser']
+        return state
+
+    def __setstate__(self, state):
+        '''ensure multiprocess operations can pickle relevant data. need tests'''
+        self.__dict__.update(state)
+        self.rFp = {}
+        self.wFp = {}
+        self.Fp = ChainMap(self.rFp, self.wFp)
+        self.fmtParser = HDF5_00_Parser()
+        self.open(self.mode)
 
     def open(self, mode: str, *, remote_operation: bool = False):
         '''Open an hdf5 file handle in the Handler Singleton
@@ -556,7 +577,7 @@ class HDF5_00_FileHandles(object):
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
 
-    def read_data(self, hashVal: HDF5_00_Parser.DataHashSpec) -> np.ndarray:
+    def read_data(self, hashVal) -> np.ndarray:
         '''Read data from an hdf5 file handle at the specified locations
 
         Parameters
@@ -604,7 +625,6 @@ class HDF5_00_FileHandles(object):
                     destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
                 else:
                     raise
-
         return destArr
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:

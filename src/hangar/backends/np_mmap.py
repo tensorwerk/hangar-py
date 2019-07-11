@@ -101,18 +101,18 @@ COLLECTION_SIZE = 500
 
 # -------------------------------- Parser Implementation ----------------------
 
+DataHashSpec = namedtuple(
+    typename='DataHashSpec',
+    field_names=['backend', 'uid', 'checksum', 'dataset_idx', 'shape'])
+
 
 class NUMPY_00_Parser(object):
 
-    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE', 'DataHashSpec']
+    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE']
 
     def __init__(self):
 
         self.FmtCode = '01'
-        self.DataHashSpec = namedtuple(
-            typename='DataHashSpec',
-            field_names=['backend', 'uid', 'checksum', 'dataset_idx', 'shape'])
-
         # match and remove the following characters: '['   ']'   '('   ')'   ','
         self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
         # split up a formated parsed string into unique fields
@@ -168,11 +168,11 @@ class NUMPY_00_Parser(object):
         # empty strings from the result. So long as c.SEP_LST = ' ' this will
         # work
         shape = tuple(int(x) for x in shape_vs.split())
-        raw_val = self.DataHashSpec(backend=self.FmtCode,
-                                    uid=uid,
-                                    checksum=checksum,
-                                    dataset_idx=dataset_idx,
-                                    shape=shape)
+        raw_val = DataHashSpec(backend=self.FmtCode,
+                               uid=uid,
+                               checksum=checksum,
+                               dataset_idx=dataset_idx,
+                               shape=shape)
         return raw_val
 
 
@@ -313,7 +313,7 @@ class NUMPY_00_FileHandles(object):
             symlink_file_path = pjoin(self.STAGEDIR, f'{uid}.npy')
         symlink_rel(file_path, symlink_file_path)
 
-    def read_data(self, hashVal: namedtuple) -> np.ndarray:
+    def read_data(self, hashVal) -> np.ndarray:
         '''Read data from disk written in the numpy_00 fmtBackend
 
         Parameters
@@ -350,8 +350,8 @@ class NUMPY_00_FileHandles(object):
           all future reads of the subarray from that process, but which would
           not be persisted to disk.
         '''
-        srcSlc = (self.slcExpr[int(hashVal.dataset_idx)], *(self.slcExpr[0:x] for x in hashVal.shape))
-
+        srcSlc = (self.slcExpr[int(hashVal.dataset_idx)],
+                  *(self.slcExpr[0:x] for x in hashVal.shape))
         try:
             res = self.Fp[hashVal.uid][srcSlc]
         except TypeError:

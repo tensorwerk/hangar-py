@@ -19,6 +19,7 @@ Improvements
 
 * Record format versioning and standardization so to not break backwards compatibility in the future. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Backend addition and update developer protocols and documentation. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Read-only checkout dataset sample ``get`` methods now are multithread and multiprocess safe. (`#84 <https://github.com/tensorwerk/hangar-py/pull/84>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Many tests added (including support for Mac OSX on Travis-CI).
 
 Bug Fixes

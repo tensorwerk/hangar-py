@@ -1,9 +1,11 @@
 import hashlib
-from typing import Optional
 import logging
+from typing import Optional
+from multiprocessing import Pool, get_context, cpu_count
+from typing import MutableMapping
 
-import numpy as np
 import lmdb
+import numpy as np
 
 from .context import TxnRegister
 from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP, backend_from_heuristics
@@ -44,7 +46,6 @@ class DatasetDataReader(object):
     mode : str, optional
         mode to open the file handles in. 'r' for read only, 'a' for read/write, defaults
         to 'r'
-
     '''
 
     def __init__(self,
@@ -58,7 +59,7 @@ class DatasetDataReader(object):
                  dataenv: lmdb.Environment,
                  hashenv: lmdb.Environment,
                  mode: str,
-                 **kwargs):
+                 *args, **kwargs):
 
         self._mode = mode
         self._path = repo_pth
@@ -69,16 +70,11 @@ class DatasetDataReader(object):
         self._schema_max_shape = tuple(varMaxShape)
         self._default_schema_hash = default_schema_hash
 
-        self._dataenv: lmdb.Environment = dataenv
-        self._hashenv: lmdb.Environment = hashenv
-        self._hashTxn: Optional[lmdb.Transaction] = None
-        self._dataTxn: Optional[lmdb.Transaction] = None
-        self._TxnRegister = TxnRegister()
-        self._Query = RecordQuery(self._dataenv)
-
         self._is_conman = False
         self._index_expr_factory = np.s_
         self._index_expr_factory.maketuple = False
+
+        # ------------------------ backend setup ------------------------------
 
         self._fs = {}
         for backend, accessor in BACKEND_ACCESSOR_MAP.items():
@@ -89,16 +85,33 @@ class DatasetDataReader(object):
                     schema_dtype=np.typeDict[self._schema_dtype_num])
                 self._fs[backend].open(self._mode)
 
+        # -------------- Sample backend specification parsing -----------------
+
+        self._sspecs = {}
+        _TxnRegister = TxnRegister()
+        hashTxn = _TxnRegister.begin_reader_txn(hashenv)
+        dataTxn = _TxnRegister.begin_reader_txn(dataenv)
+        try:
+            data_names = RecordQuery(dataenv).dataset_data_names(self._dsetn)
+            for name in data_names:
+                ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
+                data_ref = dataTxn.get(ref_key, default=False)
+
+                dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
+                hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
+                hash_ref = hashTxn.get(hashKey)
+                self._sspecs[name] = backend_decoder(hash_ref)
+        finally:
+            _TxnRegister.abort_reader_txn(hashenv)
+            _TxnRegister.abort_reader_txn(dataenv)
+
     def __enter__(self):
         self._is_conman = True
-        self._hashTxn = self._TxnRegister.begin_reader_txn(self._hashenv)
-        self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
         return self
 
     def __exit__(self, *exc):
         self._is_conman = False
-        self._hashTxn = self._TxnRegister.abort_reader_txn(self._hashenv)
-        self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+        return
 
     def __getitem__(self, key):
         '''Retrieve a sample with a given key. Convenience method for dict style access.
@@ -128,18 +141,7 @@ class DatasetDataReader(object):
         int
             number of samples the dataset contains
         '''
-        if not self._is_conman:
-            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
-
-        try:
-            dsetCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
-            dsetCountVal = self._dataTxn.get(dsetCountKey, default='0'.encode())
-            dset_count = parsing.dataset_record_count_raw_val_from_db_val(dsetCountVal)
-        finally:
-            if not self._is_conman:
-                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
-
-        return dset_count
+        return len(self._sspecs)
 
     def __contains__(self, key):
         '''Determine if a key is a valid sample name in the dataset
@@ -154,18 +156,8 @@ class DatasetDataReader(object):
         bool
             True if key exists, else False
         '''
-        if not self._is_conman:
-            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
-
-        try:
-            ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, key)
-            data_ref = self._dataTxn.get(ref_key, default=False)
-            keyExists = bool(data_ref)
-        finally:
-            if not self._is_conman:
-                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
-
-        return keyExists
+        exists = key in self._sspecs
+        return exists
 
     def _repr_pretty_(self, p, cycle):
         res = f'\n Hangar {self.__class__.__name__} \
@@ -187,8 +179,6 @@ class DatasetDataReader(object):
               f'isVar={self._schema_variable}, '\
               f'varMaxShape={self._schema_max_shape}, '\
               f'varDtypeNum={self._schema_dtype_num}, '\
-              f'dataenv={self._dataenv}, '\
-              f'hashenv={self._hashenv}, '\
               f'mode={self._mode})'
         return res
 
@@ -239,36 +229,47 @@ class DatasetDataReader(object):
     def keys(self):
         '''generator which yields the names of every sample in the dataset
         '''
-        data_names = self._Query.dataset_data_names(self._dsetn)
-        for name in data_names:
+        for name in self._sspecs:
             yield name
 
     def values(self):
         '''generator which yields the tensor data for every sample in the dataset
         '''
-        data_names = self._Query.dataset_data_names(self._dsetn)
-        for name in data_names:
+        for name in self._sspecs:
             yield self.get(name)
 
     def items(self):
         '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
         '''
-        data_names = self._Query.dataset_data_names(self._dsetn)
-        for name in data_names:
+        for name in self._sspecs:
             yield (name, self.get(name))
 
-    def get(self, name):
-        '''Retrieve a dataset data sample with the provided sample name
+    def get(self, name: str) -> np.ndarray:
+        '''Retrieve a sample in the dataset with a specific name.
+
+        The method is thread/process safe IF used in a read only checkout. Use
+        this if the calling application wants to manually manage multiprocess
+        logic for data retrieval. Otherwise, see the :py:meth:`get_batch` method
+        to retrieve multiple data samples simultaneously. This method uses
+        multiprocess pool of workers (managed by hangar) to drastically increase
+        access speed and simplify application developer workflows.
+
+        .. note::
+
+            in most situations, we have observed little to no performance
+            improvements when using multithreading. However, access time can be
+            nearly linearly decreased with the number of CPU cores / workers if
+            multiprocessing is used.
 
         Parameters
         ----------
         name : str
-            name of the sample to retrieve
+            Name of the sample to retrieve data for.
 
         Returns
         -------
         np.array
-            tensor data stored in the dataset archived with provided name
+            Tensor data stored in the dataset archived with provided name(s).
 
         Raises
         ------
@@ -276,51 +277,92 @@ class DatasetDataReader(object):
             if the dataset does not contain data with the provided name
         '''
         try:
-            tmpconman = False if self._is_conman else True
-            if tmpconman:
-                self.__enter__()
-
-            ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
-            data_ref = self._dataTxn.get(ref_key, default=False)
-            if data_ref is False:
-                raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
-
-            dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
-            hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
-            hash_ref = self._hashTxn.get(hashKey)
-            spec = backend_decoder(hash_ref)
+            spec = self._sspecs[name]
             data = self._fs[spec.backend].read_data(spec)
+            return data
+        except KeyError:
+            raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
 
-        except KeyError as e:
-            logger.error(e, exc_info=False)
-            raise
+    def get_batch(self, names: list,
+                  *, n_cpus: int = None, start_method: str = 'spawn') -> list:
+        '''Retrieve a batch of sample data with the provided names.
 
-        finally:
-            if tmpconman:
-                self.__exit__()
+        This method is (technically) thread & process safe, though it should not
+        be called in parallel via multithread/process application code; This
+        method has been seen to drastically decrease retrieval time of sample
+        batches (as compared to looping over single sample names sequentially).
+        Internally it implements a multiprocess pool of workers (managed by
+        hangar) to simplify application developer workflows.
 
+        Parameters
+        ----------
+        name : list, tuple
+            list/tuple of sample names to retrieve data for.
+        n_cpus : int, kwarg-only
+            if not None, uses num_cpus / 2 of the system for retrieval. Setting
+            this value to ``1`` will not use a multiprocess pool to perform the
+            work. Default is None
+        start_method : str, kwarg-only
+            One of 'spawn', 'fork', 'forkserver' specifying the process pool
+            start method. Not all options are available on all platforms. see
+            python multiprocess docs for details. Default is 'spawn'.
+
+        Returns
+        -------
+        list(np.ndarray)
+            Tensor data stored in the dataset archived with provided name(s).
+
+            If a single sample name is passed in as the, the corresponding
+            np.array data will be returned.
+
+            If a list/tuple of sample names are pass in the ``names`` argument,
+            a tuple of size ``len(names)`` will be returned where each element
+            is an np.array containing data at the position it's name listed in
+            the ``names`` parameter.
+
+        Raises
+        ------
+        KeyError
+            if the dataset does not contain data with the provided name
+        '''
+        n_jobs = n_cpus if isinstance(n_cpus, int) else int(cpu_count() / 2)
+        with get_context(start_method).Pool(n_jobs) as p:
+            data = p.map(self.get, names)
         return data
 
 
 class DatasetDataWriter(DatasetDataReader):
     '''Class implementing methods to write data to a dataset.
 
-    Extends the functionality of the DatasetDataReader class. The __init__ method requires
-    quite a number of ``**kwargs`` to be passed along to the :class:`DatasetDataReader`
-    class.
+    Extends the functionality of the DatasetDataReader class. The __init__
+    method requires quite a number of ``**kwargs`` to be passed along to the
+    :class:`DatasetDataReader` class.
 
     .. seealso:: :class:`DatasetDataReader`
 
     Parameters
     ----------
+        stagehashenv : lmdb.Environment
+            db where the newly added staged hash data records are stored
+        default_schema_backend : str
+            backend code to act as default where new data samples are added.
         **kwargs:
             See args of :class:`DatasetDataReader`
     '''
 
     def __init__(self, stagehashenv, default_schema_backend, *args, **kwargs):
+
         super().__init__(*args, **kwargs)
+
         self._stagehashenv = stagehashenv
-        self._dflt_backend = default_schema_backend
+        self._dflt_backend: str = default_schema_backend
+        self._dataenv: lmdb.Environment = kwargs['dataenv']
+        self._hashenv: lmdb.Environment = kwargs['hashenv']
+
+        self._TxnRegister = TxnRegister()
+        self._Query = RecordQuery(self._dataenv)
+        self._hashTxn: Optional[lmdb.Transaction] = None
+        self._dataTxn: Optional[lmdb.Transaction] = None
 
     def __enter__(self):
         self._is_conman = True
@@ -340,7 +382,7 @@ class DatasetDataWriter(DatasetDataReader):
             self._fs[k].__exit__(*exc)
 
     def __setitem__(self, key, value):
-        '''Store a piece of data in a dataset. Convenince method to :meth:`add`.
+        '''Store a piece of data in a dataset. Convenience method to :meth:`add`.
 
         .. seealso:: :meth:`add`
 
@@ -360,7 +402,7 @@ class DatasetDataWriter(DatasetDataReader):
         return key
 
     def __delitem__(self, key):
-        '''Remove a sample from the dataset. Convenence method to :meth:`remove`.
+        '''Remove a sample from the dataset. Convenience method to :meth:`remove`.
 
         .. seealso:: :meth:`remove`
 
@@ -413,14 +455,14 @@ class DatasetDataWriter(DatasetDataReader):
             For variable shape datasets, if a dimension size of the input data
             tensor exceeds specified max dimension size of the dataset samples.
         ValueError
-            For fixed shape datasets, if input data dimensions do not exactally match
+            For fixed shape datasets, if input data dimensions do not exactly match
             specified dataset dimensions.
         ValueError
             If type of `data` argument is not an instance of np.ndarray.
         ValueError
             If `data` is not "C" contiguous array layout.
         ValueError
-            If the datatype of the input data does not match the specifed data type of
+            If the datatype of the input data does not match the specified data type of
             the dataset
         LookupError
             If a data sample with the same name and hash value already exists in the
@@ -489,6 +531,9 @@ class DatasetDataWriter(DatasetDataReader):
                 hashVal = self._fs[self._dflt_backend].write_data(data)
                 self._hashTxn.put(hashKey, hashVal)
                 self._stageHashTxn.put(hashKey, hashVal)
+                self._sspecs[name] = backend_decoder(hashVal)
+            else:
+                self._sspecs[name] = backend_decoder(existingHashVal)
 
             # add the record to the db
             dataRecVal = parsing.data_record_db_val_from_raw_val(full_hash)
@@ -518,7 +563,7 @@ class DatasetDataWriter(DatasetDataReader):
 
             This operation will NEVER actually remove any data from disk. If
             you commit a tensor at any point in time, **it will always remain
-            accessable by checking out a previous commit** when the tensor was
+            accessible by checking out a previous commit** when the tensor was
             present. This is just a way to tell Hangar that you don't want some
             piece of data to clutter up the current version of the repository.
 
@@ -529,7 +574,7 @@ class DatasetDataWriter(DatasetDataReader):
             staging area, written to disk, but then removed **before** a commit
             operation was run. This would be a similar sequence of events as:
             checking out a `git` branch, changing a bunch of text in the file, and
-            immediatly performing a hard reset. If it was never committed, git
+            immediately performing a hard reset. If it was never committed, git
             doesn't know about it, and (at the moment) neither does Hangar.
 
         Parameters
@@ -555,6 +600,7 @@ class DatasetDataWriter(DatasetDataReader):
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
                 raise KeyError(f'No sample: {name} exists in dset: {self._dsetn}')
+            del self._sspecs[name]
 
             dsetDataCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)
             dsetDataCountVal = self._dataTxn.get(dsetDataCountKey)
@@ -598,13 +644,13 @@ Constructor and Interaction Class for Datasets
 
 
 class Datasets(object):
-    '''Common access patterns and initilization/removal of datasets in a checkout.
+    '''Common access patterns and initialization/removal of datasets in a checkout.
 
     .. warning::
 
         This class should not be instantiated directly. Instead use the factory
         functions :py:meth:`_from_commit` or :py:meth:`_from_staging` to
-        return a pre-initialized class instance appropriatly constructed for
+        return a pre-initialized class instance appropriately constructed for
         either a read-only or write-enabled checkout.
 
     Parameters
@@ -616,8 +662,11 @@ class Datasets(object):
     hashenv : lmdb.Environment
         environment handle for hash records
     dataenv : lmdb.Environment
-        environment handle for the unpacked records (stage for
-        write-enabled, cmtrefenv for read-only)
+        environment handle for the unpacked records. `data` is means to refer to
+        the fact that the stageenv is passed in for for write-enabled, and a
+        cmtrefenv for read-only checkouts.
+    stagehashenv : lmdb.Environment
+        environment handle for newly added staged data hash records.
     mode : str
         one of 'r' or 'a' to indicate read or write mode
     '''
@@ -626,12 +675,12 @@ class Datasets(object):
         self._mode = mode
         self._hashenv = hashenv
         self._dataenv = dataenv
-        self._stagehashenv = stagehashenv
         self._repo_pth = repo_pth
         self._datasets = datasets
+        self._stagehashenv = stagehashenv
+
         self._is_conman = False
         self._Query = RecordQuery(self._dataenv)
-
         self.__setup()
 
     def __setup(self):
@@ -658,7 +707,7 @@ class Datasets(object):
         res = f'\n Hangar {self.__class__.__name__}\
                 \n     Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n     Dataset Names:\
-                \n       - ' + '\n       - '.join(self._datasets.keys())
+                \n       - '                             + '\n       - '.join(self._datasets.keys())
         p.text(res)
 
     def __repr__(self):
@@ -673,7 +722,7 @@ class Datasets(object):
     def _ipython_key_completions_(self):
         '''Let ipython know that any key based access can use the dataset keys
 
-        Since we don't want to inheret from dict, nor mess with `__dir__` for the
+        Since we don't want to inherit from dict, nor mess with `__dir__` for the
         sanity of developers, this is the best way to ensure users can autocomplete
         keys.
 
@@ -728,7 +777,7 @@ class Datasets(object):
         key : string
             name of the dataset to remove from the repository. This will remove
             all records from the staging area (though the actual data and all
-            records are still accessable) if they were previously commited
+            records are still accessible) if they were previously committed
 
         Raises
         ------
@@ -835,7 +884,7 @@ class Datasets(object):
         '''Add related samples to un-named datasets with the same generated key.
 
         If you have multiple datasets in a checkout whose samples are related to
-        eachother in some manner, there are two ways of associating samples
+        each other in some manner, there are two ways of associating samples
         together:
 
         1) using named datasets and setting each tensor in each dataset to the
@@ -846,7 +895,7 @@ class Datasets(object):
         When method (2) - this method - is used, the internally generated sample
         ids will be set to the same value for the samples in each dataset. That
         way a user can iterate over the dataset key's in one sample, and use
-        those same keys to get the other releated tensor samples in another
+        those same keys to get the other related tensor samples in another
         dataset.
 
         Parameters
@@ -904,7 +953,7 @@ class Datasets(object):
         the same size that was initially specified upon dataset initialization.
         Variable size datasets on the other hand, can write samples with
         dimensions of any size less than a maximum which is required to be set
-        upon datset creation.
+        upon dataset creation.
 
         Parameters
         ----------
@@ -944,7 +993,7 @@ class Datasets(object):
         ValueError
             If provided name contains any non ascii, non alpha-numeric characters.
         ValueError
-            If required `shape` and `dtype` arguments are not provided in absense of
+            If required `shape` and `dtype` arguments are not provided in absence of
             `prototype` argument.
         ValueError
             If `prototype` argument is not a C contiguous ndarray.
@@ -1120,7 +1169,7 @@ class Datasets(object):
         stageenv : lmdb.Environment
             environment where staging records (dataenv) are opened in write mode.
         stagehashenv: lmdb.Environment
-            environment where the staged hash records are sored in write mode
+            environment where the staged hash records are stored in write mode
 
         Returns
         -------
