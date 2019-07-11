@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 
 
-class TestReaderDiff:
+class TestReaderDiff(object):
 
     def test_diff_by_commit_and_branch(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
@@ -295,7 +295,7 @@ class TestReaderDiff:
         assert len(conflicts['meta'].t3) == 1
 
 
-class TestWriterDiff:
+class TestWriterDiff(object):
 
     def test_status_and_staged_samples(self, written_repo):
         dummyData = np.zeros((5, 7))
