@@ -94,7 +94,7 @@ class ReaderCheckout(object):
             assert hasattr(self, '_datasets')
         except AssertionError:
             err = f'Unable to operate on past checkout objects which have been '\
-                  f'closed. No operation occured. Please use a new checkout.'
+                  f'closed. No operation occurred. Please use a new checkout.'
             raise PermissionError(err) from None
 
     @property
@@ -109,7 +109,7 @@ class ReaderCheckout(object):
         Returns
         -------
         weakref.proxy
-            weakref proxy to the datasets object which behaves exactally like a
+            weakref proxy to the datasets object which behaves exactly like a
             datasets accessor class but which can be invalidated when the writer
             lock is released.
         '''
@@ -129,7 +129,7 @@ class ReaderCheckout(object):
         Returns
         -------
         weakref.proxy
-            weakref proxy to the metadata object which behaves exactally like a
+            weakref proxy to the metadata object which behaves exactly like a
             metadata class but which can be invalidated when the writer lock is
             released.
         '''
@@ -150,7 +150,7 @@ class ReaderCheckout(object):
         -------
         weakref.proxy
             weakref proxy to the differ object (and contained methods) which behaves
-            exactally like the differ class but which can be invalidated when the
+            exactly like the differ class but which can be invalidated when the
             writer lock is released.
         '''
         self.__verify_checkout_alive()
@@ -280,7 +280,7 @@ class WriterCheckout(object):
         Returns
         -------
         weakref.proxy
-            weakref proxy to the datasets object which behaves exactally like a
+            weakref proxy to the datasets object which behaves exactly like a
             datasets accessor class but which can be invalidated when the writer
             lock is released.
         '''
@@ -300,7 +300,7 @@ class WriterCheckout(object):
         Returns
         -------
         weakref.proxy
-            weakref proxy to the metadata object which behaves exactally like a
+            weakref proxy to the metadata object which behaves exactly like a
             metadata class but which can be invalidated when the writer lock is
             released.
         '''
@@ -321,7 +321,7 @@ class WriterCheckout(object):
         -------
         weakref.proxy
             weakref proxy to the differ object (and contained methods) which behaves
-            exactally like the differ class but which can be invalidated when the
+            exactly like the differ class but which can be invalidated when the
             writer lock is released.
         '''
         self.__acquire_writer_lock()
@@ -426,7 +426,7 @@ class WriterCheckout(object):
             except AttributeError:
                 pass
             err = f'Unable to operate on past checkout objects which have been '\
-                  f'closed. No operation occured. Please use a new checkout.'
+                  f'closed. No operation occurred. Please use a new checkout.'
             logger.error(err, exc_info=0)
             raise PermissionError(err) from None
 
@@ -449,12 +449,12 @@ class WriterCheckout(object):
             raise e from None
 
     def __setup(self):
-        '''setup the staging area appropriatly for a write enabled checkout.
+        '''setup the staging area appropriately for a write enabled checkout.
 
         On setup, we cannot be sure what branch the staging area was previously
         checked out on, and we cannot be sure if there are any `uncommitted
         changes` in the staging area (ie. the staging area is `DIRTY`). The
-        setup methods here ensure that we can safetly make any changes to the
+        setup methods here ensure that we can safety make any changes to the
         staging area without overwriting uncommitted changes, and then perform
         the setup steps to checkout staging area state at that point in time.
 
@@ -476,7 +476,7 @@ class WriterCheckout(object):
             if current_head != self._branch_name:
                 err = f'Unable to check out branch: {self._branch_name} for writing as '\
                       f'the staging area has uncommitted changes on branch: {current_head}. '\
-                      f'Please commit or stash uncommited changes before checking out a '\
+                      f'Please commit or stash uncommitted changes before checking out a '\
                       f'different branch for writing.'
                 self.close()
                 logger.error(err, exc_info=1)
@@ -565,7 +565,7 @@ class WriterCheckout(object):
         .. warning::
 
             This operation is IRREVERSIBLE. all records and data which are note
-            stored in a previous commit will be premenantly deleted.
+            stored in a previous commit will be permanently deleted.
 
         Returns
         -------

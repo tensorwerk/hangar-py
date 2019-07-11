@@ -1,5 +1,10 @@
+import time
 import shutil
 import random
+from random import randint
+import platform
+from os.path import join as pjoin
+from os import mkdir
 
 import pytest
 import numpy as np
@@ -129,3 +134,53 @@ def repo_2_br_no_conf(repo_1_br_no_conf):
     co1.commit('second commit on master adding non-conflict data')
     co1.close()
     return repo
+
+
+@pytest.fixture()
+def server_instance(managed_tmpdir, worker_id):
+    from hangar import serve
+
+    address = f'localhost:{randint(50000, 59999)}'
+    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
+    mkdir(base_tmpdir)
+    server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
+    server.start()
+    yield address
+
+    hangserver.env._close_environments()
+    server.stop(0.0)
+    if platform.system() == 'Windows':
+        # time for open file handles to close before tmp dir can be removed.
+        time.sleep(0.5)
+
+
+@pytest.fixture()
+def server_instance_push_restricted(managed_tmpdir, worker_id):
+    from hangar import serve
+
+    address = f'localhost:{randint(50000, 59999)}'
+    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
+    mkdir(base_tmpdir)
+    server, hangserver, _ = serve(base_tmpdir,
+                                  overwrite=True,
+                                  channel_address=address,
+                                  restrict_push=True,
+                                  username='right_username',
+                                  password='right_password')
+    server.start()
+    yield address
+
+    hangserver.env._close_environments()
+    server.stop(0.0)
+    if platform.system() == 'Windows':
+        # time for open file handles to close before tmp dir can be removed.
+        time.sleep(0.5)
+
+
+
+@pytest.fixture()
+def written_two_cmt_server_repo(server_instance, written_two_cmt_repo) -> tuple:
+    written_two_cmt_repo.remote.add('origin', server_instance)
+    success = written_two_cmt_repo.remote.push('origin', 'master')
+    assert success == 'master'
+    yield (server_instance, written_two_cmt_repo)

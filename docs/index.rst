@@ -11,6 +11,7 @@
    tutorial
    design
    api
+   backends
    contributing
    codeofconduct
    authors

@@ -33,7 +33,7 @@ def main():
 @click.option('--email', prompt='User Email', help='email address of the user')
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
 def init(name, email, overwrite):
-    '''Initialize an empty remository at the current path
+    '''Initialize an empty repository at the current path
     '''
     P = os.getcwd()
     repo = Repository(path=P)
@@ -98,7 +98,7 @@ def push(remote, branch):
     P = os.getcwd()
     repo = Repository(path=P)
     commit_hash = repo.remote.push(remote=remote, branch=branch)
-    click.echo(f'Retrieved data for commit hash: {commit_hash}')
+    click.echo(f'Push data for commit hash: {commit_hash}')
 
 
 @main.group()
@@ -199,10 +199,10 @@ def server(overwrite, ip, port):
 @click.option('-b', is_flag=True, help='display the branch/heads db')
 @click.option('-r', is_flag=True, help='display the references db')
 @click.option('-d', is_flag=True, help='display the data hash db')
-@click.option('-m', is_flag=True, help='display the metadat hash db')
+@click.option('-m', is_flag=True, help='display the metadata hash db')
 @click.option('-s', is_flag=True, help='display the stage record db')
 @click.option('-z', is_flag=True, help='display the staged hash record db')
-@click.option('--limit', default=30, help='limit the amount of records diplayed before truncation')
+@click.option('--limit', default=30, help='limit the amount of records displayed before truncation')
 def lmdb_record_details(a, b, r, d, m, s, z, limit):
     from hangar.context import Environments
     from hangar.records.summarize import details

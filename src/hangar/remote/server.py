@@ -616,8 +616,13 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
 
-def serve(hangar_path: os.PathLike, overwrite: bool = False,
-          *, channel_address: str = None) -> tuple:
+def serve(hangar_path: os.PathLike,
+          overwrite: bool = False,
+          *,
+          channel_address: str = None,
+          restrict_push: bool = None,
+          username: str = None,
+          password: str = None) -> tuple:
     '''Start serving the GRPC server. Should only be called once.
 
     Raises:
@@ -638,9 +643,14 @@ def serve(hangar_path: os.PathLike, overwrite: bool = False,
     max_thread_pool_workers = config.get('server.grpc.max_thread_pool_workers')
     max_concurrent_rpcs = config.get('server.grpc.max_concurrent_rpcs')
 
-    admin_restrict_push = config.get('server.admin.restrict_push')
-    admin_username = config.get('server.admin.username')
-    admin_password = config.get('server.admin.password')
+    if (restrict_push is None) and (username is None) and (password is None):
+        admin_restrict_push = config.get('server.admin.restrict_push')
+        admin_username = config.get('server.admin.username')
+        admin_password = config.get('server.admin.password')
+    else:
+        admin_restrict_push = restrict_push
+        admin_username = username
+        admin_password = password
     msg = 'PERMISSION ERROR: PUSH OPERATIONS RESTRICTED FOR CALLER'
     code = grpc.StatusCode.PERMISSION_DENIED
     interc = request_header_validator_interceptor.RequestHeaderValidatorInterceptor(

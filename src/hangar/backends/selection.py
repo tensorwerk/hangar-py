@@ -5,13 +5,13 @@ dynamic routing of method calls to the appropriate backend from a stored record
 specification.
 
 Identification
--------------
+--------------
 
 A two character ascii code identifies which backend some record belongs to.
-Valid characters are the union of ascii_lowercase, ascii_uppercase, and
-ascii_digits:
+Valid characters are the union of ``ascii_lowercase``, ``ascii_uppercase``, and
+``ascii_digits``:
 
-    ``abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789``
+.. centered:: ``abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789``
 
 Though stored as bytes in the backend, we use human readable characters (and not
 unprintable bytes) to aid in human tasks like developer database dumps and
@@ -22,45 +22,47 @@ which we anticipate to be more then sufficient long into the future. As a
 convention, the first digit of the code can be used to identify the storage
 medium:
 
-    * Lowercase ascii letters & digits [0, 1, 2, 3, 4] -> reserved for
+   *  Lowercase ``ascii_letters`` & digits ``[0, 1, 2, 3, 4]`` -> reserved for
       backends handling data on the local disk.
-    * Uppercase ascii letters & digits [5, 6, 7, 8, 9] -> reserved for
+
+   *  Uppercase ``ascii_letters`` & digits ``[5, 6, 7, 8, 9]`` -> reserved for
       backends referring to data residing on a remote server.
 
 This is not a hard and fast rule though, and can be changed in the future if the
 need arises.
 
 Process & Guarantees
----------------------
+--------------------
 
 In order to maintain backwards compatibility across versions of Hangar into the
 future the following ruleset is specified and MUST BE HONORED:
 
-    * When a new backend is proposed, the contributor(s) provide the class with a
-      canonical name (HDF5_00, TILEDB_01, etc) for developer consumption in the
-      backend. The review team will provide an available two-digit code which all
-      records corresponding to that backend must identify themselves with.
+*  When a new backend is proposed, the contributor(s) provide the class with a
+   canonical name (``HDF5_00``, ``TILEDB_01``, etc) for developer consumption in
+   the backend. The review team will provide an available two-digit code which
+   all records corresponding to that backend must identify themselves with.
 
-    * Once a new backend is accepted, the code assigned to it is PERMANENT &
-      UNCHANGING. The same code cannot be used in the future for other backends.
+*  Once a new backend is accepted, the code assigned to it is PERMANENT &
+   UNCHANGING. The same code cannot be used in the future for other backends.
 
-    * Each backend independently determines the information it needs to log/store to
-      uniquely identify and retrieve a sample stored by it. There is no standard
-      format, each is free to define whatever fields they find most convenient.
-      Unique encode/decode methods are defined in order to serialize this
-      information to bytes and then reconstruct the information later. These bytes
-      are what are passed in when a retrieval request is made, and returned when a
-      storage request for some piece of data is performed.
+*  Each backend independently determines the information it needs to log/store
+   to uniquely identify and retrieve a sample stored by it. There is no standard
+   format, each is free to define whatever fields they find most convenient.
+   Unique encode/decode methods are defined in order to serialize this
+   information to bytes and then reconstruct the information later. These bytes
+   are what are passed in when a retrieval request is made, and returned when a
+   storage request for some piece of data is performed.
 
-    * Once accepted, The record format specified (ie. the byte representation
-     described above) cannot be modified in any way. This must remain permanent!
+*  Once accepted, The record format specified (ie. the byte representation
+   described above) cannot be modified in any way. This must remain permanent!
 
-    * Backend (internal) methods can be updated, optimized, and/or changed at any
-     time so long as:
+*  Backend (internal) methods can be updated, optimized, and/or changed at any
+   time so long as:
 
-        * No changes to the record format specification are introduced
-        * Data stored via any previous iteration of the backend's accessor methods
-          can be retrieved bitwise exactly by the "updated" version.
+   *  No changes to the record format specification are introduced
+
+   *  Data stored via any previous iteration of the backend's accessor methods
+      can be retrieved bitwise exactly by the "updated" version.
 
 Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the

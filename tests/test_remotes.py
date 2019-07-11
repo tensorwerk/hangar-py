@@ -7,32 +7,6 @@ from random import randint
 import platform
 
 
-@pytest.fixture()
-def server_instance(managed_tmpdir, worker_id):
-    from hangar import serve
-
-    address = f'localhost:{randint(50000, 59999)}'
-    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
-    mkdir(base_tmpdir)
-    server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
-    server.start()
-    yield address
-
-    hangserver.env._close_environments()
-    server.stop(0.0)
-    if platform.system() == 'Windows':
-        # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.5)
-
-
-@pytest.fixture()
-def written_two_cmt_server_repo(server_instance, written_two_cmt_repo) -> tuple:
-    written_two_cmt_repo.remote.add('origin', server_instance)
-    success = written_two_cmt_repo.remote.push('origin', 'master')
-    assert success is True
-    yield (server_instance, written_two_cmt_repo)
-
-
 def test_cannot_add_remote_twice_with_same_name(repo):
     remote_spec = repo.remote.add('origin', 'test')
     assert remote_spec.name == 'origin'
@@ -90,7 +64,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
 
     repo.remote.add('origin', server_instance)
     push1 = repo.remote.push('origin', 'master')
-    assert push1 is True
+    assert push1 == 'master'
 
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
@@ -136,7 +110,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
 
     repo.remote.add('origin', server_instance)
     push1 = repo.remote.push('origin', 'master')
-    assert push1 is True
+    assert push1 == 'master'
 
     branch = repo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
@@ -154,7 +128,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
         co.close()
 
     push2 = repo.remote.push('origin', branch)
-    assert push2 is True
+    assert push2 == branch
 
 
 @pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 10], [10, 10]])
@@ -185,7 +159,7 @@ def test_server_push_clone_second_branch_with_new_commit(
 
     repo.remote.add('origin', server_instance)
     push1 = repo.remote.push('origin', 'master')
-    assert push1 is True
+    assert push1 == 'master'
 
     # Push dev branch test
     devCmtList = []
@@ -205,7 +179,7 @@ def test_server_push_clone_second_branch_with_new_commit(
         co.close()
 
     push2 = repo.remote.push('origin', branch)
-    assert push2 is True
+    assert push2 == branch
 
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
@@ -269,9 +243,9 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
 
     repo_2_br_no_conf.remote.add('origin', server_instance)
     push1 = repo_2_br_no_conf.remote.push('origin', 'master')
-    assert push1 is True
+    assert push1 == 'master'
     push2 = repo_2_br_no_conf.remote.push('origin', 'testbranch')
-    assert push2 is True
+    assert push2 == 'testbranch'
 
     test_head = repo_2_br_no_conf.log(branch_name='testbranch', return_contents=True)['head']
     master_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
@@ -280,7 +254,7 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
     merge_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
     merge_order = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['order']
     merge_push = repo_2_br_no_conf.remote.push('origin', 'master')
-    assert merge_push is True
+    assert merge_push == 'master'
     assert merge_head != master_head
     assert merge_head != test_head
 
@@ -324,7 +298,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
 
     repo.remote.add('origin', server_instance)
     push1 = repo.remote.push('origin', 'master')
-    assert push1 is True
+    assert push1 == 'master'
 
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
@@ -342,3 +316,91 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
             assert np.allclose(nco.datasets['dset'][str(sIdx)], samp)
         nco.close()
     newRepo._env._close_environments()
+
+
+def test_push_restricted_with_right_username_password(server_instance_push_restricted, repo, managed_tmpdir):
+    from hangar import Repository
+
+    # Push master branch test
+    masterCmtList = []
+    co = repo.checkout(write=True)
+    co.datasets.init_dataset(name='dset', shape=(50, 20), dtype=np.float32)
+    for cIdx in range(1):
+        if cIdx != 0:
+            co = repo.checkout(write=True)
+        masterSampList = []
+        with co.datasets['dset'] as d:
+            for prevKey in list(d.keys())[1:]:
+                d.remove(prevKey)
+            for sIdx in range(70):
+                arr = np.random.randn(50, 20).astype(np.float32)
+                d[str(sIdx)] = arr
+                masterSampList.append(arr)
+        cmt = co.commit(f'master commit number: {cIdx}')
+        masterCmtList.append((cmt, masterSampList))
+        co.close()
+
+    repo.remote.add('origin', server_instance_push_restricted)
+    push1 = repo.remote.push('origin',
+                             'master',
+                             username='right_username',
+                             password='right_password')
+    assert push1 == 'master'
+
+    # Clone test (master branch)
+    new_tmpdir = pjoin(managed_tmpdir, 'new')
+    mkdir(new_tmpdir)
+    newRepo = Repository(path=new_tmpdir)
+    newRepo.clone('Test User', 'tester@foo.com', server_instance_push_restricted, remove_old=True)
+    assert newRepo.list_branches() == ['master', 'origin/master']
+    for cmt, sampList in masterCmtList:
+        newRepo.remote.fetch_data('origin', commit=cmt)
+        nco = newRepo.checkout(commit=cmt)
+        assert len(nco.datasets) == 1
+        assert 'dset' in nco.datasets
+        assert len(nco.datasets['dset']) == 70
+        for sIdx, samp in enumerate(sampList):
+            assert np.allclose(nco.datasets['dset'][str(sIdx)], samp)
+        nco.close()
+    newRepo._env._close_environments()
+
+
+def test_push_restricted_wrong_user_and_password(server_instance_push_restricted, repo, managed_tmpdir):
+
+    # Push master branch test
+    masterCmtList = []
+    co = repo.checkout(write=True)
+    co.datasets.init_dataset(name='dset', shape=(50, 20), dtype=np.float32)
+    for cIdx in range(1):
+        if cIdx != 0:
+            co = repo.checkout(write=True)
+        masterSampList = []
+        with co.datasets['dset'] as d:
+            for prevKey in list(d.keys())[1:]:
+                d.remove(prevKey)
+            for sIdx in range(70):
+                arr = np.random.randn(50, 20).astype(np.float32)
+                d[str(sIdx)] = arr
+                masterSampList.append(arr)
+        cmt = co.commit(f'master commit number: {cIdx}')
+        masterCmtList.append((cmt, masterSampList))
+        co.close()
+
+    repo.remote.add('origin', server_instance_push_restricted)
+    with pytest.raises(PermissionError):
+        push1 = repo.remote.push('origin',
+                                 'master',
+                                 username='wrong_username',
+                                 password='right_password')
+
+    with pytest.raises(PermissionError):
+        push2 = repo.remote.push('origin',
+                                 'master',
+                                 username='right_username',
+                                 password='wrong_password')
+
+    with pytest.raises(PermissionError):
+        push3 = repo.remote.push('origin',
+                                 'master',
+                                 username='wrong_username',
+                                 password='wrong_password')

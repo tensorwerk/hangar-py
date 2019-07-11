@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import collections
+from collections import namedtuple
 
 import grpc
 
@@ -57,9 +57,9 @@ def create_client_interceptor(intercept_call):
 
 
 class _ClientCallDetails(
-        collections.namedtuple(
-            '_ClientCallDetails',
-            ('method', 'timeout', 'metadata', 'credentials')),
+        namedtuple(
+            typename='_ClientCallDetails',
+            field_names=('method', 'timeout', 'metadata', 'credentials')),
         grpc.ClientCallDetails):
     pass
 

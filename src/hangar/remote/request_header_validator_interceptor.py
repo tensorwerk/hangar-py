@@ -41,34 +41,26 @@ SERVICE_METHOD_TYPES = {
 
 
 def _unary_unary_rpc_terminator(code, details):
-
     def terminate(ignored_request, context):
         context.abort(code, details)
-
     return grpc.unary_unary_rpc_method_handler(terminate)
 
 
 def _unary_stream_rpc_terminator(code, details):
-
     def terminate(ignored_request, context):
         context.abort(code, details)
-
     return grpc.unary_stream_rpc_method_handler(terminate)
 
 
 def _stream_unary_rpc_terminator(code, details):
-
     def terminate(ignored_request, context):
         context.abort(code, details)
-
     return grpc.unary_stream_rpc_method_handler(terminate)
 
 
 def _stream_stream_rpc_terminator(code, details):
-
     def terminate(ignored_request, context):
         context.abort(code, details)
-
     return grpc.stream_stream_rpc_method_handler(terminate)
 
 
@@ -104,6 +96,5 @@ class RequestHeaderValidatorInterceptor(grpc.ServerInterceptor):
                 return continuation(handler_call_details)
             else:
                 return _select_rpc_terminator(intercepted_method)(self._code, self._details)
-
         else:
             return continuation(handler_call_details)

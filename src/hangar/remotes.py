@@ -4,8 +4,8 @@ import logging
 import tempfile
 import warnings
 from typing import List
-from collections import defaultdict, namedtuple
 from contextlib import closing
+from collections import defaultdict, namedtuple
 
 import grpc
 import lmdb
@@ -31,7 +31,7 @@ class Remotes(object):
         self._client: HangarClient = None
 
     def __verify_repo_initialized(self):
-        '''Internal method to verify repo inititilized before operations occur
+        '''Internal method to verify repo initialized before operations occur
 
         Raises
         ------
@@ -128,7 +128,7 @@ class Remotes(object):
         -------
         float
             round trip time it took to ping the server after the connection was
-            establised and requested client configuration was retrieved
+            established and requested client configuration was retrieved
 
         Raises
         ------
@@ -150,8 +150,8 @@ class Remotes(object):
     def fetch(self, remote: str, branch: str) -> str:
         '''Retrieve new commits made on a remote repository branch.
 
-        This is symantecally identical to a `git fetch` command. Any new commits
-        along the branch will be retrived, but placed on an isolated branch to
+        This is semantically identical to a `git fetch` command. Any new commits
+        along the branch will be retrieved, but placed on an isolated branch to
         the local copy (ie. ``remote_name/branch_name``). In order to unify
         histories, simply merge the remote branch into the local branch.
 
@@ -215,7 +215,7 @@ class Remotes(object):
 
             mCmtResponse = client.fetch_find_missing_commits(branch)
             m_cmts = mCmtResponse.commits
-            for commit in m_cmts:
+            for commit in tqdm(m_cmts, desc='fetching commit data refs'):
                 # Get missing label (metadata) digest & values
                 m_labels = set(client.fetch_find_missing_labels(commit))
                 for label in m_labels:
@@ -235,7 +235,7 @@ class Remotes(object):
                     CW.data(schema_hash, recieved_data, backend='50')
 
             # Get missing commit reference specification
-            for commit in m_cmts:
+            for commit in tqdm(m_cmts, desc='fetching commit spec'):
                 cmt, parentVal, specVal, refVal = client.fetch_commit_record(commit)
                 CW.commit(cmt, parentVal, specVal, refVal)
 
@@ -261,7 +261,7 @@ class Remotes(object):
             name of the remote to pull the data from
         branch : str, optional
             The name of a branch whose HEAD will be used as the data fetch
-            poing. If None, ``commit`` argument expected, by default None
+            point. If None, ``commit`` argument expected, by default None
         commit : str, optional
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
@@ -276,7 +276,7 @@ class Remotes(object):
             ValueError
                 if branch and commit args are set simultaneously.
             ValueError
-                if specified commit does not exist in the repositoy.
+                if specified commit does not exist in the repository.
             ValueError
                 if branch name does not exist in the repository.
         '''
@@ -284,6 +284,8 @@ class Remotes(object):
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
         self._client = HangarClient(envs=self._env, address=address)
         CW = ContentWriter(self._env)
+
+        # ----------------- setup / validate operations -----------------------
 
         if all([branch, commit]):
             raise ValueError(f'``branch`` and ``commit`` args cannot be set simultaneously')
@@ -295,37 +297,40 @@ class Remotes(object):
             if not cmtExist:
                 raise ValueError(f'specified commit: {commit} does not exist in the repository')
 
+        # --------------- negotiate missing data to get -----------------------
+
         self._env.checkout_commit(commit=cmt)
         cmtData_hashs = set(queries.RecordQuery(self._env.cmtenv[cmt]).data_hashes())
         hashQuery = hashs.HashQuery(self._env.hashenv)
         hashMap = hashQuery.map_all_hash_keys_raw_to_values_raw()  # TODO: only get subset
         m_schema_hash_map = defaultdict(list)
+        total_data = 0
         for digest in cmtData_hashs:
             hashSpec = hashMap[digest]
             if hashSpec.backend == '50':
                 m_schema_hash_map[hashSpec.schema_hash].append(digest)
+                total_data += 1
 
-        with closing(self._client) as client:
+        # -------------------- download missing data --------------------------
+
+        with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar:
             client: HangarClient  # type hint
             for schema in m_schema_hash_map.keys():
                 hashes = set(m_schema_hash_map[schema])
                 while len(hashes) > 0:
                     ret = client.fetch_data(schema, hashes)
                     saved_digests = CW.data(schema, ret)
+                    pbar.update(len(saved_digests))
                     hashes = hashes.difference(set(saved_digests))
 
         commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
         return cmt
 
-    def push(self,
-             remote: str,
-             branch: str,
-             *,
-             username: str = '',
-             password: str = '') -> bool:
+    def push(self, remote: str, branch: str,
+             *, username: str = '', password: str = '') -> bool:
         '''push changes made on a local repository to a remote repository.
 
-        This method is symantically identical to a ``git push`` operation.
+        This method is semantically identical to a ``git push`` operation.
         Any local updates will be sent to the remote repository.
 
         .. note::
@@ -351,8 +356,8 @@ class Remotes(object):
 
         Returns
         -------
-        bool
-            True if the operation succeeded, Otherwise False
+        str
+            Name of the branch which was pushed
         '''
         self.__verify_repo_initialized()
         try:
@@ -366,6 +371,9 @@ class Remotes(object):
                                     address=address,
                                     auth_username=username,
                                     auth_password=password)
+
+        # ----------------- setup / validate operations -------------------
+
         with closing(self._client) as client:
             client: HangarClient  # type hinting for development
             CR: ContentReader
@@ -382,17 +390,17 @@ class Remotes(object):
                 sHEAD = s_branch.rec.commit
                 if sHEAD == cHEAD:
                     warnings.warn(
-                        f'NoOp: server HEAD: {sHEAD} == client HEAD: {cHEAD}',
-                        UserWarning)
+                        f'NoOp: server HEAD: {sHEAD} == client HEAD: {cHEAD}', UserWarning)
                     return branch
                 elif (sHEAD not in c_bhistory['order']) and (sHEAD != ''):
                     warnings.warn(
-                        f'REJECTED: server branch has commits not on client',
-                        UserWarning)
+                        f'REJECTED: server branch has commits not on client', UserWarning)
                     return branch
 
-            # verify user permissions if push restricted (NOT SECURE)
+            # --------------- negotiate missing data to send -------------------
+
             try:
+                # First push op verifies user permissions if push restricted (NOT SECURE)
                 res = client.push_find_missing_commits(branch)
                 m_commits = res.commits
             except grpc.RpcError as rpc_error:
@@ -407,6 +415,7 @@ class Remotes(object):
                 tmpDF = os.path.join(tempD, 'test.lmdb')
                 tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
                 for commit in tqdm(m_commits, desc='counting objects'):
+                    # share unpacked ref db between dependent methods
                     with tmpDB.begin(write=True) as txn:
                         with txn.cursor() as curs:
                             notEmpty = curs.first()
@@ -428,8 +437,10 @@ class Remotes(object):
                     m_labels.update(missing_labels)
                 tmpDB.close()
 
+            # ------------------------- send data -----------------------------
+
             # schemas
-            for m_schema in m_schemas:
+            for m_schema in tqdm(m_schemas, desc='pushing schemas'):
                 schemaVal = CR.schema(m_schema)
                 if not schemaVal:
                     raise KeyError(f'no schema with hash: {m_schema} exists')
@@ -441,13 +452,13 @@ class Remotes(object):
                     client.push_data(dataSchema, dataHashes, pbar=p)
                     p.update(1)
             # labels/metadata
-            for label in m_labels:
+            for label in tqdm(m_labels, desc='pushing metadata'):
                 labelVal = CR.label(label)
                 if not labelVal:
                     raise KeyError(f'no label with hash: {label} exists')
                 client.push_label(label, labelVal)
             # commit refs
-            for commit in tqdm(m_commits, desc='pushing refs'):
+            for commit in tqdm(m_commits, desc='pushing commit refs'):
                 cmtContent = CR.commit(commit)
                 if not cmtContent:
                     raise KeyError(f'no commit with hash: {commit} exists')
@@ -456,6 +467,26 @@ class Remotes(object):
                                           specVal=cmtContent.cmtSpecVal,
                                           refVal=cmtContent.cmtRefVal)
 
+            # --------------------------- At completion -----------------------
+
+            # update local remote HEAD pointer
             branchHead = heads.get_branch_head_commit(self._env.branchenv, branch)
-            client.push_branch_record(branch, branchHead)
-            return True
+            try:
+                client.push_branch_record(branch, branchHead)
+            except grpc.RpcError as rpc_error:
+                # Do not raise if error due to branch not existing on server
+                if rpc_error.code() != grpc.StatusCode.ALREADY_EXISTS:
+                    logger.warning(f'CODE: {rpc_error.code()} DETAILS:{rpc_error.details()}')
+                else:
+                    raise rpc_error
+            else:
+                cRemoteBranch = f'{remote}/{branch}'
+                if cRemoteBranch not in heads.get_branch_names(self._env.branchenv):
+                    heads.create_branch(branchenv=self._env.branchenv,
+                                        branch_name=cRemoteBranch,
+                                        base_commit=branchHead)
+                else:
+                    heads.set_branch_head_commit(branchenv=self._env.branchenv,
+                                                 branch_name=cRemoteBranch,
+                                                 commit_hash=branchHead)
+            return branch

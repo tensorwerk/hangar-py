@@ -1,27 +1,30 @@
-'''Local HDF5 Backend Implementation, Identifier: HDF5_00
+'''Local HDF5 Backend Implementation, Identifier: ``HDF5_00``
 
 Backend Identifiers
 ===================
 
-* Format Code: 00
-* Canonical Name: HDF5_00
+*  Format Code: ``00``
+*  Canonical Name: ``HDF5_00``
 
 Storage Method
 ==============
 
-* Data is written to specific subarray indexes inside an HDF5 "dataset" in a
-  single HDF5 File.
+*  Data is written to specific subarray indexes inside an HDF5 "dataset" in a
+   single HDF5 File.
 
-* In each HDF5 File there are COLLECTION_COUNT "datasets" (named ["0" :
-  "{COLLECTION_COUNT}"]). These are refered to as "dataset number"
+*  In each HDF5 File there are ``COLLECTION_COUNT`` "datasets" (named ``["0" :
+   "{COLLECTION_COUNT}"]``). These are referred to as ``"dataset number"``
 
-* Each dataset is a zero-initialized array of
-  * dtype: {schema_dtype}; ie "np.float32" or "np.uint8"
-  * shape: (COLLECTION_SIZE, *{schema_shape}); ie "(500, 10)" or "(500, 4, 3)".
-    The first index in the dataset is refered to as a "collection index".
+*  Each dataset is a zero-initialized array of:
 
-* Compression Filters, Chunking Configuration/Options are applied globally for
-  all "datasets" in a file at dataset creation time.
+   *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
+
+   *  ``shape: (COLLECTION_SIZE, *{schema_shape})``; ie ``(500, 10)`` or ``(500,
+      4, 3)``. The first index in the dataset is referred to as a ``collection
+      index``.
+
+*  Compression Filters, Chunking Configuration/Options are applied globally for
+   all ``datasets`` in a file at dataset creation time.
 
 Record Format
 =============
@@ -29,59 +32,64 @@ Record Format
 Fields Recorded for Each Array
 ------------------------------
 
-* Format Code
-* File UID
-* Dataset Number (0:COLLECTION_COUNT dataset selection)
-* Collection Index (0:COLLECTION_SIZE dataset subarray selection)
-* Subarray Shape
+*  Format Code
+*  File UID
+*  Dataset Number (``0:COLLECTION_COUNT`` dataset selection)
+*  Collection Index (``0:COLLECTION_SIZE`` dataset subarray selection)
+*  Subarray Shape
 
-Seperators used
+Separators used
 ---------------
 
-* SEP_KEY
-* SEP_HSH
-* SEP_LST
-* SEP_SLC
+*  ``SEP_KEY``
+*  ``SEP_HSH``
+*  ``SEP_LST``
+*  ``SEP_SLC``
 
 Examples
 --------
 
-Note: all examples use SEP_KEY: ":", SEP_HSH: "$", SEP_LST: " ", SEP_SLC: "*"
+Note: all examples use ``SEP_KEY: ":"``, ``SEP_HSH: "$"``, ``SEP_LST: " "``,
+``SEP_SLC: "*"``
 
-1) Adding the first piece of data to a file:
+1)  Adding the first piece of data to a file:
 
-   * Array shape (Subarray Shape): (10)
-   * File UID: "2HvGf9"
-   * Dataset Number: "0"
-   * Collection Index: 0
+    *  Array shape (Subarray Shape): (10)
+    *  File UID: "2HvGf9"
+    *  Dataset Number: "0"
+    *  Collection Index: 0
 
-   Record Data => "00:2HvGf9$0 0*10"
+   ``Record Data => "00:2HvGf9$0 0*10"``
 
-1) Adding to a piece of data to a the middle of a file:
+1)  Adding to a piece of data to a the middle of a file:
 
-   * Array shape (Subarray Shape): (20, 2, 3)
-   * File UID: "WzUtdu"
-   * Dataset Number: "3"
-   * Collection Index: 199
+    *  Array shape (Subarray Shape): (20, 2, 3)
+    *  File UID: "WzUtdu"
+    *  Dataset Number: "3"
+    *  Collection Index: 199
 
-   Record Data => "00:WzUtdu$3 199*20 2 3"
+    ``Record Data => "00:WzUtdu$3 199*20 2 3"``
 
 
 Technical Notes
 ===============
 
-* Files are read only after initial creation/writes. Only a write-enabled
-  checkout can open a HDF5 file in "w" or "a" mode, and writer checkouts create
-  new files on every checkout, and make no attempt to fill in unset locations in
-  previous files. This is not an issue as no disk space is used until data is
-  written to the initially created "zero-initialized" collection datasets
+*  Files are read only after initial creation/writes. Only a write-enabled
+   checkout can open a HDF5 file in ``"w"`` or ``"a"`` mode, and writer
+   checkouts create new files on every checkout, and make no attempt to fill in
+   unset locations in previous files. This is not an issue as no disk space is
+   used until data is written to the initially created "zero-initialized"
+   collection datasets
 
-* On write: Single Writer Multipe Reader (SWMR) mode is set to ensure that
-  improper closing (not calling `.close()`) method does not corrupt any data
-  which had been previously flushed to the file.
+*  On write: Single Writer Multiple Reader (``SWMR``) mode is set to ensure that
+   improper closing (not calling ``.close()``) method does not corrupt any data
+   which had been previously flushed to the file.
 
-* On read: SWMR is set to allow multiple readers (in different threads /
-  processes) to read from the same file.
+*  On read: SWMR is set to allow multiple readers (in different threads /
+   processes) to read from the same file. File handle serialization is handled
+   via custom python ``pickle`` serialization/reduction logic which is
+   implemented by the high level ``pickle`` reduction ``__set_state__()``,
+   ``__get_state__()`` class methods.
 '''
 
 import logging
@@ -259,7 +267,8 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid].flush()
 
     def __getstate__(self):
-        '''ensure multiprocess operations can pickle relevant data. need tests'''
+        '''ensure multiprocess operations can pickle relevant data.
+        '''
         self.close()
         time.sleep(0.1)  # buffer time
         state = self.__dict__.copy()
@@ -270,7 +279,8 @@ class HDF5_00_FileHandles(object):
         return state
 
     def __setstate__(self, state):
-        '''ensure multiprocess operations can pickle relevant data. need tests'''
+        '''ensure multiprocess operations can pickle relevant data.
+        '''
         self.__dict__.update(state)
         self.rFp = {}
         self.wFp = {}

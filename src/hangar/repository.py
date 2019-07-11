@@ -6,10 +6,10 @@ from typing import Union, Optional
 from . import merger
 from . import constants as c
 from .remotes import Remotes
-from .checkout import ReaderCheckout, WriterCheckout
 from .context import Environments
 from .diagnostics import graphing, ecosystem
 from .records import heads, parsing, summarize
+from .checkout import ReaderCheckout, WriterCheckout
 from .utils import is_valid_directory_path, is_suitable_user_key
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class Repository(object):
     def __repr__(self):
         '''Override the default repr to show useful information to developers.
 
-        Note: the pprint repr (ipython enabled) is seperately defined in
+        Note: the pprint repr (ipython enabled) is separately defined in
         :py:meth:`_repr_pretty_`. We specialize because we assume that anyone
         operating in a terminal-based interpreter is probably a more advanced
         developer-type, and expects traditional repr information instead of a
@@ -75,13 +75,13 @@ class Repository(object):
         Returns
         -------
         string
-            formated representation of the object
+            formatted representation of the object
         '''
         res = f'{self.__class__}(path={self._repo_path})'
         return res
 
     def __verify_repo_initialized(self):
-        '''Internal method to verify repo inititilized before operations occur
+        '''Internal method to verify repo initialized before operations occur
 
         Raises
         ------
@@ -177,7 +177,6 @@ class Repository(object):
             elif write is False:
                 commit_hash = self._env.checkout_commit(
                     branch_name=branch_name, commit=commit)
-
                 co = ReaderCheckout(
                     base_path=self._repo_path,
                     labelenv=self._env.labelenv,
@@ -210,15 +209,15 @@ class Repository(object):
             information is recorded permanently in the commit records.
         user_email : str
             Email address of the repository user. This information is recorded
-            permenantly in any commits created.
+            permanently in any commits created.
         remote_address : str
             location where the
             :class:`hangar.remote.server.HangarServer` process is
-            running and accessable by the clone user.
+            running and accessible by the clone user.
         remove_old : bool, optional, kwarg only
             DANGER! DEVELOPMENT USE ONLY! If enabled, a
             :class:`hangar.repository.Repository` existing on disk at the same
-            path as the requested clone location will be completly removed and
+            path as the requested clone location will be completely removed and
             replaced with the newly cloned repo. (the default is False, which
             will not modify any contents on disk and which will refuse to create
             a repository at a given location if one already exists there.)
@@ -240,7 +239,7 @@ class Repository(object):
 
     def init(self, user_name: str, user_email: str,
              remove_old: bool = False) -> os.PathLike:
-        '''Initialize a Hangar repositor at the specified directory path.
+        '''Initialize a Hangar repository at the specified directory path.
 
         This function must be called before a checkout can be performed.
 
@@ -249,7 +248,7 @@ class Repository(object):
         user_name : str
             Name of the repository user.
         user_email : str
-            Email address of the respository user.
+            Email address of the repository user.
         remove_old : bool, optional
             DEVELOPER USE ONLY -- remove and reinitialize a Hangar
             repository at the given path, defaults to False
@@ -288,7 +287,7 @@ class Repository(object):
             The commit hash to start the log process from. (Default value = None)
         return_contents : bool, optional, kwarg only
             If true, return the commit graph specifications in a dictionary
-            suitable for programatic access/evalutation.
+            suitable for programatic access/evaluation.
         show_time : bool, optional, kwarg only
             If true and return_contents is False, show the time of each commit
             on the printed log graph
@@ -312,19 +311,15 @@ class Repository(object):
         else:
             branchMap = heads.commit_hash_to_branch_name_map(branchenv=self._env.branchenv)
             g = graphing.Graph()
-            g.show_nodes(
-                dag=res['ancestors'],
-                spec=res['specs'],
-                branch=branchMap,
-                start=res['head'],
-                order=res['order'],
-                show_time=show_time,
-                show_user=show_user)
+            g.show_nodes(dag=res['ancestors'],
+                         spec=res['specs'],
+                         branch=branchMap,
+                         start=res['head'],
+                         order=res['order'],
+                         show_time=show_time,
+                         show_user=show_user)
 
-    def summary(self,
-                *,
-                branch_name: str = '',
-                commit: str = '',
+    def summary(self, *, branch_name: str = '', commit: str = '',
                 return_contents: bool = False) -> Optional[dict]:
         '''Print a summary of the repository contents to the terminal
 
@@ -370,7 +365,7 @@ class Repository(object):
         return
 
     def _ecosystem_details(self) -> dict:
-        '''DEVELOPER USER ONLY: log and return package versions on the sytem.
+        '''DEVELOPER USER ONLY: log and return package versions on the system.
         '''
         eco = ecosystem.get_versions()
         return eco
@@ -390,7 +385,7 @@ class Repository(object):
         Returns
         -------
         str
-            Hashof the commit which is written if possible.
+            Hash of the commit which is written if possible.
         '''
         self.__verify_repo_initialized()
         commit_hash = merger.select_merge_algorithm(

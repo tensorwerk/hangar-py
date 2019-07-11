@@ -1,10 +1,10 @@
-'''Local Numpy Memmap Backend Implementation, Identifier: NUMPY_00
+'''Local Numpy memmap Backend Implementation, Identifier: ``NUMPY_00``
 
 Backend Identifiers
 ===================
 
-* Format Code: 01
-* Canonical Name: NUMPY_00
+*  Format Code: ``01``
+*  Canonical Name: ``NUMPY_00``
 
 Storage Method
 ==============
@@ -12,9 +12,12 @@ Storage Method
 * Data is written to specific subarray indexes inside a numpy memmapped array on disk.
 
 * Each dataset is a zero-initialized array of
-  * dtype: {schema_dtype}; ie "np.float32" or "np.uint8"
-  * shape: (COLLECTION_SIZE, *{schema_shape}); ie "(500, 10)" or "(500, 4, 3)".
-    The first index in the dataset is refered to as a "collection index".
+
+  *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
+
+  *  ``shape: (COLLECTION_SIZE, *{schema_shape})``; ie ``(500, 10)`` or ``(500,
+     4, 3)``. The first index in the dataset is referred to as a "collection
+     index".
 
 Record Format
 =============
@@ -22,58 +25,60 @@ Record Format
 Fields Recorded for Each Array
 ------------------------------
 
-* Format Code
-* File UID
-* Alder32 Checksum
-* Collection Index (0:COLLECTION_SIZE subarray selection)
-* Subarray Shape
+*  Format Code
+*  File UID
+*  Alder32 Checksum
+*  Collection Index (0:COLLECTION_SIZE subarray selection)
+*  Subarray Shape
 
-Seperators used
+Separators used
 ---------------
 
-* SEP_KEY
-* SEP_HSH
-* SEP_LST
-* SEP_SLC
+*  ``SEP_KEY``
+*  ``SEP_HSH``
+*  ``SEP_LST``
+*  ``SEP_SLC``
 
 Examples
 --------
 
-Note: all examples use SEP_KEY: ":", SEP_HSH: "$", SEP_LST: " ", SEP_SLC: "*"
+Note: all examples use ``SEP_KEY: ":"``, ``SEP_HSH: "$"``, ``SEP_LST: " "``,
+``SEP_SLC: "*"``
 
-1) Adding the first piece of data to a file:
+1)  Adding the first piece of data to a file:
 
-   * Array shape (Subarray Shape): (10)
-   * File UID: "NJUUUK"
-   * Alder32 Checksum: 900338819
-   * Collection Index: 2
+    *  Array shape (Subarray Shape): (10)
+    *  File UID: "NJUUUK"
+    *  Alder32 Checksum: 900338819
+    *  Collection Index: 2
 
-   Record Data => '01:NJUUUK$900338819$2*10'
+    ``Record Data => '01:NJUUUK$900338819$2*10'``
 
-1) Adding to a piece of data to a the middle of a file:
+1)  Adding to a piece of data to a the middle of a file:
 
-   * Array shape (Subarray Shape): (20, 2, 3)
-   * File UID: "Mk23nl"
-   * Alder32 Checksum: 2546668575
-   * Collection Index: 199
+    *  Array shape (Subarray Shape): (20, 2, 3)
+    *  File UID: "Mk23nl"
+    *  Alder32 Checksum: 2546668575
+    *  Collection Index: 199
 
-   Record Data => "01:Mk23nl$2546668575$199*20 2 3"
+    ``Record Data => "01:Mk23nl$2546668575$199*20 2 3"``
 
 
 Technical Notes
 ===============
 
-* A typical numpy memmap file persisted to disk does not retain information
-  about its datatype or shape, and as such must be provided when re-opened after
-  close. In order to persist a memmap in `.npy` format, we use the a special
-  function `open_memmap` imported from `np.lib.format` which can open a memmap
-  file and persist necessary header info to disk in `.npy` format.
+*  A typical numpy memmap file persisted to disk does not retain information
+   about its datatype or shape, and as such must be provided when re-opened
+   after close. In order to persist a memmap in ``.npy`` format, we use the a
+   special function ``open_memmap`` imported from ``np.lib.format`` which can
+   open a memmap file and persist necessary header info to disk in ``.npy``
+   format.
 
-* On each write, an alder32 checksum is calculated. This is not for use as the
-  primary hash algorithm, but rather stored in the local record format itself to
-  serve as a quick way to verify no disk corruption occured. This is required
-  since numpy has no built in data integrity validation methods when reading
-  from disk.
+*  On each write, an ``alder32`` checksum is calculated. This is not for use as
+   the primary hash algorithm, but rather stored in the local record format
+   itself to serve as a quick way to verify no disk corruption occurred. This is
+   required since numpy has no built in data integrity validation methods when
+   reading from disk.
 '''
 
 import logging
