@@ -15,7 +15,7 @@ def reset_singletons(monkeypatch):
     no leaked state between tests.
     '''
     hangar.context.TxnRegisterSingleton._instances = {}
-    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 5_000_000)
+    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
 
 
 @pytest.fixture()
