@@ -2,6 +2,7 @@ import hashlib
 import logging
 from typing import Optional
 from multiprocessing import Pool, get_context, cpu_count
+from typing import MutableMapping
 
 import lmdb
 import numpy as np
@@ -248,10 +249,10 @@ class DatasetDataReader(object):
 
         The method is thread/process safe IF used in a read only checkout. Use
         this if the calling application wants to manually manage multiprocess
-        logic for data retrieval. Otherwise, hangar includes the ``batch_get``
-        method to retrieve multiple data samples simultaneously. This method
-        uses multiprocess pool of workers (managed by hangar) to drastically
-        increase access speed and simplifly application developer workflows.
+        logic for data retrieval. Otherwise, see the :py:meth:`get_batch` method
+        to retrieve multiple data samples simultaneously. This method uses
+        multiprocess pool of workers (managed by hangar) to drastically increase
+        access speed and simplify application developer workflows.
 
         .. note::
 
@@ -291,7 +292,7 @@ class DatasetDataReader(object):
         method has been seen to drastically decrease retrieval time of sample
         batches (as compared to looping over single sample names sequentially).
         Internally it implements a multiprocess pool of workers (managed by
-        hangar) to simplifly application developer workflows.
+        hangar) to simplify application developer workflows.
 
         Parameters
         ----------
@@ -311,7 +312,7 @@ class DatasetDataReader(object):
         list(np.ndarray)
             Tensor data stored in the dataset archived with provided name(s).
 
-            If a single sample name is passed in as th, the corresponding
+            If a single sample name is passed in as the, the corresponding
             np.array data will be returned.
 
             If a list/tuple of sample names are pass in the ``names`` argument,
@@ -333,14 +334,18 @@ class DatasetDataReader(object):
 class DatasetDataWriter(DatasetDataReader):
     '''Class implementing methods to write data to a dataset.
 
-    Extends the functionality of the DatasetDataReader class. The __init__ method requires
-    quite a number of ``**kwargs`` to be passed along to the :class:`DatasetDataReader`
-    class.
+    Extends the functionality of the DatasetDataReader class. The __init__
+    method requires quite a number of ``**kwargs`` to be passed along to the
+    :class:`DatasetDataReader` class.
 
     .. seealso:: :class:`DatasetDataReader`
 
     Parameters
     ----------
+        stagehashenv : lmdb.Environment
+            db where the newly added staged hash data records are stored
+        default_schema_backend : str
+            backend code to act as default where new data samples are added.
         **kwargs:
             See args of :class:`DatasetDataReader`
     '''
@@ -377,7 +382,7 @@ class DatasetDataWriter(DatasetDataReader):
             self._fs[k].__exit__(*exc)
 
     def __setitem__(self, key, value):
-        '''Store a piece of data in a dataset. Convenince method to :meth:`add`.
+        '''Store a piece of data in a dataset. Convenience method to :meth:`add`.
 
         .. seealso:: :meth:`add`
 
@@ -397,7 +402,7 @@ class DatasetDataWriter(DatasetDataReader):
         return key
 
     def __delitem__(self, key):
-        '''Remove a sample from the dataset. Convenence method to :meth:`remove`.
+        '''Remove a sample from the dataset. Convenience method to :meth:`remove`.
 
         .. seealso:: :meth:`remove`
 
@@ -450,14 +455,14 @@ class DatasetDataWriter(DatasetDataReader):
             For variable shape datasets, if a dimension size of the input data
             tensor exceeds specified max dimension size of the dataset samples.
         ValueError
-            For fixed shape datasets, if input data dimensions do not exactally match
+            For fixed shape datasets, if input data dimensions do not exactly match
             specified dataset dimensions.
         ValueError
             If type of `data` argument is not an instance of np.ndarray.
         ValueError
             If `data` is not "C" contiguous array layout.
         ValueError
-            If the datatype of the input data does not match the specifed data type of
+            If the datatype of the input data does not match the specified data type of
             the dataset
         LookupError
             If a data sample with the same name and hash value already exists in the
@@ -558,7 +563,7 @@ class DatasetDataWriter(DatasetDataReader):
 
             This operation will NEVER actually remove any data from disk. If
             you commit a tensor at any point in time, **it will always remain
-            accessable by checking out a previous commit** when the tensor was
+            accessible by checking out a previous commit** when the tensor was
             present. This is just a way to tell Hangar that you don't want some
             piece of data to clutter up the current version of the repository.
 
@@ -569,7 +574,7 @@ class DatasetDataWriter(DatasetDataReader):
             staging area, written to disk, but then removed **before** a commit
             operation was run. This would be a similar sequence of events as:
             checking out a `git` branch, changing a bunch of text in the file, and
-            immediatly performing a hard reset. If it was never committed, git
+            immediately performing a hard reset. If it was never committed, git
             doesn't know about it, and (at the moment) neither does Hangar.
 
         Parameters
@@ -639,13 +644,13 @@ Constructor and Interaction Class for Datasets
 
 
 class Datasets(object):
-    '''Common access patterns and initilization/removal of datasets in a checkout.
+    '''Common access patterns and initialization/removal of datasets in a checkout.
 
     .. warning::
 
         This class should not be instantiated directly. Instead use the factory
         functions :py:meth:`_from_commit` or :py:meth:`_from_staging` to
-        return a pre-initialized class instance appropriatly constructed for
+        return a pre-initialized class instance appropriately constructed for
         either a read-only or write-enabled checkout.
 
     Parameters
@@ -717,7 +722,7 @@ class Datasets(object):
     def _ipython_key_completions_(self):
         '''Let ipython know that any key based access can use the dataset keys
 
-        Since we don't want to inheret from dict, nor mess with `__dir__` for the
+        Since we don't want to inherit from dict, nor mess with `__dir__` for the
         sanity of developers, this is the best way to ensure users can autocomplete
         keys.
 
@@ -772,7 +777,7 @@ class Datasets(object):
         key : string
             name of the dataset to remove from the repository. This will remove
             all records from the staging area (though the actual data and all
-            records are still accessable) if they were previously commited
+            records are still accessible) if they were previously committed
 
         Raises
         ------
@@ -879,7 +884,7 @@ class Datasets(object):
         '''Add related samples to un-named datasets with the same generated key.
 
         If you have multiple datasets in a checkout whose samples are related to
-        eachother in some manner, there are two ways of associating samples
+        each other in some manner, there are two ways of associating samples
         together:
 
         1) using named datasets and setting each tensor in each dataset to the
@@ -890,7 +895,7 @@ class Datasets(object):
         When method (2) - this method - is used, the internally generated sample
         ids will be set to the same value for the samples in each dataset. That
         way a user can iterate over the dataset key's in one sample, and use
-        those same keys to get the other releated tensor samples in another
+        those same keys to get the other related tensor samples in another
         dataset.
 
         Parameters
@@ -948,7 +953,7 @@ class Datasets(object):
         the same size that was initially specified upon dataset initialization.
         Variable size datasets on the other hand, can write samples with
         dimensions of any size less than a maximum which is required to be set
-        upon datset creation.
+        upon dataset creation.
 
         Parameters
         ----------
@@ -988,7 +993,7 @@ class Datasets(object):
         ValueError
             If provided name contains any non ascii, non alpha-numeric characters.
         ValueError
-            If required `shape` and `dtype` arguments are not provided in absense of
+            If required `shape` and `dtype` arguments are not provided in absence of
             `prototype` argument.
         ValueError
             If `prototype` argument is not a C contiguous ndarray.
@@ -1164,7 +1169,7 @@ class Datasets(object):
         stageenv : lmdb.Environment
             environment where staging records (dataenv) are opened in write mode.
         stagehashenv: lmdb.Environment
-            environment where the staged hash records are sored in write mode
+            environment where the staged hash records are stored in write mode
 
         Returns
         -------
