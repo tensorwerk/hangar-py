@@ -15,7 +15,7 @@ def reset_singletons(monkeypatch):
     no leaked state between tests.
     '''
     hangar.context.TxnRegisterSingleton._instances = {}
-    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 5_000_000)
+    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
 
 
 @pytest.fixture()
@@ -39,6 +39,7 @@ def written_repo(repo):
     co.commit('this is a commit message')
     co.close()
     yield repo
+
 
 @pytest.fixture()
 def variable_shape_written_repo(repo):
@@ -66,6 +67,7 @@ def randomsizedarray():
     a = random.randint(2, 8)
     b = random.randint(2, 8)
     return np.random.random((a, b))
+
 
 @pytest.fixture()
 def written_two_cmt_repo(repo, array5by7):
@@ -98,6 +100,7 @@ def repo_1_br_no_conf(request, repo):
         dummyData[:] = idx
         co1.datasets['dummy'][str(idx)] = dummyData
     co1.metadata['hello'] = 'world'
+    co1.metadata['somemetadatakey'] = 'somemetadatavalue'
     co1.commit('first commit adding dummy data and hello meta')
     co1.close()
 

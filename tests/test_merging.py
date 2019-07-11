@@ -66,7 +66,7 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     cmt_hash = repo_2_br_no_conf.merge('merge commit', 'master', 'testbranch')
     co = repo_2_br_no_conf.checkout(branch_name='master')
     # metadata
-    assert len(co.metadata) == 2
+    assert len(co.metadata) == 3
     assert co.metadata['hello'] == 'world'
     assert co.metadata['foo'] == 'bar'
 
@@ -178,7 +178,7 @@ class TestMetadataConflicts(object):
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        assert len(co.metadata) == 3
+        assert len(co.metadata) == 4
         assert co.metadata['bothadd'] == 'this value'
         assert co.metadata['hello'] == 'world'
         assert co.metadata['foo'] == 'bar'

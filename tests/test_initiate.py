@@ -14,25 +14,23 @@ def test_starting_up(managed_tmpdir):
     assert repo.list_branch_names() == ['master']
     assert os.path.isdir(repo._repo_path)
     assert repo._repo_path == os.path.join(managed_tmpdir, '__hangar')
+    co = repo.checkout(write=True)
+    assert co.diff.status() == 'CLEAN'
+    co.close()
     repo._env._close_environments()
 
 
 def test_initial_read_checkout(managed_tmpdir):
     repo = Repository(path=managed_tmpdir)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
-    # TODO it should do something to indicate the issue or return a read checkout
     with pytest.raises(ValueError):
-        r_checkout = repo.checkout()
+        repo.checkout()
     repo._env._close_environments()
 
 
 def test_initial_dataset(managed_tmpdir, randomsizedarray):
     repo = Repository(path=managed_tmpdir)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
-
-    with pytest.raises(ValueError):
-        # Read only checkout of repo without commits raises as expected
-        r_checkout = repo.checkout()
 
     w_checkout = repo.checkout(write=True)
     assert len(w_checkout.datasets) == 0
