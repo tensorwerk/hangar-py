@@ -725,13 +725,12 @@ def commit_ref_db_val_from_raw_val(commit_db_key_val_list):
     bytes
         Serialized and compressed representation of the object.
     '''
-    serialized_db_list = msgpack.packb(tuple(commit_db_key_val_list), use_bin_type=True)
-    zlibpacked = blosc.compress(
-        serialized_db_list,
-        cname='zlib',
-        clevel=9,
-        shuffle=blosc.SHUFFLE,
-        typesize=1)
+    serialized_db_list = msgpack.packb(commit_db_key_val_list, use_bin_type=True)
+    zlibpacked = blosc.compress(serialized_db_list,
+                                cname='zlib',
+                                clevel=9,
+                                shuffle=blosc.SHUFFLE,
+                                typesize=1)
     return zlibpacked
 
 
@@ -790,18 +789,18 @@ def commit_spec_db_val_from_raw_val(commit_time, commit_message, commit_user, co
         'commit_user': commit_user,
         'commit_email': commit_email,
     }
-    db_spec_val = json.dumps(spec_dict, ensure_ascii=True).encode()
-    compressed_db_val = blosc.compress(
-        db_spec_val,
-        cname='zlib',
-        clevel=9,
-        shuffle=blosc.SHUFFLE)
+    db_spec_val = msgpack.dumps(spec_dict)
+    compressed_db_val = blosc.compress(db_spec_val,
+                                       cname='zlib',
+                                       clevel=9,
+                                       shuffle=blosc.SHUFFLE,
+                                       typesize=1)
     return compressed_db_val
 
 
 def commit_spec_raw_val_from_db_val(db_val):
     uncompressed_db_val = blosc.decompress(db_val)
-    commit_spec = json.loads(uncompressed_db_val, encoding='ASCII')
+    commit_spec = msgpack.loads(uncompressed_db_val, raw=False)
     raw_val = CommitSpec(**commit_spec)
     return raw_val
 

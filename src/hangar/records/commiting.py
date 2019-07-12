@@ -23,6 +23,53 @@ Reading commit specifications and parents.
 '''
 
 
+def full_commit_digest_from_short_in_history(refenv: lmdb.Environment,
+                                             commit_hash: str) -> str:
+    '''Find the a full commit hash from a short version provided by the user
+
+    Parameters
+    ----------
+    refenv : lmdb.Environment
+        db where the commit references are stored
+    commit_hash : str
+        short commit hash to search for in the repository
+
+    Returns
+    -------
+    str
+        full commit hash if short maps to a unique digest in the repo history
+
+    Raises
+    ------
+    KeyError
+        If the short commit hash can reference two full commit digests
+    KeyError
+        if no expanded commit digest is found starting with the short version.
+    '''
+    reftxn = TxnRegister().begin_reader_txn(refenv)
+    commitParentStart = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+    with reftxn.cursor() as cursor:
+        shortHashExists = cursor.set_range(commitParentStart)
+        if shortHashExists is True:
+            commitKey = cursor.key()
+            commit_key = parsing.commit_parent_raw_key_from_db_key(commitKey)
+            if commit_key.startswith(commit_hash) is False:
+                raise KeyError(f'No expanded commit hash found for short: {commit_hash}')
+            cursor.next()
+            cursor.next()
+            nextHashExist = cursor.next()
+            if nextHashExist is False:
+                return commit_key
+            nextCommitKey = cursor.key()
+            next_commit_key = parsing.commit_parent_raw_key_from_db_key(nextCommitKey)
+            if next_commit_key.startswith(commit_hash) is True:
+                raise KeyError(f'Non unique short commit hash: {commit_hash}')
+            else:
+                return commit_key
+        else:
+            raise KeyError(f'No expanded commit hash found for short: {commit_hash}')
+
+
 def check_commit_hash_in_history(refenv, commit_hash):
     '''Check if a commit hash exists in the repository history
 
@@ -289,7 +336,6 @@ The functions below act to:
 
 # ---------------- Functions to format the writen values of a commit --------------------
 
-
 def __commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='', dev_branch_name=''):
     '''Format the commit parent db value, finding HEAD commits automatically.
 
@@ -313,7 +359,7 @@ def __commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='
     Returns
     -------
     bytestring
-        Commit parent db value formated appropriatly based on the repo state and
+        Commit parent db value formatted appropriately based on the repo state and
         any specified arguments.
     '''
     if not is_merge_commit:
@@ -350,7 +396,7 @@ def __commit_spec(message, user, email):
     Returns
     -------
     bytestring
-        Formated value for the specification field of the commit.
+        Formatted value for the specification field of the commit.
     '''
     commitSpecVal = parsing.commit_spec_db_val_from_raw_val(
         commit_time=time.time(),
@@ -376,7 +422,7 @@ def __commit_ref(stageenv):
 
     '''
     querys = RecordQuery(dataenv=stageenv)
-    allRecords = querys._traverse_all_records()
+    allRecords = tuple(querys._traverse_all_records())
     commitRefVal = parsing.commit_ref_db_val_from_raw_val(allRecords)
     return commitRefVal
 
@@ -415,11 +461,10 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     string
         Commit hash of the newly added commit
     '''
-    commitParentVal = __commit_ancestors(
-        branchenv=branchenv,
-        is_merge_commit=is_merge_commit,
-        master_branch_name=merge_master,
-        dev_branch_name=merge_dev)
+    commitParentVal = __commit_ancestors(branchenv=branchenv,
+                                         is_merge_commit=is_merge_commit,
+                                         master_branch_name=merge_master,
+                                         dev_branch_name=merge_dev)
 
     user_info_pth = pjoin(repo_path, 'config_user.yml')
     with open(user_info_pth) as f:
