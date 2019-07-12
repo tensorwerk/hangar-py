@@ -75,7 +75,7 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     assert 'dummy' in co.datasets
     # dataset samples
     dset = co.datasets['dummy']
-    assert len(dset) == 30
+    assert len(dset) == 50
 
     # dataset sample values
     checkarr = np.zeros_like(np.arange(50))
@@ -88,7 +88,7 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     for genKey in range(30):
         assert str(genKey) in dset_keys
         dset_keys.remove(str(genKey))
-    assert len(dset_keys) == 0
+    assert len(dset_keys) == 20
 
 
 def test_3_way_merge_updates_head_commit_of_branches(repo_2_br_no_conf):
@@ -186,12 +186,39 @@ class TestMetadataConflicts(object):
 
 class TestDatasetSampleConflicts(object):
 
-    def test_conflict_additions_same_name_different_value(self, repo_2_br_no_conf):
+    def test_conflict_additions_same_str_name_different_value(self, repo_2_br_no_conf):
         newdata = np.arange(50)
         newdata = newdata * 2
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch_name='master')
+        co.datasets['dummy']['15'] = newdata
+        co.commit('commit on master with conflicting data')
+        co.close()
+
+        with pytest.raises(ValueError):
+            repo.merge('merge commit', 'master', 'testbranch')
+
+    def test_conflict_additions_same_int_name_different_value(self, repo_2_br_no_conf):
+        newdata = np.arange(50)
+        newdata = newdata * 2
+
+        repo = repo_2_br_no_conf
+        co = repo.checkout(write=True, branch_name='master')
+        co.datasets['dummy'][15] = newdata
+        co.commit('commit on master with conflicting data')
+        co.close()
+
+        with pytest.raises(ValueError):
+            repo.merge('merge commit', 'master', 'testbranch')
+
+    def test_conflict_additions_same_str_and_int_name_different_value(self, repo_2_br_no_conf):
+        newdata = np.arange(50)
+        newdata = newdata * 2
+
+        repo = repo_2_br_no_conf
+        co = repo.checkout(write=True, branch_name='master')
+        co.datasets['dummy'][15] = newdata
         co.datasets['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
@@ -206,6 +233,7 @@ class TestDatasetSampleConflicts(object):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch_name='master')
         co.datasets['dummy']['15'] = newdata
+        co.datasets['dummy'][15] = newdata
         co.commit('commit on master with same value data')
         co.close()
 
@@ -213,6 +241,7 @@ class TestDatasetSampleConflicts(object):
         co = repo.checkout(commit=cmt_hash)
         dset = co.datasets['dummy']
         assert np.allclose(dset['15'], newdata)
+        assert np.allclose(dset[15], newdata)
 
     def test_conflict_mutations_same_name_different_value(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
@@ -251,11 +280,13 @@ class TestDatasetSampleConflicts(object):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch_name='master')
         co.datasets['dummy'].remove('0')
+        del co.datasets['dummy'][21]
         co.commit('commit on master with removal')
         co.close()
 
         co = repo.checkout(write=True, branch_name='testbranch')
         co.datasets['dummy'].remove('0')
+        del co.datasets['dummy'][10]
         co.commit('commit on testbranch with removal')
         co.close()
 
@@ -263,4 +294,4 @@ class TestDatasetSampleConflicts(object):
         co = repo.checkout(commit=cmt_hash)
         dset = co.datasets['dummy']
         assert '0' not in dset
-        assert len(dset) == 29
+        assert len(dset) == 47

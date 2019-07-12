@@ -38,6 +38,7 @@ SEP_CMT = ' << '
 SEP_SLC = "*"
 SEP_HSH = '$'
 
+K_INT = f'#'
 K_BRANCH = f'branch{SEP_KEY}'
 K_HEAD = 'head'
 K_REMOTES = f'remote{SEP_KEY}'

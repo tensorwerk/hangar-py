@@ -2,7 +2,7 @@ import hashlib
 import logging
 from typing import Optional
 from multiprocessing import Pool, get_context, cpu_count
-from typing import MutableMapping
+from typing import MutableMapping, Union
 
 import lmdb
 import numpy as np
@@ -381,44 +381,44 @@ class DatasetDataWriter(DatasetDataReader):
         for k in self._fs.keys():
             self._fs[k].__exit__(*exc)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Union[str, int], value: np.ndarray) -> Union[str, int]:
         '''Store a piece of data in a dataset. Convenience method to :meth:`add`.
 
         .. seealso:: :meth:`add`
 
         Parameters
         ----------
-        key : str
+        key : Union[str, int]
             name of the sample to add to the dataset
         value : np.array
             tensor data to add as the sample
 
         Returns
         -------
-        str
+        Union[str, int]
             sample name of the stored data (assuming operation was successful)
         '''
         self.add(value, key)
         return key
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: Union[str, int]) -> Union[str, int]:
         '''Remove a sample from the dataset. Convenience method to :meth:`remove`.
 
         .. seealso:: :meth:`remove`
 
         Parameters
         ----------
-        key : str
+        key : Union[str, int]
             Name of the sample to remove from the dataset
 
         Returns
         -------
-        str
+        Union[str, int]
             Name of the sample removed from the dataset (assuming operation successful)
         '''
         return self.remove(key)
 
-    @ property
+    @property
     def _backend(self) -> str:
         '''The default backend for the dataset which can be written to
 
@@ -429,20 +429,20 @@ class DatasetDataWriter(DatasetDataReader):
         '''
         return self._dflt_backend
 
-    def add(self, data: np.ndarray, name: str = None, **kwargs):
+    def add(self, data: np.ndarray, name: Union[str, int] = None, **kwargs) -> Union[str, int]:
         '''Store a piece of data in a dataset
 
         Parameters
         ----------
         data : np.ndarray
             data to store as a sample in the dataset.
-        name : str, optional
+        name : Union[str, int], optional
             name to assign to the same (assuming the dataset accepts named
             samples), by default None
 
         Returns
         -------
-        str
+        Union[str, int]
             sample name of the stored data (assuming the operation was successful)
 
         Raises
@@ -474,7 +474,7 @@ class DatasetDataWriter(DatasetDataReader):
         try:
             if self._samples_are_named and not is_suitable_user_key(name):
                 raise ValueError(
-                    f'Data name provided: `{name}` is invalid. Can only contain '
+                    f'Data name provided: `{name}` type: {type(name)} is invalid. Can only contain '
                     f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
             elif not self._samples_are_named:
                 name = kwargs['bulkn'] if 'bulkn' in kwargs else parsing.generate_sample_name()
@@ -556,7 +556,7 @@ class DatasetDataWriter(DatasetDataReader):
 
         return name
 
-    def remove(self, name):
+    def remove(self, name: Union[str, int]) -> Union[str, int]:
         '''Remove a sample with the provided name from the dataset.
 
         .. Note::
@@ -579,12 +579,12 @@ class DatasetDataWriter(DatasetDataReader):
 
         Parameters
         ----------
-        name : str
+        name : Union[str, int]
             name of the sample to remove.
 
         Returns
         -------
-        str
+        Union[str, int]
             If the operation was successful, name of the data sample deleted.
 
         Raises
@@ -599,7 +599,7 @@ class DatasetDataWriter(DatasetDataReader):
         try:
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
-                raise KeyError(f'No sample: {name} exists in dset: {self._dsetn}')
+                raise KeyError(f'No sample: {name} type: {type(name)} exists in: {self._dsetn}')
             del self._sspecs[name]
 
             dsetDataCountKey = parsing.dataset_record_count_db_key_from_raw_key(self._dsetn)

@@ -109,6 +109,7 @@ def repo_1_br_no_conf(request, repo):
     for idx in range(10, 20):
         dummyData[:] = idx
         co2.datasets['dummy'][str(idx)] = dummyData
+        co2.datasets['dummy'][idx] = dummyData
     co2.metadata['foo'] = 'bar'
     co2.commit('first commit on test branch adding non-conflict data and meta')
     co2.close()
@@ -124,6 +125,7 @@ def repo_2_br_no_conf(repo_1_br_no_conf):
     for idx in range(20, 30):
         dummyData[:] = idx
         co1.datasets['dummy'][str(idx)] = dummyData
+        co1.datasets['dummy'][idx] = dummyData
     co1.commit('second commit on master adding non-conflict data')
     co1.close()
     return repo

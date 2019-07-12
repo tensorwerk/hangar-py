@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 from functools import partial
 from numbers import Number
+from typing import Union
 
 import blosc
 import wrapt
@@ -83,14 +84,14 @@ def symlink_rel(src: os.PathLike, dst: os.PathLike):
 SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)
 
 
-def is_suitable_user_key(str_data: str) -> bool:
+def is_suitable_user_key(key: Union[str, int]) -> bool:
     '''Checks if string contains only alpha-numeric ascii chars or ['.', '-' '_'] (no whitespace)
 
     Necessary because python 3.6 does not have a str.isascii() method.
 
     Parameters
     ----------
-    str_data : str
+    key : Union[str, int]
         string to check if it contains only ascii characters
 
     Returns
@@ -99,6 +100,10 @@ def is_suitable_user_key(str_data: str) -> bool:
         True if only ascii characters in the string, else False.
     '''
     try:
+        if isinstance(key, (str, int)):
+            str_data = str(key)
+        else:
+            raise TypeError
         return bool(SuitableCharRE.match(str_data))
     except TypeError:
         return False
