@@ -510,7 +510,7 @@ class TestDataWithFixedSizedDataset(object):
 
         # dummy additino with wrong key
         with pytest.raises(KeyError):
-            co.datasets.add(
+            co.datasets.multi_add(
                 {
                     'dset_no_name2': randomsizedarray / 255,
                     'dummykey': randomsizedarray
@@ -520,7 +520,7 @@ class TestDataWithFixedSizedDataset(object):
             co.commit('this is a commit message')
 
         # proper addition and verification
-        co.datasets.add(
+        co.datasets.multi_add(
             {
                 'dset_no_name1': randomsizedarray,
                 'dset_no_name2': randomsizedarray / 255

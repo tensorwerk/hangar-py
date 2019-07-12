@@ -65,6 +65,7 @@ def cm_weakref_obj_proxy(obj):
     setattr(wr, '__exit__', partial(obj.__class__.__exit__, wr))
     obj_proxy = wrapt.ObjectProxy(wr)
     return obj_proxy
+    return wr
 
 
 def symlink_rel(src: os.PathLike, dst: os.PathLike):

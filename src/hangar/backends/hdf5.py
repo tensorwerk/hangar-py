@@ -128,7 +128,7 @@ filter_options = {
     'default': {
         'shuffle': True,
         'complib': 'blosc:lz4',
-        'complevel': 5,
+        'complevel': 3,
         'fletcher32': True},
     'backup': {
         'shuffle': True,
@@ -189,7 +189,7 @@ class HDF5_00_Parser(object):
                   f'{self.ShapeFmtRE.sub("", str(shape))}'
         return out_str.encode()
 
-    def decode(self, db_val: bytes) -> namedtuple:
+    def decode(self, db_val: bytes) -> DataHashSpec:
         '''converts an hdf5 data hash db val into an hdf5 data python spec.
 
         Parameters
@@ -223,7 +223,7 @@ class HDF5_00_Parser(object):
 
 
 class HDF5_00_FileHandles(object):
-    '''Singleton to manage HDF5 file handles.
+    '''Manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
     "writeable" state. This is an issue where multiple datasets may need to
@@ -231,9 +231,9 @@ class HDF5_00_FileHandles(object):
     '''
 
     def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
-        self.repo_path = repo_path
-        self.schema_shape = schema_shape
-        self.schema_dtype = schema_dtype
+        self.path: os.PathLike = repo_path
+        self.schema_shape: tuple = schema_shape
+        self.schema_dtype: np.dtype = schema_dtype
 
         self.rFp: MutableMapping[str, h5py.File] = {}
         self.wFp: MutableMapping[str, h5py.File] = {}
@@ -248,12 +248,12 @@ class HDF5_00_FileHandles(object):
 
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
-        self.fmtParser = HDF5_00_Parser()
+        self.Parser = HDF5_00_Parser()
 
-        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, self.fmtParser.FmtCode)
-        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, self.fmtParser.FmtCode)
-        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, self.fmtParser.FmtCode)
-        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, self.fmtParser.FmtCode)
+        self.STAGEDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_STAGE, self.Parser.FmtCode)
+        self.REMOTEDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_REMOTE, self.Parser.FmtCode)
+        self.DATADIR: os.PathLike = pjoin(self.path, c.DIR_DATA, self.Parser.FmtCode)
+        self.STOREDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_STORE, self.Parser.FmtCode)
         if not os.path.isdir(self.DATADIR):
             os.makedirs(self.DATADIR)
 
@@ -275,7 +275,7 @@ class HDF5_00_FileHandles(object):
         del state['rFp']
         del state['wFp']
         del state['Fp']
-        del state['fmtParser']
+        del state['Parser']
         return state
 
     def __setstate__(self, state):
@@ -285,7 +285,7 @@ class HDF5_00_FileHandles(object):
         self.rFp = {}
         self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
-        self.fmtParser = HDF5_00_Parser()
+        self.Parser = HDF5_00_Parser()
         self.open(self.mode)
 
     def open(self, mode: str, *, remote_operation: bool = False):
@@ -674,8 +674,8 @@ class HDF5_00_FileHandles(object):
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(array, srcSlc, destSlc)
 
-        hashVal = self.fmtParser.encode(uid=self.w_uid,
-                                        dataset=self.hNextPath,
-                                        dataset_idx=self.hIdx,
-                                        shape=array.shape)
+        hashVal = self.Parser.encode(uid=self.w_uid,
+                                     dataset=self.hNextPath,
+                                     dataset_idx=self.hIdx,
+                                     shape=array.shape)
         return hashVal

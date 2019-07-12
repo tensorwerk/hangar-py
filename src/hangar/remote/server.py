@@ -148,7 +148,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             self.txnregister.abort_reader_txn(self.env.refenv)
 
         if commitRefVal is False:
-            err = hangar_service_pb2.ErrorProto(code=1, message='COMMIT DOES NOT EXIST')
+            msg = f'COMMIT: {commit} DOES NOT EXIST ON SERVER'
+            context.set_details(msg)
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            err = hangar_service_pb2.ErrorProto(code=5, message=msg)
             reply = hangar_service_pb2.FetchCommitReply(commit=commit, error=err)
             yield reply
             raise StopIteration()
@@ -181,7 +184,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
         digest = self.CW.commit(commit, parentVal, specVal, refBytes)
         if not digest:
-            err = hangar_service_pb2.ErrorProto(code=1, message='COMMIT EXISTS')
+            msg = f'COMMIT: {commit} ALREADY EXISTS'
+            context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+            context.set_details(msg)
+            err = hangar_service_pb2.ErrorProto(code=6, message=msg)
         else:
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
             commiting.move_process_data_to_store(self.env.repo_path, remote_operation=True)
@@ -205,8 +211,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 err = hangar_service_pb2.ErrorProto(code=0, message='OK')
             else:
                 print(f'not exists: {schema_hash}')
+                msg = f'SCHEMA HASH: {schema_hash} DOES NOT EXIST ON SERVER'
+                context.set_details(msg)
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                err = hangar_service_pb2.ErrorProto(code=5, message=msg)
                 rec = hangar_service_pb2.SchemaRecord(digest=schema_hash)
-                err = hangar_service_pb2.ErrorProto(code=1, message='DOES NOT EXIST')
         finally:
             self.txnregister.abort_reader_txn(self.env.hashenv)
 
@@ -224,7 +233,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         digest = self.CW.schema(schema_hash, schema_val)
         if not digest:
             print(f'exists: {schema_val}')
-            err = hangar_service_pb2.ErrorProto(code=1, message='ALREADY EXISTS')
+            msg = f'SCHEMA: {schema_hash} ALREADY EXISTS ON SERVER'
+            context.set_details(msg)
+            context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+            err = hangar_service_pb2.ErrorProto(code=6, message=msg)
         else:
             print(f'created new: {schema_val}')
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
@@ -254,7 +266,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             msg = f'Expected nbytes data sent: {uncomp_nbytes} != recieved {comp_nbytes}'
             context.set_details(msg)
             context.set_code(grpc.StatusCode.DATA_LOSS)
-            err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+            err = hangar_service_pb2.ErrorProto(code=15, message=msg)
             reply = hangar_service_pb2.FetchDataReply(error=err)
             yield reply
             raise StopIteration()
@@ -288,7 +300,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     msg = f'HASH DOES NOT EXIST: {hashKey}'
                     context.set_details(msg)
                     context.set_code(grpc.StatusCode.NOT_FOUND)
-                    err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+                    err = hangar_service_pb2.ErrorProto(code=5, message=msg)
                     reply = hangar_service_pb2.FetchDataReply(error=err)
                     yield reply
                     raise StopIteration()
@@ -312,7 +324,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                           'raw data size to prevent memory overload of user system.'
                     context.set_details(msg)
                     context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
-                    err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+                    err = hangar_service_pb2.ErrorProto(code=8, message=msg)
                     yield hangar_service_pb2.FetchDataReply(error=err, raw_data=b'')
                     raise StopIteration()
 
@@ -353,7 +365,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         uncompBytes = blosc.decompress(dBytes)
         if uncomp_nbytes != len(uncompBytes):
             msg = f'ERROR: uncomp_nbytes sent: {uncomp_nbytes} != recieved {comp_nbytes}'
-            err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+            context.set_details(msg)
+            context.set_code(grpc.StatusCode.DATA_LOSS)
+            err = hangar_service_pb2.ErrorProto(code=15, message=msg)
             reply = hangar_service_pb2.PushDataReply(error=err)
             return reply
 
@@ -370,7 +384,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 msg = f'HASH MANGLED, recieved: {recieved_hash} != expected digest: {digest}'
                 context.set_details(msg)
                 context.set_code(grpc.StatusCode.DATA_LOSS)
-                err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+                err = hangar_service_pb2.ErrorProto(code=15, message=msg)
                 reply = hangar_service_pb2.PushDataReply(error=err)
                 return reply
             recieved_data.append((recieved_hash, tensor))
@@ -395,7 +409,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             labelVal = labelTxn.get(labelKey, default=False)
             if labelVal is False:
                 msg = f'DOES NOT EXIST: labelval with key: {labelKey}'
-                err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(msg)
+                err = hangar_service_pb2.ErrorProto(code=5, message=msg)
             else:
                 err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                 compLabelVal = blosc.compress(labelVal)
@@ -418,14 +434,18 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         recieved_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
         if recieved_hash != req_digest:
             msg = f'HASH MANGED: recieved_hash: {recieved_hash} != digest: {req_digest}'
-            err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+            context.set_details(msg)
+            context.set_code(grpc.StatusCode.DATA_LOSS)
+            err = hangar_service_pb2.ErrorProto(code=15, message=msg)
             reply = hangar_service_pb2.PushLabelReply(error=err)
             return reply
 
         digest = self.CW.label(recieved_hash, uncompBlob)
         if not digest:
             msg = f'HASH ALREADY EXISTS: {req_digest}'
-            err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+            context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+            context.set_details(msg)
+            err = hangar_service_pb2.ErrorProto(code=6, message=msg)
         else:
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushLabelReply(error=err)
@@ -446,7 +466,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 branch_name=c_branch_name)
         except ValueError:
             msg = f'BRANCH NOT EXIST. Name: {c_branch_name}'
-            err = hangar_service_pb2.ErrorProto(code=1, message=msg)
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details(msg)
+            err = hangar_service_pb2.ErrorProto(code=5, message=msg)
+            reply = hangar_service_pb2.FindMissingCommitsReply(error=err)
+            return reply
 
         s_orderset = set(s_history['order'])
         c_orderset = set(c_ordered_commits)

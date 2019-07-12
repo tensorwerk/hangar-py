@@ -238,6 +238,23 @@ def test_fetch_newer_disk_repo_makes_no_modifications(written_two_cmt_server_rep
     assert branchName == 'master'
 
 
+def test_fetch_branch_which_does_not_exist_client_server_raises_rpc_error(written_two_cmt_server_repo):
+    import grpc
+    _, repo = written_two_cmt_server_repo
+    with pytest.raises(grpc.RpcError) as rpc_error:
+        repo.remote.fetch('origin', 'not-a-branch')
+    assert rpc_error.value._state.code == grpc.StatusCode.NOT_FOUND
+
+
+def test_fetch_branch_on_client_which_does_not_existserver_raises_rpc_error(written_two_cmt_server_repo):
+    import grpc
+    _, repo = written_two_cmt_server_repo
+    repo.create_branch('new-branch')
+    with pytest.raises(grpc.RpcError) as exc_info:
+        repo.remote.fetch('origin', 'new-branch')
+    assert exc_info.value._state.code == grpc.StatusCode.NOT_FOUND
+
+
 def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_tmpdir):
     from hangar import Repository
 

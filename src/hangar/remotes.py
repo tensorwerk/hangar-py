@@ -207,8 +207,7 @@ class Remotes(object):
                     return branch
                 elif sHEAD in c_bhistory['order']:
                     warnings.warn(
-                        f'REJECTED: remote HEAD: {sHEAD} behind local HEAD: {cHEAD}',
-                        UserWarning)
+                        f'REJECTED: remote HEAD: {sHEAD} behind local: {cHEAD}', UserWarning)
                     return branch
 
             # ------------------- get data ------------------------------------

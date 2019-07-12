@@ -201,12 +201,12 @@ class NUMPY_00_FileHandles(object):
 
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
-        self.fmtParser = NUMPY_00_Parser()
+        self.Parser = NUMPY_00_Parser()
 
-        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, self.fmtParser.FmtCode)
-        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, self.fmtParser.FmtCode)
-        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, self.fmtParser.FmtCode)
-        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, self.fmtParser.FmtCode)
+        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, self.Parser.FmtCode)
+        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, self.Parser.FmtCode)
+        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, self.Parser.FmtCode)
+        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, self.Parser.FmtCode)
         if not os.path.isdir(self.DATADIR):
             os.makedirs(self.DATADIR)
 
@@ -404,7 +404,7 @@ class NUMPY_00_FileHandles(object):
 
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][destSlc] = array
-        hashVal = self.fmtParser.encode(uid=self.w_uid,
+        hashVal = self.Parser.encode(uid=self.w_uid,
                                         checksum=checksum,
                                         dataset_idx=self.hIdx,
                                         shape=array.shape)

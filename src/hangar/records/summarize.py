@@ -64,7 +64,7 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
     return res
 
 
-def details(env: lmdb.Environment, line_limit=100) -> StringIO:
+def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no cover
     '''Print the details of an lmdb environment to stdout
 
     Parameters

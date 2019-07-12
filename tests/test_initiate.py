@@ -50,3 +50,15 @@ def test_empty_commit(managed_tmpdir, caplog):
         w_checkout.commit('this is a merge message')
     w_checkout.close()
     repo._env._close_environments()
+
+
+def test_get_ecosystem_details(managed_tmpdir):
+    repo = Repository(path=managed_tmpdir)
+    repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
+    eco = repo._ecosystem_details()
+    assert isinstance(eco, dict)
+    assert 'host' in eco
+    assert 'packages' in eco
+    for package_name, version in eco['packages']:
+        assert version is not None
+    repo._env._close_environments()

@@ -60,7 +60,7 @@ class MetadataReader(object):
         self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *exc):
         self._is_conman = False
         self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
         self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
@@ -248,7 +248,7 @@ class MetadataWriter(MetadataReader):
         self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *exc):
         self._is_conman = False
         self._labelTxn = self._TxnRegister.commit_writer_txn(self._labelenv)
         self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)

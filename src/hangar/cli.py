@@ -21,6 +21,7 @@ import click
 
 from hangar import Repository
 from hangar import serve
+from hangar.records.commiting import expand_short_commit_digest
 
 
 @click.group()
@@ -49,16 +50,16 @@ def init(name, email, overwrite):
 @click.option('--email', prompt='User Email', help='email address of the user')
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
 @click.argument('remote', nargs=1, required=True)
+# include --all (data) option
 def clone(remote, name, email, overwrite):
     '''Initialize a repository at the current path and fetch data records from REMOTE server.
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    repo.clone(
-        user_name=name,
-        user_email=email,
-        remote_address=remote,
-        remove_old=overwrite)
+    repo.clone(user_name=name,
+               user_email=email,
+               remote_address=remote,
+               remove_old=overwrite)
     click.echo(f'Hangar repository initialized at {P}')
 
 
@@ -76,16 +77,31 @@ def fetch_records(remote, branch):
     bName = repo.remote.fetch(remote=remote, branch=branch)
     click.echo(f'Fetch to Branch Name: {bName}')
 
+# --all
+# --updates (history?)   Default?
+# --data (via commit or branch HEAD)
+# --dset
+
+# fetch to update refs
+# **view how much data is actually missing before you `fetch-data` in a commit**
+# --fetch-data --dset FOO --samples 1 2 3 ...
+# --fetch-data commit/branch --dset --samples (list, or slice notation (foo1:bar1) (check if colon is proper)) --limit-disk
+### --fetch-data --dset FOO --samples (way to include predicates? key functions?)
 
 @main.command(name='fetch-data')
 @click.argument('remote', nargs=1, required=True)  # help='name of the remote server')
 @click.argument('commit', nargs=1, required=True)  # help='commit hash for which data should be retrieved')
+# need BRANCH for HEAD
+# all for all branches/commits.
+# all for history of branch
+# raise warning if too large?
 def fetch_data(remote, commit):
     '''Download the tensor data from the REMOTE server referenced by COMMIT.
     '''
     P = os.getcwd()
     repo = Repository(path=P)
-    commit_hash = repo.remote.fetch_data(remote=remote, commit=commit)
+    cmt = expand_short_commit_digest(repo._env.refenv, commit)
+    commit_hash = repo.remote.fetch_data(remote=remote, commit=cmt)
     click.echo(f'Retrieved data for commit hash: {commit_hash}')
 
 
@@ -142,7 +158,8 @@ def summary(b, c):
     P = os.getcwd()
     repo = Repository(path=P)
     if c:
-        click.echo(repo.summary(commit=c))
+        cmt = expand_short_commit_digest(repo._env.refenv, c)
+        click.echo(repo.summary(commit=cmt))
     elif b:
         click.echo(repo.summary(branch_name=b))
     else:
@@ -174,7 +191,8 @@ def branch(l, b):
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite the hangar server instance if it exists at the current path.')
 @click.option('--ip', default='localhost', help='the ip to start the server on. default is `localhost`')
 @click.option('--port', default='50051', help='port to start the server on. default in `50051`')
-def server(overwrite, ip, port):
+@click.option('--timeout', default=60*60*24, required=False, help='time (in seconds) before server is stopped automatically')
+def server(overwrite, ip, port, timeout):
     P = os.getcwd()
     ip_port = f'{ip}:{port}'
     server, hangserver, channel_address = serve(P, overwrite, channel_address=ip_port)
@@ -184,8 +202,11 @@ def server(overwrite, ip, port):
     click.echo(f'* Base Directory Path: {P}')
     click.echo(f'* Operating on `IP_ADDRESS:PORT`: {channel_address}')
     try:
+        startTime = time.time()
         while True:
             time.sleep(0.1)
+            if time.time() - startTime > timeout:
+                raise SystemExit
     except (KeyboardInterrupt, SystemExit):
         click.echo(f'Server Stopped at Time: {time.asctime()}')
         hangserver.env._close_environments()
@@ -203,7 +224,7 @@ def server(overwrite, ip, port):
 @click.option('-s', is_flag=True, help='display the stage record db')
 @click.option('-z', is_flag=True, help='display the staged hash record db')
 @click.option('--limit', default=30, help='limit the amount of records displayed before truncation')
-def lmdb_record_details(a, b, r, d, m, s, z, limit):
+def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
     from hangar.context import Environments
     from hangar.records.summarize import details
     from hangar import constants as c

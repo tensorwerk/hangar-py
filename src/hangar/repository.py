@@ -1,6 +1,7 @@
 import os
 import logging
 import weakref
+import warnings
 from typing import Union, Optional
 
 from . import merger
@@ -90,8 +91,8 @@ class Repository(object):
             specified repo path.
         '''
         if not self._env.repo_is_initialized:
-            msg = f'HANGAR RUNTIME ERROR:: Repository at path: {self._repo_path} has not '\
-                  f'been initialized. Please run the `init_repo()` function'
+            msg = f'Repository at path: {self._repo_path} has not been initialized. '\
+                  f'Please run the `init_repo()` function'
             raise RuntimeError(msg)
 
     @property
@@ -232,9 +233,11 @@ class Repository(object):
         branch = self._remote.fetch(remote='origin', branch='master')
         HEAD = heads.get_branch_head_commit(self._env.branchenv, branch_name=branch)
         heads.set_branch_head_commit(self._env.branchenv, 'master', HEAD)
-        co = self.checkout(write=True, branch_name='master')
-        co.reset_staging_area()
-        co.close()
+        with warnings.catch_warnings(record=False):
+            warnings.simplefilter('ignore', category=UserWarning)
+            co = self.checkout(write=True, branch_name='master')
+            co.reset_staging_area()
+            co.close()
         return 'master'
 
     def init(self, user_name: str, user_email: str,

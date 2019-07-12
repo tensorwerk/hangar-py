@@ -151,7 +151,6 @@ def test_fetch_records_and_data(server_instance, backend):
         assert res.exit_code == 0
 
 
-
 def test_add_remote():
     from hangar.remotes import RemoteInfo
 
@@ -286,3 +285,14 @@ def test_branch_create_and_list(written_two_cmt_server_repo):
         res = runner.invoke(cli.branch, ['-l'])
         assert res.exit_code == 0
         assert res.stdout == "['master', 'origin/master', 'testbranch']\n"
+
+
+def test_start_server():
+    import time
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        startTime = time.time()
+        res = runner.invoke(cli.server, ['--ip', 'localhost', '--port', '50111', '--timeout', '3'])
+        assert time.time() - startTime >= 3
+        assert res.exit_code == 0
+        assert res.stdout.startswith('Hangar Server Started')

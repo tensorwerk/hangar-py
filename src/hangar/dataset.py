@@ -1,14 +1,14 @@
 import hashlib
 import logging
-from typing import Optional
+import warnings
+from typing import Optional, MutableMapping, List, Union
 from multiprocessing import get_context, cpu_count
-from typing import Union
 
 import lmdb
 import numpy as np
 
 from .context import TxnRegister
-from .backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP, backend_from_heuristics
+from .backends import backend_decoder, BACKEND_ACCESSOR_MAP, backend_from_heuristics
 from .records import parsing
 from .records.queries import RecordQuery
 from .utils import is_suitable_user_key, cm_weakref_obj_proxy
@@ -70,9 +70,10 @@ class DatasetDataReader(object):
         self._schema_max_shape = tuple(varMaxShape)
         self._default_schema_hash = default_schema_hash
 
-        self._is_conman = False
+        self._is_conman: bool = False
         self._index_expr_factory = np.s_
         self._index_expr_factory.maketuple = False
+        self._contains_partial_remote_data: bool = False
 
         # ------------------------ backend setup ------------------------------
 
@@ -100,7 +101,14 @@ class DatasetDataReader(object):
                 dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
                 hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
                 hash_ref = hashTxn.get(hashKey)
-                self._sspecs[name] = backend_decoder(hash_ref)
+                be_loc = backend_decoder(hash_ref)
+                self._sspecs[name] = be_loc
+                if be_loc.backend == '50':
+                    warnings.warn(
+                        f'Dataset: {self._dsetn} contains `reference-only` samples, with '
+                        f'actual data residing on a remote server. A `fetch-data` '
+                        f'operation is required to access these samples.', UserWarning)
+                    self._contains_partial_remote_data = True
         finally:
             _TxnRegister.abort_reader_txn(hashenv)
             _TxnRegister.abort_reader_txn(dataenv)
@@ -160,15 +168,16 @@ class DatasetDataReader(object):
         return exists
 
     def _repr_pretty_(self, p, cycle):
-        res = f'\n Hangar {self.__class__.__name__} \
-                \n    Dataset Name     : {self._dsetn}\
-                \n    Schema Hash      : {self._default_schema_hash}\
-                \n    Variable Shape   : {bool(int(self._schema_variable))}\
-                \n    (max) Shape      : {self._schema_max_shape}\
-                \n    Datatype         : {np.typeDict[self._schema_dtype_num]}\
-                \n    Named Samples    : {bool(self._samples_are_named)}\
-                \n    Access Mode      : {self._mode}\
-                \n    Num Samples      : {self.__len__()}\n'
+        res = f'Hangar {self.__class__.__name__} \
+                \n    Dataset Name             : {self._dsetn}\
+                \n    Schema Hash              : {self._default_schema_hash}\
+                \n    Variable Shape           : {bool(int(self._schema_variable))}\
+                \n    (max) Shape              : {self._schema_max_shape}\
+                \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
+                \n    Named Samples            : {bool(self._samples_are_named)}\
+                \n    Access Mode              : {self._mode}\
+                \n    Number of Samples        : {self.__len__()}\
+                \n    Partial Remote Data Refs : {bool(self._contains_partial_remote_data)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -225,6 +234,28 @@ class DatasetDataReader(object):
         '''Bool indicating if this dataset object is write-enabled. Read-only attribute.
         '''
         return False if self._mode == 'r' else True
+
+    @property
+    def contains_remote_references(self) -> bool:
+        '''Bool indicating if all samples exist locally or if some reference remote sources.
+        '''
+        return bool(self._contains_partial_remote_data)
+
+    @property
+    def remote_reference_sample_keys(self) -> List[str]:
+        '''Returns sample names whose data is stored in a remote server reference.
+
+        Returns
+        -------
+        List[str]
+            list of sample keys in the dataset.
+        '''
+        remote_keys = []
+        if self.contains_remote_references is True:
+            for sampleName, beLoc in self._sspecs.items():
+                if beLoc.backend == '50':
+                    remote_keys.append(sampleName)
+        return remote_keys
 
     def keys(self):
         '''generator which yields the names of every sample in the dataset
@@ -682,6 +713,7 @@ class Datasets(object):
         self._stagehashenv = stagehashenv
 
         self._is_conman = False
+        self._contains_partial_remote_data: bool = False
         self._Query = RecordQuery(self._dataenv)
         self.__setup()
 
@@ -693,7 +725,7 @@ class Datasets(object):
         if self._mode == 'r':
             self.init_dataset = None
             self.remove_dset = None
-            self.add = None
+            self.multi_add = None
 
     def _open(self):
         for v in self._datasets.values():
@@ -706,10 +738,11 @@ class Datasets(object):
 # ------------- Methods Available To Both Read & Write Checkouts ------------------
 
     def _repr_pretty_(self, p, cycle):
-        res = f'\n Hangar {self.__class__.__name__}\
-                \n     Writeable: {bool(0 if self._mode == "r" else 1)}\
-                \n     Dataset Names:\
-                \n       - '                                                         + '\n       - '.join(self._datasets.keys())
+        res = f'Hangar {self.__class__.__name__}\
+                \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
+                \n    Dataset Names / Partial Remote References:\
+                \n      - ' + '\n      - '.join(
+                f'{dsetn} / {dset.contains_remote_references}' for dsetn, dset in self._datasets.items())
         p.text(res)
 
     def __repr__(self):
@@ -805,6 +838,32 @@ class Datasets(object):
         '''
         return False if self._mode == 'r' else True
 
+    @property
+    def contains_remote_references(self) -> MutableMapping[str, bool]:
+        '''Dict of bool indicating data reference locality in each dataset.
+
+        False is all samples in dataset exist locally, True if some reference remote sources.
+        '''
+        res = {}
+        for dsetn, dset in self._datasets.items():
+            res[dsetn] = dset.contains_remote_references
+        return res
+
+    @property
+    def remote_reference_dset_sample_keys(self) -> MutableMapping[str, List[str]]:
+        '''Return list of sample keys containing data stored in a remote reference for each dataset
+
+        Returns
+        -------
+        MutableMapping[str, List[str]]
+            dict where keys are dataset names and values are samples in the dataset containing
+            remote references
+        '''
+        res: MutableMapping[str, List[str]] = {}
+        for dsetn, dset in self._datasets.items():
+            res[dsetn] = dset.remote_reference_sample_keys
+        return res
+
     def keys(self):
         '''list all dataset keys (names) in the checkout
 
@@ -882,7 +941,7 @@ class Datasets(object):
         for dskey in list(self._datasets):
             self._datasets[dskey].__exit__(*exc)
 
-    def add(self, mapping: dict) -> str:
+    def multi_add(self, mapping: dict) -> str:
         '''Add related samples to un-named datasets with the same generated key.
 
         If you have multiple datasets in a checkout whose samples are related to

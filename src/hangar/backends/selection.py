@@ -68,8 +68,8 @@ Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the
 process.
 '''
-
 from collections import namedtuple
+from typing import Dict, Union
 
 import numpy as np
 
@@ -77,7 +77,18 @@ from .hdf5 import HDF5_00_Parser, HDF5_00_FileHandles
 from .np_mmap import NUMPY_00_Parser, NUMPY_00_FileHandles
 from .remote_unknown import REMOTE_UNKNOWN_00_Parser, REMOTE_UNKNOWN_00_Handler
 
-BACKEND_PARSER_MAP = {
+
+# -------------------------- Parser Types and Mapping -------------------------
+
+
+_BackendParsers = Union[
+    HDF5_00_Parser,
+    NUMPY_00_Parser,
+    REMOTE_UNKNOWN_00_Parser
+]
+_ParserMapping = Dict[bytes, _BackendParsers]
+
+BACKEND_PARSER_MAP: _ParserMapping = {
     # LOCALS -> [00:50]
     b'00': HDF5_00_Parser(),
     b'01': NUMPY_00_Parser(),
@@ -87,7 +98,18 @@ BACKEND_PARSER_MAP = {
     b'51': None,               # url_00 - Reserved
 }
 
-BACKEND_ACCESSOR_MAP = {
+
+# ------------------------ Accessor Types and Mapping -------------------------
+
+
+_BackendAccessors = Union[
+    HDF5_00_FileHandles,
+    NUMPY_00_FileHandles,
+    REMOTE_UNKNOWN_00_Handler
+]
+_AccessorMapping = Dict[str, _BackendAccessors]
+
+BACKEND_ACCESSOR_MAP: _AccessorMapping = {
     # LOCALS -> [0:50]
     '00': HDF5_00_FileHandles,
     '01': NUMPY_00_FileHandles,
@@ -96,6 +118,9 @@ BACKEND_ACCESSOR_MAP = {
     '50': REMOTE_UNKNOWN_00_Handler,
     '51': None,               # url_00 - Reserved
 }
+
+
+# ------------------------ Selector Functions ---------------------------------
 
 
 def backend_decoder(db_val: bytes) -> namedtuple:

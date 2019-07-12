@@ -23,8 +23,7 @@ Reading commit specifications and parents.
 '''
 
 
-def full_commit_digest_from_short_in_history(refenv: lmdb.Environment,
-                                             commit_hash: str) -> str:
+def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> str:
     '''Find the a full commit hash from a short version provided by the user
 
     Parameters

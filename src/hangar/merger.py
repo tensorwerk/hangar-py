@@ -12,14 +12,14 @@ Merge Methods
 -------------
 
 In the current implementation, only fast-forward and a very simple three-way merge
-algorithm are implemented. All user facing API calls should be funnled through the
+algorithm are implemented. All user facing API calls should be funneled through the
 :function:`select_merge_algorithm` function
 
 .. note::
 
     In the current implementation, it is not possible to stop a merge in progress or
     to revert a bad merge commit. All revert like operations should be made by
-    creating new branchs from the last "good" state, after which new merge
+    creating new branches from the last "good" state, after which new merge
     operations can be attempted (if desired.)
 '''
 
@@ -38,11 +38,11 @@ def select_merge_algorithm(message,
     ----------
     message : str
         user message describing the commit
-    branchenv : `lmdb.Envrionment`
+    branchenv : `lmdb.Environment`
         where the branch references are stored
     stageenv : `lmdb.Environment`
         where the staging area is open
-    refenv : `lmdb.Evironment`
+    refenv : `lmdb.Environment`
         where commit history is stored
     stagehashenv: `lmdb.Environment`
         where the stage hash environment data is stored
@@ -191,7 +191,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
 def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
                      devHEAD, ancestorHEAD, branchenv, stageenv, refenv, stagehashenv,
                      repo_path):
-    '''Merge stratagy with diff/patch computed from changes since last common ancestor.
+    '''Merge strategy with diff/patch computed from changes since last common ancestor.
 
     Parameters
     ----------
@@ -309,7 +309,7 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     Parameters
     ----------
     a_cont : dict
-        contents of the lastest common ancestor of the `master` and `dev` HEAD commits.
+        contents of the latest common ancestor of the `master` and `dev` HEAD commits.
     m_cont : dict
         contents of the `master` HEAD commit.
     d_cont : dict
@@ -375,7 +375,7 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
 
 
 def _merge_dict_to_lmdb_tuples(patchedRecs):
-    '''Create a lexographically sorted iterable of (key/val tuples) from a dict.
+    '''Create a lexicographically sorted iterable of (key/val tuples) from a dict.
 
     .. note::
 
@@ -386,13 +386,13 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
     Parameters
     ----------
     patchedRecs : dict
-        nested dict which specifies all records for datasets & metdata
+        nested dict which specifies all records for datasets & metadata
 
     Returns
     -------
     iterable
-        iterable of tuples formated correctly to serve an a drop in replacement
-        for the staging environment, with elements lexographically sorted so
+        iterable of tuples formatted correctly to serve an a drop in replacement
+        for the staging environment, with elements lexicographically sorted so
         that an lmdb `putmulti` operation can be performed with `append=True`.
     '''
     entries = []
@@ -428,8 +428,7 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
             entries.append((dataRecKey, dataRecVal))
 
     numMetaKey = parsing.metadata_count_db_key()
-    numMetaVal = parsing.metadata_count_db_val_from_raw_val(
-        len(patchedRecs['metadata'].keys()))
+    numMetaVal = parsing.metadata_count_db_val_from_raw_val(len(patchedRecs['metadata'].keys()))
     entries.append((numMetaKey, numMetaVal))
 
     for metaRecRawKey, metaRecRawVal in patchedRecs['metadata'].items():

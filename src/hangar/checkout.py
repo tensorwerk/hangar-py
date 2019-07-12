@@ -1,7 +1,10 @@
+import os
 import logging
 import weakref
 from uuid import uuid4
 from os.path import join as pjoin
+
+import lmdb
 
 from . import constants as c
 from .dataset import Datasets
@@ -39,7 +42,11 @@ class ReaderCheckout(object):
         specific commit hash to checkout
     '''
 
-    def __init__(self, base_path, labelenv, dataenv, hashenv, branchenv, refenv, commit):
+    def __init__(self, base_path: os.PathLike, labelenv: lmdb.Environment,
+                 dataenv: lmdb.Environment, hashenv: lmdb.Environment,
+                 branchenv: lmdb.Environment, refenv: lmdb.Environment,
+                 commit: str):
+
         self._commit_hash = commit
         self._repo_path = base_path
         self._labelenv = labelenv
@@ -64,11 +71,11 @@ class ReaderCheckout(object):
         '''pretty repr for printing in jupyter notebooks
         '''
         self.__verify_checkout_alive()
-        res = f'\n Hangar {self.__class__.__name__}\
-                \n     Writer       : False\
-                \n     Commit Hash  : {self._commit_hash}\
-                \n     Num Datasets : {len(self._datasets)}\
-                \n     Num Metadata : {len(self._metadata)}\n'
+        res = f'Hangar {self.__class__.__name__}\
+                \n    Writer       : False\
+                \n    Commit Hash  : {self._commit_hash}\
+                \n    Num Datasets : {len(self._datasets)}\
+                \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -178,8 +185,8 @@ class ReaderCheckout(object):
         multiple simultaneous read checkouts.
         '''
         self.__verify_checkout_alive()
-        for dsetHandle in self._datasets.values():
-            dsetHandle._close()
+        self._datasets._close()
+
         del self._datasets
         del self._metadata
         del self._differ
@@ -227,22 +234,33 @@ class WriterCheckout(object):
         open in write or read only mode, default is 'a' which is write-enabled.
     '''
 
-    def __init__(self, repo_pth, branch_name, labelenv, hashenv, refenv,
-                 stageenv, branchenv, stagehashenv, mode='a'):
+    def __init__(self,
+                 repo_pth: os.PathLike,
+                 branch_name: str,
+                 labelenv: lmdb.Environment,
+                 hashenv: lmdb.Environment,
+                 refenv: lmdb.Environment,
+                 stageenv: lmdb.Environment,
+                 branchenv: lmdb.Environment,
+                 stagehashenv: lmdb.Environment,
+                 mode: str = 'a'):
+
+        self._repo_path = repo_pth
         self._branch_name = branch_name
         self._writer_lock = str(uuid4())
-        self._repo_path = repo_pth
-        self._repo_stage_path = pjoin(self._repo_path, c.DIR_DATA_STAGE)
-        self._repo_store_path = pjoin(self._repo_path, c.DIR_DATA_STORE)
+
+        self._refenv = refenv
+        self._hashenv = hashenv
         self._labelenv = labelenv
         self._stageenv = stageenv
-        self._hashenv = hashenv
-        self._refenv = refenv
         self._branchenv = branchenv
         self._stagehashenv = stagehashenv
-        self._datasets: Datasets = {}
-        self._metadata: MetadataWriter = None
+        self._repo_stage_path = pjoin(self._repo_path, c.DIR_DATA_STAGE)
+        self._repo_store_path = pjoin(self._repo_path, c.DIR_DATA_STORE)
+
+        self._datasets: Datasets = None
         self._differ: WriterUserDiff = None
+        self._metadata: MetadataWriter = None
         self.__setup()
 
     def _repr_pretty_(self, p, cycle):
@@ -467,11 +485,10 @@ class WriterCheckout(object):
         '''
         self.__acquire_writer_lock()
         current_head = heads.get_staging_branch_head(self._branchenv)
-        currentDiff = WriterUserDiff(
-            stageenv=self._stageenv,
-            refenv=self._refenv,
-            branchenv=self._branchenv,
-            branch_name=current_head)
+        currentDiff = WriterUserDiff(stageenv=self._stageenv,
+                                     refenv=self._refenv,
+                                     branchenv=self._branchenv,
+                                     branch_name=current_head)
         if currentDiff.status() == 'DIRTY':
             if current_head != self._branch_name:
                 err = f'Unable to check out branch: {self._branch_name} for writing as '\
@@ -533,21 +550,19 @@ class WriterCheckout(object):
         self.__acquire_writer_lock()
         logger.info(f'Commit operation requested with message: {commit_message}')
         if self._differ.status() == 'CLEAN':
-            msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. Cannot commit.'
-            e = RuntimeError(msg)
+            e = RuntimeError('No changes made in staging area. Cannot commit.')
             logger.error(e, exc_info=False)
             raise e
 
         self._datasets._close()
-        commit_hash = commiting.commit_records(
-            message=commit_message,
-            branchenv=self._branchenv,
-            stageenv=self._stageenv,
-            refenv=self._refenv,
-            repo_path=self._repo_path)
+        commit_hash = commiting.commit_records(message=commit_message,
+                                               branchenv=self._branchenv,
+                                               stageenv=self._stageenv,
+                                               refenv=self._refenv,
+                                               repo_path=self._repo_path)
 
         hashs.clear_stage_hash_records(self._stagehashenv)
-        # reopen the hdf5 file handles so that we don't have to invalidate
+        # reopen the file handles so that we don't have to invalidate
         # previous weakproxy references like if we just called `__setup`
         self._datasets._open()
         logger.info(f'Commit completed. Commit hash: {commit_hash}')
@@ -581,8 +596,7 @@ class WriterCheckout(object):
         logger.info(f'Hard reset requested with writer_lock: {self._writer_lock}')
 
         if self._differ.status() == 'CLEAN':
-            msg = f'HANGAR RUNTIME ERROR: No changes made in staging area. No reset necessary.'
-            e = RuntimeError(msg)
+            e = RuntimeError(f'No changes made in staging area. No reset necessary.')
             logger.error(e, exc_info=False)
             raise e
 
@@ -593,10 +607,9 @@ class WriterCheckout(object):
 
         branch_head = heads.get_staging_branch_head(self._branchenv)
         head_commit = heads.get_branch_head_commit(self._branchenv, branch_head)
-        commiting.replace_staging_area_with_commit(
-            refenv=self._refenv,
-            stageenv=self._stageenv,
-            commit_hash=head_commit)
+        commiting.replace_staging_area_with_commit(refenv=self._refenv,
+                                                   stageenv=self._stageenv,
+                                                   commit_hash=head_commit)
 
         logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
         self._metadata = MetadataWriter(
@@ -622,7 +635,10 @@ class WriterCheckout(object):
         writes until it has been manually cleared.
         '''
         self.__acquire_writer_lock()
-        self._datasets._close()
+        try:
+            self._datasets._close()
+        except AttributeError:
+            pass
         del self._datasets
         del self._metadata
         del self._differ

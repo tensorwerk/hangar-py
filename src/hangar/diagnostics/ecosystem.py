@@ -14,8 +14,7 @@ required_packages = [('hangar', lambda p: p.__version__),
                      ('h5py', lambda p: p.__version__),
                      ('numpy', lambda p: p.__version__),
                      ('blosc', lambda p: p.__version__),
-                     ('yaml', lambda p: p.__version__),
-                     ('xxhash', lambda p: p.VERSION)]
+                     ('yaml', lambda p: p.__version__)]
 
 
 def get_versions():

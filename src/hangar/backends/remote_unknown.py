@@ -56,8 +56,8 @@ Technical Notes
 '''
 import logging
 import os
-from collections import namedtuple
 import re
+from collections import namedtuple
 
 import numpy as np
 
@@ -65,8 +65,7 @@ from .. import constants as c
 
 logger = logging.getLogger(__name__)
 
-
-DataHashSpec = namedtuple('DataHashSpec', field_names=['backend', 'schema_hash'])
+DataHashSpec = namedtuple(typename='DataHashSpec', field_names=['backend', 'schema_hash'])
 
 
 class REMOTE_UNKNOWN_00_Parser(object):
@@ -112,7 +111,7 @@ class REMOTE_UNKNOWN_00_Handler(object):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
-        self.fmtParser = REMOTE_UNKNOWN_00_Parser()
+        self.Parser = REMOTE_UNKNOWN_00_Parser()
 
     def __enter__(self):
         return self
@@ -139,4 +138,4 @@ class REMOTE_UNKNOWN_00_Handler(object):
             f'Perform a `data-fetch` operation to retrieve it from the remote server.')
 
     def write_data(self, schema_hash: str = '', *args, **kwargs):
-        return self.fmtParser.encode(schema_hash=schema_hash)
+        return self.Parser.encode(schema_hash=schema_hash)
