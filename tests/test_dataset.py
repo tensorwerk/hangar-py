@@ -190,22 +190,71 @@ class TestDataWithFixedSizedDataset(object):
             co.datasets.get('_dset').get('1'),
             array5by7)
 
-    def test_add_data(self, written_repo, array5by7):
+    def test_add_data_str_keys(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         dset = co.datasets['_dset']
         with pytest.raises(KeyError):
             dset['somerandomkey']
 
-        with pytest.raises(ValueError):
-            dset[1] = array5by7
         dset['1'] = array5by7
         dset.add(array5by7, '2')
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        assert np.allclose(
-            co.datasets['_dset']['1'],
-            co.datasets['_dset']['2'])
+        assert np.allclose(co.datasets['_dset']['1'], array5by7)
+        assert np.allclose(co.datasets['_dset']['2'], array5by7)
+        co.close()
+
+    def test_add_data_int_keys(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        dset = co.datasets['_dset']
+
+        dset[1] = array5by7
+        secondArray = array5by7 + 1
+        dset.add(secondArray, 2)
+        co.commit('this is a commit message')
+        co.close()
+        co = written_repo.checkout()
+        assert np.allclose(co.datasets['_dset'][1], array5by7)
+        assert np.allclose(co.datasets['_dset'][2], secondArray)
+        co.close()
+
+    def test_cannot_add_data_negative_int_key(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        with pytest.raises(ValueError):
+            dset[-1] = array5by7
+        assert len(co.datasets['_dset']) == 0
+        co.close()
+
+    def test_cannot_add_data_float_key(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        with pytest.raises(ValueError):
+            dset[2.1] = array5by7
+        with pytest.raises(ValueError):
+            dset[0.0] = array5by7
+        assert len(co.datasets['_dset']) == 0
+        co.close()
+
+    def test_add_data_mixed_int_str_keys(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        dset = co.datasets['_dset']
+
+        dset[1] = array5by7
+        newFirstArray = array5by7 + 1
+        dset['1'] = newFirstArray
+        secondArray = array5by7 + 2
+        dset.add(secondArray, 2)
+        thirdArray = array5by7 + 3
+        dset.add(thirdArray, '2')
+        co.commit('this is a commit message')
+        co.close()
+        co = written_repo.checkout()
+        assert np.allclose(co.datasets['_dset'][1], array5by7)
+        assert np.allclose(co.datasets['_dset']['1'], newFirstArray)
+        assert np.allclose(co.datasets['_dset'][2], secondArray)
+        assert np.allclose(co.datasets['_dset']['2'], thirdArray)
         co.close()
 
     def test_add_with_wrong_argument_order(self, w_checkout, array5by7):
@@ -358,10 +407,9 @@ class TestDataWithFixedSizedDataset(object):
         with pytest.raises(ValueError):
             dset.add(randomsizedarray)
 
-        dset_no_name = co.datasets.init_dataset(
-            'dset_no_name',
-            prototype=randomsizedarray,
-            named_samples=False)
+        dset_no_name = co.datasets.init_dataset('dset_no_name',
+                                                prototype=randomsizedarray,
+                                                named_samples=False)
         dset_no_name.add(randomsizedarray)
         assert np.allclose(next(dset_no_name.values()), randomsizedarray)
         co.close()

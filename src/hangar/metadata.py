@@ -1,5 +1,5 @@
 import hashlib
-from typing import Optional
+from typing import Optional, Union, Iterable, Tuple
 import logging
 
 import lmdb
@@ -27,16 +27,16 @@ class MetadataReader(object):
         It is important to realize that this is not intended to serve as a general
         store large amounts of textual data, and has no optimization to support such
         use cases at this time. This should only serve to attach helpful labels, or
-        other quick information primarily intdented for human book-keeping, to the
+        other quick information primarily intended for human book-keeping, to the
         main tensor data!
 
     Parameters
     ----------
     dataenv : lmdb.Environment
-        the lmdb enviornment in which the data records are stored. this is
+        the lmdb environment in which the data records are stored. this is
         the same as the dataset data record environments.
     labelenv : lmdb.Environment
-        the lmdb envirionment in which the label hash key / values are stored
+        the lmdb environment in which the label hash key / values are stored
         permanently. When opened in by this reader instance, no write access
         is allowed.
     '''
@@ -65,7 +65,7 @@ class MetadataReader(object):
         self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
         self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
-    def __len__(self):
+    def __len__(self) -> int:
         '''Determine how many metadata key/value pairs are in the checkout
 
         Returns
@@ -85,14 +85,14 @@ class MetadataReader(object):
                 self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
         return meta_count
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Union[str, int]) -> str:
         '''Retrieve a metadata sample with a key. Convenience method for dict style access.
 
         .. seealso:: :meth:`get()`
 
         Parameters
         ----------
-        key : string
+        key : Union[str, int]
             metadata key to retrieve from the dataset
 
         Returns
@@ -102,12 +102,12 @@ class MetadataReader(object):
         '''
         return self.get(key)
 
-    def __contains__(self, key):
+    def __contains__(self, key: Union[str, int]) -> bool:
         '''Determine if a key with the provided name is in the metadata
 
         Parameters
         ----------
-        key : string
+        key : Union[str, int]
             key to check for containment testing
 
         Returns
@@ -116,64 +116,62 @@ class MetadataReader(object):
             True if key exists, False otherwise
         '''
         names = self._Query.metadata_names()
-        if key in names:
-            return True
-        else:
-            return False
+        ret = True if key in names else False
+        return ret
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable:
         return self.keys()
 
     def _repr_pretty_(self, p, cycle):
-        res = f'\n Hangar Metadata\
-                \n     Writeable: {self.iswriteable}\
-                \n     Number of Keys: {len(self)}\n'
+        res = f'Hangar Metadata\
+                \n    Writeable: {self.iswriteable}\
+                \n    Number of Keys: {len(self)}\n'
         p.text(res)
 
     def __repr__(self):
-        res = f'\n Hangar Metadata\
-                \n     Writeable: {self.iswriteable}\
-                \n     Number of Keys: {len(self)}\n'
+        res = f'Hangar Metadata\
+                \n    Writeable: {self.iswriteable}\
+                \n    Number of Keys: {len(self)}\n'
         return res
 
     @property
-    def iswriteable(self):
+    def iswriteable(self) -> bool:
         '''Bool indicating if this metadata object is write-enabled. Read-only attribute.
         '''
         return self._is_writeable
 
-    def keys(self):
+    def keys(self) -> Iterable[Union[str, int]]:
         '''generator returning all metadata key names in the checkout
         '''
         names = self._Query.metadata_names()
         for name in names:
             yield name
 
-    def values(self):
+    def values(self) -> Iterable[str]:
         '''generator returning all metadata values in the checkout
         '''
         names = self._Query.metadata_names()
         for name in names:
             yield self.get(name)
 
-    def items(self):
+    def items(self) -> Iterable[Tuple[Union[str, int], str]]:
         '''generator returning all key/value pairs in the checkout.
         '''
         names = self._Query.metadata_names()
         for name in names:
             yield (name, self.get(name))
 
-    def get(self, key):
+    def get(self, key: Union[str, int]) -> str:
         '''retrieve a piece of metadata from the checkout.
 
         Parameters
         ----------
-        key : string
+        key : Union[str, int]
             The name of the metadata piece to retrieve.
 
         Returns
         -------
-        string
+        str
             The stored metadata value associated with the key.
 
         Raises
@@ -190,15 +188,14 @@ class MetadataReader(object):
 
         try:
             if not is_suitable_user_key(key):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Can '\
-                      f'only contain alpha-numeric or "." "_" "-" ascii characters.'
-                raise ValueError(msg)
+                raise ValueError(
+                    f'metadata key: `{key}` not allowed. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters.')
 
             refKey = parsing.metadata_record_db_key_from_raw_key(key)
             hashVal = self._dataTxn.get(refKey, default=False)
             if hashVal is False:
-                msg = f'HANGAR KEY ERROR:: No metadata key: `{key}` exists in checkout'
-                raise KeyError(msg)
+                raise KeyError(f'No metadata key: `{key}` exists in checkout')
 
             hash_spec = parsing.metadata_record_raw_val_from_db_val(hashVal)
             metaKey = parsing.hash_meta_db_key_from_raw_key(hash_spec)
@@ -221,7 +218,7 @@ class MetadataWriter(MetadataReader):
     '''Class implementing write access to repository metadata.
 
     Similar to the :class:`hangar.dataset.DatasetDataWriter`, this class
-    inherets the functionality of the :class:`MetadataReader` for reading. The
+    inherits the functionality of the :class:`MetadataReader` for reading. The
     only difference is that the reader will be initialized with a data record
     lmdb environment pointing to the staging area, and not a commit which is
     checked out.
@@ -256,49 +253,49 @@ class MetadataWriter(MetadataReader):
         self._labelTxn = self._TxnRegister.commit_writer_txn(self._labelenv)
         self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
 
-    def __setitem__(self, key, value):
-        '''Store a key/value pair as metadata. Convenince method to :meth:`add`.
+    def __setitem__(self, key: Union[str, int], value: str) -> Union[str, int]:
+        '''Store a key/value pair as metadata. Convenience method to :meth:`add`.
 
         .. seealso:: :meth:`add`
 
         Parameters
         ----------
-        key : string
+        key : Union[str, int]
             name of the key to add as metadata
         value : string
             value to add as metadata
 
         Returns
         -------
-        str
+        Union[str, int]
             key of the stored metadata sample (assuming operation was successful)
         '''
         return self.add(key, value)
 
-    def __delitem__(self, key):
-        '''Remove a key/value pair from metadata. Convenence method to :meth:`remove`.
+    def __delitem__(self, key: Union[str, int]) -> Union[str, int]:
+        '''Remove a key/value pair from metadata. Convenience method to :meth:`remove`.
 
         .. seealso:: :meth:`remove`
 
         Parameters
         ----------
-        key : str
+        key : Union[str, int]
             Name of the metadata piece to remove.
 
         Returns
         -------
-        str
+        Union[str, int]
             Metadata key removed from the dataset (assuming operation successful)
         '''
         return self.remove(key)
 
-    def add(self, key, value):
+    def add(self, key: Union[str, int], value: str) -> Union[str, int]:
         '''Add a piece of metadata to the staging area of the next commit.
 
         Parameters
         ----------
         key : string
-            Name of the metadata piece, alphanumeric ascii chracters only
+            Name of the metadata piece, alphanumeric ascii characters only
         value : string
             Metadata value to store in the repository, any length of valid
             ascii characters.
@@ -320,13 +317,12 @@ class MetadataWriter(MetadataReader):
         '''
         try:
             if not is_suitable_user_key(key):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Must be '\
-                      f'str containing only alpha-numeric or "." "_" "-" ascii characters.'
-                raise ValueError(msg)
+                raise ValueError(
+                    f'Metadata key: `{key}` not allowed. Must be str or int containing '
+                    f'only alpha-numeric or "." "_" "-" ascii characters.')
             elif not (isinstance(value, str) and is_ascii(value)):
-                msg = f'HANGAR VALUE ERROR:: metadata value: `{value}` not allowed. '\
-                      f'Must be str with only ascii characters.'
-                raise ValueError(msg)
+                raise ValueError(
+                    f'Metadata Value: `{value}` not allowed. Must be ascii-only str')
         except ValueError as e:
             logger.error(e, exc_info=False)
             raise e from None
@@ -345,9 +341,9 @@ class MetadataWriter(MetadataReader):
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
                 if metaRecVal == existingMetaRecVal:
-                    msg = f'HANGAR KEY EXISTS ERROR:: metadata already contains key: `{key}` '\
-                          f'with value: `{value}` & hash: {val_hash}'
-                    raise LookupError(msg)
+                    raise LookupError(
+                        f'HANGAR KEY EXISTS ERROR:: metadata already contains key: `{key}` '
+                        f'with value: `{value}` & hash: {val_hash}')
             else:
                 # increment metadata record count
                 metaCountKey = parsing.metadata_count_db_key()
@@ -369,7 +365,7 @@ class MetadataWriter(MetadataReader):
 
         return key
 
-    def remove(self, key):
+    def remove(self, key: Union[str, int]) -> Union[str, int]:
         '''Remove a piece of metadata from the staging area of the next commit.
 
         Parameters

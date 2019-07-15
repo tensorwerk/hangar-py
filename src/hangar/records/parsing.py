@@ -4,6 +4,7 @@ from itertools import cycle
 from time import sleep
 from time import perf_counter
 from random import randint
+from typing import Union
 
 import blosc
 import msgpack
@@ -182,12 +183,12 @@ Parsing functions to convert lmdb data record keys/vals to/from python vars
 # -------------------- db -> raw (python) -----------------------------
 
 
-def data_record_raw_key_from_db_key(db_key):
+def data_record_raw_key_from_db_key(db_key: bytes) -> RawDataRecordKey:
     '''Convert and split a lmdb record key & value into python objects
 
     Parameters
     ----------
-    db_key : bytestring
+    db_key : bytes
         full lmdb record key
 
     Returns
@@ -197,15 +198,17 @@ def data_record_raw_key_from_db_key(db_key):
     '''
     key = db_key.decode()
     dset_name, data_name = key.replace(c.K_STGARR, '', 1).split(c.SEP_KEY)
+    if data_name.startswith(c.K_INT):
+        data_name = int(data_name.lstrip(c.K_INT))
     return RawDataRecordKey(dset_name, data_name)
 
 
-def data_record_raw_val_from_db_val(db_val):
+def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
     '''Convert and split a lmdb record value into python objects
 
     Parameters
     ----------
-    db_val : bytestring
+    db_val : bytes
         full lmdb record value
 
     Returns
@@ -220,22 +223,25 @@ def data_record_raw_val_from_db_val(db_val):
 # -------------------- raw (python) -> db -----------------------------
 
 
-def data_record_db_key_from_raw_key(dset_name, data_name):
+def data_record_db_key_from_raw_key(dset_name: str, data_name: Union[str, int]) -> bytes:
     '''converts a python record spec into the appropriate lmdb key
 
     Parameters
     ----------
     dset_name : string
         name of the dataset for the record
-    data_name : string
+    data_name : Union[string, int]
         name of the data sample for the record
 
     Returns
     -------
-    bytesstring
+    bytes
         Byte encoded db record key
     '''
-    record_key = f'{c.K_STGARR}{dset_name}{c.SEP_KEY}{data_name}'.encode()
+    if isinstance(data_name, int):
+        record_key = f'{c.K_STGARR}{dset_name}{c.SEP_KEY}{c.K_INT}{data_name}'.encode()
+    else:
+        record_key = f'{c.K_STGARR}{dset_name}{c.SEP_KEY}{data_name}'.encode()
     return record_key
 
 
@@ -403,7 +409,7 @@ Functions to convert metadata count records to/from python objects.
 # ------------------ raw count -> db dset record count  --------------------
 
 
-def metadata_count_db_key():
+def metadata_count_db_key() -> bytes:
     '''return the metadata db count key
 
     this is fixed at the current implementation, no arguments needed
@@ -413,14 +419,14 @@ def metadata_count_db_key():
 
     Returns
     -------
-    bytestring
+    bytes
         db key to access the metadata count at
     '''
     db_key = c.K_STGMETA.encode()
     return db_key
 
 
-def metadata_count_db_val_from_raw_val(metadata_record_count):
+def metadata_count_db_val_from_raw_val(metadata_record_count: int) -> bytes:
     '''return the metadata db count value from a raw value
 
     Parameters
@@ -430,7 +436,7 @@ def metadata_count_db_val_from_raw_val(metadata_record_count):
 
     Returns
     -------
-    bytestring
+    bytes
         db val of the new metadata count
     '''
     db_val = str(metadata_record_count).encode()
@@ -457,29 +463,31 @@ Functions to convert metadata records to/from python objects
 # -------------------- db -> raw (python) -----------------------------
 
 
-def metadata_record_raw_key_from_db_key(db_key):
+def metadata_record_raw_key_from_db_key(db_key: bytes) -> Union[str, int]:
     '''Convert and split a lmdb record key & value into python objects
 
     Parameters
     ----------
-    db_key : bytestring
+    db_key : bytes
         full lmdb record key
 
     Returns
     -------
-    str
-        string containing the metadata name
+    Union[str, int]
+        the metadata name
     '''
     meta_name = db_key.decode().replace(c.K_STGMETA, '', 1)
+    if meta_name.startswith(c.K_INT):
+        meta_name = int(meta_name.lstrip(c.K_INT))
     return meta_name
 
 
-def metadata_record_raw_val_from_db_val(db_val):
+def metadata_record_raw_val_from_db_val(db_val: bytes) -> str:
     '''Convert and split a lmdb record value into python objects
 
     Parameters
     ----------
-    db_val : bytestring
+    db_val : bytes
         full lmdb record value
 
     Returns
@@ -494,24 +502,27 @@ def metadata_record_raw_val_from_db_val(db_val):
 # -------------------- raw (python) -> db -----------------------------
 
 
-def metadata_record_db_key_from_raw_key(meta_name):
+def metadata_record_db_key_from_raw_key(meta_name: Union[str, int]) -> bytes:
     '''converts a python metadata name into the appropriate lmdb key
 
     Parameters
     ----------
-    meta_name : string
+    meta_name : Union[str, int]
         key / name assigned to the metadata piece
 
     Returns
     -------
-    bytesstring
+    bytes
         Byte encoded db record key
     '''
-    record_key = f'{c.K_STGMETA}{meta_name}'.encode()
+    if isinstance(meta_name, int):
+        record_key = f'{c.K_STGMETA}{c.K_INT}{meta_name}'.encode()
+    else:
+        record_key = f'{c.K_STGMETA}{meta_name}'.encode()
     return record_key
 
 
-def metadata_record_db_val_from_raw_val(meta_hash):
+def metadata_record_db_val_from_raw_val(meta_hash: str) -> bytes:
     '''convert a python metadata hash into the appropriate lmdb value
 
     Parameters
@@ -521,7 +532,7 @@ def metadata_record_db_val_from_raw_val(meta_hash):
 
     Returns
     -------
-    bytestring
+    bytes
         Byte encoded db record val.
     '''
     record_val = meta_hash.encode()
@@ -555,13 +566,13 @@ Data Hash parsing functions used to convert db key/val to raw pyhon obj
 # -------------------- raw (python) -> db ----------------------------------------
 
 
-def hash_schema_db_key_from_raw_key(schema_hash):
+def hash_schema_db_key_from_raw_key(schema_hash: str) -> bytes:
     key = f'{c.K_SCHEMA}{schema_hash}'
     db_key = key.encode()
     return db_key
 
 
-def hash_data_db_key_from_raw_key(data_hash):
+def hash_data_db_key_from_raw_key(data_hash: str) -> bytes:
     key = f'{c.K_HASH}{data_hash}'
     db_key = key.encode()
     return db_key
@@ -591,12 +602,12 @@ Metadata/Label Hash parsing functions used to convert db key/val to raw pyhon ob
 # -------------------- raw (python) -> db ----------------------------------------
 
 
-def hash_meta_db_key_from_raw_key(meta_hash):
+def hash_meta_db_key_from_raw_key(meta_hash: str) -> bytes:
     db_key = f'{c.K_HASH}{meta_hash}'.encode()
     return db_key
 
 
-def hash_meta_db_val_from_raw_val(meta_val):
+def hash_meta_db_val_from_raw_val(meta_val: str) -> bytes:
     db_val = f'{meta_val}'.encode()
     return db_val
 
@@ -604,12 +615,12 @@ def hash_meta_db_val_from_raw_val(meta_val):
 # ----------------------------- db -> raw (python) ----------------------------
 
 
-def hash_meta_raw_key_from_db_key(db_key):
+def hash_meta_raw_key_from_db_key(db_key: bytes) -> str:
     data_hash = db_key.decode().replace(c.K_HASH, '', 1)
     return data_hash
 
 
-def hash_meta_raw_val_from_db_val(db_val):
+def hash_meta_raw_val_from_db_val(db_val: bytes) -> str:
     meta_val = db_val.decode()
     return meta_val
 
@@ -638,12 +649,14 @@ Commit Parent (ancestor) Lookup methods
 # ------------------------- raw -> db -----------------------------------------
 
 
-def commit_parent_db_key_from_raw_key(commit_hash):
+def commit_parent_db_key_from_raw_key(commit_hash: str) -> bytes:
     db_key = f'{commit_hash}'.encode()
     return db_key
 
 
-def commit_parent_db_val_from_raw_val(master_ancestor, dev_ancestor='', is_merge_commit=False):
+def commit_parent_db_val_from_raw_val(master_ancestor: str,
+                                      dev_ancestor: str = '',
+                                      is_merge_commit: bool = False) -> bytes:
     if is_merge_commit:
         str_val = f'{master_ancestor}{c.SEP_CMT}{dev_ancestor}'
     else:
@@ -655,12 +668,12 @@ def commit_parent_db_val_from_raw_val(master_ancestor, dev_ancestor='', is_merge
 # ------------------------------- db -> raw -----------------------------------
 
 
-def commit_parent_raw_key_from_db_key(db_key):
+def commit_parent_raw_key_from_db_key(db_key: bytes) -> str:
     commit_hash = db_key.decode()
     return commit_hash
 
 
-def commit_parent_raw_val_from_db_val(db_val):
+def commit_parent_raw_val_from_db_val(db_val: bytes) -> CommitAncestorSpec:
     '''Parse the value of a commit's parent value to find it's ancestors
 
     Parameters
