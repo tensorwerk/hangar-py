@@ -100,7 +100,9 @@ def is_suitable_user_key(key: Union[str, int]) -> bool:
         True if only ascii characters in the string, else False.
     '''
     try:
-        if isinstance(key, (str, int)):
+        if isinstance(key, int) and (key >= 0):
+            str_data = str(key)
+        elif isinstance(key, str):
             str_data = str(key)
         else:
             raise TypeError

@@ -1,8 +1,8 @@
 import hashlib
 import logging
 from typing import Optional
-from multiprocessing import Pool, get_context, cpu_count
-from typing import MutableMapping, Union
+from multiprocessing import get_context, cpu_count
+from typing import Union
 
 import lmdb
 import numpy as np
@@ -438,7 +438,9 @@ class DatasetDataWriter(DatasetDataReader):
             data to store as a sample in the dataset.
         name : Union[str, int], optional
             name to assign to the same (assuming the dataset accepts named
-            samples), by default None
+            samples), If str, can only contain alpha-numeric ascii characters
+            (in addition to '-', '.', '_'). Integer key must be >= 0. by default
+            None
 
         Returns
         -------
@@ -474,8 +476,8 @@ class DatasetDataWriter(DatasetDataReader):
         try:
             if self._samples_are_named and not is_suitable_user_key(name):
                 raise ValueError(
-                    f'Data name provided: `{name}` type: {type(name)} is invalid. Can only contain '
-                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
+                    f'Name provided: `{name}` type: {type(name)} is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace) or int >= 0')
             elif not self._samples_are_named:
                 name = kwargs['bulkn'] if 'bulkn' in kwargs else parsing.generate_sample_name()
 
@@ -707,7 +709,7 @@ class Datasets(object):
         res = f'\n Hangar {self.__class__.__name__}\
                 \n     Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n     Dataset Names:\
-                \n       - '                             + '\n       - '.join(self._datasets.keys())
+                \n       - '                                                         + '\n       - '.join(self._datasets.keys())
         p.text(res)
 
     def __repr__(self):

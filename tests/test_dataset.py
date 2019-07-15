@@ -219,6 +219,24 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(co.datasets['_dset'][2], secondArray)
         co.close()
 
+    def test_cannot_add_data_negative_int_key(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        with pytest.raises(ValueError):
+            dset[-1] = array5by7
+        assert len(co.datasets['_dset']) == 0
+        co.close()
+
+    def test_cannot_add_data_float_key(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        with pytest.raises(ValueError):
+            dset[2.1] = array5by7
+        with pytest.raises(ValueError):
+            dset[0.0] = array5by7
+        assert len(co.datasets['_dset']) == 0
+        co.close()
+
     def test_add_data_mixed_int_str_keys(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         dset = co.datasets['_dset']

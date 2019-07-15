@@ -27,7 +27,7 @@ class MetadataReader(object):
         It is important to realize that this is not intended to serve as a general
         store large amounts of textual data, and has no optimization to support such
         use cases at this time. This should only serve to attach helpful labels, or
-        other quick information primarily indented for human book-keeping, to the
+        other quick information primarily intended for human book-keeping, to the
         main tensor data!
 
     Parameters
@@ -295,7 +295,7 @@ class MetadataWriter(MetadataReader):
         Parameters
         ----------
         key : string
-            Name of the metadata piece, alphanumeric ascii chracters only
+            Name of the metadata piece, alphanumeric ascii characters only
         value : string
             Metadata value to store in the repository, any length of valid
             ascii characters.
