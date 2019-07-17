@@ -97,29 +97,31 @@ import math
 import os
 import re
 import time
-from collections import namedtuple, ChainMap
+from collections import ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
 from functools import partial
-from typing import MutableMapping
+from typing import MutableMapping, NamedTuple, Tuple, Match
 
 import h5py
 import numpy as np
 
 from .. import __version__
 from .. import constants as c
-from ..utils import find_next_prime, symlink_rel, random_string
+from ..utils import find_next_prime, symlink_rel, random_string, set_blosc_nthreads
 
 logger = logging.getLogger(__name__)
+
+set_blosc_nthreads()
 
 # ----------------------------- Configuration ---------------------------------
 
 # contents of a single hdf5 file
-COLLECTION_SIZE = 500
+COLLECTION_SIZE = 250
 COLLECTION_COUNT = 100
 
 # chunking options for compression schemes
-CHUNK_MAX_NBYTES = 400_000
+CHUNK_MAX_NBYTES = 200_000  # < 256 KB to fit in L2 CPU Cache
 CHUNK_MAX_RDCC_NBYTES = 100_000_000
 CHUNK_RDCC_W0 = 0.75
 
@@ -128,7 +130,7 @@ filter_options = {
     'default': {
         'shuffle': True,
         'complib': 'blosc:lz4',
-        'complevel': 3,
+        'complevel': 5,
         'fletcher32': True},
     'backup': {
         'shuffle': True,
@@ -140,14 +142,19 @@ if filter_options['default']['complib'].startswith('blosc'):
     bloscFilterAvail = h5py.h5z.filter_avail(32001)
     if not bloscFilterAvail:
         HDF5_FILTER = filter_options['backup']
+        logger.info(f'hdf5-blosc not found. Filter opts: {HDF5_FILTER}')
     else:
         HDF5_FILTER = filter_options['default']
+        logger.info(f'hdf5-blosc available. Filter opts: {HDF5_FILTER}')
 
 # -------------------------------- Parser Implementation ----------------------
 
-DataHashSpec = namedtuple(
-    typename='DataHashSpec',
-    field_names=['backend', 'uid', 'dataset', 'dataset_idx', 'shape'])
+DataHashSpec = NamedTuple('DataHashSpec', [
+    ('backend', str),
+    ('uid', str),
+    ('dataset', str),
+    ('dataset_idx', int),
+    ('shape', Tuple[int])])
 
 
 class HDF5_00_Parser(object):
@@ -156,12 +163,12 @@ class HDF5_00_Parser(object):
 
     def __init__(self):
 
-        self.FmtCode = '00'
+        self.FmtCode: str = '00'
         # match and remove the following characters: '['   ']'   '('   ')'   ','
-        self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
-        self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+        self.ShapeFmtRE: Match = re.compile('[,\(\)\[\]]')
+        self.SplitDecoderRE: Match = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
-    def encode(self, uid, dataset, dataset_idx, shape) -> bytes:
+    def encode(self, uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) -> bytes:
         '''converts the hdf5 data has spec to an appropriate db value
 
         Parameters
@@ -170,9 +177,9 @@ class HDF5_00_Parser(object):
             the file name prefix which the data is written to.
         dataset : str
             collection (ie. hdf5 dataset) name to find this data piece.
-        dataset_idx : int or str
+        dataset_idx : int
             collection first axis index in which this data piece resides.
-        shape : tuple
+        shape : Tuple[int]
             shape of the data sample written to the collection idx. ie:
             what subslices of the hdf5 dataset should be read to retrieve
             the sample as recorded.
@@ -214,7 +221,7 @@ class HDF5_00_Parser(object):
         raw_val = DataHashSpec(backend=self.FmtCode,
                                uid=uid,
                                dataset=dataset,
-                               dataset_idx=dataset_idx,
+                               dataset_idx=int(dataset_idx),
                                shape=shape)
         return raw_val
 
@@ -434,7 +441,7 @@ class HDF5_00_FileHandles(object):
         return args
 
     @staticmethod
-    def _chunk_opts(sample_array, max_chunk_nbytes):
+    def _chunk_opts(sample_array: np.ndarray, max_chunk_nbytes: int) -> Tuple[list, int]:
         '''Determine the chunk shape so each array chunk fits into configured nbytes.
 
         Currently the chunk nbytes are not user configurable. Instead the constant
@@ -516,7 +523,7 @@ class HDF5_00_FileHandles(object):
             sample_array=sample_array,
             max_chunk_nbytes=CHUNK_MAX_NBYTES)
 
-        rdcc_nbytes_val = math.ceil((sample_array.nbytes / chunk_nbytes) * chunk_nbytes * 10)
+        rdcc_nbytes_val = sample_array.nbytes * COLLECTION_SIZE
         if rdcc_nbytes_val < CHUNK_MAX_NBYTES:
             rdcc_nbytes_val = CHUNK_MAX_NBYTES
         elif rdcc_nbytes_val > CHUNK_MAX_RDCC_NBYTES:
@@ -587,7 +594,7 @@ class HDF5_00_FileHandles(object):
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
 
-    def read_data(self, hashVal) -> np.ndarray:
+    def read_data(self, hashVal: DataHashSpec) -> np.ndarray:
         '''Read data from an hdf5 file handle at the specified locations
 
         Parameters

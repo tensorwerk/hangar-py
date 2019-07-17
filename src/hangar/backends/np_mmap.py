@@ -84,11 +84,11 @@ Technical Notes
 import logging
 import os
 import re
-from collections import ChainMap, namedtuple
+from collections import ChainMap
 from functools import partial
 from os.path import join as pjoin
 from os.path import splitext as psplitext
-from typing import MutableMapping
+from typing import MutableMapping, NamedTuple, Match, Tuple
 from zlib import adler32
 
 import numpy as np
@@ -102,13 +102,16 @@ logger = logging.getLogger(__name__)
 # ----------------------------- Configuration ---------------------------------
 
 # number of subarray contents of a single numpy memmap file
-COLLECTION_SIZE = 500
+COLLECTION_SIZE = 1000
 
 # -------------------------------- Parser Implementation ----------------------
 
-DataHashSpec = namedtuple(
-    typename='DataHashSpec',
-    field_names=['backend', 'uid', 'checksum', 'dataset_idx', 'shape'])
+DataHashSpec = NamedTuple('DataHashSpec', [
+    ('backend', str),
+    ('uid', str),
+    ('checksum', str),
+    ('dataset_idx', int),
+    ('shape', Tuple[int])])
 
 
 class NUMPY_00_Parser(object):
@@ -117,11 +120,11 @@ class NUMPY_00_Parser(object):
 
     def __init__(self):
 
-        self.FmtCode = '01'
+        self.FmtCode: str = '01'
         # match and remove the following characters: '['   ']'   '('   ')'   ','
-        self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
+        self.ShapeFmtRE: Match = re.compile('[,\(\)\[\]]')
         # split up a formated parsed string into unique fields
-        self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+        self.SplitDecoderRE: Match = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
     def encode(self, uid: str, checksum: int, dataset_idx: int, shape: tuple) -> bytes:
         '''converts the numpy data spect to an appropriate db value
@@ -152,7 +155,7 @@ class NUMPY_00_Parser(object):
                   f'{self.ShapeFmtRE.sub("", str(shape))}'
         return out_str.encode()
 
-    def decode(self, db_val: bytes) -> namedtuple:
+    def decode(self, db_val: bytes) -> DataHashSpec:
         '''converts a numpy data hash db val into a numpy data python spec
 
         Parameters
@@ -162,7 +165,7 @@ class NUMPY_00_Parser(object):
 
         Returns
         -------
-        namedtuple
+        DataHashSpec
             numpy data hash specification containing `backend`, `schema`, and
             `uid`, `dataset_idx` and `shape` fields.
         '''
@@ -176,7 +179,7 @@ class NUMPY_00_Parser(object):
         raw_val = DataHashSpec(backend=self.FmtCode,
                                uid=uid,
                                checksum=checksum,
-                               dataset_idx=dataset_idx,
+                               dataset_idx=int(dataset_idx),
                                shape=shape)
         return raw_val
 
@@ -318,7 +321,7 @@ class NUMPY_00_FileHandles(object):
             symlink_file_path = pjoin(self.STAGEDIR, f'{uid}.npy')
         symlink_rel(file_path, symlink_file_path)
 
-    def read_data(self, hashVal) -> np.ndarray:
+    def read_data(self, hashVal: DataHashSpec) -> np.ndarray:
         '''Read data from disk written in the numpy_00 fmtBackend
 
         Parameters
@@ -355,7 +358,7 @@ class NUMPY_00_FileHandles(object):
           all future reads of the subarray from that process, but which would
           not be persisted to disk.
         '''
-        srcSlc = (self.slcExpr[int(hashVal.dataset_idx)],
+        srcSlc = (self.slcExpr[hashVal.dataset_idx],
                   *(self.slcExpr[0:x] for x in hashVal.shape))
         try:
             res = self.Fp[hashVal.uid][srcSlc]
@@ -405,7 +408,7 @@ class NUMPY_00_FileHandles(object):
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][destSlc] = array
         hashVal = self.Parser.encode(uid=self.w_uid,
-                                        checksum=checksum,
-                                        dataset_idx=self.hIdx,
-                                        shape=array.shape)
+                                     checksum=checksum,
+                                     dataset_idx=self.hIdx,
+                                     shape=array.shape)
         return hashVal

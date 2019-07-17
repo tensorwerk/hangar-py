@@ -57,7 +57,7 @@ Technical Notes
 import logging
 import os
 import re
-from collections import namedtuple
+from typing import NamedTuple, Match
 
 import numpy as np
 
@@ -65,7 +65,9 @@ from .. import constants as c
 
 logger = logging.getLogger(__name__)
 
-DataHashSpec = namedtuple(typename='DataHashSpec', field_names=['backend', 'schema_hash'])
+DataHashSpec = NamedTuple('DataHashSpec', [
+    ('backend', str),
+    ('schema_hash', str)])
 
 
 class REMOTE_UNKNOWN_00_Parser(object):
@@ -73,8 +75,8 @@ class REMOTE_UNKNOWN_00_Parser(object):
     __slots__ = ['FmtCode', 'SplitDecoderRE']
 
     def __init__(self):
-        self.FmtCode = '50'
-        self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+        self.FmtCode: str = '50'
+        self.SplitDecoderRE: Match = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
     def encode(self, schema_hash: str = '') -> bytes:
         '''returns an db value saying that this hash exists somewhere on a remote
@@ -86,7 +88,7 @@ class REMOTE_UNKNOWN_00_Parser(object):
         '''
         return f'{self.FmtCode}{c.SEP_KEY}{schema_hash}'.encode()
 
-    def decode(self, db_val: bytes) -> namedtuple:
+    def decode(self, db_val: bytes) -> DataHashSpec:
         '''converts a numpy data hash db val into a numpy data python spec
 
         Parameters
@@ -132,10 +134,10 @@ class REMOTE_UNKNOWN_00_Handler(object):
         logger.debug(f'delete_in_process_data for REMOTE_UNKNOWN_00_Handler called.')
         return
 
-    def read_data(self, hashVal: namedtuple) -> None:
+    def read_data(self, hashVal: DataHashSpec) -> None:
         raise FileNotFoundError(
             f'data sample with digest: {hashVal} does not exist on this machine. '
             f'Perform a `data-fetch` operation to retrieve it from the remote server.')
 
-    def write_data(self, schema_hash: str = '', *args, **kwargs):
+    def write_data(self, schema_hash: str = '', *args, **kwargs) -> bytes:
         return self.Parser.encode(schema_hash=schema_hash)

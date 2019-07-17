@@ -1,7 +1,11 @@
+from typing import Iterable, Tuple
+
 from . import parsing
+from .parsing import RawDataRecordKey, RawDataRecordVal
 from .. import constants as c
 from ..context import TxnRegister
 
+RawDataTuple = Tuple[RawDataRecordKey, RawDataRecordVal]
 
 '''
 Data record queries
@@ -138,7 +142,7 @@ class RecordQuery(object):
         dataset_names = list(map(parsing.dataset_record_schema_raw_key_from_db_key, recs.keys()))
         return dataset_names
 
-    def dataset_data_records(self, dataset_name):
+    def dataset_data_records(self, dataset_name: str) -> Iterable[RawDataTuple]:
         '''Returns the raw data record key and record values for a specific dataset.
 
         Parameters
@@ -146,16 +150,16 @@ class RecordQuery(object):
         dataset_name : str
             name of the dataset to pull records for
 
-        Returns
-        -------
-        dict of namedtuple
-            dict of key and value data record specs
+        Yields
+        ------
+        tuple
+            generator of key and value data record specs
         '''
         recs = self._traverse_dataset_data_records(dataset_name)
         if len(recs) > 0:
             data_rec_keys = map(parsing.data_record_raw_key_from_db_key, recs.keys())
             data_rec_vals = map(parsing.data_record_raw_val_from_db_val, recs.values())
-            recs = dict(zip(data_rec_keys, data_rec_vals))
+            recs = zip(data_rec_keys, data_rec_vals)
         return recs
 
     def dataset_data_names(self, dataset_name):
@@ -372,7 +376,7 @@ class RecordQuery(object):
         for dsetName in dset_names:
             dsetRecs[dsetName] = {
                 'schema': schema_records[dsetName],
-                'data': self.dataset_data_records(dsetName),
+                'data': dict(self.dataset_data_records(dsetName)),
             }
 
         res = {

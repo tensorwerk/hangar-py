@@ -91,18 +91,13 @@ class DatasetDataReader(object):
         self._sspecs = {}
         _TxnRegister = TxnRegister()
         hashTxn = _TxnRegister.begin_reader_txn(hashenv)
-        dataTxn = _TxnRegister.begin_reader_txn(dataenv)
         try:
-            data_names = RecordQuery(dataenv).dataset_data_names(self._dsetn)
-            for name in data_names:
-                ref_key = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
-                data_ref = dataTxn.get(ref_key, default=False)
-
-                dataSpec = parsing.data_record_raw_val_from_db_val(data_ref)
+            dsetNamesSpec = RecordQuery(dataenv).dataset_data_records(self._dsetn)
+            for dsetNames, dataSpec in dsetNamesSpec:
                 hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
                 hash_ref = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hash_ref)
-                self._sspecs[name] = be_loc
+                self._sspecs[dsetNames.data_name] = be_loc
                 if be_loc.backend == '50':
                     warnings.warn(
                         f'Dataset: {self._dsetn} contains `reference-only` samples, with '
@@ -111,7 +106,6 @@ class DatasetDataReader(object):
                     self._contains_partial_remote_data = True
         finally:
             _TxnRegister.abort_reader_txn(hashenv)
-            _TxnRegister.abort_reader_txn(dataenv)
 
     def __enter__(self):
         self._is_conman = True
@@ -742,7 +736,8 @@ class Datasets(object):
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Dataset Names / Partial Remote References:\
                 \n      - ' + '\n      - '.join(
-                f'{dsetn} / {dset.contains_remote_references}' for dsetn, dset in self._datasets.items())
+            f'{dsetn} / {dset.contains_remote_references}'
+            for dsetn, dset in self._datasets.items())
         p.text(res)
 
     def __repr__(self):

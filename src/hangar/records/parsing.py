@@ -4,7 +4,7 @@ from itertools import cycle
 from time import sleep
 from time import perf_counter
 from random import randint
-from typing import Union
+from typing import Union, NamedTuple
 
 import blosc
 import msgpack
@@ -157,23 +157,25 @@ The following records can be parsed:
 # ------------------- named tuple classes used ----------------------
 
 
-RawDataRecordKey = namedtuple(
-    typename='RawDataRecordKey', field_names=['dset_name', 'data_name'])
+RawDataRecordKey = NamedTuple('RawDataRecordKey', [
+    ('dset_name', str),
+    ('data_name', Union[str, int])])
+RawDataRecordKey.__doc__ = 'Represents a Data Sample Record Key'
 
 
-RawDataRecordVal = namedtuple(
-    typename='RawDataRecordVal', field_names=['data_hash'])
+RawDataRecordVal = NamedTuple('RawDataRecordVal', [
+    ('data_hash', str)])
+RawDataRecordVal.__doc__ = 'Represents a Data Sample Record Hash Value'
 
 
-RawDatasetSchemaVal = namedtuple(
-    typename='RawDatasetSchemaVal',
-    field_names=[
-        'schema_hash',
-        'schema_dtype',
-        'schema_is_var',
-        'schema_max_shape',
-        'schema_is_named',
-        'schema_default_backend'])
+RawDatasetSchemaVal = NamedTuple('RawDatasetSchemaVal', [
+    ('schema_hash', str),
+    ('schema_dtype', int),
+    ('schema_is_var', bool),
+    ('schema_max_shape', tuple),
+    ('schema_is_named', bool),
+    ('schema_default_backend', str)])
+RawDatasetSchemaVal.__doc__ = 'Information Specifying a Dataset Schema'
 
 '''
 Parsing functions to convert lmdb data record keys/vals to/from python vars
@@ -193,7 +195,7 @@ def data_record_raw_key_from_db_key(db_key: bytes) -> RawDataRecordKey:
 
     Returns
     -------
-    namedtuple
+    RawDataRecordKey
         Tuple containing the record dset_name, data_name
     '''
     key = db_key.decode()
@@ -213,7 +215,7 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
 
     Returns
     -------
-    namedtuple
+    RawDataRecordVal
         Tuple containing the record data_hash
     '''
     data_hash = db_val.decode()
@@ -363,12 +365,12 @@ def dataset_record_schema_db_val_from_raw_val(schema_hash,
 
 # -------------- db schema -> raw schema -------------------------------
 
-def dataset_record_schema_raw_key_from_db_key(db_key):
+def dataset_record_schema_raw_key_from_db_key(db_key: bytes) -> str:
     dset_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
     return dset_name
 
 
-def dataset_record_schema_raw_val_from_db_val(db_val):
+def dataset_record_schema_raw_val_from_db_val(db_val: bytes) -> RawDatasetSchemaVal:
     schema_spec = json.loads(db_val)
     schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
     raw_val = RawDatasetSchemaVal(**schema_spec)
@@ -383,12 +385,12 @@ Functions to convert total daset count records to/from python objects
 # ------------------------ raw -> db ------------------------------------------
 
 
-def dataset_total_count_db_key():
+def dataset_total_count_db_key() -> bytes:
     db_key = c.K_STGARR.encode()
     return db_key
 
 
-def dataset_total_count_db_val_from_raw_val(number_of_dsets):
+def dataset_total_count_db_val_from_raw_val(number_of_dsets: int) -> bytes:
     db_val = f'{number_of_dsets}'.encode()
     return db_val
 
@@ -396,7 +398,7 @@ def dataset_total_count_db_val_from_raw_val(number_of_dsets):
 # --------------------------- db -> raw ---------------------------------------
 
 
-def dataset_total_count_raw_val_from_db_val(db_val):
+def dataset_total_count_raw_val_from_db_val(db_val: bytes) -> int:
     raw_val = int(db_val.decode())
     return raw_val
 
