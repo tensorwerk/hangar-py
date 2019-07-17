@@ -21,6 +21,20 @@ def read(*names, **kwargs):
         return fh.read()
 
 
+extra_require = {
+        'torch': [
+            'torch>=1.0.0',
+        ],
+        'dev': [
+            'grpcio_tools',
+            'mypy>=0.701',
+            'mypy-protobuf',
+        ],
+    }
+for _, packages in extra_require.items():
+    extra_require['all'].extend(packages)
+
+
 setup(
     name='hangar',
     version='0.1.1',
@@ -72,16 +86,7 @@ setup(
         'tqdm',
         'wrapt',
     ],
-    extras_require={
-        'torch': [
-            'torch>=1.0.0',
-        ],
-        'dev': [
-            'grpcio_tools',
-            'mypy>=0.701',
-            'mypy-protobuf',
-        ],
-    },
+    extras_require=extra_require,
     entry_points={'console_scripts': [
         'hangar = hangar.cli:main',
     ]},
