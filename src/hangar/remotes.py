@@ -3,9 +3,9 @@ import time
 import logging
 import tempfile
 import warnings
-from typing import List
+from typing import List, NamedTuple
 from contextlib import closing
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 
 import grpc
 import lmdb
@@ -19,7 +19,7 @@ from .records import heads, summarize, commiting, queries, hashs
 
 logger = logging.getLogger(__name__)
 
-RemoteInfo = namedtuple(typename='RemoteInfo', field_names=['name', 'address'])
+RemoteInfo = NamedTuple('RemoteInfo', [('name', str), ('address', str)])
 
 
 class Remotes(object):
@@ -57,7 +57,7 @@ class Remotes(object):
 
         Returns
         -------
-        namedtuple
+        RemoteInfo
             Two-tuple containing (``name``, ``address``) of the remote added to
             the client's server list.
 

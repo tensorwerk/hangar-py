@@ -60,7 +60,7 @@ def acquire_writer_lock(branchenv, writer_uuid):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment where the writer lock is stored
     writer_uuid : str
         uuid generated when a write enabled checkout instance starts
@@ -117,7 +117,7 @@ def release_writer_lock(branchenv, writer_uuid):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment where the lock key/val lives
     writer_uuid : str
         uuid of the requested releaser
@@ -177,7 +177,7 @@ def create_branch(branchenv, branch_name, base_commit):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment of the branch db
     branch_name : str
         Name of the branch to create, if a branch with this name exists no
@@ -230,7 +230,7 @@ def get_staging_branch_head(branchenv):
 
     Parameters
     ----------
-    branchenv : `lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment for the branch references
 
     Returns
@@ -258,7 +258,7 @@ def set_staging_branch_head(branchenv, branch_name):
 
     Parameters
     ----------
-    branchenv : `lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment of the branch db.
     branch_name : str
         name of the branch to checkout.
@@ -339,7 +339,7 @@ def set_branch_head_commit(branchenv, branch_name, commit_hash):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment where the branch records are kept
     branch_name : string
         Name of the branch to update the HEAD commit of
@@ -378,7 +378,7 @@ def get_branch_names(branchenv):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment storing the branch records.
 
     Returns
@@ -542,7 +542,7 @@ def get_remote_names(branchenv):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment storing the branch records.
 
     Returns

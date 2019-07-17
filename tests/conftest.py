@@ -94,7 +94,7 @@ def written_two_cmt_repo(repo, array5by7):
     yield repo
 
 
-@pytest.fixture(params=['00', '01'])
+@pytest.fixture(params=['00', '10'])
 def repo_1_br_no_conf(request, repo):
 
     dummyData = np.arange(50)

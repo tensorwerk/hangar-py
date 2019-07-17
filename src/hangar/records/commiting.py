@@ -99,7 +99,7 @@ def get_commit_spec(refenv, commit_hash):
 
     Parameters
     ----------
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         refenv where the specs are stored
     commit_hash : str
         commit hash to query
@@ -133,7 +133,7 @@ def get_commit_ancestors(refenv, commit_hash):
 
     Parameters
     ----------
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         lmdb environment where the commit refs are stored
     commit_hash : string
         commit hash to find the ancestors for
@@ -169,7 +169,7 @@ def get_commit_ancestors_graph(refenv, starting_commit):
 
     Parameters
     ----------
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         lmdb environment where the commit refs are stored
     starting_commit : string
         commit hash to start creating the DAG from
@@ -270,7 +270,7 @@ def get_commit_ref_contents(refenv, commit_hash):
 
     Parameters
     ----------
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         lmdb environment where the commit refs are stored
     commit_hash : str
         hash of the commit to get the contents of
@@ -335,7 +335,7 @@ The functions below act to:
 
 # ---------------- Functions to format the writen values of a commit --------------------
 
-def __commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='', dev_branch_name=''):
+def _commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='', dev_branch_name=''):
     '''Format the commit parent db value, finding HEAD commits automatically.
 
     This method handles formating for both regular & merge commits through the
@@ -377,7 +377,7 @@ def __commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='
     return commitParentVal
 
 
-def __commit_spec(message, user, email):
+def _commit_spec(message, user, email):
     '''Format the commit specification according to the supplied username and email.
 
     This method currently only acts as a pass through to the parsing options
@@ -406,12 +406,12 @@ def __commit_spec(message, user, email):
     return commitSpecVal
 
 
-def __commit_ref(stageenv):
+def _commit_ref(stageenv):
     '''Query and format all staged data records, and format it for ref storage.
 
     Parameters
     ----------
-    stageenv : lmdb.Environment`
+    stageenv : lmdb.Environment
         lmdb environment where the staged record data is actually stored.
 
     Returns
@@ -441,12 +441,12 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     message : string
         Message the user accociates with what has been added, removed, or
         changed in this commit. Must not be empty.
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment where branch records are stored.
-    stageenv : lmdb.Environment`
+    stageenv : lmdb.Environment
         lmdb environment where the staged data records are stored in
         uncompressed format.
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         lmdb environment where the commit ref records are stored.
     is_merge_commit : bool, optional
         Is the commit a merge commit or not? defaults to False
@@ -460,7 +460,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     string
         Commit hash of the newly added commit
     '''
-    commitParentVal = __commit_ancestors(branchenv=branchenv,
+    commitParentVal = _commit_ancestors(branchenv=branchenv,
                                          is_merge_commit=is_merge_commit,
                                          master_branch_name=merge_master,
                                          dev_branch_name=merge_dev)
@@ -474,8 +474,8 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     if (USER_NAME is None) or (USER_EMAIL is None):
         raise RuntimeError(f'Username and Email are required. Please configure.')
 
-    commitSpecVal = __commit_spec(message=message, user=USER_NAME, email=USER_EMAIL)
-    commitRefVal = __commit_ref(stageenv=stageenv)
+    commitSpecVal = _commit_spec(message=message, user=USER_NAME, email=USER_EMAIL)
+    commitRefVal = _commit_ref(stageenv=stageenv)
 
     hasher = hashlib.blake2b(digest_size=20)
     hasher.update(commitParentVal)

@@ -67,7 +67,7 @@ def test_clone(written_two_cmt_server_repo):
         assert new_repo.summary() == base_repo.summary()
 
 
-@pytest.mark.parametrize('backend', ['00', '01'])
+@pytest.mark.parametrize('backend', ['00', '10'])
 def test_push_fetch_records(server_instance, backend):
 
     runner = CliRunner()
@@ -104,7 +104,7 @@ def test_push_fetch_records(server_instance, backend):
 
 
 
-@pytest.mark.parametrize('backend', ['00', '01'])
+@pytest.mark.parametrize('backend', ['00', '10'])
 def test_fetch_records_and_data(server_instance, backend):
 
     runner = CliRunner()

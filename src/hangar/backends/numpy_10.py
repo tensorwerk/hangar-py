@@ -1,10 +1,12 @@
-'''Local Numpy memmap Backend Implementation, Identifier: ``NUMPY_00``
+'''Local Numpy memmap Backend Implementation, Identifier: ``NUMPY_10``
 
 Backend Identifiers
 ===================
 
-*  Format Code: ``01``
-*  Canonical Name: ``NUMPY_00``
+*  Backend: ``1``
+*  Version: ``0``
+*  Format Code: ``10``
+*  Canonical Name: ``NUMPY_10``
 
 Storage Method
 ==============
@@ -52,7 +54,7 @@ Note: all examples use ``SEP_KEY: ":"``, ``SEP_HSH: "$"``, ``SEP_LST: " "``,
     *  Alder32 Checksum: 900338819
     *  Collection Index: 2
 
-    ``Record Data => '01:NJUUUK$900338819$2*10'``
+    ``Record Data => '10:NJUUUK$900338819$2*10'``
 
 1)  Adding to a piece of data to a the middle of a file:
 
@@ -61,7 +63,7 @@ Note: all examples use ``SEP_KEY: ":"``, ``SEP_HSH: "$"``, ``SEP_LST: " "``,
     *  Alder32 Checksum: 2546668575
     *  Collection Index: 199
 
-    ``Record Data => "01:Mk23nl$2546668575$199*20 2 3"``
+    ``Record Data => "10:Mk23nl$2546668575$199*20 2 3"``
 
 
 Technical Notes
@@ -80,15 +82,14 @@ Technical Notes
    required since numpy has no built in data integrity validation methods when
    reading from disk.
 '''
-
-import logging
 import os
 import re
+import logging
 from collections import ChainMap
 from functools import partial
 from os.path import join as pjoin
 from os.path import splitext as psplitext
-from typing import MutableMapping, NamedTuple, Match, Tuple
+from typing import MutableMapping, NamedTuple, Tuple
 from zlib import adler32
 
 import numpy as np
@@ -99,95 +100,91 @@ from ..utils import random_string, symlink_rel
 
 logger = logging.getLogger(__name__)
 
+
 # ----------------------------- Configuration ---------------------------------
+
 
 # number of subarray contents of a single numpy memmap file
 COLLECTION_SIZE = 1000
 
+
 # -------------------------------- Parser Implementation ----------------------
 
-DataHashSpec = NamedTuple('DataHashSpec', [
-    ('backend', str),
-    ('uid', str),
-    ('checksum', str),
-    ('dataset_idx', int),
-    ('shape', Tuple[int])])
+_FmtCode = '10'
+# match and remove the following characters: '['   ']'   '('   ')'   ','
+_ShapeFmtRE = re.compile('[,\(\)\[\]]')
+# split up a formated parsed string into unique fields
+_SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
 
-class NUMPY_00_Parser(object):
+NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec',
+                                   [('backend', str), ('uid', str),
+                                    ('checksum', str), ('dataset_idx', int),
+                                    ('shape', Tuple[int])])
 
-    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE']
 
-    def __init__(self):
+def numpy_10_encode(uid: str, checksum: int, dataset_idx: int, shape: tuple) -> bytes:
+    '''converts the numpy data spect to an appropriate db value
 
-        self.FmtCode: str = '01'
-        # match and remove the following characters: '['   ']'   '('   ')'   ','
-        self.ShapeFmtRE: Match = re.compile('[,\(\)\[\]]')
-        # split up a formated parsed string into unique fields
-        self.SplitDecoderRE: Match = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+    Parameters
+    ----------
+    uid : str
+        file name (schema uid) of the np file to find this data piece in.
+    checksum : int
+        adler32 checksum of the data as computed on that local machine.
+    dataset_idx : int
+        collection first axis index in which this data piece resides.
+    shape : tuple
+        shape of the data sample written to the collection idx. ie:
+        what subslices of the hdf5 dataset should be read to retrieve
+        the sample as recorded.
 
-    def encode(self, uid: str, checksum: int, dataset_idx: int, shape: tuple) -> bytes:
-        '''converts the numpy data spect to an appropriate db value
+    Returns
+    -------
+    bytes
+        hash data db value recording all input specifications
+    '''
+    out_str = f'{_FmtCode}{c.SEP_KEY}'\
+              f'{uid}{c.SEP_HSH}{checksum}'\
+              f'{c.SEP_HSH}'\
+              f'{dataset_idx}'\
+              f'{c.SEP_SLC}'\
+              f'{_ShapeFmtRE.sub("", str(shape))}'
+    return out_str.encode()
 
-        Parameters
-        ----------
-        uid : str
-            file name (schema uid) of the np file to find this data piece in.
-        checksum : int
-            adler32 checksum of the data as computed on that local machine.
-        dataset_idx : int
-            collection first axis index in which this data piece resides.
-        shape : tuple
-            shape of the data sample written to the collection idx. ie:
-            what subslices of the hdf5 dataset should be read to retrieve
-            the sample as recorded.
 
-        Returns
-        -------
-        bytes
-            hash data db value recording all input specifications
-        '''
-        out_str = f'{self.FmtCode}{c.SEP_KEY}'\
-                  f'{uid}{c.SEP_HSH}{checksum}'\
-                  f'{c.SEP_HSH}'\
-                  f'{dataset_idx}'\
-                  f'{c.SEP_SLC}'\
-                  f'{self.ShapeFmtRE.sub("", str(shape))}'
-        return out_str.encode()
+def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
+    '''converts a numpy data hash db val into a numpy data python spec
 
-    def decode(self, db_val: bytes) -> DataHashSpec:
-        '''converts a numpy data hash db val into a numpy data python spec
+    Parameters
+    ----------
+    db_val : bytes
+        data hash db val
 
-        Parameters
-        ----------
-        db_val : bytes
-            data hash db val
-
-        Returns
-        -------
-        DataHashSpec
-            numpy data hash specification containing `backend`, `schema`, and
-            `uid`, `dataset_idx` and `shape` fields.
-        '''
-        db_str = db_val.decode()
-        _, uid, checksum, dataset_idx, shape_vs = self.SplitDecoderRE.split(db_str)
-        # if the data is of empty shape -> shape_vs = '' str.split() default
-        # value of none means split according to any whitespace, and discard
-        # empty strings from the result. So long as c.SEP_LST = ' ' this will
-        # work
-        shape = tuple(int(x) for x in shape_vs.split())
-        raw_val = DataHashSpec(backend=self.FmtCode,
-                               uid=uid,
-                               checksum=checksum,
-                               dataset_idx=int(dataset_idx),
-                               shape=shape)
-        return raw_val
+    Returns
+    -------
+    DataHashSpec
+        numpy data hash specification containing `backend`, `schema`, and
+        `uid`, `dataset_idx` and `shape` fields.
+    '''
+    db_str = db_val.decode()
+    _, uid, checksum, dataset_idx, shape_vs = _SplitDecoderRE.split(db_str)
+    # if the data is of empty shape -> shape_vs = '' str.split() default value
+    # of none means split according to any whitespace, and discard empty strings
+    # from the result. So long as c.SEP_LST = ' ' this will work
+    shape = tuple(int(x) for x in shape_vs.split())
+    raw_val = NUMPY_10_DataHashSpec(backend=_FmtCode,
+                                    uid=uid,
+                                    checksum=checksum,
+                                    dataset_idx=int(dataset_idx),
+                                    shape=shape)
+    return raw_val
 
 
 # ------------------------- Accessor Object -----------------------------------
 
 
-class NUMPY_00_FileHandles(object):
+class NUMPY_10_FileHandles(object):
 
     def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
@@ -204,12 +201,11 @@ class NUMPY_00_FileHandles(object):
 
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
-        self.Parser = NUMPY_00_Parser()
 
-        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, self.Parser.FmtCode)
-        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, self.Parser.FmtCode)
-        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, self.Parser.FmtCode)
-        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, self.Parser.FmtCode)
+        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, _FmtCode)
+        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, _FmtCode)
+        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, _FmtCode)
+        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, _FmtCode)
         if not os.path.isdir(self.DATADIR):
             os.makedirs(self.DATADIR)
 
@@ -279,10 +275,9 @@ class NUMPY_00_FileHandles(object):
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
         '''
-        FmtCode = NUMPY_00_Parser().FmtCode
-        data_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
+        data_dir = pjoin(repo_path, c.DIR_DATA, _FmtCode)
         PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
-        process_dir = pjoin(repo_path, PDIR, FmtCode)
+        process_dir = pjoin(repo_path, PDIR, _FmtCode)
         if not os.path.isdir(process_dir):
             return
 
@@ -321,12 +316,12 @@ class NUMPY_00_FileHandles(object):
             symlink_file_path = pjoin(self.STAGEDIR, f'{uid}.npy')
         symlink_rel(file_path, symlink_file_path)
 
-    def read_data(self, hashVal: DataHashSpec) -> np.ndarray:
+    def read_data(self, hashVal: NUMPY_10_DataHashSpec) -> np.ndarray:
         '''Read data from disk written in the numpy_00 fmtBackend
 
         Parameters
         ----------
-        hashVal : namedtuple
+        hashVal : NUMPY_10_DataHashSpec
             record specification stored in the db
 
         Returns
@@ -407,8 +402,8 @@ class NUMPY_00_FileHandles(object):
 
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][destSlc] = array
-        hashVal = self.Parser.encode(uid=self.w_uid,
-                                     checksum=checksum,
-                                     dataset_idx=self.hIdx,
-                                     shape=array.shape)
+        hashVal = numpy_10_encode(uid=self.w_uid,
+                                  checksum=checksum,
+                                  dataset_idx=self.hIdx,
+                                  shape=array.shape)
         return hashVal

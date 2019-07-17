@@ -40,7 +40,7 @@ class TestDataset(object):
         assert dsetOldDsetn == dsetNew._dsetn
         assert dsetOldDefaultSchemaHash == dsetNew._default_schema_hash
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_remove_dataset(self, dset_backend, written_repo):
         co = written_repo.checkout(write=True)
         co.datasets.remove_dset('_dset')
@@ -66,7 +66,7 @@ class TestDataset(object):
         co.commit('this is a commit message')
         co.close()
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_init_again(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
@@ -74,7 +74,7 @@ class TestDataset(object):
             co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
         co.close()
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_dataset_with_more_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
@@ -89,7 +89,7 @@ class TestDataset(object):
             co.datasets.init_dataset('dset2', shape=shape, dtype=np.int, backend=dset_backend)
         co.close()
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_dataset_with_empty_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.array(1, dtype=np.int64)
@@ -107,7 +107,7 @@ class TestDataset(object):
         assert np.allclose(dset2['1'], arr)
 
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_dataset_with_int_specifier_as_dimension(self, dset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.arange(10, dtype=np.int64)
@@ -128,9 +128,9 @@ class TestDataset(object):
 
 class TestDataWithFixedSizedDataset(object):
 
-    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
-    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
-    @pytest.mark.parametrize("dset3_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '10'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '10'])
+    @pytest.mark.parametrize("dset3_backend", ['00', '10'])
     def test_iterating_over(self, dset1_backend, dset2_backend, dset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
@@ -366,8 +366,8 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(co.datasets['_dset']['1'], array5by7)
         co.close()
 
-    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
-    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '10'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '10'])
     def test_multiple_datasets_single_commit(self, dset1_backend, dset2_backend, written_repo, randomsizedarray):
         co = written_repo.checkout(write=True)
         dset1 = co.datasets.init_dataset('dset1', prototype=randomsizedarray, backend=dset1_backend)
@@ -381,8 +381,8 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(co.datasets['dset2']['arr'], randomsizedarray)
         co.close()
 
-    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
-    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '10'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '10'])
     def test_prototype_and_shape(self, dset1_backend, dset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         dset1 = co.datasets.init_dataset(
@@ -433,7 +433,7 @@ class TestDataWithFixedSizedDataset(object):
             dset['3'] = newarr
         co.close()
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_adding_same_data_again_with_same_name(self, dset_backend, repo, array5by7):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset_backend)
@@ -452,7 +452,7 @@ class TestDataWithFixedSizedDataset(object):
             # raises in another checkout
             dset['1'] = array5by7
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_writer_context_manager_dataset_add_sample(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
@@ -472,7 +472,7 @@ class TestDataWithFixedSizedDataset(object):
         co = repo.checkout()
         assert co.metadata['key'] == 'val'
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_dataset_context_manager_dset_sample_and_metadata_add(self, dset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=randomsizedarray, backend=dset_backend)
@@ -492,8 +492,8 @@ class TestDataWithFixedSizedDataset(object):
         assert co.metadata['key'] == 'val'
         assert co.metadata.get('hello') == 'world'
 
-    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
-    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '10'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '10'])
     def test_bulk_add(self, dset1_backend, dset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.datasets.init_dataset(
@@ -565,7 +565,7 @@ class TestVariableSizedDataset(object):
          [[(10,), (1,), (5,)], (10,)],
          [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]])
     @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
-    @pytest.mark.parametrize('backend', ['00', '01'])
+    @pytest.mark.parametrize('backend', ['00', '10'])
     def test_writer_can_create_variable_size_dataset(self, written_repo, dtype, test_shapes, shape, backend):
         repo = written_repo
         wco = repo.checkout(write=True)
@@ -595,7 +595,7 @@ class TestVariableSizedDataset(object):
         [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]
     ])
     @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
-    @pytest.mark.parametrize('backend', ['00', '01'])
+    @pytest.mark.parametrize('backend', ['00', '10'])
     def test_reader_recieves_expected_values_for_variable_size_dataset(self, written_repo, dtype, test_shapes, shape, backend):
         repo = written_repo
         wco = repo.checkout(write=True)
@@ -626,25 +626,25 @@ class TestVariableSizedDataset(object):
          ['dset2', [(10,), (1,), (5,)], (10,), '00', np.uint8]
          ],
         [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
-         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+         ['dset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
          ],
-        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.uint8],
-         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
          ],
-        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.uint8],
-         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.uint8]
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.uint8],
+         ['dset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
          ],
         [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
          ['dset2', [(10,), (1,), (5,)], (10,), '00', np.float32]
          ],
         [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
-         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+         ['dset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
          ],
-        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.float32],
-         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
          ],
-        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '01', np.float32],
-         ['dset2', [(10,), (1,), (5,)], (10,), '01', np.float32]
+        [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.float32],
+         ['dset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
          ]])
     def test_writer_reader_can_create_read_multiple_variable_size_dataset(self, written_repo, dset_specs):
         repo = written_repo
@@ -701,7 +701,7 @@ class TestVariableSizedDataset(object):
 
 class TestMultiprocessDatasetReads(object):
 
-    @pytest.mark.parametrize('backend', ['00', '01'])
+    @pytest.mark.parametrize('backend', ['00', '10'])
     def test_external_multi_process_pool(self, repo, backend):
         from multiprocessing import get_context
 
@@ -736,7 +736,7 @@ class TestMultiprocessDatasetReads(object):
             cmtIdx += 1
             nco.close()
 
-    @pytest.mark.parametrize('backend', ['00', '01'])
+    @pytest.mark.parametrize('backend', ['00', '10'])
     def test_batch_get_multi_process_pool(self, repo, backend):
         masterCmtList = []
         co = repo.checkout(write=True)
@@ -768,7 +768,7 @@ class TestMultiprocessDatasetReads(object):
             cmtIdx += 1
             nco.close()
 
-    @pytest.mark.parametrize('backend', ['00', '01'])
+    @pytest.mark.parametrize('backend', ['00', '10'])
     def test_batch_get_fails_on_superset_of_keys_and_succeeds_on_subset(self, repo, backend):
         co = repo.checkout(write=True)
         co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32, backend=backend)

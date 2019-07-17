@@ -1,10 +1,12 @@
-'''Remote server location unknown backend, Identifier: ``REMOTE_UNKNOWN_00``
+'''Remote server location unknown backend, Identifier: ``REMOTE_50``
 
 Backend Identifiers
 ===================
 
+*  Backend: ``5``
+*  Version: ``0``
 *  Format Code: ``50``
-*  Canonical Name: ``REMOTE_UNKNOWN_00``
+*  Canonical Name: ``REMOTE_50``
 
 Storage Method
 ==============
@@ -54,9 +56,9 @@ Technical Notes
    actual retrieved data into suitable sized collections on a ``fetch-data()``
    operation
 '''
-import logging
 import os
 import re
+import logging
 from typing import NamedTuple, Match
 
 import numpy as np
@@ -65,55 +67,57 @@ from .. import constants as c
 
 logger = logging.getLogger(__name__)
 
-DataHashSpec = NamedTuple('DataHashSpec', [
-    ('backend', str),
-    ('schema_hash', str)])
+
+# -------------------------------- Parser Implementation ----------------------
+
+_FmtCode = '50'
+# split up a formated parsed string into unique fields
+_SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
 
-class REMOTE_UNKNOWN_00_Parser(object):
-
-    __slots__ = ['FmtCode', 'SplitDecoderRE']
-
-    def __init__(self):
-        self.FmtCode: str = '50'
-        self.SplitDecoderRE: Match = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
-
-    def encode(self, schema_hash: str = '') -> bytes:
-        '''returns an db value saying that this hash exists somewhere on a remote
-
-        Returns
-        -------
-        bytes
-            hash data db value
-        '''
-        return f'{self.FmtCode}{c.SEP_KEY}{schema_hash}'.encode()
-
-    def decode(self, db_val: bytes) -> DataHashSpec:
-        '''converts a numpy data hash db val into a numpy data python spec
-
-        Parameters
-        ----------
-        db_val : bytes
-            data hash db val
-
-        Returns
-        -------
-        namedtuple
-            hash specification containing an identifies: `backend`
-        '''
-        db_str = db_val.decode()
-        _, schema_hash = self.SplitDecoderRE.split(db_str)
-        raw_val = DataHashSpec(backend=self.FmtCode, schema_hash=schema_hash)
-        return raw_val
+REMOTE_50_DataHashSpec = NamedTuple('REMOTE_50_DataHashSpec',
+                                    [('backend', str), ('schema_hash', str)])
 
 
-class REMOTE_UNKNOWN_00_Handler(object):
+def remote_50_encode(schema_hash: str = '') -> bytes:
+    '''returns an db value saying that this hash exists somewhere on a remote
+
+    Returns
+    -------
+    bytes
+        hash data db value
+    '''
+    return f'{_FmtCode}{c.SEP_KEY}{schema_hash}'.encode()
+
+
+def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
+    '''converts a numpy data hash db val into a numpy data python spec
+
+    Parameters
+    ----------
+    db_val : bytes
+        data hash db val
+
+    Returns
+    -------
+    REMOTE_50_DataHashSpec
+        hash specification containing an identifies: `backend`, `schema_hash`
+    '''
+    db_str = db_val.decode()
+    _, schema_hash = _SplitDecoderRE.split(db_str)
+    raw_val = REMOTE_50_DataHashSpec(backend=_FmtCode, schema_hash=schema_hash)
+    return raw_val
+
+
+# ------------------------- Accessor Object -----------------------------------
+
+
+class REMOTE_50_Handler(object):
 
     def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
-        self.Parser = REMOTE_UNKNOWN_00_Parser()
 
     def __enter__(self):
         return self
@@ -131,13 +135,13 @@ class REMOTE_UNKNOWN_00_Handler(object):
     def delete_in_process_data(*args, **kwargs):
         '''mockup of clearing staged directory for upstream calls.
         '''
-        logger.debug(f'delete_in_process_data for REMOTE_UNKNOWN_00_Handler called.')
+        logger.debug(f'delete_in_process_data for REMOTE_50_Handler called.')
         return
 
-    def read_data(self, hashVal: DataHashSpec) -> None:
+    def read_data(self, hashVal: REMOTE_50_DataHashSpec) -> None:
         raise FileNotFoundError(
             f'data sample with digest: {hashVal} does not exist on this machine. '
             f'Perform a `data-fetch` operation to retrieve it from the remote server.')
 
     def write_data(self, schema_hash: str = '', *args, **kwargs) -> bytes:
-        return self.Parser.encode(schema_hash=schema_hash)
+        return remote_50_encode(schema_hash=schema_hash)

@@ -44,7 +44,7 @@ def random_string(stringLength=6):
     return ''.join(random.choice(letters) for i in range(stringLength))
 
 
-def cm_weakref_obj_proxy(obj):
+def cm_weakref_obj_proxy(obj: object) -> wrapt.ObjectProxy:
     '''Creates a weakproxy reference honoring optional use context managers.
 
     This is required because (for some unknown reason) `weakproxy`
@@ -70,7 +70,6 @@ def cm_weakref_obj_proxy(obj):
     setattr(wr, '__exit__', partial(obj.__class__.__exit__, wr))
     obj_proxy = wrapt.ObjectProxy(wr)
     return obj_proxy
-    return wr
 
 
 def symlink_rel(src: os.PathLike, dst: os.PathLike):

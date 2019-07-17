@@ -24,10 +24,16 @@ algorithm are implemented. All user facing API calls should be funneled through 
 '''
 
 
-def select_merge_algorithm(message,
-                           branchenv, stageenv, refenv, stagehashenv,
-                           master_branch_name, dev_branch_name,
-                           repo_path, *, writer_uuid='MERGE_PROCESS'):
+def select_merge_algorithm(message: str,
+                           branchenv: lmdb.Environment,
+                           stageenv: lmdb.Environment,
+                           refenv: lmdb.Environment,
+                           stagehashenv: lmdb.Environment,
+                           master_branch_name: str,
+                           dev_branch_name: str,
+                           repo_path: str,
+                           *,
+                           writer_uuid: str = 'MERGE_PROCESS') -> str:
     '''Entry point to perform a merge.
 
     Automatically selects algorithm and does the operation if no conflicts are
@@ -38,13 +44,13 @@ def select_merge_algorithm(message,
     ----------
     message : str
         user message describing the commit
-    branchenv : `lmdb.Environment`
+    branchenv : lmdb.Environment
         where the branch references are stored
-    stageenv : `lmdb.Environment`
+    stageenv : lmdb.Environment
         where the staging area is open
-    refenv : `lmdb.Environment`
+    refenv : lmdb.Environment
         where commit history is stored
-    stagehashenv: `lmdb.Environment`
+    stagehashenv: lmdb.Environment
         where the stage hash environment data is stored
     master_branch_name : str
         name of the branch to serve as a merge master

@@ -3,6 +3,8 @@
 Backend Identifiers
 ===================
 
+*  Backend: ``0``
+*  Version: ``0``
 *  Format Code: ``00``
 *  Canonical Name: ``HDF5_00``
 
@@ -101,7 +103,7 @@ from collections import ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
 from functools import partial
-from typing import MutableMapping, NamedTuple, Tuple, Match
+from typing import MutableMapping, NamedTuple, Tuple
 
 import h5py
 import numpy as np
@@ -111,10 +113,11 @@ from .. import constants as c
 from ..utils import find_next_prime, symlink_rel, random_string, set_blosc_nthreads
 
 logger = logging.getLogger(__name__)
-
 set_blosc_nthreads()
 
+
 # ----------------------------- Configuration ---------------------------------
+
 
 # contents of a single hdf5 file
 COLLECTION_SIZE = 250
@@ -126,7 +129,7 @@ CHUNK_MAX_RDCC_NBYTES = 100_000_000
 CHUNK_RDCC_W0 = 0.75
 
 # filter definition and backup selection if not available.
-filter_options = {
+filter_opts = {
     'default': {
         'shuffle': True,
         'complib': 'blosc:lz4',
@@ -138,92 +141,84 @@ filter_options = {
         'complevel': None,
         'fletcher32': True},
 }
-if filter_options['default']['complib'].startswith('blosc'):
-    bloscFilterAvail = h5py.h5z.filter_avail(32001)
-    if not bloscFilterAvail:
-        HDF5_FILTER = filter_options['backup']
-        logger.info(f'hdf5-blosc not found. Filter opts: {HDF5_FILTER}')
-    else:
-        HDF5_FILTER = filter_options['default']
-        logger.info(f'hdf5-blosc available. Filter opts: {HDF5_FILTER}')
+hdf5BloscAvail = h5py.h5z.filter_avail(32001)
+HDF5_FILTER = filter_opts['default'] if hdf5BloscAvail else filter_opts['backup']
+
+logger.info(f'hdf5-blosc available: {hdf5BloscAvail}. Filter opts: {HDF5_FILTER}')
+
 
 # -------------------------------- Parser Implementation ----------------------
 
-DataHashSpec = NamedTuple('DataHashSpec', [
-    ('backend', str),
-    ('uid', str),
-    ('dataset', str),
-    ('dataset_idx', int),
-    ('shape', Tuple[int])])
+
+_FmtCode = '00'
+# match and remove the following characters: '['   ']'   '('   ')'   ','
+_ShapeFmtRE = re.compile('[,\(\)\[\]]')
+# split up a formated parsed string into unique fields
+_SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
 
-class HDF5_00_Parser(object):
+HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec',
+                                  [('backend', str), ('uid', str),
+                                   ('dataset', str), ('dataset_idx', int),
+                                   ('shape', Tuple[int])])
 
-    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE']
 
-    def __init__(self):
+def hdf5_00_encode(uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) -> bytes:
+    '''converts the hdf5 data has spec to an appropriate db value
 
-        self.FmtCode: str = '00'
-        # match and remove the following characters: '['   ']'   '('   ')'   ','
-        self.ShapeFmtRE: Match = re.compile('[,\(\)\[\]]')
-        self.SplitDecoderRE: Match = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+    Parameters
+    ----------
+    uid : str
+        the file name prefix which the data is written to.
+    dataset : str
+        collection (ie. hdf5 dataset) name to find this data piece.
+    dataset_idx : int
+        collection first axis index in which this data piece resides.
+    shape : Tuple[int]
+        shape of the data sample written to the collection idx. ie:
+        what subslices of the hdf5 dataset should be read to retrieve
+        the sample as recorded.
 
-    def encode(self, uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) -> bytes:
-        '''converts the hdf5 data has spec to an appropriate db value
+    Returns
+    -------
+    bytes
+        hash data db value recording all input specifications.
+    '''
+    out_str = f'{_FmtCode}{c.SEP_KEY}{uid}'\
+              f'{c.SEP_HSH}'\
+              f'{dataset}{c.SEP_LST}{dataset_idx}'\
+              f'{c.SEP_SLC}'\
+              f'{_ShapeFmtRE.sub("", str(shape))}'
+    return out_str.encode()
 
-        Parameters
-        ----------
-        uid : str
-            the file name prefix which the data is written to.
-        dataset : str
-            collection (ie. hdf5 dataset) name to find this data piece.
-        dataset_idx : int
-            collection first axis index in which this data piece resides.
-        shape : Tuple[int]
-            shape of the data sample written to the collection idx. ie:
-            what subslices of the hdf5 dataset should be read to retrieve
-            the sample as recorded.
 
-        Returns
-        -------
-        bytes
-            hash data db value recording all input specifications.
-        '''
-        out_str = f'{self.FmtCode}{c.SEP_KEY}{uid}'\
-                  f'{c.SEP_HSH}'\
-                  f'{dataset}{c.SEP_LST}{dataset_idx}'\
-                  f'{c.SEP_SLC}'\
-                  f'{self.ShapeFmtRE.sub("", str(shape))}'
-        return out_str.encode()
+def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
+    '''converts an hdf5 data hash db val into an hdf5 data python spec.
 
-    def decode(self, db_val: bytes) -> DataHashSpec:
-        '''converts an hdf5 data hash db val into an hdf5 data python spec.
+    Parameters
+    ----------
+    db_val : bytestring
+        data hash db value
 
-        Parameters
-        ----------
-        db_val : bytestring
-            data hash db value
-
-        Returns
-        -------
-        namedtuple
-            hdf5 data hash specification containing `backend`, `schema`,
-            `instance`, `dataset`, `dataset_idx`, `shape`
-        '''
-        db_str = db_val.decode()
-        _, uid, dataset_vs, shape_vs = self.SplitDecoderRE.split(db_str)
-        dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
-        # if the data is of empty shape -> shape_vs = '' str.split() default
-        # value of none means split according to any whitespace, and discard
-        # empty strings from the result. So long as c.SEP_LST = ' ' this will
-        # work
-        shape = tuple(int(x) for x in shape_vs.split())
-        raw_val = DataHashSpec(backend=self.FmtCode,
-                               uid=uid,
-                               dataset=dataset,
-                               dataset_idx=int(dataset_idx),
-                               shape=shape)
-        return raw_val
+    Returns
+    -------
+    HDF5_00_DataHashSpec
+        hdf5 data hash specification containing `backend`, `schema`,
+        `instance`, `dataset`, `dataset_idx`, `shape`
+    '''
+    db_str = db_val.decode()
+    _, uid, dataset_vs, shape_vs = _SplitDecoderRE.split(db_str)
+    dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
+    # if the data is of empty shape -> shape_vs = '' str.split() default value
+    # of none means split according to any whitespace, and discard empty strings
+    # from the result. So long as c.SEP_LST = ' ' this will work
+    shape = tuple(int(x) for x in shape_vs.split())
+    raw_val = HDF5_00_DataHashSpec(backend=_FmtCode,
+                                   uid=uid,
+                                   dataset=dataset,
+                                   dataset_idx=int(dataset_idx),
+                                   shape=shape)
+    return raw_val
 
 
 # ------------------------- Accessor Object -----------------------------------
@@ -255,12 +250,11 @@ class HDF5_00_FileHandles(object):
 
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
-        self.Parser = HDF5_00_Parser()
 
-        self.STAGEDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_STAGE, self.Parser.FmtCode)
-        self.REMOTEDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_REMOTE, self.Parser.FmtCode)
-        self.DATADIR: os.PathLike = pjoin(self.path, c.DIR_DATA, self.Parser.FmtCode)
-        self.STOREDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_STORE, self.Parser.FmtCode)
+        self.STAGEDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_STAGE, _FmtCode)
+        self.REMOTEDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_REMOTE, _FmtCode)
+        self.DATADIR: os.PathLike = pjoin(self.path, c.DIR_DATA, _FmtCode)
+        self.STOREDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_STORE, _FmtCode)
         if not os.path.isdir(self.DATADIR):
             os.makedirs(self.DATADIR)
 
@@ -282,7 +276,6 @@ class HDF5_00_FileHandles(object):
         del state['rFp']
         del state['wFp']
         del state['Fp']
-        del state['Parser']
         return state
 
     def __setstate__(self, state):
@@ -292,7 +285,6 @@ class HDF5_00_FileHandles(object):
         self.rFp = {}
         self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
-        self.Parser = HDF5_00_Parser()
         self.open(self.mode)
 
     def open(self, mode: str, *, remote_operation: bool = False):
@@ -377,10 +369,9 @@ class HDF5_00_FileHandles(object):
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
         '''
-        FmtCode = HDF5_00_Parser().FmtCode
-        data_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
+        data_dir = pjoin(repo_path, c.DIR_DATA, _FmtCode)
         PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
-        process_dir = pjoin(repo_path, PDIR, FmtCode)
+        process_dir = pjoin(repo_path, PDIR, _FmtCode)
         if not os.path.isdir(process_dir):
             return
 
@@ -594,13 +585,13 @@ class HDF5_00_FileHandles(object):
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
 
-    def read_data(self, hashVal: DataHashSpec) -> np.ndarray:
+    def read_data(self, hashVal: HDF5_00_DataHashSpec) -> np.ndarray:
         '''Read data from an hdf5 file handle at the specified locations
 
         Parameters
         ----------
-        hashVal : namedtuple
-            record specification stored in the DB.
+        hashVal : HDF5_00_DataHashSpec
+            record specification parsed from its serialized store val in lmdb.
 
         Returns
         -------
@@ -681,8 +672,8 @@ class HDF5_00_FileHandles(object):
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(array, srcSlc, destSlc)
 
-        hashVal = self.Parser.encode(uid=self.w_uid,
-                                     dataset=self.hNextPath,
-                                     dataset_idx=self.hIdx,
-                                     shape=array.shape)
+        hashVal = hdf5_00_encode(uid=self.w_uid,
+                                 dataset=self.hNextPath,
+                                 dataset_idx=self.hIdx,
+                                 shape=array.shape)
         return hashVal

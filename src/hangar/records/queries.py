@@ -1,5 +1,7 @@
 from typing import Iterable, Tuple
 
+import lmdb
+
 from . import parsing
 from .parsing import RawDataRecordKey, RawDataRecordVal
 from .. import constants as c
@@ -15,7 +17,7 @@ Data record queries
 
 class RecordQuery(object):
 
-    def __init__(self, dataenv):
+    def __init__(self, dataenv: lmdb.Environment):
         self._dataenv = dataenv
 
 # ------------------ traversing the unpacked records ------------------------------------

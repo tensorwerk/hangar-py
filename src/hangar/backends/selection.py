@@ -7,20 +7,27 @@ specification.
 Identification
 --------------
 
-A two character ascii code identifies which backend some record belongs to.
-Valid characters are the union of ``ascii_lowercase``, ``ascii_uppercase``, and
-``ascii_digits``:
+A two character ascii code identifies which backend/version some record belongs
+to. Valid characters are the union of ``ascii_lowercase``, ``ascii_uppercase``,
+and ``ascii_digits``:
 
 .. centered:: ``abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789``
 
 Though stored as bytes in the backend, we use human readable characters (and not
 unprintable bytes) to aid in human tasks like developer database dumps and
-debugging
+debugging. The characters making up the two digit code have the following
+symantic meanings:
+
+   *  First Character (element 0) indicates the ``backend type`` used.
+
+   *  Second character (element 1) indicates the ``version`` of the backend type
+      which should be used to parse the specification & accesss data (more on
+      this later)
 
 The number of codes possible (a 2-choice permutation with repetition) is: 3844
 which we anticipate to be more then sufficient long into the future. As a
-convention, the first digit of the code can be used to identify the storage
-medium:
+convention, the range of values in which the first digit of the code falls into
+can be used to identify the storage medium location:
 
    *  Lowercase ``ascii_letters`` & digits ``[0, 1, 2, 3, 4]`` -> reserved for
       backends handling data on the local disk.
@@ -38,9 +45,17 @@ In order to maintain backwards compatibility across versions of Hangar into the
 future the following ruleset is specified and MUST BE HONORED:
 
 *  When a new backend is proposed, the contributor(s) provide the class with a
-   canonical name (``HDF5_00``, ``TILEDB_01``, etc) for developer consumption in
-   the backend. The review team will provide an available two-digit code which
-   all records corresponding to that backend must identify themselves with.
+   meaningful name (``HDF5``, ``NUMPY``, ``TILEDB``, etc) identifying the
+   backend to Hangar developers. The review team will provide:
+
+   -  ``backend type`` code
+   -  ``version`` code
+
+   which all records related to that implementation identify themselves with. In
+   addition, Externally facing classes / methods go by a canonical name which is
+   the concatenation of the ``meaningful name`` and assigned ``"format code"``
+   ie. for ``backend name: 'NUMPY'`` assigned ``type code: '1'`` and ``version
+   code: '0'`` must start external method/class names with: ``NUMPY_10_foo``
 
 *  Once a new backend is accepted, the code assigned to it is PERMANENT &
    UNCHANGING. The same code cannot be used in the future for other backends.
@@ -69,61 +84,53 @@ reaching out to the Hangar core development team so we can guide you through the
 process.
 '''
 from collections import namedtuple
-from typing import Dict, Union
+from typing import Dict, Union, Callable, Mapping
 
 import numpy as np
 
-from .hdf5 import HDF5_00_Parser, HDF5_00_FileHandles
-from .np_mmap import NUMPY_00_Parser, NUMPY_00_FileHandles
-from .remote_unknown import REMOTE_UNKNOWN_00_Parser, REMOTE_UNKNOWN_00_Handler
+from .hdf5_00 import HDF5_00_FileHandles, hdf5_00_decode, HDF5_00_DataHashSpec
+from .numpy_10 import NUMPY_10_FileHandles, numpy_10_decode, NUMPY_10_DataHashSpec
+from .remote_50 import REMOTE_50_Handler, remote_50_decode, REMOTE_50_DataHashSpec
 
 
 # -------------------------- Parser Types and Mapping -------------------------
 
 
-_BackendParsers = Union[
-    HDF5_00_Parser,
-    NUMPY_00_Parser,
-    REMOTE_UNKNOWN_00_Parser
-]
-_ParserMapping = Dict[bytes, _BackendParsers]
+_DataHashSpecs = Union[HDF5_00_DataHashSpec, NUMPY_10_DataHashSpec, REMOTE_50_DataHashSpec]
+_ParserMap = Mapping[bytes, Callable[[bytes], _DataHashSpecs]]
 
-BACKEND_PARSER_MAP: _ParserMapping = {
+BACKEND_DECODER_MAP: _ParserMap = {
     # LOCALS -> [00:50]
-    b'00': HDF5_00_Parser(),
-    b'01': NUMPY_00_Parser(),
-    b'02': None,               # tiledb_00 - Reserved
+    b'00': hdf5_00_decode,
+    b'10': numpy_10_decode,
+    b'20': None,               # tiledb_20 - Reserved
     # REMOTES -> [50:100]
-    b'50': REMOTE_UNKNOWN_00_Parser(),
-    b'51': None,               # url_00 - Reserved
+    b'50': remote_50_decode,
+    b'60': None,               # url_60 - Reserved
 }
 
 
 # ------------------------ Accessor Types and Mapping -------------------------
 
 
-_BackendAccessors = Union[
-    HDF5_00_FileHandles,
-    NUMPY_00_FileHandles,
-    REMOTE_UNKNOWN_00_Handler
-]
-_AccessorMapping = Dict[str, _BackendAccessors]
+_BeAccessors = Union[HDF5_00_FileHandles, NUMPY_10_FileHandles, REMOTE_50_Handler]
+_AccessorMap = Dict[str, _BeAccessors]
 
-BACKEND_ACCESSOR_MAP: _AccessorMapping = {
+BACKEND_ACCESSOR_MAP: _AccessorMap = {
     # LOCALS -> [0:50]
     '00': HDF5_00_FileHandles,
-    '01': NUMPY_00_FileHandles,
-    '02': None,               # tiledb_00 - Reserved
+    '10': NUMPY_10_FileHandles,
+    '20': None,               # tiledb_20 - Reserved
     # REMOTES -> [50:100]
-    '50': REMOTE_UNKNOWN_00_Handler,
-    '51': None,               # url_00 - Reserved
+    '50': REMOTE_50_Handler,
+    '60': None,               # url_60 - Reserved
 }
 
 
 # ------------------------ Selector Functions ---------------------------------
 
 
-def backend_decoder(db_val: bytes) -> namedtuple:
+def backend_decoder(db_val: bytes) -> _DataHashSpecs:
     '''Determine backend and decode specification for a raw hash record value.
 
     Parameters
@@ -138,8 +145,8 @@ def backend_decoder(db_val: bytes) -> namedtuple:
         The only field common to all backends is located at index [0] with the
         field name `backend`.
     '''
-    parser = BACKEND_PARSER_MAP[db_val[:2]]
-    decoded = parser.decode(db_val)
+    parser = BACKEND_DECODER_MAP[db_val[:2]]
+    decoded = parser(db_val)
     return decoded
 
 
@@ -164,7 +171,7 @@ def backend_from_heuristics(array: np.ndarray) -> str:
     # uncompressed numpy memmap data is most appropriate for data whose shape is
     # likely small tabular row data (CSV or such...)
     if (array.ndim == 1) and (array.size < 400):
-        backend = '01'
+        backend = '10'
     # hdf5 is the default backend for larger array sizes.
     else:
         backend = '00'

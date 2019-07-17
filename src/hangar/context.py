@@ -3,7 +3,7 @@ import os
 import shutil
 import platform
 import tempfile
-from typing import MutableMapping
+from typing import MutableMapping, Optional
 from collections import Counter
 from os.path import join as pjoin
 
@@ -176,18 +176,18 @@ class Environments(object):
 
     def __init__(self, repo_path: str):
 
-        self.repo_path: str = repo_path
-        self.refenv: lmdb.Environment = None
-        self.hashenv: lmdb.Environment = None
-        self.stageenv: lmdb.Environment = None
-        self.branchenv: lmdb.Environment = None
-        self.labelenv: lmdb.Environment = None
-        self.stagehashenv: lmdb.Environment = None
+        self.repo_path: os.PathLike = repo_path
+        self.refenv: Optional[lmdb.Environment] = None
+        self.hashenv: Optional[lmdb.Environment] = None
+        self.stageenv: Optional[lmdb.Environment] = None
+        self.branchenv: Optional[lmdb.Environment] = None
+        self.labelenv: Optional[lmdb.Environment] = None
+        self.stagehashenv: Optional[lmdb.Environment] = None
         self.cmtenv: MutableMapping[str, lmdb.Environment] = {}
         self._startup()
 
     @property
-    def repo_is_initialized(self):
+    def repo_is_initialized(self) -> bool:
         '''Property to check if the repository is initialized, read-only attribute
 
         Returns

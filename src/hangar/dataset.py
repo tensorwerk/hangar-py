@@ -19,9 +19,10 @@ logger = logging.getLogger(__name__)
 class DatasetDataReader(object):
     '''Class implementing get access to data in a dataset
 
-    The location of the data references can be transparently specified by feeding in a
-    different dataenv argument. For staged reads -> ``dataenv = lmdb.Environment(STAGING_DB)``.
-    For commit read -> ``dataenv = lmdb.Environment(COMMIT_DB)``.
+    The location of the data references can be transparently specified by
+    feeding in a different dataenv argument. For staged reads -> ``dataenv =
+    lmdb.Environment(STAGING_DB)``. For commit read -> ``dataenv =
+    lmdb.Environment(COMMIT_DB)``.
 
     Parameters
     ----------
@@ -98,7 +99,7 @@ class DatasetDataReader(object):
                 hash_ref = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hash_ref)
                 self._sspecs[dsetNames.data_name] = be_loc
-                if be_loc.backend == '50':
+                if (be_loc.backend == '50') and (not self._contains_partial_remote_data):
                     warnings.warn(
                         f'Dataset: {self._dsetn} contains `reference-only` samples, with '
                         f'actual data residing on a remote server. A `fetch-data` '

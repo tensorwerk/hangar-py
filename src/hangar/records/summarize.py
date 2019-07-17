@@ -1,10 +1,10 @@
+import os
 import time
 from io import StringIO
-import lmdb
-import os
 
-from . import heads
-from . import commiting
+import lmdb
+
+from . import heads, commiting
 from ..context import TxnRegister
 from ..utils import format_bytes, file_size, folder_size
 

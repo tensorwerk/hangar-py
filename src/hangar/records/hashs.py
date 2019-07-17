@@ -1,5 +1,7 @@
 import logging
 
+import lmdb
+
 from . import parsing
 from .. import constants as c
 from ..context import TxnRegister
@@ -10,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class HashQuery(object):
 
-    def __init__(self, hashenv):
+    def __init__(self, hashenv: lmdb.Environment):
         self._hashenv = hashenv
 
     # ------------------ traversing the unpacked records ----------------------
