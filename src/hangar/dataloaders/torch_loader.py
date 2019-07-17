@@ -1,6 +1,9 @@
 from ..dataset import DatasetDataReader
-import torch
-from torch.utils.data import Dataset, DataLoader
+try:
+    import torch
+    from torch.utils.data import Dataset, DataLoader
+except (ImportError, ModuleNotFoundError):
+    raise RuntimeError("Could not import torch. Try installing extra dependencies")
 
 
 class TorchDataSet(Dataset):
@@ -51,10 +54,10 @@ class TorchDataSet(Dataset):
 
 class TorchLoader(DataLoader):
     """
-    TorchLoader inherits and offloads all the operations to PyTorch loaders but this class
-    kept here as a convenient class to accept hangar dataset and convert it to PyTorch
-    dataset implicitly. The arguments of the class itself is absolutely similar to PyTorch
-    DataLoader except that here it only accepts a hangar dataset.
+    TorchLoader inherits and offloads all the operations to PyTorch DataLoader.
+    TorchLoader is a convenient class to accept hangar dataset and convert it to PyTorch
+    dataset implicitly. The arguments / signature of the class itself is absolutely
+    similar to PyTorch DataLoader except that here it only accepts a hangar dataset.
 
     Parameters
     ----------
