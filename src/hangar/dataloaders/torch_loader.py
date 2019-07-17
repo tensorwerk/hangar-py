@@ -7,20 +7,46 @@ class TorchDataSet(Dataset):
     """
     TorchDataSet inherits `torch.utils.data.Dataset` and override
     `__len__` & `__getitem__`. Not needed to use directly by the user.
+
+    Parameters
+    ----------
+    hangar_datasets : `hangar.dataset.DatasetDataReader` or a Collection
+        A dataset object or a list of dataset objects which will be
+        consumed by :class:`TorchDataSet`
     """
 
-    def __init__(self, hangar_dataset):
-        if not isinstance(hangar_dataset, DatasetDataReader):
-            raise TypeError("`hangar_dataset` provided is not a valid hangar dataset")
-        self.hangar_dataset = hangar_dataset
-        self._data_names = list(self.hangar_dataset.keys())
+    def __init__(self, hangar_datasets):
+        if isinstance(hangar_datasets, DatasetDataReader):
+            hangar_datasets = [hangar_datasets]
+
+        try:
+            self._dataset_len = len(hangar_datasets[0])
+        except IndexError:
+            raise
+        except Exception:
+            raise TypeError("`hangar_datasets` has to be a valid hangar dataset or an"
+                            "iterable that can hold other objects, like a list.")
+
+        for dset in hangar_datasets:
+            if not isinstance(dset, DatasetDataReader):
+                raise TypeError("`hangar_dataset` contains invalid hangar dataset(s)")
+            if len(dset) != self._dataset_len:
+                raise RuntimeError("Got datasets with different length")
+        self._number_of_datasets = len(hangar_datasets)
+        self.hangar_datasets = hangar_datasets
+        self._data_names = tuple(self.hangar_datasets[0].keys())
 
     def __len__(self):
-        return len(self._data_names)
+        return self._dataset_len
 
     def __getitem__(self, index):
         key = self._data_names[index]
-        return torch.from_numpy(self.hangar_dataset[key])
+        if self._number_of_datasets == 1:
+            return torch.from_numpy(self.hangar_datasets[0][key])
+        out = []
+        for dset in self.hangar_datasets:
+            out.append(torch.from_numpy(dset[key]))
+        return out
 
 
 class TorchLoader(DataLoader):
@@ -32,8 +58,9 @@ class TorchLoader(DataLoader):
 
     Parameters
     ----------
-    hangar_dataset : An instance of :class:`hangar.dataset.DatasetDataReader`
-        A dataset object which will be consumed by :class:`TorchDataSet`
+    hangar_datasets : `hangar.dataset.DatasetDataReader` or a Collection
+        A dataset object or a collection of dataset objects which will be
+        consumed by :class:`TorchDataSet`
     batch_size : int
         how many samples per batch to load
     shuffle : bool
@@ -62,6 +89,6 @@ class TorchLoader(DataLoader):
         input, after seeding and before data loading. Default to `None`
     """
 
-    def __init__(self, hangar_dataset, *args, **kwargs):
-        self.torch_dataset = TorchDataSet(hangar_dataset)
+    def __init__(self, hangar_datasets, *args, **kwargs):
+        self.torch_dataset = TorchDataSet(hangar_datasets)
         super().__init__(self.torch_dataset, *args, **kwargs)
