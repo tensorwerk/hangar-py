@@ -26,7 +26,7 @@ URLS = {
     # ("3.5", "32"): BASE_URL + "3.5.4/python-3.5.4.exe",
     ("3.6", "64"): BASE_URL + "3.6.2/python-3.6.2-amd64.exe",
     # ("3.6", "32"): BASE_URL + "3.6.2/python-3.6.2.exe",
-    ("3.7", "64"): BASE_URL + "3.7.3/python-3.6.3-amd64.exe",
+    ("3.7", "64"): BASE_URL + "3.7.3/python-3.7.3-amd64.exe",
 
 }
 INSTALL_CMD = {
