@@ -3,7 +3,7 @@ import time
 import logging
 import tempfile
 import warnings
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Optional, Union, Sequence
 from contextlib import closing
 from collections import defaultdict
 
@@ -12,10 +12,11 @@ import lmdb
 from tqdm import tqdm
 
 from . import constants as c
-from .context import Environments
+from .context import TxnRegister, Environments
 from .remote.client import HangarClient
 from .remote.content import ContentWriter, ContentReader
-from .records import heads, summarize, commiting, queries, hashs
+from .backends import backend_decoder
+from .records import heads, summarize, commiting, queries, parsing
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class Remotes(object):
 
         self._env: Environments = env
         self._repo_path: os.PathLike = self._env.repo_path
-        self._client: HangarClient = None
+        self._client: Optional[HangarClient] = None
 
     def __verify_repo_initialized(self):
         '''Internal method to verify repo initialized before operations occur
@@ -251,7 +252,14 @@ class Remotes(object):
 
             return fetchBranchName
 
-    def fetch_data(self, remote: str, branch: str = None, commit: str = None) -> str:
+    def fetch_data(self,
+                   remote: str,
+                   branch: str = None,
+                   commit: str = None,
+                   *,
+                   dataset_names: Optional[Sequence[str]] = None,
+                   max_num_bytes: int = None,
+                   retrieve_all_history: bool = False) -> List[str]:
         '''Retrieve the data for some commit which exists in a `partial` state.
 
         Parameters
@@ -264,11 +272,14 @@ class Remotes(object):
         commit : str, optional
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
+        get_all : bool, optional
+            if data should be retrieved for all history accessible by the parents
+            of this commit HEAD. by default False
 
         Returns
         -------
-        str
-            commit hash of the data which was returned.
+        List[str]
+            commit hashs of the data which was returned.
 
         Raises
         ------
@@ -294,36 +305,82 @@ class Remotes(object):
             cmt = commit
             cmtExist = commiting.check_commit_hash_in_history(self._env.refenv, commit)
             if not cmtExist:
-                raise ValueError(f'specified commit: {commit} does not exist in the repository')
+                raise ValueError(f'specified commit: {commit} does not exist in the repo.')
 
         # --------------- negotiate missing data to get -----------------------
 
-        self._env.checkout_commit(commit=cmt)
-        cmtData_hashs = set(queries.RecordQuery(self._env.cmtenv[cmt]).data_hashes())
-        hashQuery = hashs.HashQuery(self._env.hashenv)
-        hashMap = hashQuery.map_all_hash_keys_raw_to_values_raw()  # TODO: only get subset
-        m_schema_hash_map = defaultdict(list)
-        total_data = 0
-        for digest in cmtData_hashs:
-            hashSpec = hashMap[digest]
-            if hashSpec.backend == '50':
-                m_schema_hash_map[hashSpec.schema_hash].append(digest)
-                total_data += 1
+        if retrieve_all_history is True:
+            if isinstance(max_num_bytes, int):
+                raise ValueError(
+                    f'setting the maximum number of bytes transfered and requesting '
+                    f'all history are incompatible arguments.')
+            else:
+                hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)
+                commits = hist['order']
+        else:
+            commits = [cmt]
+
+        with tempfile.TemporaryDirectory() as tempD:
+            # share unpacked ref db between dependent methods
+            tmpDF = os.path.join(tempD, 'test.lmdb')
+            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
+            try:
+                allHashs = set()
+                # all history argument
+                for commit in tqdm(commits, desc='counting objects'):
+                    with tmpDB.begin(write=True) as txn:
+                        with txn.cursor() as curs:
+                            notEmpty = curs.first()
+                            while notEmpty:
+                                notEmpty = curs.delete()
+                    commiting.unpack_commit_ref(self._env.refenv, tmpDB, commit)
+                    # dataset_names option
+                    if dataset_names is not None:
+                        for dsetn in dataset_names:
+                            cmtData_hashs = queries.RecordQuery(tmpDB).dataset_data_hashes(dsetn)
+                            allHashs.update(cmtData_hashs)
+                    else:
+                        cmtData_hashs = queries.RecordQuery(tmpDB).data_hashes()
+                        allHashs.update(cmtData_hashs)
+            finally:
+                tmpDB.close()
+        hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
+        try:
+            m_schema_hash_map = defaultdict(list)
+            for hashVal in allHashs:
+                hashKey = parsing.hash_data_db_key_from_raw_key(hashVal.data_hash)
+                hashRef = hashTxn.get(hashKey)
+                be_loc = backend_decoder(hashRef)
+                if be_loc.backend == '50':
+                    m_schema_hash_map[be_loc.schema_hash].append(hashVal.data_hash)
+        finally:
+            TxnRegister().abort_reader_txn(self._env.hashenv)
 
         # -------------------- download missing data --------------------------
 
+        total_nbytes_seen = 0
+        total_data = sum(len(v) for v in m_schema_hash_map.values())
         with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar:
             client: HangarClient  # type hint
+            stop = False
             for schema in m_schema_hash_map.keys():
                 hashes = set(m_schema_hash_map[schema])
-                while len(hashes) > 0:
+                while (len(hashes) > 0) and (not stop):
                     ret = client.fetch_data(schema, hashes)
+                    # max_num_bytes option
+                    if isinstance(max_num_bytes, int):
+                        for idx, r_kv in enumerate(ret):
+                            total_nbytes_seen += r_kv[1].nbytes
+                            if total_nbytes_seen >= max_num_bytes:
+                                ret = ret[0:idx]
+                                stop = True
+                                break
                     saved_digests = CW.data(schema, ret)
                     pbar.update(len(saved_digests))
                     hashes = hashes.difference(set(saved_digests))
 
         commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
-        return cmt
+        return commits
 
     def push(self, remote: str, branch: str,
              *, username: str = '', password: str = '') -> bool:

@@ -103,7 +103,7 @@ from collections import ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
 from functools import partial
-from typing import MutableMapping, NamedTuple, Tuple
+from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable
 
 import h5py
 import numpy as np
@@ -131,9 +131,9 @@ CHUNK_RDCC_W0 = 0.75
 # filter definition and backup selection if not available.
 filter_opts = {
     'default': {
-        'shuffle': True,
+        'shuffle': 'bit',
         'complib': 'blosc:lz4',
-        'complevel': 5,
+        'complevel': 7,
         'fletcher32': True},
     'backup': {
         'shuffle': True,
@@ -224,6 +224,9 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
 # ------------------------- Accessor Object -----------------------------------
 
 
+HDF5_00_MapTypes = MutableMapping[str, Union[h5py.File, Callable[[], h5py.File]]]
+
+
 class HDF5_00_FileHandles(object):
     '''Manage HDF5 file handles.
 
@@ -237,16 +240,16 @@ class HDF5_00_FileHandles(object):
         self.schema_shape: tuple = schema_shape
         self.schema_dtype: np.dtype = schema_dtype
 
-        self.rFp: MutableMapping[str, h5py.File] = {}
-        self.wFp: MutableMapping[str, h5py.File] = {}
-        self.Fp = ChainMap(self.rFp, self.wFp)
+        self.rFp: HDF5_00_MapTypes = {}
+        self.wFp: HDF5_00_MapTypes = {}
+        self.Fp: HDF5_00_MapTypes = ChainMap(self.rFp, self.wFp)
 
-        self.mode: str = None
-        self.hIdx: int = None
-        self.w_uid: str = None
-        self.hMaxSize: int = None
-        self.hNextPath: int = None
-        self.hColsRemain: int = None
+        self.mode: Optional[str] = None
+        self.hIdx: Optional[int] = None
+        self.w_uid: Optional[str] = None
+        self.hMaxSize: Optional[int] = None
+        self.hNextPath: Optional[int] = None
+        self.hColsRemain: Optional[int] = None
 
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
@@ -267,7 +270,7 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
             self.wFp[self.w_uid].flush()
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict:
         '''ensure multiprocess operations can pickle relevant data.
         '''
         self.close()
@@ -278,7 +281,7 @@ class HDF5_00_FileHandles(object):
         del state['Fp']
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict) -> None:
         '''ensure multiprocess operations can pickle relevant data.
         '''
         self.__dict__.update(state)
@@ -355,7 +358,7 @@ class HDF5_00_FileHandles(object):
             del self.rFp[uid]
 
     @staticmethod
-    def delete_in_process_data(repo_path, *, remote_operation=False):
+    def delete_in_process_data(repo_path: os.PathLike, *, remote_operation=False) -> None:
         '''Removes some set of files entirely from the stage/remote directory.
 
         DANGER ZONE. This should essentially only be used to perform hard resets
@@ -363,7 +366,7 @@ class HDF5_00_FileHandles(object):
 
         Parameters
         ----------
-        repo_path : str
+        repo_path : os.PathLike
             path to the repository on disk
         remote_operation : optional, kwarg only, bool
             If true, modify contents of the remote_dir, if false (default) modify
@@ -384,7 +387,7 @@ class HDF5_00_FileHandles(object):
         os.rmdir(process_dir)
 
     @staticmethod
-    def _dataset_opts(complib, complevel, shuffle, fletcher32):
+    def _dataset_opts(complib: str, complevel: int, shuffle: Union[bool, str], fletcher32: bool) -> dict:
         '''specify compression options for the hdf5 dataset.
 
         .. seealso:: :function:`_blosc_opts`

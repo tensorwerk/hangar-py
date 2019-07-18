@@ -1,4 +1,4 @@
-from collections import namedtuple
+from typing import NamedTuple
 
 import blosc
 import numpy as np
@@ -169,9 +169,10 @@ class ContentWriter(object):
         return ret
 
 
-RawCommitContent = namedtuple(
-    typename='RawCommitContent',
-    field_names=['commit', 'cmtParentVal', 'cmtSpecVal', 'cmtRefVal'])
+RawCommitContent = NamedTuple('RawCommitContent', [('commit', str),
+                                                   ('cmtParentVal', bytes),
+                                                   ('cmtSpecVal', bytes),
+                                                   ('cmtRefVal', bytes)])
 
 
 class ContentReader(object):

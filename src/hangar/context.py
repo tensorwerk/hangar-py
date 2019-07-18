@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import platform
+import weakref
 import tempfile
 from typing import MutableMapping, Optional
 from collections import Counter
@@ -174,7 +175,7 @@ from .records import commiting, heads
 
 class Environments(object):
 
-    def __init__(self, repo_path: str):
+    def __init__(self, repo_path: os.PathLike):
 
         self.repo_path: os.PathLike = repo_path
         self.refenv: Optional[lmdb.Environment] = None
@@ -195,8 +196,8 @@ class Environments(object):
         bool
             True if repo environments are initialized, False otherwise
         '''
-        environmentInitialized = isinstance(self.refenv, lmdb.Environment)
-        return environmentInitialized
+        ret = True if isinstance(self.refenv, lmdb.Environment) else False
+        return ret
 
     def _startup(self) -> bool:
         '''When first access to the Repo starts, attempt to open the lmdb.Environments.
@@ -221,7 +222,10 @@ class Environments(object):
         self._open_environments()
         return True
 
-    def _init_repo(self, user_name: str, user_email: str, remove_old: bool = False) -> str:
+    def _init_repo(self,
+                   user_name: str,
+                   user_email: str,
+                   remove_old: bool = False) -> os.PathLike:
         '''Create a new hangar repositiory at the specified environment path.
 
         Parameters
@@ -236,7 +240,7 @@ class Environments(object):
 
         Returns
         -------
-        str
+        os.PathLike
             The path to the newly created repository on disk.
 
         Raises

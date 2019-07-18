@@ -50,7 +50,6 @@ def init(name, email, overwrite):
 @click.option('--email', prompt='User Email', help='email address of the user')
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
 @click.argument('remote', nargs=1, required=True)
-# include --all (data) option
 def clone(remote, name, email, overwrite):
     '''Initialize a repository at the current path and fetch data records from REMOTE server.
     '''
@@ -77,32 +76,52 @@ def fetch_records(remote, branch):
     bName = repo.remote.fetch(remote=remote, branch=branch)
     click.echo(f'Fetch to Branch Name: {bName}')
 
-# --all
-# --updates (history?)   Default?
-# --data (via commit or branch HEAD)
-# --dset
-
-# fetch to update refs
-# **view how much data is actually missing before you `fetch-data` in a commit**
-# --fetch-data --dset FOO --samples 1 2 3 ...
-# --fetch-data commit/branch --dset --samples (list, or slice notation (foo1:bar1) (check if colon is proper)) --limit-disk
-### --fetch-data --dset FOO --samples (way to include predicates? key functions?)
 
 @main.command(name='fetch-data')
 @click.argument('remote', nargs=1, required=True)  # help='name of the remote server')
-@click.argument('commit', nargs=1, required=True)  # help='commit hash for which data should be retrieved')
-# need BRANCH for HEAD
-# all for all branches/commits.
-# all for history of branch
-# raise warning if too large?
-def fetch_data(remote, commit):
-    '''Download the tensor data from the REMOTE server referenced by COMMIT.
+@click.argument('startpoint', nargs=1, required=True)  # help='commit hash for which data should be retrieved')
+@click.option('--dset', '-d', multiple=True, required=False, default=None)  # help='specify any number of dset keys to fetch data for.')
+@click.option('--nbytes', '-n', default=None, required=False, help='total amount of data to retrieve in MB/GB.')
+@click.option('--all-history', '-a', 'all_', is_flag=True, default=False, required=False,
+              help='Retrieve data referenced in every parent commit accessible to the STARTPOINT')
+def fetch_data(remote, startpoint, dset, nbytes, all_):
+    '''Download the tensor data from the REMOTE server referenced by STARTPOINT which can be a commit or branch name.
+
+    The default behavior is to only download a single commit's data or the HEAD commmit of a branch.
+    Please review the optional arguments for other behaviors
     '''
+    from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
+    from hangar.utils import parse_bytes
+
     P = os.getcwd()
     repo = Repository(path=P)
-    cmt = expand_short_commit_digest(repo._env.refenv, commit)
-    commit_hash = repo.remote.fetch_data(remote=remote, commit=cmt)
-    click.echo(f'Retrieved data for commit hash: {commit_hash}')
+    if startpoint is None:
+        branch = get_staging_branch_head(repo._env.branchenv)
+        commit = get_branch_head_commit(repo._env.branchenv, branch)
+        click.echo(f'No startpoint supplied, fetching data of HEAD: {commit} for BRANCH: {branch}')
+    elif startpoint in repo.list_branches():
+        commit = get_branch_head_commit(repo._env.branchenv, startpoint)
+        click.echo(f'Fetching data for HEAD: {commit} of STARTPOINT BRANCH: {startpoint}')
+    else:
+        commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+        click.echo(f'Fetching data for STARTPOINT HEAD: {commit}')
+
+    click.echo(f'dset argument: {dset}')
+    try:
+        max_nbytes = parse_bytes(nbytes)
+        click.echo(f'nbytes argument: {max_nbytes}')
+    except AttributeError:
+        max_nbytes = None
+
+    if len(dset) == 0:
+        dset = None
+
+    commits = repo.remote.fetch_data(remote=remote,
+                                     commit=commit,
+                                     dataset_names=dset,
+                                     max_num_bytes=max_nbytes,
+                                     retrieve_all_history=all_)
+    click.echo(f'completed data for commits: {commits}')
 
 
 @main.command()
@@ -152,39 +171,74 @@ def remove_remote(name):
 
 
 @main.command(help='show a summary of the repository')
-@click.option('-b', nargs=1, required=False, help='name of the branch to show the head commit details of')
-@click.option('-c', nargs=1, required=False, help='commit hash to show the summary of')
-def summary(b, c):
+@click.argument('startpoint', nargs=1, required=False)
+def summary(startpoint):
+    '''get a summary of the contents of the repostory as they exist at STARTPOINT (a commit digest or branch HEAD).
+    '''
     P = os.getcwd()
     repo = Repository(path=P)
-    if c:
-        cmt = expand_short_commit_digest(repo._env.refenv, c)
-        click.echo(repo.summary(commit=cmt))
-    elif b:
-        click.echo(repo.summary(branch_name=b))
-    else:
+    if startpoint is None:
         click.echo(repo.summary())
+    elif startpoint in repo.list_branches():
+        click.echo(repo.summary(branch_name=startpoint))
+    else:
+        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+        click.echo(repo.summary(commit=base_commit))
 
 
 @main.command(help='show the commit log graph')
-@click.option('-b', required=False, default=None, help='branch name')
-def log(b):
+@click.argument('startpoint', required=False, default=None)
+def log(startpoint):
+    '''Show the commit log graph for a given STARTPOINT which can be a branch name or commit hash.
+
+    If no argument is passed in, the staging area branch HEAD wil be used as the starting point.
+    '''
     P = os.getcwd()
     repo = Repository(path=P)
-    click.echo(repo.log(branch_name=b))
+    if startpoint is None:
+        click.echo(repo.log())
+    elif startpoint in repo.list_branches():
+        click.echo(repo.log(branch_name=startpoint))
+    else:
+        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+        click.echo(repo.log(commit_hash=base_commit))
 
 
-@main.command(help='list or create branches')
-@click.option('-l', is_flag=True, help='list the branches in the repository')
-@click.option('-b', nargs=1, required=False, help='create branch from HEAD commit with provided name')
-def branch(l, b):
+@main.group(help='list or create branches')
+def branch():
+    pass
+
+
+@branch.command(name='list', help='list all branch names')
+def branch_list():
     P = os.getcwd()
     repo = Repository(path=P)
-    if l:
-        click.echo(repo.list_branches())
-    elif b:
-        succ = repo.create_branch(b)
-        click.echo(f'create branch operation success: {succ}')
+    click.echo(repo.list_branches())
+
+
+@branch.command(name='create')
+@click.argument('name', nargs=1, required=True)
+@click.argument('startpoint', nargs=1, default=None, required=False)
+def branch_create(name, startpoint):
+    '''Create a branch with NAME at STARTPOINT, which can either be a commit digest or branch name.
+    '''
+    from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
+
+    P = os.getcwd()
+    repo = Repository(path=P)
+    branch_names = repo.list_branches()
+    if name in branch_names:
+        raise ValueError(f'branch name: {name} already exists')
+
+    if startpoint is None:
+        branch = get_staging_branch_head(repo._env.branchenv)
+        base_commit = get_branch_head_commit(repo._env.branchenv, branch)
+    elif startpoint in branch_names:
+        base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
+    else:
+        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+
+    click.echo(f'BRANCH: ' + repo.create_branch(name, base_commit=base_commit) + f' HEAD: {base_commit}')
 
 
 @main.command(help='start a hangar server at the given location')

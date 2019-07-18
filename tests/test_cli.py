@@ -105,7 +105,19 @@ def test_push_fetch_records(server_instance, backend):
 
 
 @pytest.mark.parametrize('backend', ['00', '10'])
-def test_fetch_records_and_data(server_instance, backend):
+@pytest.mark.parametrize('options', [
+    ['origin', 'testbranch'],
+    ['origin', 'master'],
+    ['origin', 'testbranch', '--all-history'],
+    ['origin', 'master', '--all-history'],
+    ['origin', 'testbranch', '--dset', 'data'],
+    ['origin', 'master', '--dset', 'data'],
+    ['origin', 'testbranch', '--dset', 'data', '--all-history'],
+    ['origin', 'master', '--dset', 'data', '--all-history'],
+    ['origin', 'testbranch', '--dset', 'data', '--all-history'],
+    ['origin', 'master', '--nbytes', '3Kb'],
+])
+def test_fetch_records_and_data(server_instance, backend, options):
 
     runner = CliRunner()
     with runner.isolated_filesystem():
@@ -147,7 +159,9 @@ def test_fetch_records_and_data(server_instance, backend):
 
         res = runner.invoke(cli.fetch_records, ['origin', 'testbranch'])
         assert res.exit_code == 0
-        res = runner.invoke(cli.fetch_data, ['origin', cmt2])
+        res = runner.invoke(cli.branch_create, ['testbranch', 'origin/testbranch'])
+        assert res.exit_code == 0
+        res = runner.invoke(cli.fetch_data, options)
         assert res.exit_code == 0
 
 
@@ -260,12 +274,17 @@ def test_log(written_two_cmt_server_repo, capsys):
         new_repo.log()
 
         with capsys.disabled():
-            res = runner.invoke(cli.log, ['-b', 'master'])
+            res = runner.invoke(cli.log, ['master'])
             assert res.stdout == f"{capsys.readouterr().out}\n"
 
 
 def test_branch_create_and_list(written_two_cmt_server_repo):
     server, base_repo = written_two_cmt_server_repo
+
+    co = base_repo.checkout(write=True)
+    cmt = co.commit_hash
+    co.close()
+
     runner = CliRunner()
     with runner.isolated_filesystem():
         res = runner.invoke(
@@ -273,16 +292,16 @@ def test_branch_create_and_list(written_two_cmt_server_repo):
             ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'])
         assert res.exit_code == 0
 
-        res = runner.invoke(cli.branch, ['-b', 'testbranch'])
+        res = runner.invoke(cli.branch_create, ['testbranch'])
         assert res.exit_code == 0
-        assert res.stdout == "create branch operation success: testbranch\n"
+        assert res.stdout == f"BRANCH: testbranch HEAD: {cmt}\n"
 
         P = getcwd()
         new_repo = Repository(P)
         branches = new_repo.list_branches()
         assert branches == ['master', 'origin/master', 'testbranch']
 
-        res = runner.invoke(cli.branch, ['-l'])
+        res = runner.invoke(cli.branch_list)
         assert res.exit_code == 0
         assert res.stdout == "['master', 'origin/master', 'testbranch']\n"
 

@@ -23,9 +23,9 @@ def get_versions():
     """
 
     d = {'host': get_system_info(),
-         'packages': get_package_info(required_packages)}
+         'packages': get_package_info(required_packages),
+         'optional': get_optional_info()}
     return d
-
 
 def get_system_info():
     (sysname, nodename, release,
@@ -50,6 +50,16 @@ def get_system_info():
             ]
 
     return host
+
+
+def get_optional_info() -> dict:
+    try:
+        import h5py
+        bloscFilterAvail = h5py.h5z.filter_avail(32001)
+    except ImportError:
+        bloscFilterAvail = False
+
+    return {'blosc-hdf5-plugin': bloscFilterAvail}
 
 
 def version_of_package(pkg):

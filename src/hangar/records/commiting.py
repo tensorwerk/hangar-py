@@ -335,7 +335,12 @@ The functions below act to:
 
 # ---------------- Functions to format the writen values of a commit --------------------
 
-def _commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='', dev_branch_name=''):
+
+def _commit_ancestors(branchenv: lmdb.Environment,
+                      *,
+                      is_merge_commit: bool = False,
+                      master_branch_name: str = '',
+                      dev_branch_name: str = '') -> bytes:
     '''Format the commit parent db value, finding HEAD commits automatically.
 
     This method handles formating for both regular & merge commits through the
@@ -357,7 +362,7 @@ def _commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name=''
 
     Returns
     -------
-    bytestring
+    bytes
         Commit parent db value formatted appropriately based on the repo state and
         any specified arguments.
     '''
@@ -377,7 +382,7 @@ def _commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name=''
     return commitParentVal
 
 
-def _commit_spec(message, user, email):
+def _commit_spec(message: str, user: str, email: str) -> bytes:
     '''Format the commit specification according to the supplied username and email.
 
     This method currently only acts as a pass through to the parsing options
@@ -394,7 +399,7 @@ def _commit_spec(message, user, email):
 
     Returns
     -------
-    bytestring
+    bytes
         Formatted value for the specification field of the commit.
     '''
     commitSpecVal = parsing.commit_spec_db_val_from_raw_val(
@@ -402,11 +407,10 @@ def _commit_spec(message, user, email):
         commit_message=message,
         commit_user=user,
         commit_email=email)
-
     return commitSpecVal
 
 
-def _commit_ref(stageenv):
+def _commit_ref(stageenv: lmdb.Environment) -> bytes:
     '''Query and format all staged data records, and format it for ref storage.
 
     Parameters
@@ -581,9 +585,9 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
     In process writes never directly access files in the data directory.
     Instead, when the file is created is is symlinked to either the remote data
     or stage data directory. All access is handled through this intermediate
-    symlink in order to prevent any ability to overwrite commit data (even if
+    symlink in order to prevent any ability to overwpackedeven if
     there are major errors in the hash records). Once the write operation
-    complets (commit for staging, or completion of fetch for remote), this
+    packedor staging, or completion of fetch for remote), this
     method is called to move the symlinks from the write enabled directory to
     the (read only, fully-committed) storage dir.
 

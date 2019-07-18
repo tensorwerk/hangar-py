@@ -7,6 +7,32 @@ from random import randint
 import platform
 
 
+def test_list_all_remotes_works(repo):
+
+    remote_spec1 = repo.remote.add('origin', 'test')
+    currentRemotes = repo.remote.list_all()
+
+    assert len(currentRemotes) == 1
+    currentSpec = currentRemotes[0]
+    assert len(currentSpec) == 2
+    assert currentSpec.name == 'origin'
+    assert currentSpec.address == 'test'
+
+    remote_spec2 = repo.remote.add('origin2', 'test2')
+    currentRemotes = repo.remote.list_all()
+
+    assert len(currentRemotes) == 2
+    currentSpec = currentRemotes[0]
+    assert currentSpec == remote_spec1
+    assert len(currentSpec) == 2
+    assert currentSpec.name == 'origin'
+    assert currentSpec.address == 'test'
+    currentSpec = currentRemotes[1]
+    assert currentSpec == remote_spec2
+    assert currentSpec.name == 'origin2'
+    assert currentSpec.address == 'test2'
+
+
 def test_cannot_add_remote_twice_with_same_name(repo):
     remote_spec = repo.remote.add('origin', 'test')
     assert remote_spec.name == 'origin'
@@ -43,6 +69,7 @@ def test_server_is_started_multiple_times_via_ping_pong(server_instance, written
 def test_push_and_clone_master_linear_history_multiple_commits(
         server_instance, repo, managed_tmpdir, array5by7, nCommits, nSamples):
     from hangar import Repository
+    from hangar.records.summarize import list_history
 
     cmtList = []
     co = repo.checkout(write=True)
@@ -61,6 +88,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
         cmt = co.commit(f'commit number: {cIdx}')
         cmtList.append((cmt, sampList))
         co.close()
+    masterHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name='master')
 
     repo.remote.add('origin', server_instance)
     push1 = repo.remote.push('origin', 'master')
@@ -72,19 +100,29 @@ def test_push_and_clone_master_linear_history_multiple_commits(
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in cmtList:
-        newRepo.remote.fetch_data('origin', commit=cmt)
-        nco = newRepo.checkout(commit=cmt)
+        with pytest.warns(UserWarning):
+            nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
-        assert len(nco.datasets['_dset']) == nSamples
-        for sIdx, samp in enumerate(sampList):
-            assert np.allclose(nco.datasets['_dset'][str(sIdx)], samp)
+        assert len(nco.datasets['_dset']) == len(sampList)
+
+        assert nco.datasets['_dset'].contains_remote_references is True
+        remoteKeys = nco.datasets['_dset'].remote_reference_sample_keys
+        assert [str(idx) for idx in range(len(sampList))] == remoteKeys
+        for idx, _ in enumerate(sampList):
+            sIdx = str(idx)
+            assert sIdx in nco.datasets['_dset']
+            with pytest.raises(FileNotFoundError):
+                shouldNotExist = nco.datasets['_dset'][sIdx]
         nco.close()
+    cloneMasterHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name='master')
+    assert cloneMasterHist == masterHist
     newRepo._env._close_environments()
 
 
-@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 10], [10, 10]])
-@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 5], [5, 5]])
+
+@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [10, 10]])
+@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 3], [5, 5]])
 def test_server_push_second_branch_with_new_commit(server_instance, repo,
                                                    array5by7, nMasterCommits,
                                                    nMasterSamples, nDevCommits,
@@ -131,12 +169,13 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
     assert push2 == branch
 
 
-@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 10], [10, 10]])
-@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 5], [5, 5]])
-def test_server_push_clone_second_branch_with_new_commit(
+@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [10, 10]])
+@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 5], [3, 5]])
+def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
         nMasterSamples, nDevCommits, nDevSamples):
     from hangar import Repository
+    from hangar.records.summarize import list_history
 
     # Push master branch test
     masterCmtList = []
@@ -160,6 +199,7 @@ def test_server_push_clone_second_branch_with_new_commit(
     repo.remote.add('origin', server_instance)
     push1 = repo.remote.push('origin', 'master')
     assert push1 == 'master'
+    masterHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name='master')
 
     # Push dev branch test
     devCmtList = []
@@ -180,6 +220,7 @@ def test_server_push_clone_second_branch_with_new_commit(
 
     push2 = repo.remote.push('origin', branch)
     assert push2 == branch
+    branchHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name=branch)
 
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
@@ -188,28 +229,254 @@ def test_server_push_clone_second_branch_with_new_commit(
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in masterCmtList:
-        newRepo.remote.fetch_data('origin', commit=cmt)
-        nco = newRepo.checkout(commit=cmt)
+        with pytest.warns(UserWarning):
+            nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
         assert len(nco.datasets['_dset']) == nMasterSamples
-        for sIdx, samp in enumerate(sampList):
-            assert np.allclose(nco.datasets['_dset'][str(sIdx)], samp)
+
+        assert nco.datasets['_dset'].contains_remote_references is True
+        remoteKeys = nco.datasets['_dset'].remote_reference_sample_keys
+        assert [str(idx) for idx in range(len(sampList))] == remoteKeys
+        for idx, _ in enumerate(sampList):
+            sIdx = str(idx)
+            assert sIdx in nco.datasets['_dset']
+            with pytest.raises(FileNotFoundError):
+                shouldNotExist = nco.datasets['_dset'][sIdx]
         nco.close()
+    cloneMasterHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name='master')
+    assert cloneMasterHist == masterHist
 
     # Fetch test
     fetch = newRepo.remote.fetch('origin', branch=branch)
     assert fetch == f'origin/{branch}'
     assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch}']
     for cmt, sampList in devCmtList:
-        newRepo.remote.fetch_data('origin', commit=cmt)
-        nco = newRepo.checkout(commit=cmt)
+        # newRepo.remote.fetch_data('origin', commit=cmt)
+        with pytest.warns(UserWarning):
+            nco = newRepo.checkout(commit=cmt)
         assert len(nco.datasets) == 1
         assert '_dset' in nco.datasets
         assert len(nco.datasets['_dset']) == nDevSamples
-        for sIdx, samp in enumerate(sampList):
-            assert np.allclose(nco.datasets['_dset'][str(sIdx)], samp)
+
+        assert nco.datasets['_dset'].contains_remote_references is True
+        remoteKeys = nco.datasets['_dset'].remote_reference_sample_keys
+        assert [str(idx) for idx in range(len(sampList))] == remoteKeys
+        for idx, _ in enumerate(sampList):
+            sIdx = str(idx)
+            assert sIdx in nco.datasets['_dset']
+            with pytest.raises(FileNotFoundError):
+                shouldNotExist = nco.datasets['_dset'][sIdx]
+            # assert np.allclose(nco.datasets['_dset'][str(sIdx)], samp)
         nco.close()
+    cloneBranchHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name=f'origin/{branch}')
+    assert cloneBranchHist == branchHist
+    newRepo._env._close_environments()
+
+
+@pytest.mark.filterwarnings('ignore::UserWarning')
+@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[4, 10]])
+@pytest.mark.parametrize('nDevCommits,nDevSamples', [[3, 24]])
+@pytest.mark.parametrize('fetchBranch,fetchCommit,fetchDsetns,fetchNbytes,fetchAll_history', [
+    ['master',      None,  None,        None,  False],
+    ['testbranch',  None,  None,        None,  False],
+    [None,          'ma',  None,        None,  False],
+    [None,          'br',  None,        None,  False],
+    ['master',      None,  ('_dset',),  None,  False],
+    ['testbranch',  None,  ('_two',),   None,  False],
+    [None,          'ma',  ('_dset',),  None,  False],
+    [None,          'br',  ('_two',),   None,  False],
+    ['master',      None,  None,        None,  False],
+    ['testbranch',  None,  None,        None,  False],
+    [None,          'ma',  None,        None,  False],
+    [None,          'br',  None,        None,  False],
+    ['master',      None,  ('_dset',),  None,  False],
+    ['testbranch',  None,  ('_two',),   None,  False],
+    [None,          'ma',  ('_dset',),  None,  False],
+    [None,          'br',  ('_two',),   None,  False],
+    ['master',      None,  None,        None,  True],
+    ['testbranch',  None,  None,        None,  True],
+    [None,          'ma',  None,        None,  True],
+    [None,          'br',  None,        None,  True],
+    ['master',      None,  ('_dset',),  None,  True],
+    ['testbranch',  None,  ('_two',),   None,  True],
+    [None,          'ma',  ('_dset',),  None,  True],
+    [None,          'br',  ('_two',),   None,  True],
+    ['master',      None,  None,        1000,  False],
+    ['testbranch',  None,  None,        1000,  False],
+    [None,          'ma',  None,        1000,  False],
+    [None,          'br',  None,        1000,  False],
+    ['master',      None,  ('_dset',),  1000,  False],
+    ['testbranch',  None,  ('_two',),   1000,  False],
+    [None,          'ma',  ('_dset',),  1000,  False],
+    [None,          'br',  ('_two',),   1000,  False],
+    [None,          'br',  ('_two',),   1000,  True],  # will raise error
+])
+def test_server_push_two_branch_then_clone_fetch_data_options(
+        server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
+        nMasterSamples, nDevCommits, nDevSamples, fetchBranch, fetchCommit,
+        fetchDsetns, fetchNbytes, fetchAll_history):
+    from hangar import Repository
+    from hangar.records.summarize import list_history
+
+    # Push master branch test
+    masterCmts = {}
+    co = repo.checkout(write=True)
+    co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float32)
+    co.datasets.init_dataset(name='_two', shape=(20), dtype=np.float32)
+    for cIdx in range(nMasterCommits):
+        if cIdx != 0:
+            co = repo.checkout(write=True)
+        masterSampList1 = []
+        masterSampList2 = []
+        with co.datasets['_dset'] as d, co.datasets['_two'] as dd:
+            for prevKey in list(d.keys())[1:]:
+                d.remove(prevKey)
+                dd.remove(prevKey)
+
+            for sIdx in range(nMasterSamples):
+                arr1 = np.random.randn(*array5by7.shape).astype(np.float32) * 100
+                d[str(sIdx)] = arr1
+                masterSampList1.append(arr1)
+                arr2 = np.random.randn(20).astype(np.float32)
+                dd[str(sIdx)] = arr2
+                masterSampList2.append(arr2)
+        cmt = co.commit(f'master commit number: {cIdx}')
+        masterCmts[cmt] = (masterSampList1, masterSampList2)
+        co.close()
+
+    repo.remote.add('origin', server_instance)
+    push1 = repo.remote.push('origin', 'master')
+    assert push1 == 'master'
+    masterHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name='master')
+
+    # Push dev branch test
+    devCmts = masterCmts.copy()
+    branch = repo.create_branch('testbranch')
+    for cIdx in range(nDevCommits):
+        co = repo.checkout(write=True, branch_name=branch)
+        devSampList1 = []
+        devSampList2 = []
+        with co.datasets['_dset'] as d, co.datasets['_two'] as dd:
+            for prevKey in list(d.keys())[1:]:
+                d.remove(prevKey)
+                dd.remove(prevKey)
+
+            for sIdx in range(nDevSamples):
+                arr1 = np.random.randn(*array5by7.shape).astype(np.float32) * 100
+                d[str(sIdx)] = arr1
+                devSampList1.append(arr1)
+                arr2 = np.random.randn(20).astype(np.float32)
+                dd[str(sIdx)] = arr2
+                devSampList2.append(arr2)
+        cmt = co.commit(f'dev commit number: {cIdx}')
+        devCmts[cmt] = (devSampList1, devSampList2)
+        co.close()
+
+    push2 = repo.remote.push('origin', branch)
+    assert push2 == branch
+    branchHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name=branch)
+
+    # -------------------------- end setup ------------------------------------
+
+    # Clone test (master branch)
+    new_tmpdir = pjoin(managed_tmpdir, 'new')
+    mkdir(new_tmpdir)
+    newRepo = Repository(path=new_tmpdir)
+    newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+    newRepo.remote.fetch('origin', branch=branch)
+    newRepo.create_branch('testbranch', base_commit=branchHist['head'])
+    assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch}', branch]
+
+    # ------------------ format arguments dependingon options -----------------
+
+    kwargs = {
+        'dataset_names': fetchDsetns,
+        'max_num_bytes': fetchNbytes,
+        'retrieve_all_history': fetchAll_history,
+    }
+    if fetchBranch is not None:
+        func = branchHist if fetchBranch == 'testbranch' else masterHist
+        kwargs['branch'] = fetchBranch
+        kwargs['commit'] = None
+    else:
+        func = branchHist if fetchBranch == 'br' else masterHist
+        kwargs['branch'] = None
+        kwargs['commit'] = func['head']
+
+    if fetchAll_history is True:
+        commits_to_check = func['order']
+    else:
+        commits_to_check = [func['head']]
+
+    # ----------------------- retrieve data with desired options --------------
+
+    # This case should fail
+    if (fetchAll_history is True) and isinstance(fetchNbytes, int):
+        try:
+            with pytest.raises(ValueError):
+                fetch_commits = newRepo.remote.fetch_data(remote='origin', **kwargs)
+        finally:
+            newRepo._env._close_environments()
+        return True
+    # get data
+    fetch_commits = newRepo.remote.fetch_data(remote='origin', **kwargs)
+    assert commits_to_check == fetch_commits
+
+    # ------------- check that you got everything you expected ----------------
+
+    for fCmt in fetch_commits:
+        co = newRepo.checkout(commit=fCmt)
+        assert co.commit_hash == fCmt
+
+        # when we are checking one dset only
+        if isinstance(fetchDsetns, tuple):
+            d = co.datasets[fetchDsetns[0]]
+            # ensure we didn't fetch the other data simultaneously
+
+            ds1SampList, ds2SampList = devCmts[fCmt]
+            if fetchDsetns[0] == '_dset':
+                compare = ds1SampList
+            else:
+                compare = ds2SampList
+
+            totalSeen = 0
+            for idx, samp in enumerate(compare):
+                if fetchNbytes is None:
+                    assert np.allclose(samp, d[str(idx)])
+                else:
+                    try:
+                        arr = d[str(idx)]
+                        assert np.allclose(samp, arr)
+                        totalSeen += arr.nbytes
+                        assert totalSeen <= fetchNbytes
+                    except FileNotFoundError:
+                        continue
+        # compare both dsets at the same time
+        else:
+            d = co.datasets['_dset']
+            dd = co.datasets['_two']
+            ds1List, ds2List = devCmts[fCmt]
+            totalSeen = 0
+            for idx, ds1ds2 in enumerate(zip(ds1List, ds2List)):
+                ds1, ds2 = ds1ds2
+                if fetchNbytes is None:
+                    assert np.allclose(ds1, d[str(idx)])
+                    assert np.allclose(ds2, dd[str(idx)])
+                else:
+                    try:
+                        arr1 = d[str(idx)]
+                        assert np.allclose(ds1, arr1)
+                        totalSeen += arr1.nbytes
+                        assert totalSeen <= fetchNbytes
+
+                        arr2 = dd[str(idx)]
+                        assert np.allclose(ds2, arr2)
+                        totalSeen += arr2.nbytes
+                        assert totalSeen <= fetchNbytes
+                    except FileNotFoundError:
+                        continue
+        co.close()
     newRepo._env._close_environments()
 
 

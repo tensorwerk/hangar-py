@@ -4,7 +4,7 @@ from itertools import cycle
 from time import sleep
 from time import perf_counter
 from random import randint
-from typing import Union, NamedTuple
+from typing import Union, NamedTuple, Tuple
 
 import blosc
 import msgpack
@@ -727,16 +727,13 @@ def commit_ref_db_val_from_raw_val(commit_db_key_val_list):
     bytes
         Serialized and compressed representation of the object.
     '''
-    serialized_db_list = msgpack.packb(commit_db_key_val_list, use_bin_type=True)
-    zlibpacked = blosc.compress(serialized_db_list,
-                                cname='zlib',
-                                clevel=9,
-                                shuffle=blosc.SHUFFLE,
-                                typesize=1)
-    return zlibpacked
+    pck = msgpack.packb(commit_db_key_val_list, use_bin_type=True)
+    raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.BITSHUFFLE, cname='lz4')
+    return raw
 
 
-def commit_ref_raw_val_from_db_val(commit_db_val):
+def commit_ref_raw_val_from_db_val(
+        commit_db_val: bytes) -> Tuple[Tuple[RawDataRecordKey, RawDataRecordVal]]:
     '''Load and decompress a commit ref db_val into python object memory.
 
     Parameters
