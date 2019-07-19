@@ -11,6 +11,7 @@
    tutorial
    design
    api
+   cli
    backends
    contributing
    codeofconduct

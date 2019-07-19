@@ -132,7 +132,7 @@ class REMOTE_50_Handler(object):
         return
 
     @staticmethod
-    def delete_in_process_data(*args, **kwargs):
+    def delete_in_process_data(*args, **kwargs) -> None:
         '''mockup of clearing staged directory for upstream calls.
         '''
         logger.debug(f'delete_in_process_data for REMOTE_50_Handler called.')
@@ -140,8 +140,20 @@ class REMOTE_50_Handler(object):
 
     def read_data(self, hashVal: REMOTE_50_DataHashSpec) -> None:
         raise FileNotFoundError(
-            f'data sample with digest: {hashVal} does not exist on this machine. '
+            f'data hash spec: {REMOTE_50_DataHashSpec} does not exist on this machine. '
             f'Perform a `data-fetch` operation to retrieve it from the remote server.')
 
-    def write_data(self, schema_hash: str = '', *args, **kwargs) -> bytes:
+    def write_data(self, schema_hash: str, *args, **kwargs) -> bytes:
+        '''Provide a formatted byte representation for storage as a remote reference
+
+        Parameters
+        ----------
+        schema_hash : str
+            schema hash which the referenced data sample should be accessed under
+
+        Returns
+        -------
+        bytes
+            formated raw values encoding lookup information
+        '''
         return remote_50_encode(schema_hash=schema_hash)

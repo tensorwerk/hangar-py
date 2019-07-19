@@ -103,7 +103,7 @@ from collections import ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
 from functools import partial
-from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable
+from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable, Pattern
 
 import h5py
 import numpy as np
@@ -152,9 +152,9 @@ logger.info(f'hdf5-blosc available: {hdf5BloscAvail}. Filter opts: {HDF5_FILTER}
 
 _FmtCode = '00'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
-_ShapeFmtRE = re.compile('[,\(\)\[\]]')
+_ShapeFmtRE: Pattern = re.compile('[,\(\)\[\]]')
 # split up a formated parsed string into unique fields
-_SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+_SplitDecoderRE: Pattern = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
 
 HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec',

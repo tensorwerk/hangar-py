@@ -1,4 +1,4 @@
 Local NP Memmap Backend
 =======================
 
-.. automodule:: hangar.backends.np_mmap
+.. automodule:: hangar.backends.numpy_10

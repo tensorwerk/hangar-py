@@ -354,7 +354,7 @@ class Repository(object):
         else:
             print(ppbuf.getvalue())
 
-    def _details(self) -> None:
+    def _details(self) -> None:  # pragma: noqa
         '''DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
         '''
         print(summarize.details(self._env.branchenv).getvalue())

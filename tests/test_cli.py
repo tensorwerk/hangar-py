@@ -12,24 +12,29 @@ from click.testing import CliRunner
 
 from hangar import Repository, cli
 
-help_res = '''Usage: main [OPTIONS] COMMAND [ARGS]...
 
-Options:
-  --help  Show this message and exit.
+# -------------------------------- test data ----------------------------------
 
-Commands:
-  branch      list or create branches
-  clone       Initialize a repository at the current path and fetch data...
-  db-view     display the key/value record pair details from the lmdb database
-  fetch       Retrieve the commit history records for BRANCH from the REMOTE...
-  fetch-data  Download the tensor data from the REMOTE server referenced by...
-  init        Initialize an empty repository at the current path
-  log         show the commit log graph
-  push        Upload local BRANCH commit history / data to REMOTE server.
-  remote
-  server      start a hangar server at the given location
-  summary     show a summary of the repository
-'''
+
+help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
+           '\n'\
+           'Options:\n'\
+           '  --help  Show this message and exit.\n'\
+           '\n'\
+           'Commands:\n'\
+           '  branch      operate on and list branch pointers.\n'\
+           '  clone       Initialize a repository at the current path and fetch updated...\n'\
+           '  fetch       Retrieve the commit history from REMOTE for BRANCH.\n'\
+           '  fetch-data  Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
+           '  init        Initialize an empty repository at the current path\n'\
+           '  log         Display commit graph starting at STARTPOINT (short-digest or...\n'\
+           '  push        Upload local BRANCH commit history / data to REMOTE server.\n'\
+           '  remote      Operations for working with remote server references\n'\
+           '  server      Start a hangar server, initializing one if does not exist.\n'\
+           '  summary     Display content summary at STARTPOINT (short-digest or branch).\n'
+
+
+# ------------------------------- begin tests ---------------------------------
 
 
 def test_help():

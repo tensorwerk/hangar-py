@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+import warnings
 
 import lmdb
 
@@ -141,14 +142,14 @@ def release_writer_lock(branchenv, writer_uuid):
     try:
         currentLockVal = txn.get(writerLockKey)
         if writer_uuid == forceReleaseSentinal:
-            logger.warning('USER WARNING: Writer lock force released.')
+            warnings.warn('Writer lock force successfully force released.', ResourceWarning)
             txn.put(writerLockKey, lockSentinalVal)
             success = True
         elif currentLockVal == requestWriterLockVal:
             txn.put(writerLockKey, lockSentinalVal)
             success = True
         elif currentLockVal == lockSentinalVal:
-            logger.warning('WARNING: The lock is already available, no release is necessary.')
+            warnings.warn('The lock is already available, no release is necessary.', UserWarning)
             success = True
         else:
             success = False

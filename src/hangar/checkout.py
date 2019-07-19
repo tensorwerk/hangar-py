@@ -360,7 +360,7 @@ class WriterCheckout(object):
 
     @property
     def commit_hash(self):
-        '''Commit hash which the staging area of :ref:`branch_name` is based on.
+        '''Commit hash which the staging area of `branch_name` is based on.
 
         Returns
         -------

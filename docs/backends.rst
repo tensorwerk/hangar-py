@@ -24,6 +24,6 @@ Backend Specifications
    :maxdepth: 2
    :titlesonly:
 
-   ./backends/local_hdf5
-   ./backends/local_np_mmap
-   ./backends/remote_unknown
+   ./backends/hdf5_00
+   ./backends/numpy_10
+   ./backends/remote_50

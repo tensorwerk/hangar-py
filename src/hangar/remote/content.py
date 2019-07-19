@@ -1,10 +1,9 @@
-from typing import NamedTuple
+from typing import NamedTuple, Union, Sequence, Tuple, List
 
-import blosc
 import numpy as np
 
 from ..context import Environments, TxnRegister
-from ..backends.selection import BACKEND_ACCESSOR_MAP
+from ..backends import BACKEND_ACCESSOR_MAP
 from ..records import parsing
 
 
@@ -25,7 +24,8 @@ class ContentWriter(object):
 
         self.env: Environments = envs
 
-    def commit(self, commit, parentVal, specVal, refVal):
+    def commit(self, commit: str, parentVal: bytes, specVal: bytes,
+               refVal: bytes) -> Union[str, bool]:
         '''Write a commit record to the ref db
 
         Parameters
@@ -61,7 +61,7 @@ class ContentWriter(object):
         ret = False if not all([cmtParExists, cmtRefExists, cmtSpcExists]) else commit
         return ret
 
-    def schema(self, schema_hash, schemaVal):
+    def schema(self, schema_hash: str, schemaVal: bytes) -> Union[str, bool]:
         '''Write a dataset schema hash specification record to the db
 
         Parameters
@@ -88,14 +88,17 @@ class ContentWriter(object):
         ret = False if not schemaExists else schema_hash
         return ret
 
-    def data(self, schema_hash, recieved_data, backend=None):
+    def data(self,
+             schema_hash: str,
+             recieved_data: Sequence[Tuple[str, np.ndarray]],
+             backend: str = None) -> List[str]:
         '''Write data content to the hash records database
 
         Parameters
         ----------
         schema_hash : str
             schema_hash currently being written
-        recieved_data : list of tuple
+        recieved_data : Sequence[Tuple[str, np.ndarray]]
             list of tuples, each specifying (digest, tensor) for data retrieved
             from the server. However, if a backend is manually specified which
             requires different input to the ``write_data`` method than a tensor,
@@ -108,7 +111,7 @@ class ContentWriter(object):
 
         Returns
         -------
-        list
+        List[str]
             list of str of all data digests written by this method.
         '''
         schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
@@ -140,7 +143,7 @@ class ContentWriter(object):
             TxnRegister().commit_writer_txn(self.env.hashenv)
         return saved_digests
 
-    def label(self, digest, labelVal):
+    def label(self, digest: str, labelVal: bytes) -> Union[str, bool]:
         '''write a metadata / label hash record & content to the db.
 
         Parameters
@@ -152,7 +155,7 @@ class ContentWriter(object):
 
         Returns
         -------
-        str or False
+        Union[str, bool]
             digest if the operation was successful.
 
             False if some content already exists with the same digest in the
@@ -191,7 +194,7 @@ class ContentReader(object):
 
         self.env: Environments = envs
 
-    def commit(self, commit: str) -> RawCommitContent:
+    def commit(self, commit: str) -> Union[RawCommitContent, bool]:
         '''Read a commit with a given hash and get db formatted content
 
         Parameters
@@ -210,6 +213,7 @@ class ContentReader(object):
         cmtRefKey = parsing.commit_ref_db_key_from_raw_key(commit)
         cmtParentKey = parsing.commit_parent_db_key_from_raw_key(commit)
         cmtSpecKey = parsing.commit_spec_db_key_from_raw_key(commit)
+
         reftxn = TxnRegister().begin_reader_txn(self.env.refenv)
         try:
             cmtRefVal = reftxn.get(cmtRefKey, default=False)
@@ -219,12 +223,13 @@ class ContentReader(object):
             TxnRegister().abort_reader_txn(self.env.refenv)
 
         ret = RawCommitContent(commit, cmtParentVal, cmtSpecVal, cmtRefVal)
+
         if not all(ret) and not isinstance(ret.cmtParentVal, bytes):
             return False
         else:
             return ret
 
-    def schema(self, schema_hash):
+    def schema(self, schema_hash: str) -> Union[bytes, bool]:
         '''Read db formatted schema val for a schema hash
 
         Parameters
@@ -249,7 +254,7 @@ class ContentReader(object):
         ret = False if not schemaVal else schemaVal
         return ret
 
-    def label(self, digest):
+    def label(self, digest: str) -> Union[bytes, bool]:
         '''Read db formatted label / metadata val for a label / metadata digest
 
         Parameters

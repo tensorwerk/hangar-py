@@ -1,4 +1,0 @@
-Local HDF5 Backend
-==================
-
-.. automodule:: hangar.backends.hdf5
