@@ -19,7 +19,7 @@ Select an option:
 - [ ] Performance Bottleneck
 
 **To Reproduce**
-Steps to reproduce the behavior, minimal example code preffered:
+Steps to reproduce the behavior, minimal example code prefered:
 
 
 **Expected behavior**
