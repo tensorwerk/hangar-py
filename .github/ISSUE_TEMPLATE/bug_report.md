@@ -19,7 +19,7 @@ Select an option:
 - [ ] Performance Bottleneck
 
 **To Reproduce**
-Steps to reproduce the behavior, minimal example code prefered:
+Steps to reproduce the behavior, minimal example code preferred:
 
 
 **Expected behavior**
@@ -34,7 +34,7 @@ If applicable, add screenshots to help explain your problem.
 
  - OS:
  - Python:
- - Hangar: 
+ - Hangar:
 
 **Additional context**
 Add any other context about the problem here.
