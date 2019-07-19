@@ -22,5 +22,5 @@ python:
       extra_requirements:
           - dev
     - method: setuptools
-      path: hangar
+      path: .
   system_packages: true
