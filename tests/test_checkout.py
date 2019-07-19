@@ -226,7 +226,7 @@ class TestCheckout(object):
         with pytest.raises(PermissionError):
             co.metadata.add('a', 'b')
 
-    @pytest.mark.parametrize("dset_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_operate_on_dataset_samples_after_commiting_but_not_closing_checkout(self, dset_backend, repo, array5by7):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset_backend)
@@ -258,8 +258,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             md['hello']
 
-    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
-    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '10'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '10'])
     def test_operate_on_datasets_after_commiting_but_not_closing_checkout(self, dset1_backend, dset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         dsets = co.datasets
@@ -292,8 +292,8 @@ class TestCheckout(object):
         repo.checkout(True)  # This should not raise any excpetion
 
 
-    @pytest.mark.parametrize("dset1_backend", ['00', '01'])
-    @pytest.mark.parametrize("dset2_backend", ['00', '01'])
+    @pytest.mark.parametrize("dset1_backend", ['00', '10'])
+    @pytest.mark.parametrize("dset2_backend", ['00', '10'])
     def test_reset_staging_area_clears_datasets(self, dset1_backend, dset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         dset = co.datasets.init_dataset('dset', prototype=array5by7, backend=dset1_backend)
@@ -480,3 +480,41 @@ class TestBranching(object):
         assert h2['head'] == h3['head']
         assert h2['ancestors'][h2['head']] == h3['ancestors'][h3['head']]
         assert h1['head'] in h2['ancestors'][h2['head']]
+
+    def test_cannot_checkout_branch_with_staged_changes(self, written_repo, array5by7):
+        branch1 = written_repo.create_branch('testbranch1')
+        branch2 = written_repo.create_branch('testbranch2')
+        co1 = written_repo.checkout(write=True, branch_name=branch1)
+        initial_cmt = co1.commit_hash
+        co1.datasets.init_dataset('dset2', prototype=array5by7)
+        co1.datasets['dset2']['2'] = array5by7
+        co1.close()
+
+        with pytest.raises(ValueError):
+            con = written_repo.checkout(write=True, branch_name=branch2)
+
+        co1 = written_repo.checkout(write=True, branch_name=branch1)
+        co1.commit('hi')
+        assert co1.commit_hash != initial_cmt
+        assert co1.branch_name == branch1
+        co1.close()
+
+        co2 = written_repo.checkout(write=True, branch_name=branch2)
+        assert co2.branch_name == branch2
+        assert co2.commit_hash == initial_cmt
+        co2.close()
+
+
+def test_full_from_short_commit_digest(written_two_cmt_repo):
+    from hangar.records.commiting import expand_short_commit_digest
+
+    repo = written_two_cmt_repo
+    history = repo.log(branch_name='master', return_contents=True)
+    commits = history['order']
+    for full_cmt in commits:
+        short_cmt = full_cmt[:18]
+        found_cmt = expand_short_commit_digest(repo._env.refenv, short_cmt)
+        assert found_cmt == full_cmt
+
+    with pytest.raises(KeyError):
+        expand_short_commit_digest(repo._env.refenv, 'zzzzzzzzzzzzzzzzzzzzzzzzzzzz')

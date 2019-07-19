@@ -1,23 +1,27 @@
 import logging
-from typing import MutableMapping
+from typing import MutableMapping, Optional, NamedTuple, Tuple, Union
 from collections import namedtuple
 from functools import partial
+
+import lmdb
 
 from .records import commiting, heads, parsing
 from .records.queries import RecordQuery
 
 logger = logging.getLogger(__name__)
 
-HistoryDiffStruct = namedtuple(
-    'HistoryDiffStruct', ['masterHEAD', 'devHEAD', 'ancestorHEAD', 'canFF'])
+HistoryDiffStruct = NamedTuple('HistoryDiffStruct', [('masterHEAD', str),
+                                                     ('devHEAD', str),
+                                                     ('ancestorHEAD', str),
+                                                     ('canFF', bool)])
 
 
 class BaseUserDiff(object):
 
-    def __init__(self, branchenv, refenv, *args, **kwargs):
+    def __init__(self, branchenv: lmdb.Environment, refenv: lmdb.Environment, *args, **kwargs):
 
-        self._branchenv = branchenv
-        self._refenv = refenv
+        self._branchenv: lmdb.Environment = branchenv
+        self._refenv: lmdb.Environment = refenv
 
     def _determine_ancestors(self, mHEAD: str, dHEAD: str) -> HistoryDiffStruct:
         '''Search the commit history to determine the closest common ancestor.
@@ -144,13 +148,13 @@ class ReaderUserDiff(BaseUserDiff):
 
 class WriterUserDiff(BaseUserDiff):
 
-    def __init__(self, stageenv, branch_name, *args, **kwargs):
+    def __init__(self, stageenv: lmdb.Environment, branch_name: str, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-        self._stageenv = stageenv
-        self._branch_name = branch_name
+        self._stageenv: lmdb.Environment = stageenv
+        self._branch_name: str = branch_name
 
-    def status(self):
+    def status(self) -> str:
         '''Determine if changes have been made in the staging area
 
         If the contents of the staging area and it's parent commit are the same,
@@ -394,12 +398,14 @@ def _meta_mutation_finder(a_unchanged_kv: dict, d_unchanged_kv: dict) -> set:
 # -------------------- Dataset Schemas Differ ---------------------------------
 
 
-DatasetSchemaRecord = namedtuple('DatasetSchemaRecord',
-                                 field_names=[
-                                     'dset_name', 'schema_hash',
-                                     'schema_dtype', 'schema_is_var',
-                                     'schema_max_shape', 'schema_is_named'
-                                 ])
+DatasetSchemaRecord = NamedTuple('DatasetSchemaRecord', [
+    ('dset_name', str),
+    ('schema_hash', str),
+    ('schema_dtype', int),
+    ('schema_is_var', bool),
+    ('schema_max_shape', Tuple[int]),
+    ('schema_is_named', bool),
+])
 
 
 def _isolate_dset_schemas(dataset_specs: dict) -> dict:
@@ -516,8 +522,12 @@ def _samples_mutation_finder(a_unchanged_kv: dict, d_unchanged_kv: dict) -> set:
 # ------------------------- Commit Differ -------------------------------------
 
 
-ConflictRecords = namedtuple(
-    'ConflictRecords', field_names=['t1', 't21', 't22', 't3', 'conflict'])
+ConflictRecords = NamedTuple('ConflictRecords',
+                             [('t1', Tuple[Union[str, int]]),
+                              ('t21', Tuple[Union[str, int]]),
+                              ('t22', Tuple[Union[str, int]]),
+                              ('t3', Tuple[Union[str, int]]),
+                              ('conflict', bool)])
 ConflictRecords.__doc__ = 'Four types of conflicts are accessible through this object.'
 ConflictRecords.t1.__doc__ = 'Addition of key in master AND dev with different values.'
 ConflictRecords.t21.__doc__ = 'Removed key in master, mutated value in dev.'
@@ -534,10 +544,10 @@ class ThreeWayCommitDiffer(object):
         self.mcont = master_contents    # master contents
         self.dcont = dev_contents       # dev contents
 
-        self.am_dsetD: DifferBase = None   # ancestor -> master dset diff
-        self.ad_dsetD: DifferBase = None   # ancestor -> dev dset diff
-        self.am_metaD: DifferBase = None  # ancestor -> master metadata diff
-        self.ad_metaD: DifferBase = None  # ancestor -> dev metadata diff
+        self.am_dsetD: Optional[DifferBase] = None   # ancestor -> master dset diff
+        self.ad_dsetD: Optional[DifferBase] = None   # ancestor -> dev dset diff
+        self.am_metaD: Optional[DifferBase] = None  # ancestor -> master metadata diff
+        self.ad_metaD: Optional[DifferBase] = None  # ancestor -> dev metadata diff
         self.am_sampD: MutableMapping[str, DifferBase] = {}
         self.ad_sampD: MutableMapping[str, DifferBase] = {}
 
@@ -559,12 +569,12 @@ class ThreeWayCommitDiffer(object):
         self.ad_metaD.d_data = self.dcont['metadata']
         self.ad_metaD.compute()
 
-    def meta_conflicts(self):
+    def meta_conflicts(self) -> ConflictRecords:
         '''
-        # t1: added in master & dev with different values
-        # t21: removed in master, mutated in dev
-        # t22: removed in dev, mutated in master
-        # t3: mutated in master & dev to different values
+        t1: added in master & dev with different values
+        t21: removed in master, mutated in dev
+        t22: removed in dev, mutated in master
+        t3: mutated in master & dev to different values
         '''
         out, tempt1, tempt3 = {}, [], []
 
@@ -614,12 +624,12 @@ class ThreeWayCommitDiffer(object):
         self.ad_dsetD.d_data = _isolate_dset_schemas(self.dcont['datasets'])
         self.ad_dsetD.compute()
 
-    def dataset_conflicts(self):
+    def dataset_conflicts(self) -> ConflictRecords:
         '''
-        # t1: added in master & dev with different values
-        # t21: removed in master, mutated in dev
-        # t22: removed in dev, mutated in master
-        # t3: mutated in master & dev to different values
+        t1: added in master & dev with different values
+        t21: removed in master, mutated in dev
+        t22: removed in dev, mutated in master
+        t3: mutated in master & dev to different values
         '''
         out, tempt1, tempt3 = {}, [], []
 
@@ -702,12 +712,12 @@ class ThreeWayCommitDiffer(object):
             self.ad_sampD[dset_name].d_data = {}
             self.ad_sampD[dset_name].compute()
 
-    def sample_conflicts(self):
+    def sample_conflicts(self) -> ConflictRecords:
         '''
-        # t1: added in master & dev with different values
-        # t21: removed in master, mutated in dev
-        # t22: removed in dev, mutated in master
-        # t3: mutated in master & dev to different values
+        t1: added in master & dev with different values
+        t21: removed in master, mutated in dev
+        t22: removed in dev, mutated in master
+        t3: mutated in master & dev to different values
         '''
         out = {}
         all_dset_names = set(self.ad_sampD.keys()).union(set(self.am_sampD.keys()))

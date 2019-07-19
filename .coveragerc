@@ -8,6 +8,7 @@ source =
     tests
 parallel = true
 omit =
+    src/hangar/__main__.py
     src/hangar/remote/hangar_service_pb2.py
     src/hangar/remote/hangar_service_pb2_grpc.py
     src/hangar/remote/run_proto_codegen.py

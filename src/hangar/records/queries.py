@@ -1,7 +1,13 @@
+from typing import Iterable, Tuple, Iterator, Set
+
+import lmdb
+
 from . import parsing
+from .parsing import RawDataRecordKey, RawDataRecordVal
 from .. import constants as c
 from ..context import TxnRegister
 
+RawDataTuple = Tuple[RawDataRecordKey, RawDataRecordVal]
 
 '''
 Data record queries
@@ -11,12 +17,12 @@ Data record queries
 
 class RecordQuery(object):
 
-    def __init__(self, dataenv):
+    def __init__(self, dataenv: lmdb.Environment):
         self._dataenv = dataenv
 
 # ------------------ traversing the unpacked records ------------------------------------
 
-    def _traverse_all_records(self):
+    def _traverse_all_records(self) -> Iterator[RawDataTuple]:
         '''Pull out all records in the database as a tuple of binary encoded
 
         Returns
@@ -138,7 +144,7 @@ class RecordQuery(object):
         dataset_names = list(map(parsing.dataset_record_schema_raw_key_from_db_key, recs.keys()))
         return dataset_names
 
-    def dataset_data_records(self, dataset_name):
+    def dataset_data_records(self, dataset_name: str) -> Iterator[RawDataTuple]:
         '''Returns the raw data record key and record values for a specific dataset.
 
         Parameters
@@ -146,16 +152,16 @@ class RecordQuery(object):
         dataset_name : str
             name of the dataset to pull records for
 
-        Returns
-        -------
-        dict of namedtuple
-            dict of key and value data record specs
+        Yields
+        ------
+        tuple
+            generator of key and value data record specs
         '''
         recs = self._traverse_dataset_data_records(dataset_name)
         if len(recs) > 0:
             data_rec_keys = map(parsing.data_record_raw_key_from_db_key, recs.keys())
             data_rec_vals = map(parsing.data_record_raw_val_from_db_val, recs.values())
-            recs = dict(zip(data_rec_keys, data_rec_vals))
+            recs = zip(data_rec_keys, data_rec_vals)
         return recs
 
     def dataset_data_names(self, dataset_name):
@@ -180,7 +186,7 @@ class RecordQuery(object):
         data_names = list(map(lambda x: x.data_name, data_key_rec))
         return data_names
 
-    def dataset_data_hashes(self, dataset_name):
+    def dataset_data_hashes(self, dataset_name: str) -> Set[RawDataRecordVal]:
         '''Find all data hashes contained within a particular dataset
 
         Note: this method does not remove any duplicates which may be present,
@@ -196,14 +202,12 @@ class RecordQuery(object):
         list
             all hash values for all data pieces in the dataset
         '''
-        all_hashes = []
         recs = self._traverse_dataset_data_records(dataset_name)
         data_val_rec = map(parsing.data_record_raw_val_from_db_val, recs.values())
-        data_hashes = map(lambda x: x.data_hash, data_val_rec)
-        all_hashes.extend(data_hashes)
+        all_hashes = set(data_val_rec)
         return all_hashes
 
-    def data_hashes(self) -> list:
+    def data_hashes(self) -> Set[RawDataRecordVal]:
         '''Find all data hashes contained within all datasets
 
         Note: this method does not remove any duplicates which may be present,
@@ -215,12 +219,11 @@ class RecordQuery(object):
             all hash values for all data pieces in the commit
         '''
         datasets = self.dataset_names()
-        all_hashes = []
+        all_hashes = set()
         for dataset in datasets:
             recs = self._traverse_dataset_data_records(dataset)
-            data_val_rec = map(parsing.data_record_raw_val_from_db_val, recs.values())
-            data_hashes = map(lambda x: x.data_hash, data_val_rec)
-            all_hashes.extend(data_hashes)
+            data_val_rec = set(map(parsing.data_record_raw_val_from_db_val, recs.values()))
+            all_hashes.update(data_val_rec)
         return all_hashes
 
 # ------------------------- process schema ----------------------------------------------
@@ -290,11 +293,11 @@ class RecordQuery(object):
         dsetns = self.dataset_names()
         odict = {}
         for dsetn in dsetns:
-            dset_hashs = set(self.dataset_data_hashes(dsetn))
+            dset_hash_vals = self.dataset_data_hashes(dsetn)
             dset_schema_spec = self.dataset_schema_spec(dsetn)
             dset_schema_hash = dset_schema_spec.schema_hash
-            for dset_hash in dset_hashs:
-                odict[dset_hash] = dset_schema_hash
+            for dset_hash_val in dset_hash_vals:
+                odict[dset_hash_val.data_hash] = dset_schema_hash
 
         return odict
 
@@ -372,7 +375,7 @@ class RecordQuery(object):
         for dsetName in dset_names:
             dsetRecs[dsetName] = {
                 'schema': schema_records[dsetName],
-                'data': self.dataset_data_records(dsetName),
+                'data': dict(self.dataset_data_records(dsetName)),
             }
 
         res = {

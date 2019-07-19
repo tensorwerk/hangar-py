@@ -46,7 +46,7 @@ thing which is present: A branch with the name: ``"master"``.
 
 .. code:: python
 
-   >>> repo.list_branch_names()
+   >>> repo.list_branches()
    ['master']
 
 
@@ -174,7 +174,7 @@ our initial commit
 
 .. code:: python
 
-   >>> print(f'branch names: {repo.list_branch_names()} \n')
+   >>> print(f'branch names: {repo.list_branches()} \n')
    branch names: ['master', 'testbranch']
 
    >>> repo.log()

@@ -3,7 +3,7 @@ import numpy as np
 
 
 @pytest.mark.parametrize('prototype,expected_backend', [
-    [np.random.randn(10), '01'],
+    [np.random.randn(10), '10'],
     [np.random.randn(1000), '00'],
     [np.random.randn(2, 2), '00'],
     [np.random.randn(5, 2), '00'],
@@ -28,11 +28,11 @@ def test_heuristics_select_backend(repo, prototype, expected_backend):
 
 @pytest.mark.parametrize('prototype,backend', [
     [np.random.randn(10), '00'],
-    [np.random.randn(10), '01'],
+    [np.random.randn(10), '10'],
     [np.random.randn(1000), '00'],
-    [np.random.randn(1000), '01'],
+    [np.random.randn(1000), '10'],
     [np.random.randn(2, 2), '00'],
-    [np.random.randn(2, 2), '01'],
+    [np.random.randn(2, 2), '10'],
 ])
 def test_manual_override_heuristics_select_backend(repo, prototype, backend):
 

@@ -4,19 +4,29 @@ from shutil import move
 
 from grpc_tools import protoc
 
-protoPath = os.path.dirname(__file__)
-os.environ.putenv('PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', 'cpp')
+
+# ------------------------- output locations ----------------------------------
+
+
+toolsPath = os.path.dirname(__file__)
+srcPath = os.path.normpath(os.path.join(toolsPath, os.path.pardir, 'src'))
+
+hangarProtoDir = os.path.join(srcPath, 'hangar', 'remote')
+hangarProtoPath = os.path.join(hangarProtoDir, 'hangar_service.proto')
+if not os.path.isfile(hangarProtoPath):
+    raise FileNotFoundError(f'Cannot access hangar_service.proto at: {hangarProtoPath}')
 
 # ------------------------ hangar service -------------------------------------
 
-hangar_service_path = os.path.join(protoPath, 'hangar_service.proto')
+os.environ.putenv('PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', 'cpp')
 # generates hangar service protobuf for python
 protoc.main((
     '',
-    '-I.',
-    '--python_out=.',
-    '--grpc_python_out=.',
-    hangar_service_path,
+    f'-I{hangarProtoDir}',
+    f'--python_out={hangarProtoDir}',
+    f'--grpc_python_out={hangarProtoDir}',
+    f'--mypy_out={hangarProtoDir}',
+    hangarProtoPath,
 ))
 
 '''
@@ -25,8 +35,8 @@ in the Google protoc compiler), we have to replace the 'import foo_grpc' line
 with the 'from . import foo' line in the generated grpc code.
 '''
 
-hangar_service_grpc_path_orig = os.path.join(protoPath, 'hangar_service_pb2_grpc.py')
-hangar_service_grpc_path_old = os.path.join(protoPath, 'hangar_service_pb2_grpc.py.old')
+hangar_service_grpc_path_orig = os.path.join(hangarProtoDir, 'hangar_service_pb2_grpc.py')
+hangar_service_grpc_path_old = os.path.join(hangarProtoDir, 'hangar_service_pb2_grpc.py.old')
 move(hangar_service_grpc_path_orig, hangar_service_grpc_path_old)
 with open(hangar_service_grpc_path_orig, 'w') as new_file:
     with open(hangar_service_grpc_path_old, 'r+') as old_file:

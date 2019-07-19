@@ -1,27 +1,32 @@
-'''Local HDF5 Backend Implementation, Identifier: HDF5_00
+'''Local HDF5 Backend Implementation, Identifier: ``HDF5_00``
 
 Backend Identifiers
 ===================
 
-* Format Code: 00
-* Canonical Name: HDF5_00
+*  Backend: ``0``
+*  Version: ``0``
+*  Format Code: ``00``
+*  Canonical Name: ``HDF5_00``
 
 Storage Method
 ==============
 
-* Data is written to specific subarray indexes inside an HDF5 "dataset" in a
-  single HDF5 File.
+*  Data is written to specific subarray indexes inside an HDF5 "dataset" in a
+   single HDF5 File.
 
-* In each HDF5 File there are COLLECTION_COUNT "datasets" (named ["0" :
-  "{COLLECTION_COUNT}"]). These are refered to as "dataset number"
+*  In each HDF5 File there are ``COLLECTION_COUNT`` "datasets" (named ``["0" :
+   "{COLLECTION_COUNT}"]``). These are referred to as ``"dataset number"``
 
-* Each dataset is a zero-initialized array of
-  * dtype: {schema_dtype}; ie "np.float32" or "np.uint8"
-  * shape: (COLLECTION_SIZE, *{schema_shape}); ie "(500, 10)" or "(500, 4, 3)".
-    The first index in the dataset is refered to as a "collection index".
+*  Each dataset is a zero-initialized array of:
 
-* Compression Filters, Chunking Configuration/Options are applied globally for
-  all "datasets" in a file at dataset creation time.
+   *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
+
+   *  ``shape: (COLLECTION_SIZE, *{schema_shape})``; ie ``(500, 10)`` or ``(500,
+      4, 3)``. The first index in the dataset is referred to as a ``collection
+      index``.
+
+*  Compression Filters, Chunking Configuration/Options are applied globally for
+   all ``datasets`` in a file at dataset creation time.
 
 Record Format
 =============
@@ -29,59 +34,64 @@ Record Format
 Fields Recorded for Each Array
 ------------------------------
 
-* Format Code
-* File UID
-* Dataset Number (0:COLLECTION_COUNT dataset selection)
-* Collection Index (0:COLLECTION_SIZE dataset subarray selection)
-* Subarray Shape
+*  Format Code
+*  File UID
+*  Dataset Number (``0:COLLECTION_COUNT`` dataset selection)
+*  Collection Index (``0:COLLECTION_SIZE`` dataset subarray selection)
+*  Subarray Shape
 
-Seperators used
+Separators used
 ---------------
 
-* SEP_KEY
-* SEP_HSH
-* SEP_LST
-* SEP_SLC
+*  ``SEP_KEY``
+*  ``SEP_HSH``
+*  ``SEP_LST``
+*  ``SEP_SLC``
 
 Examples
 --------
 
-Note: all examples use SEP_KEY: ":", SEP_HSH: "$", SEP_LST: " ", SEP_SLC: "*"
+Note: all examples use ``SEP_KEY: ":"``, ``SEP_HSH: "$"``, ``SEP_LST: " "``,
+``SEP_SLC: "*"``
 
-1) Adding the first piece of data to a file:
+1)  Adding the first piece of data to a file:
 
-   * Array shape (Subarray Shape): (10)
-   * File UID: "2HvGf9"
-   * Dataset Number: "0"
-   * Collection Index: 0
+    *  Array shape (Subarray Shape): (10)
+    *  File UID: "2HvGf9"
+    *  Dataset Number: "0"
+    *  Collection Index: 0
 
-   Record Data => "00:2HvGf9$0 0*10"
+   ``Record Data => "00:2HvGf9$0 0*10"``
 
-1) Adding to a piece of data to a the middle of a file:
+1)  Adding to a piece of data to a the middle of a file:
 
-   * Array shape (Subarray Shape): (20, 2, 3)
-   * File UID: "WzUtdu"
-   * Dataset Number: "3"
-   * Collection Index: 199
+    *  Array shape (Subarray Shape): (20, 2, 3)
+    *  File UID: "WzUtdu"
+    *  Dataset Number: "3"
+    *  Collection Index: 199
 
-   Record Data => "00:WzUtdu$3 199*20 2 3"
+    ``Record Data => "00:WzUtdu$3 199*20 2 3"``
 
 
 Technical Notes
 ===============
 
-* Files are read only after initial creation/writes. Only a write-enabled
-  checkout can open a HDF5 file in "w" or "a" mode, and writer checkouts create
-  new files on every checkout, and make no attempt to fill in unset locations in
-  previous files. This is not an issue as no disk space is used until data is
-  written to the initially created "zero-initialized" collection datasets
+*  Files are read only after initial creation/writes. Only a write-enabled
+   checkout can open a HDF5 file in ``"w"`` or ``"a"`` mode, and writer
+   checkouts create new files on every checkout, and make no attempt to fill in
+   unset locations in previous files. This is not an issue as no disk space is
+   used until data is written to the initially created "zero-initialized"
+   collection datasets
 
-* On write: Single Writer Multipe Reader (SWMR) mode is set to ensure that
-  improper closing (not calling `.close()`) method does not corrupt any data
-  which had been previously flushed to the file.
+*  On write: Single Writer Multiple Reader (``SWMR``) mode is set to ensure that
+   improper closing (not calling ``.close()``) method does not corrupt any data
+   which had been previously flushed to the file.
 
-* On read: SWMR is set to allow multiple readers (in different threads /
-  processes) to read from the same file.
+*  On read: SWMR is set to allow multiple readers (in different threads /
+   processes) to read from the same file. File handle serialization is handled
+   via custom python ``pickle`` serialization/reduction logic which is
+   implemented by the high level ``pickle`` reduction ``__set_state__()``,
+   ``__get_state__()`` class methods.
 '''
 
 import logging
@@ -89,38 +99,41 @@ import math
 import os
 import re
 import time
-from collections import namedtuple, ChainMap
+from collections import ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
 from functools import partial
-from typing import MutableMapping
+from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable, Pattern
 
 import h5py
 import numpy as np
 
 from .. import __version__
 from .. import constants as c
-from ..utils import find_next_prime, symlink_rel, random_string
+from ..utils import find_next_prime, symlink_rel, random_string, set_blosc_nthreads
 
 logger = logging.getLogger(__name__)
+set_blosc_nthreads()
+
 
 # ----------------------------- Configuration ---------------------------------
 
+
 # contents of a single hdf5 file
-COLLECTION_SIZE = 500
+COLLECTION_SIZE = 250
 COLLECTION_COUNT = 100
 
 # chunking options for compression schemes
-CHUNK_MAX_NBYTES = 400_000
+CHUNK_MAX_NBYTES = 200_000  # < 256 KB to fit in L2 CPU Cache
 CHUNK_MAX_RDCC_NBYTES = 100_000_000
 CHUNK_RDCC_W0 = 0.75
 
 # filter definition and backup selection if not available.
-filter_options = {
+filter_opts = {
     'default': {
-        'shuffle': True,
+        'shuffle': 'bit',
         'complib': 'blosc:lz4',
-        'complevel': 5,
+        'complevel': 7,
         'fletcher32': True},
     'backup': {
         'shuffle': True,
@@ -128,94 +141,94 @@ filter_options = {
         'complevel': None,
         'fletcher32': True},
 }
-if filter_options['default']['complib'].startswith('blosc'):
-    bloscFilterAvail = h5py.h5z.filter_avail(32001)
-    if not bloscFilterAvail:
-        HDF5_FILTER = filter_options['backup']
-    else:
-        HDF5_FILTER = filter_options['default']
+hdf5BloscAvail = h5py.h5z.filter_avail(32001)
+HDF5_FILTER = filter_opts['default'] if hdf5BloscAvail else filter_opts['backup']
+
+logger.info(f'hdf5-blosc available: {hdf5BloscAvail}. Filter opts: {HDF5_FILTER}')
+
 
 # -------------------------------- Parser Implementation ----------------------
 
-DataHashSpec = namedtuple(
-    typename='DataHashSpec',
-    field_names=['backend', 'uid', 'dataset', 'dataset_idx', 'shape'])
+
+_FmtCode = '00'
+# match and remove the following characters: '['   ']'   '('   ')'   ','
+_ShapeFmtRE: Pattern = re.compile('[,\(\)\[\]]')
+# split up a formated parsed string into unique fields
+_SplitDecoderRE: Pattern = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
 
-class HDF5_00_Parser(object):
+HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec',
+                                  [('backend', str), ('uid', str),
+                                   ('dataset', str), ('dataset_idx', int),
+                                   ('shape', Tuple[int])])
 
-    __slots__ = ['FmtCode', 'SplitDecoderRE', 'ShapeFmtRE']
 
-    def __init__(self):
+def hdf5_00_encode(uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) -> bytes:
+    '''converts the hdf5 data has spec to an appropriate db value
 
-        self.FmtCode = '00'
-        # match and remove the following characters: '['   ']'   '('   ')'   ','
-        self.ShapeFmtRE = re.compile('[,\(\)\[\]]')
-        self.SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+    Parameters
+    ----------
+    uid : str
+        the file name prefix which the data is written to.
+    dataset : str
+        collection (ie. hdf5 dataset) name to find this data piece.
+    dataset_idx : int
+        collection first axis index in which this data piece resides.
+    shape : Tuple[int]
+        shape of the data sample written to the collection idx. ie:
+        what subslices of the hdf5 dataset should be read to retrieve
+        the sample as recorded.
 
-    def encode(self, uid, dataset, dataset_idx, shape) -> bytes:
-        '''converts the hdf5 data has spec to an appropriate db value
+    Returns
+    -------
+    bytes
+        hash data db value recording all input specifications.
+    '''
+    out_str = f'{_FmtCode}{c.SEP_KEY}{uid}'\
+              f'{c.SEP_HSH}'\
+              f'{dataset}{c.SEP_LST}{dataset_idx}'\
+              f'{c.SEP_SLC}'\
+              f'{_ShapeFmtRE.sub("", str(shape))}'
+    return out_str.encode()
 
-        Parameters
-        ----------
-        uid : str
-            the file name prefix which the data is written to.
-        dataset : str
-            collection (ie. hdf5 dataset) name to find this data piece.
-        dataset_idx : int or str
-            collection first axis index in which this data piece resides.
-        shape : tuple
-            shape of the data sample written to the collection idx. ie:
-            what subslices of the hdf5 dataset should be read to retrieve
-            the sample as recorded.
 
-        Returns
-        -------
-        bytes
-            hash data db value recording all input specifications.
-        '''
-        out_str = f'{self.FmtCode}{c.SEP_KEY}{uid}'\
-                  f'{c.SEP_HSH}'\
-                  f'{dataset}{c.SEP_LST}{dataset_idx}'\
-                  f'{c.SEP_SLC}'\
-                  f'{self.ShapeFmtRE.sub("", str(shape))}'
-        return out_str.encode()
+def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
+    '''converts an hdf5 data hash db val into an hdf5 data python spec.
 
-    def decode(self, db_val: bytes) -> namedtuple:
-        '''converts an hdf5 data hash db val into an hdf5 data python spec.
+    Parameters
+    ----------
+    db_val : bytestring
+        data hash db value
 
-        Parameters
-        ----------
-        db_val : bytestring
-            data hash db value
-
-        Returns
-        -------
-        namedtuple
-            hdf5 data hash specification containing `backend`, `schema`,
-            `instance`, `dataset`, `dataset_idx`, `shape`
-        '''
-        db_str = db_val.decode()
-        _, uid, dataset_vs, shape_vs = self.SplitDecoderRE.split(db_str)
-        dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
-        # if the data is of empty shape -> shape_vs = '' str.split() default
-        # value of none means split according to any whitespace, and discard
-        # empty strings from the result. So long as c.SEP_LST = ' ' this will
-        # work
-        shape = tuple(int(x) for x in shape_vs.split())
-        raw_val = DataHashSpec(backend=self.FmtCode,
-                               uid=uid,
-                               dataset=dataset,
-                               dataset_idx=dataset_idx,
-                               shape=shape)
-        return raw_val
+    Returns
+    -------
+    HDF5_00_DataHashSpec
+        hdf5 data hash specification containing `backend`, `schema`,
+        `instance`, `dataset`, `dataset_idx`, `shape`
+    '''
+    db_str = db_val.decode()
+    _, uid, dataset_vs, shape_vs = _SplitDecoderRE.split(db_str)
+    dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
+    # if the data is of empty shape -> shape_vs = '' str.split() default value
+    # of none means split according to any whitespace, and discard empty strings
+    # from the result. So long as c.SEP_LST = ' ' this will work
+    shape = tuple(int(x) for x in shape_vs.split())
+    raw_val = HDF5_00_DataHashSpec(backend=_FmtCode,
+                                   uid=uid,
+                                   dataset=dataset,
+                                   dataset_idx=int(dataset_idx),
+                                   shape=shape)
+    return raw_val
 
 
 # ------------------------- Accessor Object -----------------------------------
 
 
+HDF5_00_MapTypes = MutableMapping[str, Union[h5py.File, Callable[[], h5py.File]]]
+
+
 class HDF5_00_FileHandles(object):
-    '''Singleton to manage HDF5 file handles.
+    '''Manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
     "writeable" state. This is an issue where multiple datasets may need to
@@ -223,29 +236,28 @@ class HDF5_00_FileHandles(object):
     '''
 
     def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
-        self.repo_path = repo_path
-        self.schema_shape = schema_shape
-        self.schema_dtype = schema_dtype
+        self.path: os.PathLike = repo_path
+        self.schema_shape: tuple = schema_shape
+        self.schema_dtype: np.dtype = schema_dtype
 
-        self.rFp: MutableMapping[str, h5py.File] = {}
-        self.wFp: MutableMapping[str, h5py.File] = {}
-        self.Fp = ChainMap(self.rFp, self.wFp)
+        self.rFp: HDF5_00_MapTypes = {}
+        self.wFp: HDF5_00_MapTypes = {}
+        self.Fp: HDF5_00_MapTypes = ChainMap(self.rFp, self.wFp)
 
-        self.mode: str = None
-        self.hIdx: int = None
-        self.w_uid: str = None
-        self.hMaxSize: int = None
-        self.hNextPath: int = None
-        self.hColsRemain: int = None
+        self.mode: Optional[str] = None
+        self.hIdx: Optional[int] = None
+        self.w_uid: Optional[str] = None
+        self.hMaxSize: Optional[int] = None
+        self.hNextPath: Optional[int] = None
+        self.hColsRemain: Optional[int] = None
 
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
-        self.fmtParser = HDF5_00_Parser()
 
-        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, self.fmtParser.FmtCode)
-        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, self.fmtParser.FmtCode)
-        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, self.fmtParser.FmtCode)
-        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, self.fmtParser.FmtCode)
+        self.STAGEDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_STAGE, _FmtCode)
+        self.REMOTEDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_REMOTE, _FmtCode)
+        self.DATADIR: os.PathLike = pjoin(self.path, c.DIR_DATA, _FmtCode)
+        self.STOREDIR: os.PathLike = pjoin(self.path, c.DIR_DATA_STORE, _FmtCode)
         if not os.path.isdir(self.DATADIR):
             os.makedirs(self.DATADIR)
 
@@ -258,24 +270,24 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
             self.wFp[self.w_uid].flush()
 
-    def __getstate__(self):
-        '''ensure multiprocess operations can pickle relevant data. need tests'''
+    def __getstate__(self) -> dict:
+        '''ensure multiprocess operations can pickle relevant data.
+        '''
         self.close()
         time.sleep(0.1)  # buffer time
         state = self.__dict__.copy()
         del state['rFp']
         del state['wFp']
         del state['Fp']
-        del state['fmtParser']
         return state
 
-    def __setstate__(self, state):
-        '''ensure multiprocess operations can pickle relevant data. need tests'''
+    def __setstate__(self, state: dict) -> None:
+        '''ensure multiprocess operations can pickle relevant data.
+        '''
         self.__dict__.update(state)
         self.rFp = {}
         self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
-        self.fmtParser = HDF5_00_Parser()
         self.open(self.mode)
 
     def open(self, mode: str, *, remote_operation: bool = False):
@@ -346,7 +358,7 @@ class HDF5_00_FileHandles(object):
             del self.rFp[uid]
 
     @staticmethod
-    def delete_in_process_data(repo_path, *, remote_operation=False):
+    def delete_in_process_data(repo_path: os.PathLike, *, remote_operation=False) -> None:
         '''Removes some set of files entirely from the stage/remote directory.
 
         DANGER ZONE. This should essentially only be used to perform hard resets
@@ -354,16 +366,15 @@ class HDF5_00_FileHandles(object):
 
         Parameters
         ----------
-        repo_path : str
+        repo_path : os.PathLike
             path to the repository on disk
         remote_operation : optional, kwarg only, bool
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
         '''
-        FmtCode = HDF5_00_Parser().FmtCode
-        data_dir = pjoin(repo_path, c.DIR_DATA, FmtCode)
+        data_dir = pjoin(repo_path, c.DIR_DATA, _FmtCode)
         PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
-        process_dir = pjoin(repo_path, PDIR, FmtCode)
+        process_dir = pjoin(repo_path, PDIR, _FmtCode)
         if not os.path.isdir(process_dir):
             return
 
@@ -376,7 +387,7 @@ class HDF5_00_FileHandles(object):
         os.rmdir(process_dir)
 
     @staticmethod
-    def _dataset_opts(complib, complevel, shuffle, fletcher32):
+    def _dataset_opts(complib: str, complevel: int, shuffle: Union[bool, str], fletcher32: bool) -> dict:
         '''specify compression options for the hdf5 dataset.
 
         .. seealso:: :function:`_blosc_opts`
@@ -424,7 +435,7 @@ class HDF5_00_FileHandles(object):
         return args
 
     @staticmethod
-    def _chunk_opts(sample_array, max_chunk_nbytes):
+    def _chunk_opts(sample_array: np.ndarray, max_chunk_nbytes: int) -> Tuple[list, int]:
         '''Determine the chunk shape so each array chunk fits into configured nbytes.
 
         Currently the chunk nbytes are not user configurable. Instead the constant
@@ -506,7 +517,7 @@ class HDF5_00_FileHandles(object):
             sample_array=sample_array,
             max_chunk_nbytes=CHUNK_MAX_NBYTES)
 
-        rdcc_nbytes_val = math.ceil((sample_array.nbytes / chunk_nbytes) * chunk_nbytes * 10)
+        rdcc_nbytes_val = sample_array.nbytes * COLLECTION_SIZE
         if rdcc_nbytes_val < CHUNK_MAX_NBYTES:
             rdcc_nbytes_val = CHUNK_MAX_NBYTES
         elif rdcc_nbytes_val > CHUNK_MAX_RDCC_NBYTES:
@@ -577,13 +588,13 @@ class HDF5_00_FileHandles(object):
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
 
-    def read_data(self, hashVal) -> np.ndarray:
+    def read_data(self, hashVal: HDF5_00_DataHashSpec) -> np.ndarray:
         '''Read data from an hdf5 file handle at the specified locations
 
         Parameters
         ----------
-        hashVal : namedtuple
-            record specification stored in the DB.
+        hashVal : HDF5_00_DataHashSpec
+            record specification parsed from its serialized store val in lmdb.
 
         Returns
         -------
@@ -664,8 +675,8 @@ class HDF5_00_FileHandles(object):
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(array, srcSlc, destSlc)
 
-        hashVal = self.fmtParser.encode(uid=self.w_uid,
-                                        dataset=self.hNextPath,
-                                        dataset_idx=self.hIdx,
-                                        shape=array.shape)
+        hashVal = hdf5_00_encode(uid=self.w_uid,
+                                 dataset=self.hNextPath,
+                                 dataset_idx=self.hIdx,
+                                 shape=array.shape)
         return hashVal

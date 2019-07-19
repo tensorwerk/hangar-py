@@ -2,8 +2,9 @@ import logging
 import os
 import shutil
 import platform
+import weakref
 import tempfile
-from typing import MutableMapping
+from typing import MutableMapping, Optional
 from collections import Counter
 from os.path import join as pjoin
 
@@ -174,20 +175,20 @@ from .records import commiting, heads
 
 class Environments(object):
 
-    def __init__(self, repo_path: str):
+    def __init__(self, repo_path: os.PathLike):
 
-        self.repo_path: str = repo_path
-        self.refenv: lmdb.Environment = None
-        self.hashenv: lmdb.Environment = None
-        self.stageenv: lmdb.Environment = None
-        self.branchenv: lmdb.Environment = None
-        self.labelenv: lmdb.Environment = None
-        self.stagehashenv: lmdb.Environment = None
+        self.repo_path: os.PathLike = repo_path
+        self.refenv: Optional[lmdb.Environment] = None
+        self.hashenv: Optional[lmdb.Environment] = None
+        self.stageenv: Optional[lmdb.Environment] = None
+        self.branchenv: Optional[lmdb.Environment] = None
+        self.labelenv: Optional[lmdb.Environment] = None
+        self.stagehashenv: Optional[lmdb.Environment] = None
         self.cmtenv: MutableMapping[str, lmdb.Environment] = {}
         self._startup()
 
     @property
-    def repo_is_initialized(self):
+    def repo_is_initialized(self) -> bool:
         '''Property to check if the repository is initialized, read-only attribute
 
         Returns
@@ -195,8 +196,8 @@ class Environments(object):
         bool
             True if repo environments are initialized, False otherwise
         '''
-        environmentInitialized = isinstance(self.refenv, lmdb.Environment)
-        return environmentInitialized
+        ret = True if isinstance(self.refenv, lmdb.Environment) else False
+        return ret
 
     def _startup(self) -> bool:
         '''When first access to the Repo starts, attempt to open the lmdb.Environments.
@@ -221,7 +222,10 @@ class Environments(object):
         self._open_environments()
         return True
 
-    def _init_repo(self, user_name: str, user_email: str, remove_old: bool = False) -> str:
+    def _init_repo(self,
+                   user_name: str,
+                   user_email: str,
+                   remove_old: bool = False) -> os.PathLike:
         '''Create a new hangar repositiory at the specified environment path.
 
         Parameters
@@ -236,7 +240,7 @@ class Environments(object):
 
         Returns
         -------
-        str
+        os.PathLike
             The path to the newly created repository on disk.
 
         Raises

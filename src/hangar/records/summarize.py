@@ -1,10 +1,10 @@
+import os
 import time
 from io import StringIO
-import lmdb
-import os
 
-from . import heads
-from . import commiting
+import lmdb
+
+from . import heads, commiting
 from ..context import TxnRegister
 from ..utils import format_bytes, file_size, folder_size
 
@@ -64,7 +64,7 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
     return res
 
 
-def details(env: lmdb.Environment, line_limit=100) -> StringIO:
+def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no cover
     '''Print the details of an lmdb environment to stdout
 
     Parameters

@@ -54,7 +54,8 @@ setup(
     ],
     project_urls={
         'Documentation': 'https://hangar-py.readthedocs.io/',
-        'Changelog': 'https://hangar-py.readthedocs.io/en/latest/changelog.html',
+        'Changelog':
+        'https://hangar-py.readthedocs.io/en/latest/changelog.html',
         'Issue Tracker': 'https://github.com/tensorwerk/hangar-py/issues',
     },
     keywords=[],
@@ -62,7 +63,6 @@ setup(
     install_requires=[
         'blosc',
         'click',
-        'grpcio_tools',
         'grpcio',
         'h5py==2.9.0',
         'lmdb==0.94',
@@ -72,10 +72,17 @@ setup(
         'tqdm',
         'wrapt',
     ],
-    extras_require={},
-    entry_points={
-        'console_scripts': [
-            'hangar = hangar.cli:main',
-        ]
+    extras_require={
+        'torch': [
+            'torch>=1.0.0',
+        ],
+        'dev': [
+            'grpcio_tools',
+            'mypy>=0.701',
+            'mypy-protobuf',
+        ],
     },
+    entry_points={'console_scripts': [
+        'hangar = hangar.cli:main',
+    ]},
 )

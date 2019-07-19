@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+import warnings
 
 import lmdb
 
@@ -60,7 +61,7 @@ def acquire_writer_lock(branchenv, writer_uuid):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment where the writer lock is stored
     writer_uuid : str
         uuid generated when a write enabled checkout instance starts
@@ -117,7 +118,7 @@ def release_writer_lock(branchenv, writer_uuid):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment where the lock key/val lives
     writer_uuid : str
         uuid of the requested releaser
@@ -141,14 +142,14 @@ def release_writer_lock(branchenv, writer_uuid):
     try:
         currentLockVal = txn.get(writerLockKey)
         if writer_uuid == forceReleaseSentinal:
-            logger.warning('USER WARNING: Writer lock force released.')
+            warnings.warn('Writer lock force successfully force released.', ResourceWarning)
             txn.put(writerLockKey, lockSentinalVal)
             success = True
         elif currentLockVal == requestWriterLockVal:
             txn.put(writerLockKey, lockSentinalVal)
             success = True
         elif currentLockVal == lockSentinalVal:
-            logger.warning('WARNING: The lock is already available, no release is necessary.')
+            warnings.warn('The lock is already available, no release is necessary.', UserWarning)
             success = True
         else:
             success = False
@@ -177,7 +178,7 @@ def create_branch(branchenv, branch_name, base_commit):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment of the branch db
     branch_name : str
         Name of the branch to create, if a branch with this name exists no
@@ -230,7 +231,7 @@ def get_staging_branch_head(branchenv):
 
     Parameters
     ----------
-    branchenv : `lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment for the branch references
 
     Returns
@@ -258,7 +259,7 @@ def set_staging_branch_head(branchenv, branch_name):
 
     Parameters
     ----------
-    branchenv : `lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment of the branch db.
     branch_name : str
         name of the branch to checkout.
@@ -339,7 +340,7 @@ def set_branch_head_commit(branchenv, branch_name, commit_hash):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment where the branch records are kept
     branch_name : string
         Name of the branch to update the HEAD commit of
@@ -378,7 +379,7 @@ def get_branch_names(branchenv):
 
     Parameters
     ----------
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment storing the branch records.
 
     Returns
@@ -535,3 +536,38 @@ def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
 
     remote_address = parsing.remote_raw_val_from_db_val(dbVal)
     return remote_address
+
+
+def get_remote_names(branchenv):
+    '''get a list of all remotes in the repository.
+
+    Parameters
+    ----------
+    branchenv : lmdb.Environment
+        lmdb environment storing the branch records.
+
+    Returns
+    -------
+    list of str
+        list of remote names active in the repository.
+    '''
+    remoteStartKey = parsing.c.K_REMOTES.encode()  # TODO: This is odd, why??
+    remoteNames = []
+    branchTxn = TxnRegister().begin_reader_txn(branchenv)
+    try:
+        with branchTxn.cursor() as cursor:
+            cursor.first()
+            remoteRangeExists = cursor.set_range(remoteStartKey)
+            while remoteRangeExists:
+                remoteKey = cursor.key()
+                if remoteKey.startswith(remoteStartKey):
+                    name = parsing.remote_raw_key_from_db_key(remoteKey)
+                    remoteNames.append(name)
+                    remoteRangeExists = cursor.next()
+                else:
+                    remoteRangeExists = False
+        cursor.close()
+    finally:
+        TxnRegister().abort_reader_txn(branchenv)
+
+    return remoteNames

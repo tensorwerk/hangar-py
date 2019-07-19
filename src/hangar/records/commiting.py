@@ -23,6 +23,52 @@ Reading commit specifications and parents.
 '''
 
 
+def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> str:
+    '''Find the a full commit hash from a short version provided by the user
+
+    Parameters
+    ----------
+    refenv : lmdb.Environment
+        db where the commit references are stored
+    commit_hash : str
+        short commit hash to search for in the repository
+
+    Returns
+    -------
+    str
+        full commit hash if short maps to a unique digest in the repo history
+
+    Raises
+    ------
+    KeyError
+        If the short commit hash can reference two full commit digests
+    KeyError
+        if no expanded commit digest is found starting with the short version.
+    '''
+    reftxn = TxnRegister().begin_reader_txn(refenv)
+    commitParentStart = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+    with reftxn.cursor() as cursor:
+        shortHashExists = cursor.set_range(commitParentStart)
+        if shortHashExists is True:
+            commitKey = cursor.key()
+            commit_key = parsing.commit_parent_raw_key_from_db_key(commitKey)
+            if commit_key.startswith(commit_hash) is False:
+                raise KeyError(f'No expanded commit hash found for short: {commit_hash}')
+            cursor.next()
+            cursor.next()
+            nextHashExist = cursor.next()
+            if nextHashExist is False:
+                return commit_key
+            nextCommitKey = cursor.key()
+            next_commit_key = parsing.commit_parent_raw_key_from_db_key(nextCommitKey)
+            if next_commit_key.startswith(commit_hash) is True:
+                raise KeyError(f'Non unique short commit hash: {commit_hash}')
+            else:
+                return commit_key
+        else:
+            raise KeyError(f'No expanded commit hash found for short: {commit_hash}')
+
+
 def check_commit_hash_in_history(refenv, commit_hash):
     '''Check if a commit hash exists in the repository history
 
@@ -53,7 +99,7 @@ def get_commit_spec(refenv, commit_hash):
 
     Parameters
     ----------
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         refenv where the specs are stored
     commit_hash : str
         commit hash to query
@@ -87,7 +133,7 @@ def get_commit_ancestors(refenv, commit_hash):
 
     Parameters
     ----------
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         lmdb environment where the commit refs are stored
     commit_hash : string
         commit hash to find the ancestors for
@@ -123,7 +169,7 @@ def get_commit_ancestors_graph(refenv, starting_commit):
 
     Parameters
     ----------
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         lmdb environment where the commit refs are stored
     starting_commit : string
         commit hash to start creating the DAG from
@@ -224,7 +270,7 @@ def get_commit_ref_contents(refenv, commit_hash):
 
     Parameters
     ----------
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         lmdb environment where the commit refs are stored
     commit_hash : str
         hash of the commit to get the contents of
@@ -290,7 +336,11 @@ The functions below act to:
 # ---------------- Functions to format the writen values of a commit --------------------
 
 
-def __commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='', dev_branch_name=''):
+def _commit_ancestors(branchenv: lmdb.Environment,
+                      *,
+                      is_merge_commit: bool = False,
+                      master_branch_name: str = '',
+                      dev_branch_name: str = '') -> bytes:
     '''Format the commit parent db value, finding HEAD commits automatically.
 
     This method handles formating for both regular & merge commits through the
@@ -312,8 +362,8 @@ def __commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='
 
     Returns
     -------
-    bytestring
-        Commit parent db value formated appropriatly based on the repo state and
+    bytes
+        Commit parent db value formatted appropriately based on the repo state and
         any specified arguments.
     '''
     if not is_merge_commit:
@@ -332,7 +382,7 @@ def __commit_ancestors(branchenv, *, is_merge_commit=False, master_branch_name='
     return commitParentVal
 
 
-def __commit_spec(message, user, email):
+def _commit_spec(message: str, user: str, email: str) -> bytes:
     '''Format the commit specification according to the supplied username and email.
 
     This method currently only acts as a pass through to the parsing options
@@ -349,24 +399,23 @@ def __commit_spec(message, user, email):
 
     Returns
     -------
-    bytestring
-        Formated value for the specification field of the commit.
+    bytes
+        Formatted value for the specification field of the commit.
     '''
     commitSpecVal = parsing.commit_spec_db_val_from_raw_val(
         commit_time=time.time(),
         commit_message=message,
         commit_user=user,
         commit_email=email)
-
     return commitSpecVal
 
 
-def __commit_ref(stageenv):
+def _commit_ref(stageenv: lmdb.Environment) -> bytes:
     '''Query and format all staged data records, and format it for ref storage.
 
     Parameters
     ----------
-    stageenv : lmdb.Environment`
+    stageenv : lmdb.Environment
         lmdb environment where the staged record data is actually stored.
 
     Returns
@@ -376,7 +425,7 @@ def __commit_ref(stageenv):
 
     '''
     querys = RecordQuery(dataenv=stageenv)
-    allRecords = querys._traverse_all_records()
+    allRecords = tuple(querys._traverse_all_records())
     commitRefVal = parsing.commit_ref_db_val_from_raw_val(allRecords)
     return commitRefVal
 
@@ -396,12 +445,12 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     message : string
         Message the user accociates with what has been added, removed, or
         changed in this commit. Must not be empty.
-    branchenv : lmdb.Environment`
+    branchenv : lmdb.Environment
         lmdb environment where branch records are stored.
-    stageenv : lmdb.Environment`
+    stageenv : lmdb.Environment
         lmdb environment where the staged data records are stored in
         uncompressed format.
-    refenv : lmdb.Environment`
+    refenv : lmdb.Environment
         lmdb environment where the commit ref records are stored.
     is_merge_commit : bool, optional
         Is the commit a merge commit or not? defaults to False
@@ -415,11 +464,10 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     string
         Commit hash of the newly added commit
     '''
-    commitParentVal = __commit_ancestors(
-        branchenv=branchenv,
-        is_merge_commit=is_merge_commit,
-        master_branch_name=merge_master,
-        dev_branch_name=merge_dev)
+    commitParentVal = _commit_ancestors(branchenv=branchenv,
+                                         is_merge_commit=is_merge_commit,
+                                         master_branch_name=merge_master,
+                                         dev_branch_name=merge_dev)
 
     user_info_pth = pjoin(repo_path, 'config_user.yml')
     with open(user_info_pth) as f:
@@ -430,8 +478,8 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     if (USER_NAME is None) or (USER_EMAIL is None):
         raise RuntimeError(f'Username and Email are required. Please configure.')
 
-    commitSpecVal = __commit_spec(message=message, user=USER_NAME, email=USER_EMAIL)
-    commitRefVal = __commit_ref(stageenv=stageenv)
+    commitSpecVal = _commit_spec(message=message, user=USER_NAME, email=USER_EMAIL)
+    commitRefVal = _commit_ref(stageenv=stageenv)
 
     hasher = hashlib.blake2b(digest_size=20)
     hasher.update(commitParentVal)
@@ -537,9 +585,9 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
     In process writes never directly access files in the data directory.
     Instead, when the file is created is is symlinked to either the remote data
     or stage data directory. All access is handled through this intermediate
-    symlink in order to prevent any ability to overwrite commit data (even if
+    symlink in order to prevent any ability to overwpackedeven if
     there are major errors in the hash records). Once the write operation
-    complets (commit for staging, or completion of fetch for remote), this
+    packedor staging, or completion of fetch for remote), this
     method is called to move the symlinks from the write enabled directory to
     the (read only, fully-committed) storage dir.
 

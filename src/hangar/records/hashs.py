@@ -1,5 +1,7 @@
 import logging
 
+import lmdb
+
 from . import parsing
 from .. import constants as c
 from ..context import TxnRegister
@@ -10,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class HashQuery(object):
 
-    def __init__(self, hashenv):
+    def __init__(self, hashenv: lmdb.Environment):
         self._hashenv = hashenv
 
     # ------------------ traversing the unpacked records ----------------------
@@ -99,10 +101,15 @@ class HashQuery(object):
         recs = self._traverse_all_hash_records(keys=True, vals=False)
         return recs
 
-    def list_all_hash_values(self):
+    def list_all_hash_values_raw(self):
         recs = self._traverse_all_hash_records(keys=False, vals=True)
         formatted = map(backend_decoder, recs)
         return formatted
+
+    def map_all_hash_keys_raw_to_values_raw(self):
+        keys = self.list_all_hash_keys_raw()
+        vals = self.list_all_hash_values_raw()
+        return dict(zip(keys, vals))
 
     def list_all_schema_keys_raw(self):
         recs = self._traverse_all_schema_records(keys=True, vals=False)
@@ -115,9 +122,9 @@ class HashQuery(object):
 
 
 def delete_in_process_data(repo_path, *, remote_operation=False):
-    '''DANGER! Permenantly delete uncommited data files/links for stage or remote area.
+    '''DANGER! Permanently delete uncommitted data files/links for stage or remote area.
 
-    This searchs each backend accessors staged (or remote) folder structure for
+    This searches each backend accessors staged (or remote) folder structure for
     files, and if any are present the symlinks in stagedir and backing data
     files in datadir are removed.
 
@@ -131,9 +138,8 @@ def delete_in_process_data(repo_path, *, remote_operation=False):
     '''
     for backend, accesor in BACKEND_ACCESSOR_MAP.items():
         if accesor is not None:
-            # acc = accesor(repo_path, None, None)
-            # accesor.delete_in_process_data()
-            accesor.delete_in_process_data(repo_path=repo_path, remote_operation=remote_operation)
+            accesor.delete_in_process_data(repo_path=repo_path,
+                                           remote_operation=remote_operation)
 
 
 def clear_stage_hash_records(stagehashenv):
@@ -161,12 +167,12 @@ def remove_stage_hash_records_from_hashenv(hashenv, stagehashenv):
 
     For every hash record in stagehashenv, remove the corresponding k/v pair
     from the hashenv db. This is a dangerous operation if the stagehashenv was
-    not appropriatly constructed!!!
+    not appropriately constructed!!!
 
     Parameters
     ----------
     hashenv : lmdb.Environment
-        db where all the permanant hash records are stored
+        db where all the permanent hash records are stored
     stagehashenv : lmdb.Environment
         db where all the staged hash records to be removed are stored.
 

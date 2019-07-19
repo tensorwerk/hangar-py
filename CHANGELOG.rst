@@ -2,7 +2,6 @@
 Change Log
 ==========
 
-
 `In-Progress`_
 ==============
 
@@ -12,7 +11,8 @@ New Features
 * Numpy memory-mapped array file backend added. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Remote server data backend added. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Selection heuristics to determine appropriate backend from dataset schema. (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
-
+* Partial remote clones and fetch operations now fully supported. (`#85 <https://github.com/tensorwerk/hangar-py/pull/85>`__) `@rlizzo <https://github.com/rlizzo>`__
+* CLI has been placed under test coverage, added interface usage to docs (`#85 <https://github.com/tensorwerk/hangar-py/pull/85>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 Improvements
 ------------

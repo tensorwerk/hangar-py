@@ -1,10 +1,9 @@
 import json
-from collections import namedtuple
 from itertools import cycle
 from time import sleep
 from time import perf_counter
 from random import randint
-from typing import Union
+from typing import Union, NamedTuple, Tuple, Iterable
 
 import blosc
 import msgpack
@@ -17,7 +16,7 @@ RANDOM_NAME_SEED = str(randint(0, 999_999_999)).rjust(0, '0')
 perf_counter()  # call to init monotonic start point
 
 
-def generate_sample_name():
+def generate_sample_name() -> str:
     ncycle = next(NAME_CYCLER)
     if ncycle == '00000':
         sleep(0.001)
@@ -39,7 +38,7 @@ Methods working with writer HEAD branch name
 # --------------------- db HEAD key is fixed ----------------------
 
 
-def repo_head_db_key():
+def repo_head_db_key() -> bytes:
     '''db_key of the head staging branch name.
 
     Returns
@@ -54,12 +53,12 @@ def repo_head_db_key():
 # --------------------- raw -> db --------------------------------
 
 
-def repo_head_db_val_from_raw_val(branch_name):
+def repo_head_db_val_from_raw_val(branch_name: str) -> bytes:
     db_val = f'{c.K_BRANCH}{branch_name}'.encode()
     return db_val
 
 
-def repo_head_raw_val_from_db_val(db_val):
+def repo_head_raw_val_from_db_val(db_val: str) -> bytes:
     raw_val = db_val.decode().replace(c.K_BRANCH, '', 1)
     return raw_val
 
@@ -72,12 +71,12 @@ Methods working with branch names / head commit values
 # ---------------------- raw -> db --------------------------------
 
 
-def repo_branch_head_db_key_from_raw_key(branch_name):
+def repo_branch_head_db_key_from_raw_key(branch_name: str) -> bytes:
     db_key = f'{c.K_BRANCH}{branch_name}'.encode()
     return db_key
 
 
-def repo_branch_head_db_val_from_raw_val(commit_hash):
+def repo_branch_head_db_val_from_raw_val(commit_hash: str) -> bytes:
     db_val = f'{commit_hash}'.encode()
     return db_val
 
@@ -85,13 +84,13 @@ def repo_branch_head_db_val_from_raw_val(commit_hash):
 # ---------------- db -> raw -----------------------------------
 
 
-def repo_branch_head_raw_key_from_db_key(db_key):
+def repo_branch_head_raw_key_from_db_key(db_key: bytes) -> str:
     key_str = db_key.decode()
     branch_name = key_str.replace(c.K_BRANCH, '', 1)
     return branch_name
 
 
-def repo_branch_head_raw_val_from_db_val(db_val):
+def repo_branch_head_raw_val_from_db_val(db_val: bytes) -> str:
     try:
         commit_hash = db_val.decode()
     except AttributeError:
@@ -107,24 +106,24 @@ Methods working with writer lock key/values
 # ------------------- db key for lock is fixed -------------------
 
 
-def repo_writer_lock_db_key():
+def repo_writer_lock_db_key() -> bytes:
     db_key = f'{c.K_WLOCK}'.encode()
     return db_key
 
 
-def repo_writer_lock_sentinal_db_val():
+def repo_writer_lock_sentinal_db_val() -> bytes:
     db_val = f'{c.WLOCK_SENTINAL}'.encode()
     return db_val
 
 
-def repo_writer_lock_force_release_sentinal():
+def repo_writer_lock_force_release_sentinal() -> str:
     return 'FORCE_RELEASE'
 
 
 # ------------------------- raw -> db ------------------------------
 
 
-def repo_writer_lock_db_val_from_raw_val(lock_uuid):
+def repo_writer_lock_db_val_from_raw_val(lock_uuid: str) -> bytes:
     db_val = f'{lock_uuid}'.encode()
     return db_val
 
@@ -132,7 +131,7 @@ def repo_writer_lock_db_val_from_raw_val(lock_uuid):
 # -------------------------- db -> raw ------------------------------
 
 
-def repo_writer_lock_raw_val_from_db_val(db_val):
+def repo_writer_lock_raw_val_from_db_val(db_val: str) -> bytes:
     lock_uuid = db_val.decode()
     return lock_uuid
 
@@ -157,23 +156,25 @@ The following records can be parsed:
 # ------------------- named tuple classes used ----------------------
 
 
-RawDataRecordKey = namedtuple(
-    typename='RawDataRecordKey', field_names=['dset_name', 'data_name'])
+RawDataRecordKey = NamedTuple('RawDataRecordKey', [
+    ('dset_name', str),
+    ('data_name', Union[str, int])])
+RawDataRecordKey.__doc__ = 'Represents a Data Sample Record Key'
 
 
-RawDataRecordVal = namedtuple(
-    typename='RawDataRecordVal', field_names=['data_hash'])
+RawDataRecordVal = NamedTuple('RawDataRecordVal', [
+    ('data_hash', str)])
+RawDataRecordVal.__doc__ = 'Represents a Data Sample Record Hash Value'
 
 
-RawDatasetSchemaVal = namedtuple(
-    typename='RawDatasetSchemaVal',
-    field_names=[
-        'schema_hash',
-        'schema_dtype',
-        'schema_is_var',
-        'schema_max_shape',
-        'schema_is_named',
-        'schema_default_backend'])
+RawDatasetSchemaVal = NamedTuple('RawDatasetSchemaVal', [
+    ('schema_hash', str),
+    ('schema_dtype', int),
+    ('schema_is_var', bool),
+    ('schema_max_shape', tuple),
+    ('schema_is_named', bool),
+    ('schema_default_backend', str)])
+RawDatasetSchemaVal.__doc__ = 'Information Specifying a Dataset Schema'
 
 '''
 Parsing functions to convert lmdb data record keys/vals to/from python vars
@@ -193,7 +194,7 @@ def data_record_raw_key_from_db_key(db_key: bytes) -> RawDataRecordKey:
 
     Returns
     -------
-    namedtuple
+    RawDataRecordKey
         Tuple containing the record dset_name, data_name
     '''
     key = db_key.decode()
@@ -213,7 +214,7 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
 
     Returns
     -------
-    namedtuple
+    RawDataRecordVal
         Tuple containing the record data_hash
     '''
     data_hash = db_val.decode()
@@ -363,12 +364,12 @@ def dataset_record_schema_db_val_from_raw_val(schema_hash,
 
 # -------------- db schema -> raw schema -------------------------------
 
-def dataset_record_schema_raw_key_from_db_key(db_key):
+def dataset_record_schema_raw_key_from_db_key(db_key: bytes) -> str:
     dset_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
     return dset_name
 
 
-def dataset_record_schema_raw_val_from_db_val(db_val):
+def dataset_record_schema_raw_val_from_db_val(db_val: bytes) -> RawDatasetSchemaVal:
     schema_spec = json.loads(db_val)
     schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
     raw_val = RawDatasetSchemaVal(**schema_spec)
@@ -383,12 +384,12 @@ Functions to convert total daset count records to/from python objects
 # ------------------------ raw -> db ------------------------------------------
 
 
-def dataset_total_count_db_key():
+def dataset_total_count_db_key() -> bytes:
     db_key = c.K_STGARR.encode()
     return db_key
 
 
-def dataset_total_count_db_val_from_raw_val(number_of_dsets):
+def dataset_total_count_db_val_from_raw_val(number_of_dsets: int) -> bytes:
     db_val = f'{number_of_dsets}'.encode()
     return db_val
 
@@ -396,7 +397,7 @@ def dataset_total_count_db_val_from_raw_val(number_of_dsets):
 # --------------------------- db -> raw ---------------------------------------
 
 
-def dataset_total_count_raw_val_from_db_val(db_val):
+def dataset_total_count_raw_val_from_db_val(db_val: bytes) -> int:
     raw_val = int(db_val.decode())
     return raw_val
 
@@ -632,13 +633,18 @@ Commit Parsing Methods
 The parsers defined in this section handle commit (ref) records
 '''
 
-CommitAncestorSpec = namedtuple(
-    typename='CommitAncestorSpec',
-    field_names=['is_merge_commit', 'master_ancestor', 'dev_ancestor'])
+CommitAncestorSpec = NamedTuple('CommitAncestorSpec', [
+    ('is_merge_commit', bool),
+    ('master_ancestor', str),
+    ('dev_ancestor', str),
+])
 
-CommitSpec = namedtuple(
-    typename='CommitSpec',
-    field_names=['commit_time', 'commit_message', 'commit_user', 'commit_email'])
+CommitSpec = NamedTuple('CommitSpec', [
+    ('commit_time', float),
+    ('commit_message', str),
+    ('commit_user', str),
+    ('commit_email', str),
+])
 
 
 '''
@@ -707,12 +713,12 @@ Commit reference key and values.
 '''
 
 
-def commit_ref_db_key_from_raw_key(commit_hash):
+def commit_ref_db_key_from_raw_key(commit_hash: str) -> bytes:
     commit_ref_key = f'{commit_hash}{c.SEP_KEY}ref'.encode()
     return commit_ref_key
 
 
-def commit_ref_db_val_from_raw_val(commit_db_key_val_list):
+def commit_ref_db_val_from_raw_val(commit_db_kbs: Iterable[Tuple[bytes, bytes]]) -> bytes:
     '''serialize and compress a list of db_key/db_value pairs for commit storage
 
     Parameters
@@ -725,17 +731,12 @@ def commit_ref_db_val_from_raw_val(commit_db_key_val_list):
     bytes
         Serialized and compressed representation of the object.
     '''
-    serialized_db_list = msgpack.packb(tuple(commit_db_key_val_list), use_bin_type=True)
-    zlibpacked = blosc.compress(
-        serialized_db_list,
-        cname='zlib',
-        clevel=9,
-        shuffle=blosc.SHUFFLE,
-        typesize=1)
-    return zlibpacked
+    pck = msgpack.packb(commit_db_kbs, use_bin_type=True)
+    raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.BITSHUFFLE, cname='lz4')
+    return raw
 
 
-def commit_ref_raw_val_from_db_val(commit_db_val):
+def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> Tuple[Tuple[bytes, bytes]]:
     '''Load and decompress a commit ref db_val into python object memory.
 
     Parameters
@@ -745,7 +746,7 @@ def commit_ref_raw_val_from_db_val(commit_db_val):
 
     Returns
     -------
-    tuple of two-tuple binary encoded key/values.
+    Tuple[Tuple[bytes, bytes]]
         Iterable of binary encoded key/value pairs making up the repo state at
         the time of that commit. key/value pairs are already in sorted order.
     '''
@@ -760,12 +761,14 @@ Commit spec reference keys and values
 '''
 
 
-def commit_spec_db_key_from_raw_key(commit_hash):
+def commit_spec_db_key_from_raw_key(commit_hash: str) -> bytes:
     commit_spec_key = f'{commit_hash}{c.SEP_KEY}spec'.encode()
     return commit_spec_key
 
 
-def commit_spec_db_val_from_raw_val(commit_time, commit_message, commit_user, commit_email):
+def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
+                                    commit_user: str,
+                                    commit_email: str) -> bytes:
     '''Serialize a commit specification from user values to a db store value
 
     Parameters
@@ -790,18 +793,18 @@ def commit_spec_db_val_from_raw_val(commit_time, commit_message, commit_user, co
         'commit_user': commit_user,
         'commit_email': commit_email,
     }
-    db_spec_val = json.dumps(spec_dict, ensure_ascii=True).encode()
-    compressed_db_val = blosc.compress(
-        db_spec_val,
-        cname='zlib',
-        clevel=9,
-        shuffle=blosc.SHUFFLE)
+    db_spec_val = msgpack.dumps(spec_dict)
+    compressed_db_val = blosc.compress(db_spec_val,
+                                       cname='zlib',
+                                       clevel=9,
+                                       shuffle=blosc.BITSHUFFLE,
+                                       typesize=1)
     return compressed_db_val
 
 
-def commit_spec_raw_val_from_db_val(db_val):
+def commit_spec_raw_val_from_db_val(db_val: bytes) -> CommitSpec:
     uncompressed_db_val = blosc.decompress(db_val)
-    commit_spec = json.loads(uncompressed_db_val, encoding='ASCII')
+    commit_spec = msgpack.loads(uncompressed_db_val, raw=False)
     raw_val = CommitSpec(**commit_spec)
     return raw_val
 

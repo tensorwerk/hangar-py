@@ -27,7 +27,12 @@ def set_blosc_nthreads() -> int:
         ncores blosc will use on the system
     '''
     nCores = blosc.detect_number_of_cores()
-    nUsed = 2 if nCores < 4 else nCores - 2
+    if nCores <= 2:
+        nUsed = 1
+    elif nCores <= 4:
+        nUsed = nCores - 1
+    else:
+        nUsed = nCores - 2
     blosc.set_nthreads(nUsed)
     return nUsed
 
@@ -39,7 +44,7 @@ def random_string(stringLength=6):
     return ''.join(random.choice(letters) for i in range(stringLength))
 
 
-def cm_weakref_obj_proxy(obj):
+def cm_weakref_obj_proxy(obj: object) -> wrapt.ObjectProxy:
     '''Creates a weakproxy reference honoring optional use context managers.
 
     This is required because (for some unknown reason) `weakproxy`
