@@ -294,8 +294,40 @@ class TestReaderDiff(object):
         assert conflicts['meta'].t3[0] == 'hello'
         assert len(conflicts['meta'].t3) == 1
 
+    def test_commits_inside_cm(self, written_repo, array5by7):
+        repo = written_repo
+        repo.create_branch('testbranch')
+        co = repo.checkout(write=True, branch_name='testbranch')
+        dset = co.datasets['_dset']
+        dset2 = co.datasets.init_dataset('dset2', prototype=array5by7)
+        dset2[1] = array5by7
+        with dset, co.metadata:
+            dset[100] = array5by7
+            co.metadata['crazykey'] = 'crazyvalue'
+            co.commit('inside cm')
+            dset[101] = array5by7
+            co.commit('another commit inside cm')
+        co.close()
+        co = repo.checkout(branch_name='testbranch')
+        assert np.allclose(co.datasets['_dset'][101], array5by7)
+        diff = co.diff.branch('master')[0]
+        assert 'crazykey' in diff['metadata']['master']['additions'].keys()
+        assert 'dset2' in diff['datasets']['master']['additions'].keys()
+        for record in diff['samples']['master']['_dset']['additions']:
+            assert record.data_name in [100, 101]
+
 
 class TestWriterDiff(object):
+
+    def test_status_and_staged_meta(self, written_repo):
+        repo = written_repo
+        co = repo.checkout(write=True)
+        co.metadata['hello_from_test'] = 'hai to test'
+        assert co.diff.status() == 'DIRTY'
+        diff = co.diff.staged()[0]
+        assert 'hello_from_test' in diff['metadata']['master']['additions']
+        co.commit('init metadata')
+        assert co.diff.status() == 'CLEAN'
 
     def test_status_and_staged_samples(self, written_repo):
         dummyData = np.zeros((5, 7))
@@ -324,12 +356,3 @@ class TestWriterDiff(object):
         co.commit('init dset')
         assert co.diff.status() == 'CLEAN'
 
-    def test_status_and_staged_meta(self, written_repo):
-        repo = written_repo
-        co = repo.checkout(write=True)
-        co.metadata['hello_from_test'] = 'hai to test'
-        assert co.diff.status() == 'DIRTY'
-        diff = co.diff.staged()[0]
-        assert 'hello_from_test' in diff['metadata']['master']['additions']
-        co.commit('init metadata')
-        assert co.diff.status() == 'CLEAN'

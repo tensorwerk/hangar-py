@@ -1,7 +1,5 @@
 import numpy as np
 import pytest
-import shutil
-import platform
 
 
 class TestCheckout(object):
