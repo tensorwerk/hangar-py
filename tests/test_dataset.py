@@ -713,8 +713,8 @@ class TestMultiprocessDatasetReads(object):
             if cIdx != 0:
                 co = repo.checkout(write=True)
             with co.datasets['_dset'] as d:
-                kstart = 100 * cIdx
-                for sIdx in range(100):
+                kstart = 20 * cIdx
+                for sIdx in range(20):
                     arr = np.random.randn(20, 20).astype(np.float32) * 100
                     sName = str(sIdx + kstart)
                     d[sName] = arr
@@ -728,7 +728,7 @@ class TestMultiprocessDatasetReads(object):
         for cmt, sampList in masterCmtList:
             nco = repo.checkout(write=False, commit=cmt)
             ds = nco.datasets['_dset']
-            keys = [str(i) for i in range(100 + (100*cmtIdx))]
+            keys = [str(i) for i in range(20 + (20*cmtIdx))]
             with get_context('spawn').Pool(2) as P:
                 cmtData = P.map(ds.get, keys)
             for data, sampData in zip(cmtData, sampList):
@@ -746,8 +746,8 @@ class TestMultiprocessDatasetReads(object):
             if cIdx != 0:
                 co = repo.checkout(write=True)
             with co.datasets['_dset'] as d:
-                kstart = 100 * cIdx
-                for sIdx in range(100):
+                kstart = 20 * cIdx
+                for sIdx in range(20):
                     arr = np.random.randn(20, 20).astype(np.float32) * 100
                     sName = str(sIdx + kstart)
                     d[sName] = arr
@@ -761,7 +761,7 @@ class TestMultiprocessDatasetReads(object):
         for cmt, sampList in masterCmtList:
             nco = repo.checkout(write=False, commit=cmt)
             ds = nco.datasets['_dset']
-            keys = [str(i) for i in range(100 + (100*cmtIdx))]
+            keys = [str(i) for i in range(20 + (20*cmtIdx))]
             cmtData = ds.get_batch(keys, n_cpus=2)
             for data, sampData in zip(cmtData, sampList):
                 assert np.allclose(data, sampData) is True
@@ -774,7 +774,7 @@ class TestMultiprocessDatasetReads(object):
         co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
         with co.datasets['_dset'] as d:
-            for sIdx in range(100):
+            for sIdx in range(20):
                 arr = np.random.randn(20, 20).astype(np.float32) * 100
                 sName = str(sIdx)
                 d[sName] = arr
@@ -788,14 +788,14 @@ class TestMultiprocessDatasetReads(object):
 
         # superset of keys fails
         with pytest.raises(KeyError):
-            keys = [str(i) for i in range(104)]
+            keys = [str(i) for i in range(24)]
             ds.get_batch(keys, n_cpus=2)
 
         # subset of keys works
-        keys = [str(i) for i in range(20, 40)]
+        keys = [str(i) for i in range(10, 20)]
         cmtData = ds.get_batch(keys, n_cpus=2)
         for idx, data in enumerate(cmtData):
-            assert np.allclose(data, masterSampList[20+idx]) is True
+            assert np.allclose(data, masterSampList[10+idx]) is True
         nco.close()
 
     def test_writer_iterating_over_keys_can_have_additions_made_no_error(self, written_two_cmt_repo):

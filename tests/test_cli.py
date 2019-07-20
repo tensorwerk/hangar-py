@@ -316,7 +316,7 @@ def test_start_server():
     runner = CliRunner()
     with runner.isolated_filesystem():
         startTime = time.time()
-        res = runner.invoke(cli.server, ['--ip', 'localhost', '--port', '50111', '--timeout', '3'])
-        assert time.time() - startTime >= 3
+        res = runner.invoke(cli.server, ['--ip', 'localhost', '--port', '50111', '--timeout', '1'])
+        assert time.time() - startTime >= 1
         assert res.exit_code == 0
         assert res.stdout.startswith('Hangar Server Started')

@@ -95,7 +95,7 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             shouldFail = dset['1']
 
-    def test_reader_dset_obj_not_accessible_after_close(self, writtenwritten_two_cmt_repo_repo):
+    def test_reader_dset_obj_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=False)
         dsets = co.datasets
