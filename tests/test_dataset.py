@@ -713,8 +713,8 @@ class TestMultiprocessDatasetReads(object):
             if cIdx != 0:
                 co = repo.checkout(write=True)
             with co.datasets['_dset'] as d:
-                kstart = 100 * cIdx
-                for sIdx in range(100):
+                kstart = 20 * cIdx
+                for sIdx in range(20):
                     arr = np.random.randn(20, 20).astype(np.float32) * 100
                     sName = str(sIdx + kstart)
                     d[sName] = arr
@@ -728,7 +728,7 @@ class TestMultiprocessDatasetReads(object):
         for cmt, sampList in masterCmtList:
             nco = repo.checkout(write=False, commit=cmt)
             ds = nco.datasets['_dset']
-            keys = [str(i) for i in range(100 + (100*cmtIdx))]
+            keys = [str(i) for i in range(20 + (20*cmtIdx))]
             with get_context('spawn').Pool(2) as P:
                 cmtData = P.map(ds.get, keys)
             for data, sampData in zip(cmtData, sampList):
@@ -746,8 +746,8 @@ class TestMultiprocessDatasetReads(object):
             if cIdx != 0:
                 co = repo.checkout(write=True)
             with co.datasets['_dset'] as d:
-                kstart = 100 * cIdx
-                for sIdx in range(100):
+                kstart = 20 * cIdx
+                for sIdx in range(20):
                     arr = np.random.randn(20, 20).astype(np.float32) * 100
                     sName = str(sIdx + kstart)
                     d[sName] = arr
@@ -761,7 +761,7 @@ class TestMultiprocessDatasetReads(object):
         for cmt, sampList in masterCmtList:
             nco = repo.checkout(write=False, commit=cmt)
             ds = nco.datasets['_dset']
-            keys = [str(i) for i in range(100 + (100*cmtIdx))]
+            keys = [str(i) for i in range(20 + (20*cmtIdx))]
             cmtData = ds.get_batch(keys, n_cpus=2)
             for data, sampData in zip(cmtData, sampList):
                 assert np.allclose(data, sampData) is True
@@ -774,7 +774,7 @@ class TestMultiprocessDatasetReads(object):
         co.datasets.init_dataset(name='_dset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
         with co.datasets['_dset'] as d:
-            for sIdx in range(100):
+            for sIdx in range(20):
                 arr = np.random.randn(20, 20).astype(np.float32) * 100
                 sName = str(sIdx)
                 d[sName] = arr
@@ -788,12 +788,106 @@ class TestMultiprocessDatasetReads(object):
 
         # superset of keys fails
         with pytest.raises(KeyError):
-            keys = [str(i) for i in range(104)]
+            keys = [str(i) for i in range(24)]
             ds.get_batch(keys, n_cpus=2)
 
         # subset of keys works
-        keys = [str(i) for i in range(20, 40)]
+        keys = [str(i) for i in range(10, 20)]
         cmtData = ds.get_batch(keys, n_cpus=2)
         for idx, data in enumerate(cmtData):
-            assert np.allclose(data, masterSampList[20+idx]) is True
+            assert np.allclose(data, masterSampList[10+idx]) is True
         nco.close()
+
+    def test_writer_iterating_over_keys_can_have_additions_made_no_error(self, written_two_cmt_repo):
+        # do not want ``RuntimeError dictionary changed size during iteration``
+
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        klist = []
+        with dset as ds:
+            for idx, k in enumerate(ds.keys()):
+                klist.append(k)
+                if idx == 0:
+                    ds['1232'] = np.random.randn(5, 7).astype(np.float32)
+        assert '1232' not in klist
+
+        klist = []
+        for k in ds.keys():
+            klist.append(k)
+        assert '1232' in klist
+        co.close()
+
+    def test_writer_iterating_over_values_can_have_additions_made_no_error(self, written_two_cmt_repo):
+        # do not want ``RuntimeError dictionary changed size during iteration``
+
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        vlist = []
+        mysample = np.random.randn(5, 7).astype(np.float32)
+        with dset as ds:
+            for idx, v in enumerate(ds.values()):
+                assert not np.allclose(v, mysample)
+                vlist.append(v)
+                if idx == 0:
+                    ds['1232'] = mysample
+
+        has_been_seen = []
+        for v in ds.values():
+            has_been_seen.append(np.allclose(v, mysample))
+
+        assert any(has_been_seen) is True
+        assert has_been_seen.count(True) == 1
+        co.close()
+
+    def test_writer_iterating_over_items_can_have_additions_made_no_error(self, written_two_cmt_repo):
+        # do not want ``RuntimeError dictionary changed size during iteration``
+
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        vlist, klist = [], []
+        mysample = np.random.randn(5, 7).astype(np.float32)
+        with dset as ds:
+            for idx, kv in enumerate(ds.items()):
+                k, v = kv
+                assert not np.allclose(v, mysample)
+                vlist.append(v)
+                klist.append(k)
+                if idx == 0:
+                    ds['1232'] = mysample
+
+        assert '1232' not in klist
+        khas_been_seen = []
+        vhas_been_seen = []
+        for k, v in ds.items():
+            khas_been_seen.append(bool(k == '1232'))
+            vhas_been_seen.append(np.allclose(v, mysample))
+
+        assert any(khas_been_seen) is True
+        assert khas_been_seen.count(True) == 1
+        assert any(vhas_been_seen) is True
+        assert vhas_been_seen.count(True) == 1
+        co.close()
+
+    def test_reader_iterating_over_items_can_not_make_additions(self, written_two_cmt_repo):
+        # do not want ``RuntimeError dictionary changed size during iteration``
+
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=False)
+        dset = co.datasets['_dset']
+        vlist, klist = [], []
+        mysample = np.random.randn(5, 7).astype(np.float32)
+        with dset as ds:
+            for idx, kv in enumerate(ds.items()):
+                k, v = kv
+                assert not np.allclose(v, mysample)
+                vlist.append(v)
+                klist.append(k)
+                if idx == 0:
+                    with pytest.raises(TypeError):
+                        ds['1232'] = mysample
+
+        assert '1232' not in klist
+        co.close()

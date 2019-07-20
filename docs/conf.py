@@ -13,7 +13,6 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
-    'sphinx.ext.viewcode',
     'sphinx_click.ext',
     'nbsphinx',
     'recommonmark',
@@ -65,6 +64,7 @@ html_short_title = '%s-%s' % (project, version)
 napoleon_use_ivar = True
 napoleon_use_rtype = True
 napoleon_use_param = True
+napoleon_include_init_with_doc = True
 
 add_module_names = False
 doctest_test_doctest_blocks = None

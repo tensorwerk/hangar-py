@@ -3,7 +3,7 @@ import time
 import logging
 import tempfile
 import warnings
-from typing import List, NamedTuple, Optional, Union, Sequence
+from typing import List, NamedTuple, Optional, Sequence
 from contextlib import closing
 from collections import defaultdict
 

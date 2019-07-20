@@ -105,7 +105,7 @@ class ReaderCheckout(object):
             raise PermissionError(err) from None
 
     @property
-    def datasets(self):
+    def datasets(self) -> Datasets:
         '''Provides access to dataset interaction object.
 
         .. seealso::
@@ -115,7 +115,7 @@ class ReaderCheckout(object):
 
         Returns
         -------
-        weakref.proxy
+        Datasets
             weakref proxy to the datasets object which behaves exactly like a
             datasets accessor class but which can be invalidated when the writer
             lock is released.
@@ -125,7 +125,7 @@ class ReaderCheckout(object):
         return wr
 
     @property
-    def metadata(self):
+    def metadata(self) -> MetadataReader:
         '''Provides access to metadata interaction object.
 
         .. seealso::
@@ -135,7 +135,7 @@ class ReaderCheckout(object):
 
         Returns
         -------
-        weakref.proxy
+        MetadataReader
             weakref proxy to the metadata object which behaves exactly like a
             metadata class but which can be invalidated when the writer lock is
             released.
@@ -145,17 +145,17 @@ class ReaderCheckout(object):
         return wr
 
     @property
-    def diff(self):
+    def diff(self) -> ReaderUserDiff:
         '''Access the differ methods for a read-only checkout.
 
         .. seealso::
 
-            The class :class:`hangar.diff.ReaderUserDiff` contains all methods accessible
+            The class :class:`ReaderUserDiff` contains all methods accessible
             by this property accessor
 
         Returns
         -------
-        weakref.proxy
+        ReaderUserDiff
             weakref proxy to the differ object (and contained methods) which behaves
             exactly like the differ class but which can be invalidated when the
             writer lock is released.
@@ -165,7 +165,7 @@ class ReaderCheckout(object):
         return wr
 
     @property
-    def commit_hash(self):
+    def commit_hash(self) -> str:
         '''Commit hash this read-only checkout's data is read from.
 
         Returns
@@ -176,7 +176,7 @@ class ReaderCheckout(object):
         self.__verify_checkout_alive()
         return self._commit_hash
 
-    def close(self):
+    def close(self) -> None:
         '''Gracefully close the reader checkout object.
 
         Though not strictly required for reader checkouts (as opposed to
@@ -287,7 +287,7 @@ class WriterCheckout(object):
         return res
 
     @property
-    def datasets(self):
+    def datasets(self) -> Datasets:
         '''Provides access to dataset interaction object.
 
         .. seealso::
@@ -297,7 +297,7 @@ class WriterCheckout(object):
 
         Returns
         -------
-        weakref.proxy
+        Datasets
             weakref proxy to the datasets object which behaves exactly like a
             datasets accessor class but which can be invalidated when the writer
             lock is released.
@@ -307,7 +307,7 @@ class WriterCheckout(object):
         return wr
 
     @property
-    def metadata(self):
+    def metadata(self) -> MetadataWriter:
         '''Provides access to metadata interaction object.
 
         .. seealso::
@@ -317,7 +317,7 @@ class WriterCheckout(object):
 
         Returns
         -------
-        weakref.proxy
+        MetadataWriter
             weakref proxy to the metadata object which behaves exactly like a
             metadata class but which can be invalidated when the writer lock is
             released.
@@ -327,7 +327,7 @@ class WriterCheckout(object):
         return wr
 
     @property
-    def diff(self):
+    def diff(self) -> WriterUserDiff:
         '''Access the differ methods which are aware of any staged changes.
 
         .. seealso::
@@ -337,7 +337,7 @@ class WriterCheckout(object):
 
         Returns
         -------
-        weakref.proxy
+        WriterUserDiff
             weakref proxy to the differ object (and contained methods) which behaves
             exactly like the differ class but which can be invalidated when the
             writer lock is released.
@@ -347,19 +347,19 @@ class WriterCheckout(object):
         return wr
 
     @property
-    def branch_name(self):
+    def branch_name(self) -> str:
         '''Branch this write enabled checkout's staging area was based on.
 
         Returns
         -------
-        string
+        str
             name of the branch whose commit HEAD changes are staged from.
         '''
         self.__acquire_writer_lock()
         return self._branch_name
 
     @property
-    def commit_hash(self):
+    def commit_hash(self) -> str:
         '''Commit hash which the staging area of `branch_name` is based on.
 
         Returns
@@ -527,7 +527,7 @@ class WriterCheckout(object):
             branchenv=self._branchenv,
             branch_name=self._branch_name)
 
-    def commit(self, commit_message):
+    def commit(self, commit_message: str) -> str:
         '''commit the changes made in the staging area.
 
         This creates a new commit on the checkout branch.
@@ -568,7 +568,7 @@ class WriterCheckout(object):
         logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
 
-    def reset_staging_area(self):
+    def reset_staging_area(self) -> str:
         '''Perform a hard reset of the staging area to the last commit head.
 
         After this operation is performed, the writer checkout will be
@@ -627,7 +627,7 @@ class WriterCheckout(object):
             branch_name=self._branch_name)
         return head_commit
 
-    def close(self):
+    def close(self) -> None:
         '''Close all handles to the writer checkout and release the writer lock.
 
         Failure to call this method after the writer checkout has been used will

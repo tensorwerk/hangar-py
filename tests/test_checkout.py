@@ -38,8 +38,8 @@ class TestCheckout(object):
             co.metadata.add('a', 'b')
         co.close()
 
-    def test_writer_dset_obj_not_accessible_after_close(self, written_repo):
-        repo = written_repo
+    def test_writer_dset_obj_not_accessible_after_close(self, written_two_cmt_repo):
+        repo = written_two_cmt_repo
         co = repo.checkout(write=True)
         dsets = co.datasets
         dset = co.datasets['_dset']
@@ -52,8 +52,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             dset.__dict__
 
-    def test_writer_dset_obj_dataset_iter_values_not_accessible_after_close(self, written_repo):
-        repo = written_repo
+    def test_writer_dset_obj_dataset_iter_values_not_accessible_after_close(self, written_two_cmt_repo):
+        repo = written_two_cmt_repo
         co = repo.checkout(write=True)
         oldObjs = []
         for oldObj in co.datasets.values():
@@ -64,8 +64,8 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 oldObj.__dict__
 
-    def test_writer_dset_obj_dataset_iter_items_not_accessible_after_close(self, written_repo):
-        repo = written_repo
+    def test_writer_dset_obj_dataset_iter_items_not_accessible_after_close(self, written_two_cmt_repo):
+        repo = written_two_cmt_repo
         co = repo.checkout(write=True)
         oldObjs = {}
         for oldName, oldObj in co.datasets.items():
@@ -95,8 +95,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             shouldFail = dset['1']
 
-    def test_reader_dset_obj_not_accessible_after_close(self, written_repo):
-        repo = written_repo
+    def test_reader_dset_obj_not_accessible_after_close(self, written_two_cmt_repo):
+        repo = written_two_cmt_repo
         co = repo.checkout(write=False)
         dsets = co.datasets
         dset = co.datasets['_dset']
@@ -109,8 +109,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             dset.__dict__
 
-    def test_reader_dset_obj_dataset_iter_values_not_accessible_after_close(self, written_repo):
-        repo = written_repo
+    def test_reader_dset_obj_dataset_iter_values_not_accessible_after_close(self, written_two_cmt_repo):
+        repo = written_two_cmt_repo
         co = repo.checkout(write=False)
         oldObjs = []
         for oldObj in co.datasets.values():
@@ -121,8 +121,8 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 oldObj.__dict__
 
-    def test_reader_dset_obj_dataset_iter_items_not_accessible_after_close(self, written_repo):
-        repo = written_repo
+    def test_reader_dset_obj_dataset_iter_items_not_accessible_after_close(self, written_two_cmt_repo):
+        repo = written_two_cmt_repo
         co = repo.checkout(write=False)
         oldObjs = {}
         for oldName, oldObj in co.datasets.items():
@@ -133,6 +133,42 @@ class TestCheckout(object):
             assert isinstance(name, str)
             with pytest.raises(ReferenceError):
                 obj.__dict__
+
+    def test_reader_dataset_context_manager_not_accessible_after_close(self, written_two_cmt_repo):
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=False)
+        dset = co.datasets['_dset']
+        klist = []
+        with dset as ds:
+            for k in ds.keys():
+                klist.append(k)
+                a = ds
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            a.__dict__
+        with pytest.raises(ReferenceError):
+            ds.__dict__
+        with pytest.raises(ReferenceError):
+            dset[klist[0]]
+
+    def test_writer_dataset_context_manager_not_accessible_after_close(self, written_two_cmt_repo):
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        with dset as ds:
+            # for k in ds.keys():
+            #     klist.append(k)
+            a = ds
+            a['1232'] = np.random.randn(5, 7).astype(np.float32)
+        co.close()
+
+        with pytest.raises(ReferenceError):
+            a.__dict__
+        with pytest.raises(ReferenceError):
+            ds.__dict__
+        with pytest.raises(ReferenceError):
+            dset['1232']
 
     def test_writer_metadata_obj_not_accessible_after_close(self, written_repo):
         repo = written_repo

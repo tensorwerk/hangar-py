@@ -11,6 +11,8 @@ Repository
 .. automodule:: hangar.repository
    :members:
 
+.. autoclass:: Remotes
+   :members:
 
 Write Enabled Checkout
 ======================
@@ -30,6 +32,7 @@ Dataset Data
 
 .. autoclass:: hangar.dataset.DatasetDataWriter
    :members:
+   :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
 
 Metadata
@@ -37,6 +40,7 @@ Metadata
 
 .. autoclass:: hangar.metadata.MetadataWriter
    :members:
+   :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
 
 Differ
