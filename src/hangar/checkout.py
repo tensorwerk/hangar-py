@@ -549,6 +549,15 @@ class WriterCheckout(object):
         '''
         self.__acquire_writer_lock()
         logger.info(f'Commit operation requested with message: {commit_message}')
+        metadataconman = self._metadata._is_conman
+        if metadataconman:
+            self._metadata.__exit__()
+        open_datasets = []
+        for dataset in self._datasets.values():
+            if dataset._is_conman:
+                open_datasets.append(dataset.name)
+                dataset.__exit__()
+
         if self._differ.status() == 'CLEAN':
             e = RuntimeError('No changes made in staging area. Cannot commit.')
             logger.error(e, exc_info=False)
@@ -565,6 +574,13 @@ class WriterCheckout(object):
         # reopen the file handles so that we don't have to invalidate
         # previous weakproxy references like if we just called `__setup`
         self._datasets._open()
+
+        for dataset in self._datasets.values():
+            if dataset.name in open_datasets:
+                dataset.__enter__()
+        if metadataconman:
+            self._metadata.__enter__()
+
         logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
 

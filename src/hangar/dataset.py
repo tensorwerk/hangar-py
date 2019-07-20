@@ -618,7 +618,7 @@ class DatasetDataWriter(DatasetDataReader):
         # --------------------- add data to storage backend -------------------
 
         try:
-            tmpconman = False if self._is_conman else True
+            tmpconman = not self._is_conman
             if tmpconman:
                 self.__enter__()
 
@@ -1060,7 +1060,7 @@ class Datasets(object):
             If no dataset with the given name exists in the checkout
         '''
         try:
-            tmpconman = False if self._is_conman else True
+            tmpconman = not self._is_conman
             if tmpconman:
                 self.__enter__()
 
