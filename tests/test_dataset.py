@@ -797,3 +797,97 @@ class TestMultiprocessDatasetReads(object):
         for idx, data in enumerate(cmtData):
             assert np.allclose(data, masterSampList[20+idx]) is True
         nco.close()
+
+    def test_writer_iterating_over_keys_can_have_additions_made_no_error(self, written_two_cmt_repo):
+        # do not want ``RuntimeError dictionary changed size during iteration``
+
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        klist = []
+        with dset as ds:
+            for idx, k in enumerate(ds.keys()):
+                klist.append(k)
+                if idx == 0:
+                    ds['1232'] = np.random.randn(5, 7).astype(np.float32)
+        assert '1232' not in klist
+
+        klist = []
+        for k in ds.keys():
+            klist.append(k)
+        assert '1232' in klist
+        co.close()
+
+    def test_writer_iterating_over_values_can_have_additions_made_no_error(self, written_two_cmt_repo):
+        # do not want ``RuntimeError dictionary changed size during iteration``
+
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        vlist = []
+        mysample = np.random.randn(5, 7).astype(np.float32)
+        with dset as ds:
+            for idx, v in enumerate(ds.values()):
+                assert not np.allclose(v, mysample)
+                vlist.append(v)
+                if idx == 0:
+                    ds['1232'] = mysample
+
+        has_been_seen = []
+        for v in ds.values():
+            has_been_seen.append(np.allclose(v, mysample))
+
+        assert any(has_been_seen) is True
+        assert has_been_seen.count(True) == 1
+        co.close()
+
+    def test_writer_iterating_over_items_can_have_additions_made_no_error(self, written_two_cmt_repo):
+        # do not want ``RuntimeError dictionary changed size during iteration``
+
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        vlist, klist = [], []
+        mysample = np.random.randn(5, 7).astype(np.float32)
+        with dset as ds:
+            for idx, kv in enumerate(ds.items()):
+                k, v = kv
+                assert not np.allclose(v, mysample)
+                vlist.append(v)
+                klist.append(k)
+                if idx == 0:
+                    ds['1232'] = mysample
+
+        assert '1232' not in klist
+        khas_been_seen = []
+        vhas_been_seen = []
+        for k, v in ds.items():
+            khas_been_seen.append(bool(k == '1232'))
+            vhas_been_seen.append(np.allclose(v, mysample))
+
+        assert any(khas_been_seen) is True
+        assert khas_been_seen.count(True) == 1
+        assert any(vhas_been_seen) is True
+        assert vhas_been_seen.count(True) == 1
+        co.close()
+
+    def test_reader_iterating_over_items_can_not_make_additions(self, written_two_cmt_repo):
+        # do not want ``RuntimeError dictionary changed size during iteration``
+
+        repo = written_two_cmt_repo
+        co = repo.checkout(write=False)
+        dset = co.datasets['_dset']
+        vlist, klist = [], []
+        mysample = np.random.randn(5, 7).astype(np.float32)
+        with dset as ds:
+            for idx, kv in enumerate(ds.items()):
+                k, v = kv
+                assert not np.allclose(v, mysample)
+                vlist.append(v)
+                klist.append(k)
+                if idx == 0:
+                    with pytest.raises(TypeError):
+                        ds['1232'] = mysample
+
+        assert '1232' not in klist
+        co.close()

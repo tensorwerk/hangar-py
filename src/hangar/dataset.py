@@ -1,7 +1,8 @@
+import os
 import hashlib
 import logging
 import warnings
-from typing import Optional, MutableMapping, List, Union
+from typing import Optional, MutableMapping, List, Union, Mapping, Iterator, Tuple
 from multiprocessing import get_context, cpu_count
 
 import lmdb
@@ -252,20 +253,47 @@ class DatasetDataReader(object):
                     remote_keys.append(sampleName)
         return remote_keys
 
-    def keys(self):
+    def keys(self) -> Iterator[str]:
         '''generator which yields the names of every sample in the dataset
+
+        unlike write-enabled checkouts, reader checkouts do not make a copy
+        of the key list while iterating as the checkout has no way to modify
+        the contents of the list.
+
+        Yields
+        ------
+        Iterator[str]
+            keys of one sample at a time inside the dataset
         '''
         for name in self._sspecs:
             yield name
 
-    def values(self):
+    def values(self) -> Iterator[np.ndarray]:
         '''generator which yields the tensor data for every sample in the dataset
+
+        unlike write-enabled checkouts, reader checkouts do not make a copy
+        of the key/value list while iterating as the checkout has no way to modify
+        the contents of the list.
+
+        Yields
+        ------
+        Iterator[np.ndarray]
+            values of one sample at a time inside the dataset
         '''
         for name in self._sspecs:
             yield self.get(name)
 
-    def items(self):
+    def items(self) -> Iterator[Tuple[str, np.ndarray]]:
         '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
+
+        unlike write-enabled checkouts, reader checkouts do not make a copy
+        of the key/values list while iterating as the checkout has no way to modify
+        the contents of the list.
+
+        Yields
+        ------
+        Iterator[Tuple[str, np.ndarray]]
+            sample name and stored value for every sample inside the dataset
         '''
         for name in self._sspecs:
             yield (name, self.get(name))
@@ -454,6 +482,60 @@ class DatasetDataWriter(DatasetDataReader):
             numeric format code of the default backend.
         '''
         return self._dflt_backend
+
+    def keys(self) -> Iterator[str]:
+        '''generator which yields the names of every sample in the dataset
+
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.)
+        However, in order to avoid differences between read-write checkouts we
+        still just return the results as a generator to the user.
+
+        Yields
+        ------
+        Iterator[str]
+            name of keys inside the dataset
+        '''
+        for name in list(self._sspecs):
+            yield name
+
+    def values(self) -> Iterator[np.ndarray]:
+        '''generator which yields the tensor data for every sample in the dataset
+
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.)
+        However, in order to avoid differences between read-write checkouts we
+        still just return the results as a generator to the user.
+
+        Yields
+        ------
+        Iterator[np.ndarray]
+            values of one sample at a time inside the dataset
+        '''
+        for name in list(self._sspecs):
+            yield self.get(name)
+
+    def items(self) -> Iterator[Tuple[str, np.ndarray]]:
+        '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
+
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.)
+        However, in order to avoid differences between read-write checkouts we
+        still just return the results as a generator to the user.
+
+        Yields
+        ------
+        Iterator[Tuple[str, np.ndarray]]
+            sample name and stored value for every sample inside the dataset
+        '''
+        for name in list(self._sspecs):
+            yield (name, self.get(name))
 
     def add(self, data: np.ndarray, name: Union[str, int] = None, **kwargs) -> Union[str, int]:
         '''Store a piece of data in a dataset
@@ -683,7 +765,9 @@ class Datasets(object):
 
     Parameters
     ----------
-    repo_pth : str
+    mode : str
+        one of 'r' or 'a' to indicate read or write mode
+    repo_pth : os.PathLike
         path to the repository on disk
     datasets : dict of obj
         dictionary of DatasetData objects
@@ -695,32 +779,41 @@ class Datasets(object):
         cmtrefenv for read-only checkouts.
     stagehashenv : lmdb.Environment
         environment handle for newly added staged data hash records.
-    mode : str
-        one of 'r' or 'a' to indicate read or write mode
     '''
 
-    def __init__(self, repo_pth, datasets, hashenv, dataenv, stagehashenv, mode):
+    def __init__(self,
+                 mode: str,
+                 repo_pth: os.PathLike,
+                 datasets: Mapping[str, Union[DatasetDataReader, DatasetDataWriter]],
+                 hashenv: Optional[lmdb.Environment] = None,
+                 dataenv: Optional[lmdb.Environment] = None,
+                 stagehashenv: Optional[lmdb.Environment] = None):
+
         self._mode = mode
-        self._hashenv = hashenv
-        self._dataenv = dataenv
         self._repo_pth = repo_pth
         self._datasets = datasets
-        self._stagehashenv = stagehashenv
-
         self._is_conman = False
         self._contains_partial_remote_data: bool = False
-        self._Query = RecordQuery(self._dataenv)
+
+        if (mode == 'a'):
+            self._hashenv = hashenv
+            self._dataenv = dataenv
+            self._stagehashenv = stagehashenv
+            self._Query = RecordQuery(self._dataenv)
+
         self.__setup()
 
     def __setup(self):
         '''Do not allow users to use internal functions
         '''
-        self._from_commit = None
-        self._from_staging_area = None
+        self._from_commit = None  # should never be able to access
+        self._from_staging_area = None  # should never be able to access
         if self._mode == 'r':
             self.init_dataset = None
             self.remove_dset = None
             self.multi_add = None
+            self.__delitem__ = None
+            self.__setitem__ = None
 
     def _open(self):
         for v in self._datasets.values():
@@ -736,7 +829,7 @@ class Datasets(object):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Dataset Names / Partial Remote References:\
-                \n      - ' + '\n      - '.join(
+                \n      - '                            + '\n      - '.join(
             f'{dsetn} / {dset.contains_remote_references}'
             for dsetn, dset in self._datasets.items())
         p.text(res)
@@ -745,8 +838,6 @@ class Datasets(object):
         res = f'{self.__class__}('\
               f'repo_pth={self._repo_pth}, '\
               f'datasets={self._datasets}, '\
-              f'hashenv={self._hashenv}, '\
-              f'dataenv={self._dataenv}, '\
               f'mode={self._mode})'
         return res
 
@@ -792,35 +883,11 @@ class Datasets(object):
             This operation is not allowed under any circumstance
 
         '''
-        msg = f'HANGAR NOT ALLOWED ERROR:: To add a dataset use `init_dataset` method.'
-        e = PermissionError(msg)
-        logger.error(e, exc_info=False)
-        raise e
+        msg = f'HANGAR NOT ALLOWED:: To add a dataset use `init_dataset` method.'
+        raise PermissionError(msg)
 
     def __contains__(self, key):
         return True if key in self._datasets else False
-
-    def __delitem__(self, key):
-        '''remove a dataset and all data records if write-enabled process.
-
-        Parameters
-        ----------
-        key : string
-            name of the dataset to remove from the repository. This will remove
-            all records from the staging area (though the actual data and all
-            records are still accessible) if they were previously committed
-
-        Raises
-        ------
-        PermissionError
-            If this is a read-only checkout, no operation is permitted.
-        '''
-        if self._mode == 'r':
-            e = PermissionError('Cannot remove a dataset in read-only checkout')
-            logger.error(e, exc_info=False)
-            raise e
-        else:
-            self.remove_dset(key)
 
     def __len__(self):
         return len(self._datasets)
@@ -925,6 +992,23 @@ class Datasets(object):
             raise e
 
 # ------------------------ Writer-Enabled Methods Only ------------------------------
+
+    def __delitem__(self, key):
+        '''remove a dataset and all data records if write-enabled process.
+
+        Parameters
+        ----------
+        key : string
+            name of the dataset to remove from the repository. This will remove
+            all records from the staging area (though the actual data and all
+            records are still accessible) if they were previously committed
+
+        Raises
+        ------
+        PermissionError
+            If this is a read-only checkout, no operation is permitted.
+        '''
+        self.remove_dset(key)
 
     def __enter__(self):
         self._is_conman = True
@@ -1254,7 +1338,7 @@ class Datasets(object):
                 mode='a',
                 default_schema_backend=schemaSpec.schema_default_backend)
 
-        return cls(repo_pth, datasets, hashenv, stageenv, stagehashenv, 'a')
+        return cls('a', repo_pth, datasets, hashenv, stageenv, stagehashenv)
 
     @classmethod
     def _from_commit(cls, repo_pth, hashenv, cmtrefenv):
@@ -1296,4 +1380,4 @@ class Datasets(object):
                 hashenv=hashenv,
                 mode='r')
 
-        return cls(repo_pth, datasets, hashenv, cmtrefenv, None, 'r')
+        return cls('r', repo_pth, datasets, None, None, None)
