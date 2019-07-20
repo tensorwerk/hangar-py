@@ -2,7 +2,7 @@ import os
 import logging
 import weakref
 import warnings
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 from . import merger
 from . import constants as c
@@ -97,24 +97,33 @@ class Repository(object):
 
     @property
     def remote(self) -> Remotes:
-        '''Accessor to the methods controlling remote interactions
+        '''Accessor to the methods controlling remote interactions.
+
+        .. seealso::
+
+           :class:`Remotes` for available methods of this property
+
+        Returns
+        -------
+        Remotes
+            Accessor object methods for controlling remote interactions.
         '''
         proxy = weakref.proxy(self._remote)
         return proxy
 
     @property
-    def repo_path(self):
+    def repo_path(self) -> os.PathLike:
         '''Return the path to the repository on disk, read-only attribute
 
         Returns
         -------
-        str
+        os.PathLike
             path to the specified repository, not including `__hangar` directory
         '''
         return os.path.dirname(self._repo_path)
 
     @property
-    def writer_lock_held(self):
+    def writer_lock_held(self) -> bool:
         '''Check if the writer lock is currently marked as held. Read-only attribute.
 
         Returns
@@ -158,7 +167,7 @@ class Repository(object):
 
         Returns
         -------
-        object
+        Union[ReaderCheckout, WriterCheckout]
             Checkout object which can be used to interact with the repository
             data
         '''
@@ -299,7 +308,7 @@ class Repository(object):
             commit on the printed log graph
         Returns
         -------
-        dict
+        Optional[dict]
             Dict containing the commit ancestor graph, and all specifications.
         '''
         self.__verify_repo_initialized()
@@ -344,7 +353,7 @@ class Repository(object):
 
         Returns
         -------
-        dict
+        Optional[dict]
             contents of the entire repository (if `return_contents=True`)
         '''
         self.__verify_repo_initialized()
@@ -373,7 +382,7 @@ class Repository(object):
         eco = ecosystem.get_versions()
         return eco
 
-    def merge(self, message, master_branch, dev_branch):
+    def merge(self, message: str, master_branch: str, dev_branch: str) -> str:
         '''Perform a merge of the changes made on two branches.
 
         Parameters
@@ -403,7 +412,7 @@ class Repository(object):
 
         return commit_hash
 
-    def create_branch(self, branch_name, base_commit=None):
+    def create_branch(self, branch_name: str, base_commit: str = None) -> str:
         '''create a branch with the provided name from a certain commit.
 
         If no base commit hash is specified, the current writer branch HEAD
@@ -445,7 +454,7 @@ class Repository(object):
         '''
         raise NotImplementedError()
 
-    def list_branches(self):
+    def list_branches(self) -> List[str]:
         '''list all branch names created in the repository.
 
         Returns
@@ -457,7 +466,7 @@ class Repository(object):
         branches = heads.get_branch_names(self._env.branchenv)
         return branches
 
-    def force_release_writer_lock(self):
+    def force_release_writer_lock(self) -> bool:
         '''Force release the lock left behind by an unclosed writer-checkout
 
         .. warning::
