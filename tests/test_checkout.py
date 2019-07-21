@@ -552,3 +552,74 @@ def test_full_from_short_commit_digest(written_two_cmt_repo):
 
     with pytest.raises(KeyError):
         expand_short_commit_digest(repo._env.refenv, 'zzzzzzzzzzzzzzzzzzzzzzzzzzzz')
+
+
+def test_writer_context_manager_objects_are_gc_removed_after_co_close(written_two_cmt_repo):
+
+    repo = written_two_cmt_repo
+    co = repo.checkout(write=True)
+    with co.metadata as m:
+        m['aa'] = 'bb'
+        cmt1 = co.commit('here is the first commit')
+        with co.datasets['_dset'] as d:
+            d['2422'] = d['0'] + 213
+            cmt2 = co.commit('here is the second commit')
+
+    assert co.close() is None
+    with pytest.raises(ReferenceError):
+        m.__dict__
+    with pytest.raises(ReferenceError):
+        d.__dict__
+    with pytest.raises(PermissionError):
+        co.datasets
+    assert co.__dict__ == {}
+
+    co = repo.checkout(commit=cmt1)
+    assert 'aa' in co.metadata
+    assert co.metadata['aa'] == 'bb'
+    co.close()
+
+    co = repo.checkout(commit=cmt2)
+    assert 'aa' in co.metadata
+    assert co.metadata['aa'] == 'bb'
+    assert '2422' in co.datasets['_dset']
+    assert np.allclose(co.datasets['_dset']['2422'],
+                       co.datasets['_dset']['0'] + 213)
+    co.close()
+
+
+def test_reader_context_manager_objects_are_gc_removed_after_co_close(written_two_cmt_repo):
+
+    repo = written_two_cmt_repo
+    co = repo.checkout(write=False)
+    with co.metadata as m:
+        k = list(m.keys())
+        with co.datasets['_dset'] as d:
+            ds = d['2']
+
+    assert m.iswriteable is False
+    assert d.iswriteable is False
+    assert k == list(m.keys())
+    assert k == list(co.metadata.keys())
+    assert np.allclose(ds, d.get('2'))
+    assert np.allclose(ds, co.datasets['_dset'].get('2'))
+
+    assert co.close() is None
+
+    with pytest.raises(ReferenceError):
+        m.__dict__
+    with pytest.raises(ReferenceError):
+        d.__dict__
+    with pytest.raises(AttributeError):
+        co._datasets
+    with pytest.raises(AttributeError):
+        co._metadata
+    with pytest.raises(PermissionError):
+        str(co.datasets.get('_dset'))
+    with pytest.raises(PermissionError):
+        repr(co.metadata)
+    with pytest.raises(PermissionError):
+        co.datasets
+    with pytest.raises(PermissionError):
+        repr(co)
+    assert co.__dict__ == {}
