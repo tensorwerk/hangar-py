@@ -36,8 +36,8 @@ author = 'Richard Izzo'
 copyright = '{0}, {1}'.format(year, author)
 version = release = '0.1.1'
 
-pygments_style = 'sphinx'
-pygments_lexer = 'pycon'
+pygments_style = 'default'
+pygments_lexer = 'PythonConsoleLexer'
 highlight_options = {
     'python3': True
 }
@@ -68,3 +68,7 @@ napoleon_include_init_with_doc = True
 
 add_module_names = False
 doctest_test_doctest_blocks = None
+
+html_theme_options = {
+    'style_nav_header_background': 'orange'
+}

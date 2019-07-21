@@ -34,7 +34,7 @@ matrix:
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
-        - TR_PYTHON_VERSION="3.6"
+        - TR_PYTHON_VERSION="3.6.8"
         - TOXENV=py36-nocov
     - os: osx
       osx_image: xcode9.4
@@ -60,8 +60,7 @@ before_install:
       export PATH=${CONDA_INSTALL_LOCN}/bin:$PATH
       conda config --set always_yes true
       conda update conda
-      conda install python=${TR_PYTHON_VERSION} zstd zlib
-      conda clean --all
+      conda install python=${TR_PYTHON_VERSION} zstd zlib lz4-c lz4
       # ensure we have the latest version of pip installed
       python -m pip install -U pip
       python -m pip install -U setuptools
