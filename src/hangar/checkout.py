@@ -3,6 +3,8 @@ import logging
 import weakref
 from uuid import uuid4
 from os.path import join as pjoin
+from contextlib import suppress
+from functools import partial
 
 import lmdb
 
@@ -96,13 +98,13 @@ class ReaderCheckout(object):
         PermissionError
             if the checkout was previously close
         '''
-        try:
-            assert hasattr(self, '_metadata')
-            assert hasattr(self, '_datasets')
-        except AssertionError:
-            err = f'Unable to operate on past checkout objects which have been '\
-                  f'closed. No operation occurred. Please use a new checkout.'
-            raise PermissionError(err) from None
+        p_hasattr = partial(hasattr, self)
+        if not all(map(p_hasattr, ['_metadata', '_datasets', '_differ'])):
+            e = PermissionError(
+                f'Unable to operate on past checkout objects which have been '
+                f'closed. No operation occurred. Please use a new checkout.')
+            logger.error(e, exc_info=False)
+            raise e from None
 
     @property
     def datasets(self) -> Datasets:
@@ -110,8 +112,8 @@ class ReaderCheckout(object):
 
         .. seealso::
 
-            The class :class:`hangar.dataset.Datasets` contains all methods accessible
-            by this property accessor
+            The class :class:`hangar.dataset.Datasets` contains all methods
+            accessible by this property accessor
 
         Returns
         -------
@@ -130,8 +132,8 @@ class ReaderCheckout(object):
 
         .. seealso::
 
-            The class :class:`hangar.metadata.MetadataReader` contains all methods accessible
-            by this property accessor
+            The class :class:`hangar.metadata.MetadataReader` contains all methods
+            accessible by this property accessor
 
         Returns
         -------
@@ -185,11 +187,35 @@ class ReaderCheckout(object):
         multiple simultaneous read checkouts.
         '''
         self.__verify_checkout_alive()
-        self._datasets._close()
+        with suppress(AttributeError):
+            self._datasets._close()
+
+        for dsetn in (self._datasets._datasets.keys()):
+            for attr in list(self._datasets._datasets[dsetn].__dir__()):
+                with suppress(AttributeError, TypeError):
+                    delattr(self._datasets._datasets[dsetn], attr)
+
+        for attr in list(self._datasets.__dir__()):
+            with suppress(AttributeError, TypeError):
+                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
+                delattr(self._datasets, f'_self_{attr}')
+
+        for attr in list(self._metadata.__dir__()):
+            with suppress(AttributeError, TypeError):
+                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
+                delattr(self._metadata, f'_self_{attr}')
 
         del self._datasets
         del self._metadata
         del self._differ
+        del self._commit_hash
+        del self._repo_path
+        del self._labelenv
+        del self._dataenv
+        del self._hashenv
+        del self._branchenv
+        del self._refenv
+        return
 
 
 # --------------- Write enabled checkout ---------------------------------------
@@ -312,8 +338,8 @@ class WriterCheckout(object):
 
         .. seealso::
 
-            The class :class:`hangar.metadata.MetadataWriter` contains all methods accessible
-            by this property accessor
+            The class :class:`hangar.metadata.MetadataWriter` contains all methods
+            accessible by this property accessor
 
         Returns
         -------
@@ -332,8 +358,8 @@ class WriterCheckout(object):
 
         .. seealso::
 
-            The class :class:`hangar.diff.WriterUserDiff` contains all methods accessible
-            by this property accessor
+            The class :class:`hangar.diff.WriterUserDiff` contains all methods
+            accessible by this property accessor
 
         Returns
         -------
@@ -368,9 +394,9 @@ class WriterCheckout(object):
             commit hash
         '''
         self.__acquire_writer_lock()
-        commit_hash = heads.get_branch_head_commit(
-            branchenv=self._branchenv, branch_name=self._branch_name)
-        return commit_hash
+        cmt = heads.get_branch_head_commit(branchenv=self._branchenv,
+                                           branch_name=self._branch_name)
+        return cmt
 
     def merge(self, message: str, dev_branch: str) -> str:
         '''Merge the currently checked out commit with the provided branch name.
@@ -404,10 +430,8 @@ class WriterCheckout(object):
             writer_uuid=self._writer_lock)
 
         for dsetHandle in self._datasets.values():
-            try:
+            with suppress(KeyError):
                 dsetHandle._close()
-            except KeyError:
-                pass
 
         self._metadata = MetadataWriter(
             dataenv=self._stageenv,
@@ -427,22 +451,22 @@ class WriterCheckout(object):
 
     def __acquire_writer_lock(self):
         '''Ensures that this class instance holds the writer lock in the database.
+
+        Raises
+        ------
+        PermissionError
+            If the checkout was previously closed (no :attr:``_writer_lock``) or if
+            the writer lock value does not match that recorded in the branch db
         '''
         try:
             self._writer_lock
         except AttributeError:
-            try:
+            with suppress(AttributeError):
                 del self._datasets
-            except AttributeError:
-                pass
-            try:
+            with suppress(AttributeError):
                 del self._metadata
-            except AttributeError:
-                pass
-            try:
+            with suppress(AttributeError):
                 del self._differ
-            except AttributeError:
-                pass
             err = f'Unable to operate on past checkout objects which have been '\
                   f'closed. No operation occurred. Please use a new checkout.'
             logger.error(err, exc_info=0)
@@ -451,18 +475,12 @@ class WriterCheckout(object):
         try:
             heads.acquire_writer_lock(self._branchenv, self._writer_lock)
         except PermissionError as e:
-            try:
+            with suppress(AttributeError):
                 del self._datasets
-            except AttributeError:
-                pass
-            try:
+            with suppress(AttributeError):
                 del self._metadata
-            except AttributeError:
-                pass
-            try:
+            with suppress(AttributeError):
                 del self._differ
-            except AttributeError:
-                pass
             logger.error(e, exc_info=0)
             raise e from None
 
@@ -491,27 +509,22 @@ class WriterCheckout(object):
                                      branch_name=current_head)
         if currentDiff.status() == 'DIRTY':
             if current_head != self._branch_name:
-                err = f'Unable to check out branch: {self._branch_name} for writing as '\
-                      f'the staging area has uncommitted changes on branch: {current_head}. '\
-                      f'Please commit or stash uncommitted changes before checking out a '\
-                      f'different branch for writing.'
+                e = ValueError(
+                    f'Unable to check out branch: {self._branch_name} for writing '
+                    f'as the staging area has uncommitted changes on branch: '
+                    f'{current_head}. Please commit or stash uncommitted changes '
+                    f'before checking out a different branch for writing.')
                 self.close()
-                logger.error(err, exc_info=1)
-                raise ValueError(err)
+                logger.error(e, exc_info=1)
+                raise e
         else:
             if current_head != self._branch_name:
-                commit_hash = heads.get_branch_head_commit(
-                    branchenv=self._branchenv,
-                    branch_name=self._branch_name)
-
+                cmt = heads.get_branch_head_commit(
+                    branchenv=self._branchenv, branch_name=self._branch_name)
                 commiting.replace_staging_area_with_commit(
-                    refenv=self._refenv,
-                    stageenv=self._stageenv,
-                    commit_hash=commit_hash)
-
+                    refenv=self._refenv, stageenv=self._stageenv, commit_hash=cmt)
                 heads.set_staging_branch_head(
-                    branchenv=self._branchenv,
-                    branch_name=self._branch_name)
+                    branchenv=self._branchenv, branch_name=self._branch_name)
 
         self._metadata = MetadataWriter(
             dataenv=self._stageenv,
@@ -528,19 +541,19 @@ class WriterCheckout(object):
             branch_name=self._branch_name)
 
     def commit(self, commit_message: str) -> str:
-        '''commit the changes made in the staging area.
-
-        This creates a new commit on the checkout branch.
+        '''Commit the changes made in the staging area on the checkout branch.
 
         Parameters
         ----------
         commit_message : str, optional
-            log of what was changed in this commit, defaults to ''
+            user proved message for a log of what was changed in this commit.
+            Should a fast forward commit be possible, this will NOT be added to
+            fast-forward HEAD.
 
         Returns
         -------
         string
-            The commit hash of the new commit
+            The commit hash of the new commit.
 
         Raises
         ------
@@ -549,6 +562,12 @@ class WriterCheckout(object):
         '''
         self.__acquire_writer_lock()
         logger.info(f'Commit operation requested with message: {commit_message}')
+
+        if self._differ.status() == 'CLEAN':
+            e = RuntimeError('No changes made in staging area. Cannot commit.')
+            logger.error(e, exc_info=False)
+            raise e
+
         metadataconman = self._metadata._is_conman
         if metadataconman:
             self._metadata.__exit__()
@@ -557,11 +576,6 @@ class WriterCheckout(object):
             if dataset._is_conman:
                 open_datasets.append(dataset.name)
                 dataset.__exit__()
-
-        if self._differ.status() == 'CLEAN':
-            e = RuntimeError('No changes made in staging area. Cannot commit.')
-            logger.error(e, exc_info=False)
-            raise e
 
         self._datasets._close()
         commit_hash = commiting.commit_records(message=commit_message,
@@ -587,10 +601,10 @@ class WriterCheckout(object):
     def reset_staging_area(self) -> str:
         '''Perform a hard reset of the staging area to the last commit head.
 
-        After this operation is performed, the writer checkout will be
-        automatically closed in the typical fashion (any held references to
-        `dataset` or `metadata` objects will finalize and destruct as normal),
-        In order to perform any further operation, a new checkout needs to be
+        After this operation completes, the writer checkout will automatically
+        close in the typical fashion (any held references to :attr:``dataset``
+        or :attr:``metadata`` objects will finalize and destruct as normal), In
+        order to perform any further operation, a new checkout needs to be
         opened.
 
         .. warning::
@@ -606,7 +620,7 @@ class WriterCheckout(object):
         Raises
         ------
         RuntimeError
-            If no changes have been made to the staging area, no reset is necessary.
+            If no changes have been made to the staging area, No-Op.
         '''
         self.__acquire_writer_lock()
         logger.info(f'Hard reset requested with writer_lock: {self._writer_lock}')
@@ -651,13 +665,41 @@ class WriterCheckout(object):
         writes until it has been manually cleared.
         '''
         self.__acquire_writer_lock()
-        try:
+        with suppress(AttributeError):
             self._datasets._close()
-        except AttributeError:
-            pass
+
+        for dsetn in (self._datasets._datasets.keys()):
+            for attr in list(self._datasets._datasets[dsetn].__dir__()):
+                with suppress(AttributeError, TypeError):
+                    delattr(self._datasets._datasets[dsetn], attr)
+
+        for attr in list(self._datasets.__dir__()):
+            with suppress(AttributeError, TypeError):
+                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
+                delattr(self._datasets, f'_self_{attr}')
+
+        for attr in list(self._metadata.__dir__()):
+            with suppress(AttributeError, TypeError):
+                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
+                delattr(self._metadata, f'_self_{attr}')
+
+        # priorities to ensure removed
         del self._datasets
         del self._metadata
         del self._differ
+        # do not hold references in unused commit
+        del self._refenv
+        del self._hashenv
+        del self._labelenv
+        del self._stageenv
+        del self._branchenv
+        del self._stagehashenv
+        del self._repo_path
+        del self._branch_name
+        del self._writer_lock
+        del self._repo_stage_path
+        del self._repo_store_path
+
         logger.info(f'writer checkout of {self._branch_name} closed')
         heads.release_writer_lock(self._branchenv, self._writer_lock)
-        del self._writer_lock
+        return
