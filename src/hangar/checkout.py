@@ -563,37 +563,39 @@ class WriterCheckout(object):
         self.__acquire_writer_lock()
         logger.info(f'Commit operation requested with message: {commit_message}')
 
-        if self._differ.status() == 'CLEAN':
-            e = RuntimeError('No changes made in staging area. Cannot commit.')
-            logger.error(e, exc_info=False)
-            raise e
-
-        metadataconman = self._metadata._is_conman
-        if metadataconman:
-            self._metadata.__exit__()
-        open_datasets = []
+        open_dsets = []
         for dataset in self._datasets.values():
             if dataset._is_conman:
-                open_datasets.append(dataset.name)
-                dataset.__exit__()
+                open_dsets.append(dataset.name)
+        open_meta = self._metadata._is_conman
 
-        self._datasets._close()
-        commit_hash = commiting.commit_records(message=commit_message,
-                                               branchenv=self._branchenv,
-                                               stageenv=self._stageenv,
-                                               refenv=self._refenv,
-                                               repo_path=self._repo_path)
+        try:
+            if open_meta:
+                self._metadata.__exit__()
+            for dsetn in open_dsets:
+                self._datasets[dsetn].__exit__()
 
-        hashs.clear_stage_hash_records(self._stagehashenv)
-        # reopen the file handles so that we don't have to invalidate
-        # previous weakproxy references like if we just called `__setup`
-        self._datasets._open()
+            if self._differ.status() == 'CLEAN':
+                e = RuntimeError('No changes made in staging area. Cannot commit.')
+                logger.error(e, exc_info=False)
+                raise e
 
-        for dataset in self._datasets.values():
-            if dataset.name in open_datasets:
-                dataset.__enter__()
-        if metadataconman:
-            self._metadata.__enter__()
+            self._datasets._close()
+            commit_hash = commiting.commit_records(message=commit_message,
+                                                   branchenv=self._branchenv,
+                                                   stageenv=self._stageenv,
+                                                   refenv=self._refenv,
+                                                   repo_path=self._repo_path)
+            # purge recs then reopen file handles so that we don't have to invalidate
+            # previous weakproxy references like if we just called :meth:``__setup```
+            hashs.clear_stage_hash_records(self._stagehashenv)
+            self._datasets._open()
+
+        finally:
+            for dsetn in open_dsets:
+                self._datasets[dsetn].__enter__()
+            if open_meta:
+                self._metadata.__enter__()
 
         logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
@@ -665,29 +667,36 @@ class WriterCheckout(object):
         writes until it has been manually cleared.
         '''
         self.__acquire_writer_lock()
-        with suppress(AttributeError):
+
+        if hasattr(self, '_datasets') and (getattr(self, '_datasets') is not None):
             self._datasets._close()
 
-        for dsetn in (self._datasets._datasets.keys()):
-            for attr in list(self._datasets._datasets[dsetn].__dir__()):
+            for dsetn in (self._datasets._datasets.keys()):
+                for attr in list(self._datasets._datasets[dsetn].__dir__()):
+                    with suppress(AttributeError, TypeError):
+                        delattr(self._datasets._datasets[dsetn], attr)
+
+            for attr in list(self._datasets.__dir__()):
                 with suppress(AttributeError, TypeError):
-                    delattr(self._datasets._datasets[dsetn], attr)
+                    # prepending `_self_` addresses `WeakrefProxy` in `ObjectPRoxy`
+                    delattr(self._datasets, f'_self_{attr}')
 
-        for attr in list(self._datasets.__dir__()):
-            with suppress(AttributeError, TypeError):
-                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
-                delattr(self._datasets, f'_self_{attr}')
+        if hasattr(self, '_metadata') and (getattr(self, '_datasets') is not None):
+            for attr in list(self._metadata.__dir__()):
+                with suppress(AttributeError, TypeError):
+                    # prepending `_self_` addresses `WeakrefProxy` in `ObjectPRoxy`
+                    delattr(self._metadata, f'_self_{attr}')
 
-        for attr in list(self._metadata.__dir__()):
-            with suppress(AttributeError, TypeError):
-                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
-                delattr(self._metadata, f'_self_{attr}')
+        with suppress(AttributeError):
+            del self._datasets
+        with suppress(AttributeError):
+            del self._metadata
+        with suppress(AttributeError):
+            del self._differ
 
-        # priorities to ensure removed
-        del self._datasets
-        del self._metadata
-        del self._differ
-        # do not hold references in unused commit
+        logger.info(f'writer checkout of {self._branch_name} closed')
+        heads.release_writer_lock(self._branchenv, self._writer_lock)
+
         del self._refenv
         del self._hashenv
         del self._labelenv
@@ -695,11 +704,8 @@ class WriterCheckout(object):
         del self._branchenv
         del self._stagehashenv
         del self._repo_path
-        del self._branch_name
         del self._writer_lock
+        del self._branch_name
         del self._repo_stage_path
         del self._repo_store_path
-
-        logger.info(f'writer checkout of {self._branch_name} closed')
-        heads.release_writer_lock(self._branchenv, self._writer_lock)
         return
