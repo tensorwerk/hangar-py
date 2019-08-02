@@ -2,7 +2,6 @@
 # -*- encoding: utf-8 -*-
 import io
 
-import re
 from glob import glob
 from os.path import basename
 from os.path import dirname
@@ -22,15 +21,14 @@ def read(*names, **kwargs):
 
 
 extra_require = {
-        'torch': [
-            'torch>=1.0.0',
-        ],
         'dev': [
             'grpcio_tools',
             'mypy>=0.701',
             'mypy-protobuf',
         ],
+        'all': []
     }
+
 for _, packages in extra_require.items():
     extra_require['all'].extend(packages)
 
