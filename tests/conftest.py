@@ -47,15 +47,15 @@ def written_repo(repo):
 
 
 @pytest.fixture()
-def repo_with_20_samples(written_repo, array5by7, randomsizedarray):
+def repo_with_20_samples(written_repo, array5by7):
     co = written_repo.checkout(write=True)
-    second_dset = co.datasets.init_dataset('second_dset', prototype=randomsizedarray)
+    second_dset = co.datasets.init_dataset('second_dset', prototype=array5by7)
     first_dset = co.datasets['_dset']
     for i in range(20):
         array5by7[:] = i
-        randomsizedarray[:] = i
-        first_dset[i] = array5by7
-        second_dset[i] = randomsizedarray
+        array5by7[:] = i
+        first_dset[str(i)] = array5by7
+        second_dset[str(i)] = array5by7
     co.commit('20 samples')
     co.close()
     yield written_repo
@@ -78,7 +78,7 @@ def w_checkout(written_repo):
 
 
 @pytest.fixture()
-def array5by7(scope='session'):
+def array5by7():
     return np.random.random((5, 7))
 
 
