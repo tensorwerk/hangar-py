@@ -304,8 +304,8 @@ into master branch X'``.
 
 Because the raw commit hash logs can be quite dense to parse, a graphical
 logging utility is included as part of the repository. Running the
-`Repository.log()` method will pretty print a graph representation of the commit
-history:
+``Repository.log()`` method will pretty print a graph representation of the
+commit history:
 
 .. code:: python
 
@@ -317,14 +317,3 @@ history:
   >>> repo.log()
 
 .. image:: ./img/repo_graph_log.png
-
-
-Merge Strategies
-----------------
-
-**TODO: EXPAND ON THIS SECTION**
-
-There are a few ways which we can currently merge:
-
-* Fast-Forward -> update branch head pointers
-* 3-way merge -> calculate merge base and diff/patch dev/master from there.

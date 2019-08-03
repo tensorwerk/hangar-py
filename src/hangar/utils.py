@@ -308,14 +308,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 # ----------------- human & machine nbytes ------------------------------------
 
 
-@contextmanager
-def ignoring(*exceptions):
-    try:
-        yield
-    except exceptions as e:
-        pass
-
-
 def format_bytes(n):
     """ Format bytes as text
     >>> format_bytes(1)

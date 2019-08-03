@@ -4,8 +4,8 @@ import os
 import platform
 import struct
 import sys
+from contextlib import suppress
 
-from ..utils import ignoring
 
 required_packages = [('hangar', lambda p: p.__version__),
                      ('click', lambda p: p.__version__),
@@ -64,13 +64,13 @@ def get_optional_info() -> dict:
 
 def version_of_package(pkg):
     """ Try a variety of common ways to get the version of a package """
-    with ignoring(AttributeError):
+    with suppress(AttributeError):
         return pkg.__version__
-    with ignoring(AttributeError):
+    with suppress(AttributeError):
         return str(pkg.version)
-    with ignoring(AttributeError):
+    with suppress(AttributeError):
         return '.'.join(map(str, pkg.version_info))
-    with ignoring(AttributeError):
+    with suppress(AttributeError):
         return str(pkg.VERSION)
     return None
 

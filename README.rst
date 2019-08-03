@@ -102,14 +102,14 @@ The Hangar Workflow:
 
 Log Style Output:
 
-::
+.. code-block:: text
 
-    *   5254ec (master) : merge commit combining training updates and new validation samples
-    |\
-    | * 650361 (add-validation-data) : Add validation labels and image data in isolated branch
-    * | 5f15b4 : Add some metadata for later reference and add new training samples received after initial import
-    |/
-    *   baddba : Initial commit adding training images and labels
+   *   5254ec (master) : merge commit combining training updates and new validation samples
+   |\
+   | * 650361 (add-validation-data) : Add validation labels and image data in isolated branch
+   * | 5f15b4 : Add some metadata for later reference and add new training samples received after initial import
+   |/
+   *   baddba : Initial commit adding training images and labels
 
 
 Learn more about what Hangar is all about at https://hangar-py.readthedocs.io/

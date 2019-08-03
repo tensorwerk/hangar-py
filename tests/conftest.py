@@ -90,7 +90,6 @@ def written_two_cmt_repo(repo, array5by7):
                 d[str(sIdx)] = arr
         co.commit(f'commit number: {cIdx}')
         co.close()
-
     yield repo
 
 
