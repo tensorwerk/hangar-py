@@ -249,7 +249,10 @@ class Repository(object):
             co.close()
         return 'master'
 
-    def init(self, user_name: str, user_email: str,
+    def init(self,
+             user_name: str,
+             user_email: str,
+             *,
              remove_old: bool = False) -> os.PathLike:
         '''Initialize a Hangar repository at the specified directory path.
 
@@ -258,12 +261,12 @@ class Repository(object):
         Parameters
         ----------
         user_name : str
-            Name of the repository user.
+            Name of the repository user account.
         user_email : str
-            Email address of the repository user.
-        remove_old : bool, optional
+            Email address of the repository user account.
+        remove_old : bool, kwarg-only
             DEVELOPER USE ONLY -- remove and reinitialize a Hangar
-            repository at the given path, defaults to False
+            repository at the given path, Default = False
 
         Returns
         -------

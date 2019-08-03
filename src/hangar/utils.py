@@ -4,10 +4,8 @@ import random
 import re
 import string
 import weakref
-from datetime import timedelta
 from functools import partial
-from numbers import Number
-from typing import Union
+from typing import Union, Any
 
 import blosc
 import wrapt
@@ -36,14 +34,19 @@ def set_blosc_nthreads() -> int:
     return nUsed
 
 
-def random_string(stringLength=6):
-    '''Generate a random string of fixed length
+def random_string(n: int = 6) -> str:
+    '''Generate a case random string of ascii letters and digits of some length.
+
+    Parameters
+    ----------
+    n: int, optional
+        The number of characters which the output string will have. Default = 6
     '''
     letters = ''.join([string.ascii_letters, string.digits])
-    return ''.join(random.choice(letters) for i in range(stringLength))
+    return ''.join(random.choice(letters) for i in range(n))
 
 
-def cm_weakref_obj_proxy(obj: object) -> wrapt.ObjectProxy:
+def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
     '''Creates a weakproxy reference honoring optional use context managers.
 
     This is required because (for some unknown reason) `weakproxy`
@@ -55,7 +58,7 @@ def cm_weakref_obj_proxy(obj: object) -> wrapt.ObjectProxy:
 
     Parameters
     ----------
-    obj : class
+    obj: Any
         object instance implementing the __enter__ and __exit__ methods which
         should be passed through as a weakref proxy object
 
@@ -85,7 +88,7 @@ def symlink_rel(src: os.PathLike, dst: os.PathLike):
     os.symlink(rel_path_src, dst)
 
 
-SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)
+_SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)
 
 
 def is_suitable_user_key(key: Union[str, int]) -> bool:
@@ -110,12 +113,12 @@ def is_suitable_user_key(key: Union[str, int]) -> bool:
             str_data = str(key)
         else:
             raise TypeError
-        return bool(SuitableCharRE.match(str_data))
+        return bool(_SuitableCharRE.match(str_data))
     except TypeError:
         return False
 
 
-def is_ascii(str_data: str):
+def is_ascii(str_data: str) -> bool:
     '''Checks if string contains only ascii chars.
 
     Necessary because python 3.6 does not have a str.isascii() method.
@@ -165,17 +168,17 @@ def find_next_prime(N: int) -> int:
         return 2
     if N % 2 == 0:
         N += 1
-    for n in range(N, 2*N, 2):
+    for n in range(N, 2 * N, 2):
         if is_prime(n):
             return n
 
 
-def file_size(file_path):
+def file_size(p: os.PathLike) -> int:
     '''Query the file size of a specific file
 
     Parameters
     ----------
-    file_path : str
+    p : os.PathLike
         path to a file that exists on disk.
 
     Raises
@@ -188,24 +191,24 @@ def file_size(file_path):
     int
         nbytes the file consumes on disk.
     '''
-    if not os.path.isfile(file_path):
-        err = f'Cannot query size of: {file_path}. File does not exist'
+    if not os.path.isfile(p):
+        err = f'Cannot query size of: {p}. File does not exist'
         raise FileNotFoundError(err)
-    nbytes = os.stat(file_path).st_size
+    nbytes = os.stat(p).st_size
     return nbytes
 
 
-def folder_size(repo_path, *, recurse_directories=False):
+def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
     '''size of all files in a folder.
 
-    Default is to not include subdirectories. Set "recurse_directories=True"
+    Default is to not include subdirectories. Set "recurse=True"
     to enable recursive calculation.
 
     Parameters
     ----------
-    repo_path : str
+    p : os.PathLike
         path to the repository on disk.
-    recurse_directories : bool
+    recurse : bool, kwarg-only
         to calculate the full size of the repo (Default value = False)
 
     Returns
@@ -214,25 +217,25 @@ def folder_size(repo_path, *, recurse_directories=False):
         number of bytes used up in the repo_path
     '''
     total = 0
-    for entry in os.scandir(repo_path):
+    for entry in os.scandir(p):
         if entry.is_file(follow_symlinks=False):
             total += entry.stat().st_size
-        elif (recurse_directories is True) and (entry.is_dir() is True):
-            total += folder_size(entry.path, recurse_directories=True)
+        elif (recurse is True) and (entry.is_dir() is True):
+            total += folder_size(entry.path, recurse=True)
     return total
 
 
-def is_valid_directory_path(path: str) -> str:
+def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
     '''Check if path is directory which user has write permission to.
 
     Parameters
     ----------
-    path : str
+    p : os.PathLike
         path to some location on disk
 
     Returns
     -------
-    str
+    os.PathLike
         If successful, the path with any user constructions expanded
         (ie. `~/somedir` -> `/home/foo/somedir`)
 
@@ -246,20 +249,18 @@ def is_valid_directory_path(path: str) -> str:
         If the user does not have write access to the specified path
     '''
     try:
-        usr_path = os.path.expanduser(path)
+        usr_path = os.path.expanduser(p)
         isDir = os.path.isdir(usr_path)
         isWriteable = os.access(usr_path, os.W_OK)
     except TypeError:
-        msg = f'HANGAR TYPE ERROR:: `path` arg: {path} of type: {type(path)} '\
-              f'is not valid path specifier'
+        msg = f'Path arg `p`: {p} of type: {type(p)} is not valid path specifier'
         raise TypeError(msg)
 
     if not isDir:
-        msg = f'HANGAR VALUE ERROR:: `path` arg: {path} is not a directory.'
+        msg = f'Path arg `p`: {p} is not a directory.'
         raise OSError(msg)
     elif not isWriteable:
-        msg = f'HANGAR PERMISSION ERROR:: user does not have permission to write '\
-              f'to directory `path` arg: {path}'
+        msg = f'User does not have permission to write to directory path: {p}'
         raise PermissionError(msg)
 
     return usr_path
@@ -268,10 +269,10 @@ def is_valid_directory_path(path: str) -> str:
 # ----------------- human & machine nbytes ------------------------------------
 
 
-def format_bytes(n):
+def format_bytes(n: int) -> str:
     """ Format bytes as text
     >>> format_bytes(1)
-    '1 B'
+    '1.00 B'
     >>> format_bytes(1234)
     '1.23 kB'
     >>> format_bytes(12345678)
@@ -289,7 +290,7 @@ def format_bytes(n):
         n /= 1000.0
 
 
-byte_sizes = {
+_byte_sizes = {
     'kb': 1000,
     'mb': 1000000,
     'gb': 1000000000,
@@ -336,13 +337,12 @@ def parse_bytes(s: str) -> int:
     >>> parse_bytes('MB')
     1000000
     """
-    s = s.replace(' ', '')
+    s = s.replace(' ', '').lower()
     s = f'1{s}' if not s[0].isdigit() else s
     for i in range(len(s) - 1, -1, -1):
         if not s[i].isalpha():
             break
 
-    prefixN = float(s[:i + 1])
-    suffixMult = byte_sizes[s[i + 1:].lower()]
-    res = int(prefixN * suffixMult)
-    return res
+    n = float(s[:i + 1])
+    mult = _byte_sizes[s[i + 1:]]
+    return int(n * mult)

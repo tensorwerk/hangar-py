@@ -140,7 +140,7 @@ def summary(env, *, branch_name='', commit=''):
         return {}
 
     res = commiting.get_commit_ref_contents(env.refenv, cmt)
-    nbytes = folder_size(env.repo_path, recurse_directories=True)
+    nbytes = folder_size(env.repo_path, recurse=True)
     humanBytes = format_bytes(nbytes)
     buf = StringIO()
     buf.write(f'Summary of Contents Contained in Data Repository \n')
