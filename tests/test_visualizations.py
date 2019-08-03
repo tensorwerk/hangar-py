@@ -217,3 +217,147 @@ def test_octopus_merge_graph(capfd):
            '* 63ac654df43bd149a1ca5f919e714bc57e69af99 : initial commit on master with training images\n'
 
     verify_out(capfd, real)
+
+
+def test_octopus_large_merge_graph(capfd):
+    from hangar.diagnostics import Graph
+
+    octopus_log_contents = {
+        'head': 'ddeeff',
+        'ancestors': {
+            '05ad17beab54ede8d7f9214c5c6ae44509c3da97': ['b9c7da873c06c730f52bad5808df5312c4cc0a38', '1b49223ae5e731da3750e4836d14565dbe504f18'],
+            'b9c7da873c06c730f52bad5808df5312c4cc0a38': ['a74236e598b96dcde10b176921eb58bb4a9c64bf', 'c4d6875caeff83a29413ae163dbcfdc3c57ad373', 'e9ca97e336496b1fceb75869adf0294af5635922'],
+            'a74236e598b96dcde10b176921eb58bb4a9c64bf': ['9152a4578f74b36838f8187e43c8644b1eba47b5', '21f274d31abc09ede4ad6753f079297885b02a09'],
+            '9152a4578f74b36838f8187e43c8644b1eba47b5': ['ef7b6e5bcaaebf62b9e02902ff60eb7862c3472d', '21f274d31abc09ede4ad6753f079297885b02a09'],
+            'ef7b6e5bcaaebf62b9e02902ff60eb7862c3472d': ['e9ca97e336496b1fceb75869adf0294af5635922', 'c4d6875caeff83a29413ae163dbcfdc3c57ad373'],
+            'e9ca97e336496b1fceb75869adf0294af5635922': ['489bceb38246f27cae2a0f47eba0e488d95618db'],
+            '489bceb38246f27cae2a0f47eba0e488d95618db': ['17286961175c5cbbd4381fef07cc0a20920a5ce6'],
+            '17286961175c5cbbd4381fef07cc0a20920a5ce6': ['63ac654df43bd149a1ca5f919e714bc57e69af99'],
+            '63ac654df43bd149a1ca5f919e714bc57e69af99': [''],
+            '1b49223ae5e731da3750e4836d14565dbe504f18': ['9152a4578f74b36838f8187e43c8644b1eba47b5', 'a74236e598b96dcde10b176921eb58bb4a9c64bf'],
+            'c4d6875caeff83a29413ae163dbcfdc3c57ad373': ['63ac654df43bd149a1ca5f919e714bc57e69af99'],
+            '21f274d31abc09ede4ad6753f079297885b02a09': ['5c0ea20c6513f135f0131d9e10d86801ded29537'],
+            '5c0ea20c6513f135f0131d9e10d86801ded29537': ['10e84be056afb2ace6b7ba044ce1e9c9811eae4f', 'ef7b6e5bcaaebf62b9e02902ff60eb7862c3472d'],
+            '10e84be056afb2ace6b7ba044ce1e9c9811eae4f': ['e9ca97e336496b1fceb75869adf0294af5635922', 'c4d6875caeff83a29413ae163dbcfdc3c57ad373'],
+            'aabbcc': ['9152a4578f74b36838f8187e43c8644b1eba47b5', '5c0ea20c6513f135f0131d9e10d86801ded29537'],
+            'ddeeff': ['aabbcc', '05ad17beab54ede8d7f9214c5c6ae44509c3da97'],
+        },
+        'specs': {
+            'ddeeff': {'commit_message': 'new master',
+                'commit_time': 1562363266.6635652, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '05ad17beab54ede8d7f9214c5c6ae44509c3da97': {'commit_message': 'try number two',
+                'commit_time': 1562363265.6635652, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            'b9c7da873c06c730f52bad5808df5312c4cc0a38': {'commit_message': 'merging the long running branch into master',
+                'commit_time': 1562363265.652887, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            'a74236e598b96dcde10b176921eb58bb4a9c64bf': {'commit_message': 'another on master',
+                'commit_time': 1562363265.6346502, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '9152a4578f74b36838f8187e43c8644b1eba47b5': {'commit_message': 'this is the first merge',
+                'commit_time': 1562363265.578071, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            'ef7b6e5bcaaebf62b9e02902ff60eb7862c3472d': {'commit_message': 'third commit on master',
+                'commit_time': 1562363265.4683158, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            'e9ca97e336496b1fceb75869adf0294af5635922': {'commit_message': 'second commit on master with training labels',
+                'commit_time': 1562363265.398268, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '489bceb38246f27cae2a0f47eba0e488d95618db': {'commit_message': 'second',
+                'commit_time': 1562363264.7388191, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '17286961175c5cbbd4381fef07cc0a20920a5ce6': {'commit_message': 'hi',
+                'commit_time': 1562363264.735318, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '63ac654df43bd149a1ca5f919e714bc57e69af99': {'commit_message': 'initial commit on master with training images',
+                'commit_time': 1562363264.731286, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '1b49223ae5e731da3750e4836d14565dbe504f18': {'commit_message': 'another on try delete',
+                'commit_time': 1562363265.642503, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            'aabbcc': {'commit_message': 'made up b',
+                'commit_time': 1562363265.640021, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            'c4d6875caeff83a29413ae163dbcfdc3c57ad373': {'commit_message': 'first commit on the large branch',
+                'commit_time': 1562363265.374819, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '21f274d31abc09ede4ad6753f079297885b02a09': {'commit_message': 'another commit on test banch after adding to new_set',
+                'commit_time': 1562363265.56455, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '5c0ea20c6513f135f0131d9e10d86801ded29537': {'commit_message': 'second commit on test branch with new dset',
+                'commit_time': 1562363265.545484, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
+            '10e84be056afb2ace6b7ba044ce1e9c9811eae4f': {'commit_message': 'first commit on test branch',
+                'commit_time': 1562363265.524131, 'commit_user': 'test user', 'commit_email': 'test@email.com'}},
+        'order': [
+            'ddeeff',
+            '05ad17beab54ede8d7f9214c5c6ae44509c3da97',
+            'b9c7da873c06c730f52bad5808df5312c4cc0a38',
+            '1b49223ae5e731da3750e4836d14565dbe504f18',
+            'aabbcc',
+            'a74236e598b96dcde10b176921eb58bb4a9c64bf',
+            '9152a4578f74b36838f8187e43c8644b1eba47b5',
+            '21f274d31abc09ede4ad6753f079297885b02a09',
+            '5c0ea20c6513f135f0131d9e10d86801ded29537',
+            '10e84be056afb2ace6b7ba044ce1e9c9811eae4f',
+            'ef7b6e5bcaaebf62b9e02902ff60eb7862c3472d',
+            'e9ca97e336496b1fceb75869adf0294af5635922',
+            'c4d6875caeff83a29413ae163dbcfdc3c57ad373',
+            '489bceb38246f27cae2a0f47eba0e488d95618db',
+            '17286961175c5cbbd4381fef07cc0a20920a5ce6',
+            '63ac654df43bd149a1ca5f919e714bc57e69af99']
+        }
+
+    octopus_hash_branch_map = {
+        'c4d6875caeff83a29413ae163dbcfdc3c57ad373': ['large_branch'],
+        '21f274d31abc09ede4ad6753f079297885b02a09': ['test_branch'],
+        'ddeeff': ['master'],
+        '1b49223ae5e731da3750e4836d14565dbe504f18': ['trydelete'],
+        'aabbcc': ['madeupbranch']
+    }
+
+    g = Graph(use_color=False)
+    g.show_nodes(
+        dag=octopus_log_contents['ancestors'],
+        spec=octopus_log_contents['specs'],
+        branch=octopus_hash_branch_map,
+        start=octopus_log_contents['head'],
+        order=octopus_log_contents['order'],
+        show_time=True,
+        show_user=True)
+
+    real = '*   ddeeff (master) (05Jul2019 21:47:46)(test user): new master\n'\
+           '|\\  \n'\
+           '| *   05ad17beab54ede8d7f9214c5c6ae44509c3da97 (05Jul2019 21:47:45)(test user): try number two\n'\
+           '| |\\  \n'\
+           '| | \\     \n'\
+           '| |  \\    \n'\
+           '| *-. \\   b9c7da873c06c730f52bad5808df5312c4cc0a38 (05Jul2019 21:47:45)(test user): merging the long running branch into master\n'\
+           '| |\\ \\ \\  \n'\
+           '| | | | *   1b49223ae5e731da3750e4836d14565dbe504f18 (trydelete) (05Jul2019 21:47:45)(test user): another on try delete\n'\
+           '| | | | |\\  \n'\
+           '| | |_|_|/  \n'\
+           '| |/| | |   \n'\
+           '* | | | |   aabbcc (madeupbranch) (05Jul2019 21:47:45)(test user): made up b\n'\
+           '|\\ \\ \\ \\ \\  \n'\
+           '| |_|_|_|/  \n'\
+           '|/| | | |   \n'\
+           '| | * | |   a74236e598b96dcde10b176921eb58bb4a9c64bf (05Jul2019 21:47:45)(test user): another on master\n'\
+           '| | |\\ \\ \\  \n'\
+           '| |/ / / /  \n'\
+           '|/| | | |   \n'\
+           '* | | | |   9152a4578f74b36838f8187e43c8644b1eba47b5 (05Jul2019 21:47:45)(test user): this is the first merge\n'\
+           '|\\ \\ \\ \\ \\  \n'\
+           '| | |/ / /  \n'\
+           '| |/| | |   \n'\
+           '| * | | | 21f274d31abc09ede4ad6753f079297885b02a09 (test_branch) (05Jul2019 21:47:45)(test user): another commit on test banch after adding to new_set\n'\
+           '| |/ / /  \n'\
+           '| * | |   5c0ea20c6513f135f0131d9e10d86801ded29537 (05Jul2019 21:47:45)(test user): second commit on test branch with new dset\n'\
+           '| |\\ \\ \\  \n'\
+           '| |/ / /  \n'\
+           '|/| | |   \n'\
+           '| * | |   10e84be056afb2ace6b7ba044ce1e9c9811eae4f (05Jul2019 21:47:45)(test user): first commit on test branch\n'\
+           '| |\\ \\ \\  \n'\
+           '| | |/ /  \n'\
+           '| | | /   \n'\
+           '| | |/    \n'\
+           '| |/|     \n'\
+           '* | |   ef7b6e5bcaaebf62b9e02902ff60eb7862c3472d (05Jul2019 21:47:45)(test user): third commit on master\n'\
+           '|\\ \\ \\  \n'\
+           '| |/ /  \n'\
+           '|/| /   \n'\
+           '| |/    \n'\
+           '* | e9ca97e336496b1fceb75869adf0294af5635922 (05Jul2019 21:47:45)(test user): second commit on master with training labels\n'\
+           '| * c4d6875caeff83a29413ae163dbcfdc3c57ad373 (large_branch) (05Jul2019 21:47:45)(test user): first commit on the large branch\n'\
+           '* | 489bceb38246f27cae2a0f47eba0e488d95618db (05Jul2019 21:47:44)(test user): second\n'\
+           '* | 17286961175c5cbbd4381fef07cc0a20920a5ce6 (05Jul2019 21:47:44)(test user): hi\n'\
+           '|/  \n'\
+           '* 63ac654df43bd149a1ca5f919e714bc57e69af99 (05Jul2019 21:47:44)(test user): initial commit on master with training images\n'
+
+    verify_out(capfd, real)
