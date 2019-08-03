@@ -2,7 +2,7 @@ import pytest
 
 
 @pytest.mark.parametrize('arg,expected', [
-    [1, '1 B'],
+    [1, '1.00 B'],
     [1234, '1.23 kB'],
     [12345678, '12.35 MB'],
     [1234567890, '1.23 GB'],
@@ -35,12 +35,18 @@ def test_parse_bytes(arg, expected):
 
 
 @pytest.mark.parametrize('arg,expected', [
-    ['3s', 3],
-    ['3.5 seconds', 3.5],
-    ['300ms', 0.3]
+    [0, 2],
+    [1, 2],
+    [2, 2],
+    [3, 3],
+    [4, 5],
+    [7, 7],
+    [174, 179],
+    [10065, 10067],
+    [104721, 104723],
 ])
-def test_parse_timedelta(arg, expected):
-    from hangar.utils import parse_timedelta
+def test_find_next_prime(arg, expected):
+    from hangar.utils import find_next_prime
 
-    res = parse_timedelta(arg)
+    res = find_next_prime(arg)
     assert res == expected

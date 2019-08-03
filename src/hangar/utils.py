@@ -4,7 +4,6 @@ import random
 import re
 import string
 import weakref
-from contextlib import contextmanager
 from datetime import timedelta
 from functools import partial
 from numbers import Number
@@ -138,7 +137,7 @@ def is_ascii(str_data: str):
     return True
 
 
-def find_next_prime(N):
+def find_next_prime(N: int) -> int:
     '''Find next prime >= N
 
     Parameters
@@ -156,11 +155,12 @@ def find_next_prime(N):
             return False
         i = 3
         while i * i <= n:
-            if n % i:
+            if n % i != 0:
                 i += 2
             else:
                 return False
         return True
+
     if N < 3:
         return 2
     if N % 2 == 0:
@@ -265,46 +265,6 @@ def is_valid_directory_path(path: str) -> str:
     return usr_path
 
 
-'''
-Methods following this notice have been taken & modified from the Dask Distributed project
-url: https://github.com/dask/distributed
-
-From file: distributed/utils.py
-commit_hash: f50b239b8e6420fb87646f7183edaafb4b8e20be
-Access Date: 09 APR 2019
-
-Dask Distributed License
--------------------------------------------------------------------------------
-Copyright (c) 2015-2017, Anaconda, Inc. and contributors
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.
-
-Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation
-and/or other materials provided with the distribution.
-
-Neither the name of Anaconda nor the names of any contributors
-may be used to endorse or promote products derived from this software
-without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
-'''
-
 # ----------------- human & machine nbytes ------------------------------------
 
 
@@ -323,39 +283,39 @@ def format_bytes(n):
     >>> format_bytes(1234567890000000)
     '1.23 PB'
     """
-    if n > 1e15:
-        return '%0.2f PB' % (n / 1e15)
-    if n > 1e12:
-        return '%0.2f TB' % (n / 1e12)
-    if n > 1e9:
-        return '%0.2f GB' % (n / 1e9)
-    if n > 1e6:
-        return '%0.2f MB' % (n / 1e6)
-    if n > 1e3:
-        return '%0.2f kB' % (n / 1000)
-    return '%d B' % n
+    for x in ['B', 'kB', 'MB', 'GB', 'TB', 'PB']:
+        if n < 1000.0:
+            return "%3.2f %s" % (n, x)
+        n /= 1000.0
 
 
 byte_sizes = {
-    'kB': 10**3,
-    'MB': 10**6,
-    'GB': 10**9,
-    'TB': 10**12,
-    'PB': 10**15,
-    'KiB': 2**10,
-    'MiB': 2**20,
-    'GiB': 2**30,
-    'TiB': 2**40,
-    'PiB': 2**50,
-    'B': 1,
+    'kb': 1000,
+    'mb': 1000000,
+    'gb': 1000000000,
+    'tb': 1000000000000,
+    'pb': 1000000000000000,
+    'kib': 1024,
+    'mib': 1048576,
+    'gib': 1073741824,
+    'tib': 1099511627776,
+    'pib': 1125899906842624,
+    'b': 1,
     '': 1,
+    'k': 1000,
+    'm': 1000000,
+    'g': 1000000000,
+    't': 1000000000000,
+    'p': 1000000000000000,
+    'ki': 1024,
+    'mi': 1048576,
+    'gi': 1073741824,
+    'ti': 1099511627776,
+    'pi': 1125899906842624
 }
-byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
-byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
-byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
 
 
-def parse_bytes(s):
+def parse_bytes(s: str) -> int:
     """ Parse byte string to numbers
     >>> parse_bytes('100')
     100
@@ -377,92 +337,12 @@ def parse_bytes(s):
     1000000
     """
     s = s.replace(' ', '')
-    if not s[0].isdigit():
-        s = '1' + s
-
+    s = f'1{s}' if not s[0].isdigit() else s
     for i in range(len(s) - 1, -1, -1):
         if not s[i].isalpha():
             break
-    index = i + 1
 
-    prefix = s[:index]
-    suffix = s[index:]
-
-    n = float(prefix)
-
-    multiplier = byte_sizes[suffix.lower()]
-
-    result = n * multiplier
-    return int(result)
-
-
-def memory_repr(num):
-    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
-        if num < 1024.0:
-            return "%3.1f %s" % (num, x)
-        num /= 1024.0
-
-
-# ----------- Time Deltas -----------------------------------------------------
-
-timedelta_sizes = {
-    's': 1,
-    'ms': 1e-3,
-    'us': 1e-6,
-    'ns': 1e-9,
-    'm': 60,
-    'h': 3600,
-    'd': 3600 * 24,
-}
-
-tds2 = {
-    'second': 1,
-    'minute': 60,
-    'hour': 60 * 60,
-    'day': 60 * 60 * 24,
-    'millisecond': 1e-3,
-    'microsecond': 1e-6,
-    'nanosecond': 1e-9,
-}
-tds2.update({k + 's': v for k, v in tds2.items()})
-timedelta_sizes.update(tds2)
-timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
-
-
-def parse_timedelta(s, default='seconds'):
-    """ Parse timedelta string to number of seconds
-    Examples
-    --------
-    >>> parse_timedelta('3s')
-    3
-    >>> parse_timedelta('3.5 seconds')
-    3.5
-    >>> parse_timedelta('300ms')
-    0.3
-    >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
-    3
-    """
-    if isinstance(s, timedelta):
-        return s.total_seconds()
-    if isinstance(s, Number):
-        s = str(s)
-    s = s.replace(' ', '')
-    if not s[0].isdigit():
-        s = '1' + s
-
-    for i in range(len(s) - 1, -1, -1):
-        if not s[i].isalpha():
-            break
-    index = i + 1
-
-    prefix = s[:index]
-    suffix = s[index:] or default
-
-    n = float(prefix)
-
-    multiplier = timedelta_sizes[suffix.lower()]
-
-    result = n * multiplier
-    if int(result) == result:
-        result = int(result)
-    return result
+    prefixN = float(s[:i + 1])
+    suffixMult = byte_sizes[s[i + 1:].lower()]
+    res = int(prefixN * suffixMult)
+    return res

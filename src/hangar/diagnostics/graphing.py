@@ -1,13 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-These methods have been taken & modified from the Asciidag project
+Portions of this code have been taken and modified from the "asciidag" project.
 
-Access Date: 25 MAR 2019
+Access Date:
 Commit: 7c1eefe3895630dc3906bbe9d553e0169202756a
-PermalinkURL https://github.com/sambrightman/asciidag/
+PermalinkURL
 
+URL:      https://github.com/sambrightman/asciidag/
+File:     asciidag/graph.py
+Commit:   7c1eefe3895630dc3906bbe9d553e0169202756a
+Accessed: 25 MAR 2019
+
+asciidag License
+-------------------------------------------------------------------------------
 License: Mozilla Public License 2.0
-LICENSE URL: https://github.com/sambrightman/asciidag/blob/7c1eefe3895630dc3906bbe9d553e0169202756a/LICENSE
+URL:     https://github.com/sambrightman/asciidag/blob/7c1eefe3895630dc3906bbe9d553e0169202756a/LICENSE
 """
 
 import sys
