@@ -9,6 +9,7 @@ class GroupedDsets:
     and hence the dataloaders while fetching the data will throw `KeyError` in case of
     non-similar keys.
     """
+
     def __init__(self, hangar_datasets, keys=None, index_range=None):
         if not isinstance(hangar_datasets, (list, tuple)):
             hangar_datasets = (hangar_datasets,)
@@ -21,6 +22,7 @@ class GroupedDsets:
                             "iterable that can hold other objects, like a list / tuple etc.")
         dataset_names = []
         for dset in hangar_datasets:
+            # TODO: probably don't have to check if the index doesn't exceed the minimum dimension
             if not (hasattr(dset, 'get') and hasattr(dset, 'name')):
                 raise TypeError("`hangar_dataset` contains invalid hangar dataset(s)")
             if len(dset) != dataset_len:
@@ -32,6 +34,13 @@ class GroupedDsets:
         self.sample_subset(keys, index_range)
 
     def sample_subset(self, keys=None, index_range=None):
+        """
+        Based on `keys` or `index_range` (ignore `index_range` if `keys` is present)
+        it makes a subset of sample names which is then used to fetch the data from
+        hangar datasets. It is being called from the __init__ implicitly and almost
+        always not required for users to call directly until a new set of `keys` or a
+        new `index_range` is setup.
+        """
         if keys:
             if not isinstance(keys, (list, tuple)):
                 raise TypeError(f"`keys` must be a list/tuple, not {type(keys)}")

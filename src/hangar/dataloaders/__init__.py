@@ -91,6 +91,22 @@ def make_tf_dataset(hangar_datasets, keys=None, index_range=None, shuffle=True):
         or not. But user doesn't have any restriction on doing`dataset.shuffle()` on the
         returned dataset
 
+    Examples
+    --------
+    >>> from hangar import Repository
+    >>> from hangar.dataloaders import make_tf_dataset
+    >>> import tensorflow as tf
+    >>> tf.compat.v1.enable_eager_execution()
+    >>> repo = Repository('.')
+    >>> co = repo.checkout()
+    >>> data = co.datasets['mnist_data']
+    >>> target = co.datasets['mnist_target']
+    >>> tf_dset = make_tf_dataset([data, target])
+    >>> tf_dset = tf_dset.batch(512)
+    >>> for bdata, btarget in tf_dset:
+    ...     print(bdata.shape, btarget.shape)
+
+
     Returns
     -------
     `tf.data.Dataset` object
@@ -101,7 +117,6 @@ def make_tf_dataset(hangar_datasets, keys=None, index_range=None, shuffle=True):
         raise RuntimeError("Could not import Tensorflow. Install dependencies")
     gdsets = GroupedDsets(hangar_datasets, keys, index_range)
     generator = partial(yield_data, gdsets.dataset_array, gdsets.sample_names, shuffle)
+    # TODO: pass proper shapes for fixed shape input
     return tf.data.Dataset.from_generator(generator, gdsets.get_types(converter=tf.as_dtype),
                                           output_shapes=gdsets.get_shapes(converter=tf.TensorShape))
-
-

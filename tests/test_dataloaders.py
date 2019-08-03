@@ -5,6 +5,8 @@ import tensorflow as tf
 from torch.utils.data import DataLoader
 from hangar.dataloaders import make_torch_dataset, make_tf_dataset
 
+tf.compat.v1.enable_eager_execution()
+
 
 class TestTorchDataLoader(object):
 
@@ -76,14 +78,10 @@ class TestTorchDataLoader(object):
                 assert hasattr(sample, 'input')
                 assert hasattr(sample, 'target')
 
-    def test_variably_shaped(self):
-        pass
-
 
 class TestTfDataLoader(object):
 
     def test_dataset_loader(self, repo_with_20_samples):
-        tf.compat.v1.enable_eager_execution()
         repo = repo_with_20_samples
         co = repo.checkout(write=True)
         first_dset = co.datasets['_dset']
@@ -96,5 +94,20 @@ class TestTfDataLoader(object):
             assert dset1.shape == tf.TensorShape((6, 5, 7))
             assert dset2.shape == tf.TensorShape((6, 5, 7))
 
-    def test_variably_shaped(self):
-        pass
+    def test_variably_shaped(self, variable_shape_written_repo):
+        # Variably shaped test is required since the collation
+        # is dependant on the way we return the data from
+        # generator
+        repo = variable_shape_written_repo
+        co = repo.checkout(write=True)
+        dset = co.datasets['_dset']
+        for i in range(5, 10):
+            dset[i] = np.random.random((2, i))
+        co.commit('added data')
+        tf_dset = make_tf_dataset(dset)
+        shape_obj = tf.TensorShape((2, None))
+        tf_dset = tf_dset.padded_batch(5, padded_shapes=(shape_obj,))
+        for val in tf_dset:
+            assert val[0].shape[0] == 5
+            assert val[0].shape[1] == 2
+            assert 11 > val[0].shape[2] > 4
