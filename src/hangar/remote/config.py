@@ -1,10 +1,11 @@
-'''
-Methods in this file have been taken & modified from the Dask project
-https://github.com/dask/dask
+'''Provides editable config of server & rpc behavior from on disk yaml file
 
-From file: dask/config.py
-commit_hash: caa2da0c4412ab8ebf467437e58a7bd447332b70
-Access Date: 09 APR 2019
+Portions of this code have been taken and modified from the "Dask" project.
+
+URL:      https://github.com/dask/dask
+File:     dask/config.py
+Commit:   caa2da0c4412ab8ebf467437e58a7bd447332b70
+Accessed: 09 APR 2019
 
 Dask License
 -------------------------------------------------------------------------------
