@@ -27,7 +27,7 @@ class DatasetDataReader(object):
 
     Parameters
     ----------
-    repo_pth : str
+    repo_pth : os.PathLike
         path to the repository on disk.
     dset_name : str
         name of the dataset
@@ -51,7 +51,7 @@ class DatasetDataReader(object):
     '''
 
     def __init__(self,
-                 repo_pth: str,
+                 repo_pth: os.PathLike,
                  dset_name: str,
                  default_schema_hash: str,
                  samplesAreNamed: bool,
@@ -253,49 +253,58 @@ class DatasetDataReader(object):
                     remote_keys.append(sampleName)
         return remote_keys
 
-    def keys(self) -> Iterator[str]:
+    def keys(self) -> Iterator[Union[str, int]]:
         '''generator which yields the names of every sample in the dataset
 
-        unlike write-enabled checkouts, reader checkouts do not make a copy
-        of the key list while iterating as the checkout has no way to modify
-        the contents of the list.
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
 
         Yields
         ------
-        Iterator[str]
+        Iterator[Union[str, int]]
             keys of one sample at a time inside the dataset
         '''
-        for name in self._sspecs:
+        for name in tuple(self._sspecs.keys()):
             yield name
 
     def values(self) -> Iterator[np.ndarray]:
         '''generator which yields the tensor data for every sample in the dataset
 
-        unlike write-enabled checkouts, reader checkouts do not make a copy
-        of the key/value list while iterating as the checkout has no way to modify
-        the contents of the list.
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
 
         Yields
         ------
         Iterator[np.ndarray]
             values of one sample at a time inside the dataset
         '''
-        for name in self._sspecs:
+        for name in tuple(self._sspecs.keys()):
             yield self.get(name)
 
-    def items(self) -> Iterator[Tuple[str, np.ndarray]]:
+    def items(self) -> Iterator[Tuple[Union[str, int], np.ndarray]]:
         '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
 
-        unlike write-enabled checkouts, reader checkouts do not make a copy
-        of the key/values list while iterating as the checkout has no way to modify
-        the contents of the list.
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
 
         Yields
         ------
-        Iterator[Tuple[str, np.ndarray]]
+        Iterator[Tuple[Union[str, int], np.ndarray]]
             sample name and stored value for every sample inside the dataset
         '''
-        for name in self._sspecs:
+        for name in tuple(self._sspecs.keys()):
             yield (name, self.get(name))
 
     def get(self, name: str) -> np.ndarray:
@@ -414,7 +423,7 @@ class DatasetDataWriter(DatasetDataReader):
         self._hashenv: lmdb.Environment = kwargs['hashenv']
 
         self._TxnRegister = TxnRegister()
-        self._Query = RecordQuery(self._dataenv)
+        # self._Query = RecordQuery(self._dataenv)
         self._hashTxn: Optional[lmdb.Transaction] = None
         self._dataTxn: Optional[lmdb.Transaction] = None
 
@@ -482,60 +491,6 @@ class DatasetDataWriter(DatasetDataReader):
             numeric format code of the default backend.
         '''
         return self._dflt_backend
-
-    def keys(self) -> Iterator[str]:
-        '''generator which yields the names of every sample in the dataset
-
-        For write enabled checkouts, is technically possible to iterate over the
-        dataset object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.)
-        However, in order to avoid differences between read-write checkouts we
-        still just return the results as a generator to the user.
-
-        Yields
-        ------
-        Iterator[str]
-            name of keys inside the dataset
-        '''
-        for name in list(self._sspecs):
-            yield name
-
-    def values(self) -> Iterator[np.ndarray]:
-        '''generator which yields the tensor data for every sample in the dataset
-
-        For write enabled checkouts, is technically possible to iterate over the
-        dataset object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.)
-        However, in order to avoid differences between read-write checkouts we
-        still just return the results as a generator to the user.
-
-        Yields
-        ------
-        Iterator[np.ndarray]
-            values of one sample at a time inside the dataset
-        '''
-        for name in list(self._sspecs):
-            yield self.get(name)
-
-    def items(self) -> Iterator[Tuple[str, np.ndarray]]:
-        '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
-
-        For write enabled checkouts, is technically possible to iterate over the
-        dataset object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.)
-        However, in order to avoid differences between read-write checkouts we
-        still just return the results as a generator to the user.
-
-        Yields
-        ------
-        Iterator[Tuple[str, np.ndarray]]
-            sample name and stored value for every sample inside the dataset
-        '''
-        for name in list(self._sspecs):
-            yield (name, self.get(name))
 
     def add(self, data: np.ndarray, name: Union[str, int] = None, **kwargs) -> Union[str, int]:
         '''Store a piece of data in a dataset
@@ -799,7 +754,7 @@ class Datasets(object):
             self._hashenv = hashenv
             self._dataenv = dataenv
             self._stagehashenv = stagehashenv
-            self._Query = RecordQuery(self._dataenv)
+            # self._Query = RecordQuery(self._dataenv)
 
         self.__setup()
 

@@ -79,6 +79,8 @@ class ReaderCheckout(object):
         self._refenv = refenv
 
         self._metadata = MetadataReader(
+            mode='r',
+            repo_pth=self._repo_path,
             dataenv=self._dataenv,
             labelenv=self._labelenv)
         self._datasets = Datasets._from_commit(
@@ -470,6 +472,8 @@ class WriterCheckout(object):
                 dsetHandle._close()
 
         self._metadata = MetadataWriter(
+            mode='a',
+            repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
         self._datasets = Datasets._from_staging_area(
@@ -563,6 +567,8 @@ class WriterCheckout(object):
                     branchenv=self._branchenv, branch_name=self._branch_name)
 
         self._metadata = MetadataWriter(
+            mode='a',
+            repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
         self._datasets = Datasets._from_staging_area(
@@ -681,6 +687,8 @@ class WriterCheckout(object):
 
         logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
         self._metadata = MetadataWriter(
+            mode='a',
+            repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
         self._datasets = Datasets._from_staging_area(

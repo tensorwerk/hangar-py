@@ -1,5 +1,6 @@
+import os
 import hashlib
-from typing import Optional, Union, Iterable, Tuple
+from typing import Optional, Union, Iterable, Iterator, Tuple, Dict
 import logging
 
 import lmdb
@@ -32,6 +33,10 @@ class MetadataReader(object):
 
     Parameters
     ----------
+    mode : str
+        'r' for read-only, 'a' for write-enabled
+    repo_pth : os.PathLike
+        path to the repository on disk.
     dataenv : lmdb.Environment
         the lmdb environment in which the data records are stored. this is
         the same as the dataset data record environments.
@@ -41,29 +46,37 @@ class MetadataReader(object):
         is allowed.
     '''
 
-    def __init__(self, dataenv: lmdb.Environment, labelenv: lmdb.Environment):
+    def __init__(self,
+                 mode: str,
+                 repo_pth: os.PathLike,
+                 dataenv: lmdb.Environment,
+                 labelenv: lmdb.Environment,
+                 *args, **kwargs):
 
-        self._dataenv: lmdb.Environment = dataenv
+        self._mode = mode
+        self._path = repo_pth
+        self._is_conman: bool = False
+
         self._labelenv: lmdb.Environment = labelenv
         self._labelTxn: Optional[lmdb.Transaction] = None
-        self._dataTxn: Optional[lmdb.Transaction] = None
-
-        self._Query = RecordQuery(self._dataenv)
         self._TxnRegister = TxnRegister()
 
-        self._is_writeable: bool = False
-        self._is_conman: bool = False
+        self._mspecs: Dict[Union[str, int], bytes] = {}
+        metaNamesSpec = RecordQuery(dataenv).metadata_records()
+        for metaNames, metaSpec in metaNamesSpec:
+            labelKey = parsing.hash_meta_db_key_from_raw_key(metaSpec.meta_hash)
+            self._mspecs[metaNames.meta_name] = labelKey
 
     def __enter__(self):
         self._is_conman = True
         self._labelTxn = self._TxnRegister.begin_reader_txn(self._labelenv)
-        self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+        # self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
         return self
 
     def __exit__(self, *exc):
         self._is_conman = False
         self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
-        self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+        # self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
     def __len__(self) -> int:
         '''Determine how many metadata key/value pairs are in the checkout
@@ -73,17 +86,18 @@ class MetadataReader(object):
         int
             number of metadata key/value pairs.
         '''
-        if not self._is_conman:
-            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+        return len(self._mspecs)
+        # if not self._is_conman:
+        #     self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
 
-        try:
-            metaCountKey = parsing.metadata_count_db_key()
-            metaCountVal = self._dataTxn.get(metaCountKey, default='0'.encode())
-            meta_count = parsing.metadata_count_raw_val_from_db_val(metaCountVal)
-        finally:
-            if not self._is_conman:
-                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
-        return meta_count
+        # try:
+        #     metaCountKey = parsing.metadata_count_db_key()
+        #     metaCountVal = self._dataTxn.get(metaCountKey, default='0'.encode())
+        #     meta_count = parsing.metadata_count_raw_val_from_db_val(metaCountVal)
+        # finally:
+        #     if not self._is_conman:
+        #         self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+        # return meta_count
 
     def __getitem__(self, key: Union[str, int]) -> str:
         '''Retrieve a metadata sample with a key. Convenience method for dict style access.
@@ -115,9 +129,13 @@ class MetadataReader(object):
         bool
             True if key exists, False otherwise
         '''
-        names = self._Query.metadata_names()
-        ret = True if key in names else False
-        return ret
+        if key in self._mspecs:
+            return True
+        else:
+            return False
+        # names = self._Query.metadata_names()
+        # ret = True if key in names else False
+        # return ret
 
     def __iter__(self) -> Iterable:
         return self.keys()
@@ -125,40 +143,81 @@ class MetadataReader(object):
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar Metadata\
                 \n    Writeable: {self.iswriteable}\
-                \n    Number of Keys: {len(self)}\n'
+                \n    Number of Keys: {self.__len__()}\n'
         p.text(res)
 
     def __repr__(self):
         res = f'Hangar Metadata\
                 \n    Writeable: {self.iswriteable}\
-                \n    Number of Keys: {len(self)}\n'
+                \n    Number of Keys: {self.__len__()}\n'
         return res
 
     @property
     def iswriteable(self) -> bool:
-        '''Bool indicating if this metadata object is write-enabled. Read-only attribute.
-        '''
-        return self._is_writeable
+        '''Read-only attribute indicating if this metadata object is write-enabled.
 
-    def keys(self) -> Iterable[Union[str, int]]:
-        '''generator returning all metadata key names in the checkout
+        Returns
+        -------
+        bool
+            True if write-enabled checkout, Otherwise False.
         '''
-        names = self._Query.metadata_names()
-        for name in names:
+        return False if self._mode == 'r' else True
+
+    def keys(self) -> Iterator[Union[str, int]]:
+        '''generator which yields the names of every metadata piece in the checkout.
+
+        For write enabled checkouts, is technically possible to iterate over the
+        metadata object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
+
+        Yields
+        ------
+        Iterator[Union[str, int]]
+            keys of one metadata sample at a time
+        '''
+        # names = self._Query.metadata_names()
+        for name in tuple(self._mspecs.keys()):
             yield name
 
-    def values(self) -> Iterable[str]:
-        '''generator returning all metadata values in the checkout
+    def values(self) -> Iterator[str]:
+        '''generator yielding all metadata values in the checkout
+
+        For write enabled checkouts, is technically possible to iterate over the
+        metadata object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
+
+        Yields
+        ------
+        Iterator[str]
+            values of one metadata piece at a time
         '''
-        names = self._Query.metadata_names()
-        for name in names:
+        # names = self._Query.metadata_names()
+        for name in tuple(self._mspecs.keys()):
             yield self.get(name)
 
-    def items(self) -> Iterable[Tuple[Union[str, int], str]]:
-        '''generator returning all key/value pairs in the checkout.
+    def items(self) -> Iterator[Tuple[Union[str, int], str]]:
+        '''generator yielding key/value for all metadata recorded in checkout.
+
+        For write enabled checkouts, is technically possible to iterate over the
+        metadata object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginging the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
+
+        Yields
+        ------
+        Iterator[Tuple[Union[str, int], np.ndarray]]
+            metadata key and stored value for every piece in the checkout.
         '''
-        names = self._Query.metadata_names()
-        for name in names:
+        # names = self._Query.metadata_names()
+        for name in tuple(self._mspecs.keys()):
             yield (name, self.get(name))
 
     def get(self, key: Union[str, int]) -> str:
@@ -184,23 +243,24 @@ class MetadataReader(object):
         '''
         if not self._is_conman:
             self._labelTxn = self._TxnRegister.begin_reader_txn(self._labelenv)
-            self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
+            # self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
 
         try:
-            if not is_suitable_user_key(key):
-                raise ValueError(
-                    f'metadata key: `{key}` not allowed. Can only contain '
-                    f'alpha-numeric or "." "_" "-" ascii characters.')
+            # if not is_suitable_user_key(key):
+            #     raise ValueError(
+            #         f'metadata key: `{key}` not allowed. Can only contain '
+            #         f'alpha-numeric or "." "_" "-" ascii characters.')
 
-            refKey = parsing.metadata_record_db_key_from_raw_key(key)
-            hashVal = self._dataTxn.get(refKey, default=False)
-            if hashVal is False:
-                raise KeyError(f'No metadata key: `{key}` exists in checkout')
+            # refKey = parsing.metadata_record_db_key_from_raw_key(key)
+            # hashVal = self._dataTxn.get(refKey, default=False)
+            # if hashVal is False:
+            #     raise KeyError(f'No metadata key: `{key}` exists in checkout')
 
-            hash_spec = parsing.metadata_record_raw_val_from_db_val(hashVal)
-            metaKey = parsing.hash_meta_db_key_from_raw_key(hash_spec)
-            metaVal = self._labelTxn.get(metaKey)
-            meta_value = parsing.hash_meta_raw_val_from_db_val(metaVal)
+            # hash_spec = parsing.metadata_record_raw_val_from_db_val(hashVal)
+            # metaKey = parsing.hash_meta_db_key_from_raw_key(hash_spec)
+            metaVal = self._labelTxn.get(self._mspecs[key])
+            # metaVal = self._labelTxn.get(metaKey)
+            meta_val = parsing.hash_meta_raw_val_from_db_val(metaVal)
 
         except KeyError as e:
             logger.error(e, exc_info=False)
@@ -209,9 +269,9 @@ class MetadataReader(object):
         finally:
             if not self._is_conman:
                 self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
-                self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+                # self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
-        return meta_value
+        return meta_val
 
 
 class MetadataWriter(MetadataReader):
@@ -236,11 +296,12 @@ class MetadataWriter(MetadataReader):
         lmdb environment pointing to the label hash/value store db.
     '''
 
-    def __init__(self, dataenv: lmdb.Environment, labelenv: lmdb.Environment):
+    def __init__(self, *args, **kwargs):
 
-        super().__init__(dataenv, labelenv)
-        self._is_conman: bool = False
-        self._is_writeable: bool = True
+        super().__init__(*args, **kwargs)
+
+        self._dataenv: lmdb.Environment = kwargs['dataenv']
+        self._dataTxn: Optional[lmdb.Transaction] = None
 
     def __enter__(self):
         self._is_conman = True
@@ -302,7 +363,7 @@ class MetadataWriter(MetadataReader):
 
         Returns
         -------
-        str
+        Union[str, int]
             The name of the metadata key written to the database if the
             operation succeeded.
 
@@ -318,50 +379,57 @@ class MetadataWriter(MetadataReader):
         try:
             if not is_suitable_user_key(key):
                 raise ValueError(
-                    f'Metadata key: `{key}` not allowed. Must be str or int containing '
-                    f'only alpha-numeric or "." "_" "-" ascii characters.')
+                    f'Metadata key: {key} of type: {type(key)} invalid. Must be int '
+                    f'ascii string with only alpha-numeric / "." "_" "-" characters.')
             elif not (isinstance(value, str) and is_ascii(value)):
                 raise ValueError(
-                    f'Metadata Value: `{value}` not allowed. Must be ascii-only str')
+                    f'Metadata Value: `{value}` not allowed. Must be ascii-only string')
         except ValueError as e:
             logger.error(e, exc_info=False)
             raise e from None
 
-        if not self._is_conman:
-            self._labelTxn = self._TxnRegister.begin_writer_txn(self._labelenv)
-            self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
-
         try:
+            tmpconman = not self._is_conman
+            if tmpconman:
+                self.__enter__()
+
             val_hash = hashlib.blake2b(value.encode(), digest_size=20).hexdigest()
+            hashKey = parsing.hash_meta_db_key_from_raw_key(val_hash)
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             metaRecVal = parsing.metadata_record_db_val_from_raw_val(val_hash)
-            metaHashKey = parsing.hash_meta_db_key_from_raw_key(val_hash)
-            metaHashVal = parsing.hash_meta_db_val_from_raw_val(value)
 
+            # check if meta record already exists
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
-                if metaRecVal == existingMetaRecVal:
+                existingMetaRec = parsing.metadata_record_raw_val_from_db_val(existingMetaRecVal)
+                if val_hash == existingMetaRec.meta_hash:
                     raise LookupError(
                         f'HANGAR KEY EXISTS ERROR:: metadata already contains key: `{key}` '
                         f'with value: `{value}` & hash: {val_hash}')
-            else:
-                # increment metadata record count
+
+            # write new data if label hash does not exist
+            existingHashVal = self._labelTxn.get(hashKey, default=False)
+            if existingHashVal is False:
+                hashVal = parsing.hash_meta_db_val_from_raw_val(value)
+                self._labelTxn.put(hashKey, hashVal)
+
+            # increment metadata record count
+            if existingMetaRecVal is False:
                 metaCountKey = parsing.metadata_count_db_key()
                 metaCountVal = self._dataTxn.get(metaCountKey, default='0'.encode())
                 meta_count = parsing.metadata_count_raw_val_from_db_val(metaCountVal) + 1
                 newMetaCountVal = parsing.metadata_count_db_val_from_raw_val(meta_count)
                 self._dataTxn.put(metaCountKey, newMetaCountVal)
-            self._labelTxn.put(metaHashKey, metaHashVal, overwrite=False)
             self._dataTxn.put(metaRecKey, metaRecVal)
+            self._mspecs[key] = hashKey
 
         except LookupError as e:
             logger.error(e, exc_info=False)
-            raise
+            raise e
 
         finally:
-            if not self._is_conman:
-                self._labelTxn = self._TxnRegister.commit_writer_txn(self._labelenv)
-                self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
+            if tmpconman:
+                self.__exit__()
 
         return key
 
@@ -400,6 +468,7 @@ class MetadataWriter(MetadataReader):
             if delete_succeeded is False:
                 msg = f'HANGAR KEY ERROR:: No metadata exists with key: {key}'
                 raise KeyError(msg)
+            del self._mspecs[key]
 
             metaRecCountKey = parsing.metadata_count_db_key()
             metaRecCountVal = self._dataTxn.get(metaRecCountKey)

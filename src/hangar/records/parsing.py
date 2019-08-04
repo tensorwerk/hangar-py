@@ -570,11 +570,16 @@ Functions to convert metadata records to/from python objects
 -------------------------------------------------------------
 '''
 
+MetadataRecordKey = NamedTuple('RawDataRecordKey', [('meta_name', Union[str, int])])
+MetadataRecordKey.__doc__ = 'Represents a Metadata Sample Record Key'
+
+MetadataRecordVal = NamedTuple('RawDataRecordVal', [('meta_hash', str)])
+MetadataRecordVal.__doc__ = 'Represents a Metadata Sample Record Hash Value'
 
 # -------------------- db -> raw (python) -----------------------------
 
 
-def metadata_record_raw_key_from_db_key(db_key: bytes) -> Union[str, int]:
+def metadata_record_raw_key_from_db_key(db_key: bytes) -> MetadataRecordKey:
     '''Convert and split a lmdb record key & value into python objects
 
     Parameters
@@ -584,16 +589,16 @@ def metadata_record_raw_key_from_db_key(db_key: bytes) -> Union[str, int]:
 
     Returns
     -------
-    Union[str, int]
+    MetadataRecordKey
         the metadata name
     '''
     meta_name = db_key.decode().replace(c.K_STGMETA, '', 1)
     if meta_name.startswith(c.K_INT):
         meta_name = int(meta_name.lstrip(c.K_INT))
-    return meta_name
+    return MetadataRecordKey(meta_name)
 
 
-def metadata_record_raw_val_from_db_val(db_val: bytes) -> str:
+def metadata_record_raw_val_from_db_val(db_val: bytes) -> MetadataRecordVal:
     '''Convert and split a lmdb record value into python objects
 
     Parameters
@@ -603,11 +608,11 @@ def metadata_record_raw_val_from_db_val(db_val: bytes) -> str:
 
     Returns
     -------
-    str
-        string containing the metadata hash
+    MetadataRecordVal
+        containing the metadata hash
     '''
     meta_hash = db_val.decode()
-    return meta_hash
+    return MetadataRecordVal(meta_hash)
 
 
 # -------------------- raw (python) -> db -----------------------------

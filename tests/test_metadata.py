@@ -31,7 +31,7 @@ class TestMetadata(object):
         assert w_checkout.metadata.get(1) == 'test number'
         assert w_checkout.metadata['2'] == 'test2'
         assert w_checkout.metadata[2] == 'test2 number'
-        assert list(w_checkout.metadata.keys()) == [1, 2, '1', '2']
+        assert list(w_checkout.metadata.keys()) == ['1', 1, '2', 2]
 
     def test_writer_remove_mixed_string_int_type_type_keys(self, w_checkout):
         w_checkout.metadata.add('1', 'test')

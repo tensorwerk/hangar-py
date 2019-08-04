@@ -1,13 +1,16 @@
-from typing import Tuple, Iterator, Set
+from typing import Tuple, List, Iterator, Iterable, Set, Dict
 
 import lmdb
 
 from .. import constants as c
 from . import parsing
 from .parsing import RawDataRecordKey, RawDataRecordVal
+from .parsing import MetadataRecordKey, MetadataRecordVal
+from .parsing import RawDatasetSchemaVal
 from ..context import TxnRegister
 
 RawDataTuple = Tuple[RawDataRecordKey, RawDataRecordVal]
+RawMetaTuple = Tuple[MetadataRecordKey, MetadataRecordVal]
 
 '''
 Data record queries
@@ -22,7 +25,7 @@ class RecordQuery(object):
 
 # ------------------ traversing the unpacked records ------------------------------------
 
-    def _traverse_all_records(self) -> Iterator[RawDataTuple]:
+    def _traverse_all_records(self) -> Iterator[Tuple[bytes, bytes]]:
         '''Pull out all records in the database as a tuple of binary encoded
 
         Returns
@@ -39,13 +42,13 @@ class RecordQuery(object):
         finally:
             TxnRegister().abort_reader_txn(self._dataenv)
 
-    def _traverse_metadata_records(self):
+    def _traverse_metadata_records(self) -> Dict[bytes, bytes]:
         '''Internal method to traverse all metadata records and pull out keys/db_values
 
         Returns
         -------
-        dict
-            dictionary of metadata keys and db_values
+        Dict[bytes, bytes]
+            dictionary of metadata db keys and db_values
         '''
         metadataRecords = {}
         metadataCountKey = parsing.metadata_count_db_key()
@@ -64,13 +67,13 @@ class RecordQuery(object):
 
         return metadataRecords
 
-    def _traverse_dataset_schema_records(self):
+    def _traverse_dataset_schema_records(self) -> Dict[bytes, bytes]:
         '''Internal method to travers all the schema records and pull out keys/db_values
 
         Returns
         -------
-        dict
-            dictionary of schema keys and db_values
+        Dict[bytes, bytes]
+            dictionary of db schema keys and db_values
         '''
         schemaRecords = {}
         startSchemaRangeKey = f'{c.K_SCHEMA}'.encode()
@@ -91,7 +94,7 @@ class RecordQuery(object):
 
         return schemaRecords
 
-    def _traverse_dataset_data_records(self, dataset_name):
+    def _traverse_dataset_data_records(self, dataset_name) -> Dict[bytes, bytes]:
         '''Internal method to traverse dataset data records and get keys/db_values
 
         The datset name is required because this method controls the cursor movement by
@@ -105,7 +108,7 @@ class RecordQuery(object):
 
         Returns
         -------
-        dict
+        Dict[bytes, bytes]
             dict of db_key/db_values for each record traversed
         '''
         data_records = {}
@@ -132,19 +135,19 @@ class RecordQuery(object):
 
 # ------------------------- process datasets --------------------------------------------
 
-    def dataset_names(self):
+    def dataset_names(self) -> List[str]:
         '''Find all named datasets in the checkout
 
         Returns
         -------
-        list of str
+        List[str]
             list of all dataset names
         '''
         recs = self._traverse_dataset_schema_records()
         dataset_names = list(map(parsing.dataset_record_schema_raw_key_from_db_key, recs.keys()))
         return dataset_names
 
-    def dataset_data_records(self, dataset_name: str) -> Iterator[RawDataTuple]:
+    def dataset_data_records(self, dataset_name: str) -> Iterable[RawDataTuple]:
         '''Returns the raw data record key and record values for a specific dataset.
 
         Parameters
@@ -228,7 +231,7 @@ class RecordQuery(object):
 
 # ------------------------- process schema ----------------------------------------------
 
-    def dataset_schema_spec(self, dataset_name):
+    def dataset_schema_spec(self, dataset_name) -> RawDatasetSchemaVal:
         '''Return the schema spec for a specific dataset name.
 
         If you need both names, and schema spec values, use the `schema_specs` method. The
@@ -242,7 +245,7 @@ class RecordQuery(object):
 
         Returns
         -------
-        namedtuple
+        RawDatasetSchemaVal
             raw schema spec for the dataset requested
         '''
         recs = self._traverse_dataset_schema_records()
@@ -251,12 +254,12 @@ class RecordQuery(object):
         schemaRec = parsing.dataset_record_schema_raw_val_from_db_val(schemaRecVal)
         return schemaRec
 
-    def schema_specs(self):
+    def schema_specs(self) -> Dict[str, RawDatasetSchemaVal]:
         '''Return the all schema specs defined by all datasets.
 
         Returns
         -------
-        dict of namedtuple
+        Dict[str, RawDataSchemaVal]
             dict of dataset names: raw schema spec for each dataset schema
         '''
         recs = self._traverse_dataset_schema_records()
@@ -266,12 +269,12 @@ class RecordQuery(object):
             recs = dict(zip(schema_rec_keys, schema_rec_vals))
         return recs
 
-    def schema_hashes(self):
+    def schema_hashes(self) -> List[str]:
         '''Find all schema hashes inside of a commit
 
         Returns
         -------
-        list
+        List[str]
             list of all schema hash digests
         '''
         recs = self._traverse_dataset_schema_records()
@@ -282,12 +285,12 @@ class RecordQuery(object):
             all_schema_hashes.extend(schema_hashs)
         return all_schema_hashes
 
-    def data_hash_to_schema_hash(self):
+    def data_hash_to_schema_hash(self) -> Dict[str, str]:
         '''For all hashs in the commit, map sample hash to schema hash.
 
         Returns
         -------
-        dict
+        Dict[str, str]
             mapping of sample hash to dset_schema_hash
         '''
         dsetns = self.dataset_names()
@@ -303,7 +306,7 @@ class RecordQuery(object):
 
 # --------------------------- process metadata ------------------------------------------
 
-    def metadata_names(self):
+    def metadata_names(self) -> List[str]:
         '''Find all metadata names contained within checkout
 
         If you need both names, and hash values, call the `metadata_records` function. The
@@ -312,33 +315,33 @@ class RecordQuery(object):
 
         Returns
         -------
-        list of str
+        List[str]
             list of metadata names contained in the dataset
         '''
         recs = self._traverse_metadata_records()
         if len(recs) > 0:
             meta_key_rec = map(parsing.metadata_record_raw_key_from_db_key, recs.keys())
-            recs = list(meta_key_rec)
+            meta_names = list(map(lambda x: x.meta_name, meta_key_rec))
         else:
-            recs = []
-        return recs
+            meta_names = []
+        return meta_names
 
-    def metadata_records(self):
+    def metadata_records(self) -> Iterable[RawMetaTuple]:
         '''returns all the metadata record specs for all metadata keys
 
         Returns
         -------
-        dict
+        Iterable[RawMetaTuple]
             dict of metadata names: metadata record spec for all metadata pieces
         '''
         recs = self._traverse_metadata_records()
         if len(recs) > 0:
             meta_rec_keys = map(parsing.metadata_record_raw_key_from_db_key, recs.keys())
             meta_rec_vals = map(parsing.metadata_record_raw_val_from_db_val, recs.values())
-            recs = dict(zip(meta_rec_keys, meta_rec_vals))
+            recs = zip(meta_rec_keys, meta_rec_vals)
         return recs
 
-    def metadata_hashes(self) -> list:
+    def metadata_hashes(self) -> List[str]:
         '''Find all hashs for all metadata in a commit
 
         This method does not deduplicate identical hash records. if needed, postprocess
@@ -346,14 +349,15 @@ class RecordQuery(object):
 
         Returns
         -------
-        list
+        List[str]
             list of all hashes in the commit
         '''
         recs = self._traverse_metadata_records()
         all_hashes = []
         if len(recs) > 0:
             meta_rec_vals = map(parsing.metadata_record_raw_val_from_db_val, recs.values())
-            all_hashes.extend(meta_rec_vals)
+            meta_hashs = map(lambda x: x.meta_hash, meta_rec_vals)
+            all_hashes.extend(meta_hashs)
         return all_hashes
 
 # ---------------------------------- python access to all records at once ---------------
@@ -380,6 +384,6 @@ class RecordQuery(object):
 
         res = {
             'datasets': dsetRecs,
-            'metadata': self.metadata_records(),
+            'metadata': dict(self.metadata_records()),
         }
         return res
