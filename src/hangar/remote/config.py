@@ -39,10 +39,13 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 '''
 import os
-from functools import lru_cache
 from os import makedirs
+from functools import lru_cache
+from typing import MutableMapping, Union
 
 import yaml
+
+global_config: MutableMapping[str, Union[str, int]]
 
 no_default = '__no_default__'
 global_config = config = {}

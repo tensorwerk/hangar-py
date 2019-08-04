@@ -102,7 +102,7 @@ def fetch_data(ctx, remote, startpoint, dset, nbytes, all_):
     '''Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
-    commmit of a branch. Please review optional arguments for other behaviors
+    commit of a branch. Please review optional arguments for other behaviors
     '''
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
     from hangar.utils import parse_bytes
@@ -225,7 +225,7 @@ def summary(ctx, startpoint):
 def log(ctx, startpoint):
     '''Display commit graph starting at STARTPOINT (short-digest or name)
 
-    If no argument is passed in, the staging area branch HEAD wil be used as the
+    If no argument is passed in, the staging area branch HEAD will be used as the
     starting point.
     '''
     P = os.getcwd()
@@ -308,7 +308,7 @@ def server(overwrite, ip, port, timeout):
     similar, though significantly different enough to the regular user "client"
     implementation that it is not possible to fully access all information via
     regular API methods. These changes occur as a result of the uniformity of
-    operations promissed by both the RPC structure and negotiations between the
+    operations promised by both the RPC structure and negotiations between the
     client/server upon connection.
 
     More simply put, we know more, so we can optimize access more; similar, but

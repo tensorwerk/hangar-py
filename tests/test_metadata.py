@@ -275,8 +275,8 @@ def test_get_multi_threading_pool(repo):
         with dummy.Pool(2) as p:
             with nco.metadata as m:
                 out = p.map(m.get, sampKeyList)
-        for expected, recieved in zip(sampValList, out):
-            assert expected == recieved
+        for expected, received in zip(sampValList, out):
+            assert expected == received
         nco.close()
 
 

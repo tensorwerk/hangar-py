@@ -1,12 +1,13 @@
 import logging
 import os
-import shutil
 import platform
-import warnings
+import shutil
 import tempfile
-from typing import MutableMapping, Optional
+import warnings
 from collections import Counter
 from os.path import join as pjoin
+from typing import MutableMapping
+from typing import Optional
 
 import lmdb
 import yaml

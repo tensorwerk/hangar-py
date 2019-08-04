@@ -329,7 +329,7 @@ class NUMPY_10_FileHandles(object):
         Raises
         ------
         RuntimeError
-            If the recorded checksum does not match the recieved checksum.
+            If the recorded checksum does not match the received checksum.
 
         Notes
         -----

@@ -28,6 +28,8 @@ Improvements
   (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Read-only checkout dataset sample ``get`` methods now are multithread and multiprocess safe.
   (`#84 <https://github.com/tensorwerk/hangar-py/pull/84>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Read-only checkout metadata sample ``get`` methods are thread safe if used within a context manager.
+  (`#101 <https://github.com/tensorwerk/hangar-py/pull/101>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Samples can be assigned integer names in addition to ``string`` names.
   (`#89 <https://github.com/tensorwerk/hangar-py/pull/89>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Forgetting to close a ``write-enabled`` checkout before terminating the python process will close the
@@ -42,6 +44,8 @@ Bug Fixes
 
 * Diff results for fast forward merges now returns sensible results.
   (`#77 <https://github.com/tensorwerk/hangar-py/pull/77>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Many type annotations added, and developer documentation improved.
+  `@hhsecond <https://github.com/hhsecond>`__ & `@rlizzo <https://github.com/rlizzo>`__
 
 Breaking changes
 ----------------

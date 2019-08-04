@@ -68,6 +68,7 @@ napoleon_include_init_with_doc = True
 
 add_module_names = False
 doctest_test_doctest_blocks = None
+autoclass_content = 'class'
 
 html_theme_options = {
     'style_nav_header_background': 'orange'

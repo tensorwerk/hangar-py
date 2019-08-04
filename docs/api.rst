@@ -11,74 +11,85 @@ Repository
 .. automodule:: hangar.repository
    :members:
 
-.. autoclass:: Remotes
+.. autoclass:: Remotes()
    :members:
+   :exclude-members: __init__
 
 Write Enabled Checkout
 ======================
 
-.. autoclass:: hangar.checkout.WriterCheckout
+.. autoclass:: hangar.checkout.WriterCheckout()
    :members:
+   :exclude-members: __init__
 
 Datasets
 --------
 
-.. autoclass:: hangar.dataset.Datasets
-   :members: keys, values, items, get, iswriteable, multi_add, init_dataset, remove_dset
+.. autoclass:: hangar.dataset.Datasets()
+   :members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
 
 Dataset Data
 ------------
 
-.. autoclass:: hangar.dataset.DatasetDataWriter
+.. autoclass:: hangar.dataset.DatasetDataWriter()
    :members:
    :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
 
 Metadata
 --------
 
-.. autoclass:: hangar.metadata.MetadataWriter
+.. autoclass:: hangar.metadata.MetadataWriter()
    :members:
    :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
 
 Differ
 ------
 
-.. autoclass:: hangar.diff.WriterUserDiff
+.. autoclass:: hangar.diff.WriterUserDiff()
    :members:
+   :exclude-members: __init__
 
 
 Read Only Checkout
 ==================
 
-.. autoclass:: hangar.checkout.ReaderCheckout
+.. autoclass:: hangar.checkout.ReaderCheckout()
    :members:
+   :exclude-members: __init__
 
 Datasets
 --------
 
-.. autoclass:: hangar.dataset.Datasets
+.. autoclass:: hangar.dataset.Datasets()
    :members: keys, values, items, get, iswriteable
    :special-members: __getitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
 
 Dataset Data
 ------------
 
-.. autoclass:: hangar.dataset.DatasetDataReader
+.. autoclass:: hangar.dataset.DatasetDataReader()
    :members:
    :special-members: __getitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
 
 Metadata
 --------
 
-.. autoclass:: hangar.metadata.MetadataReader
+.. autoclass:: hangar.metadata.MetadataReader()
    :members:
    :special-members: __getitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
 
 Differ
 ------
 
-.. autoclass:: hangar.diff.ReaderUserDiff
+.. autoclass:: hangar.diff.ReaderUserDiff()
    :members:
+   :exclude-members: __init__

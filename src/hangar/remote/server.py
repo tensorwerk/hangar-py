@@ -23,12 +23,7 @@ from .content import ContentWriter
 from .. import constants as c
 from ..context import Environments, TxnRegister
 from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
-from ..records import commiting
-from ..records import hashs
-from ..records import heads
-from ..records import parsing
-from ..records import queries
-from ..records import summarize
+from ..records import commiting, hashs, heads, parsing, queries, summarize
 from ..utils import set_blosc_nthreads
 
 set_blosc_nthreads()
@@ -268,7 +263,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
         uncompBytes = blosc.decompress(dBytes)
         if uncomp_nbytes != len(uncompBytes):
-            msg = f'Expected nbytes data sent: {uncomp_nbytes} != recieved {comp_nbytes}'
+            msg = f'Expected nbytes data sent: {uncomp_nbytes} != received {comp_nbytes}'
             context.set_details(msg)
             context.set_code(grpc.StatusCode.DATA_LOSS)
             err = hangar_service_pb2.ErrorProto(code=15, message=msg)
@@ -280,14 +275,14 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         unpacker = msgpack.Unpacker(
             buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
 
-        # We recieve a list of digests to send to the client. One consideration
+        # We receive a list of digests to send to the client. One consideration
         # we have is that there is no way to know how much memory will be used
         # when the data is read from disk. Samples are compressed against
-        # eachother before going over the wire, which means its preferable to
+        # each-other before going over the wire, which means its preferable to
         # read in as much as possible. However, since we don't want to overload
         # the client system when the binary blob is decompressed into individual
         # tensors, we set some maximum size which tensors can occupy when
-        # uncompressed. When we recieve a list of digests whose data size is in
+        # uncompressed. When we receive a list of digests whose data size is in
         # excess of this limit, we just say sorry to the client, send the chunk
         # of digests/tensors off to them as is (incomplete), and request that
         # the client figure out what it still needs and ask us again.
@@ -351,7 +346,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             self.txnregister.abort_reader_txn(self.env.hashenv)
 
     def PushData(self, request_iterator, context):
-        '''Recieve compressed streams of binary data from the client.
+        '''Receive compressed streams of binary data from the client.
 
         In order to prevent errors or malicious behavior, the cryptographic hash
         of every tensor is calculated and compared to what the client "said" it
@@ -369,7 +364,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
         uncompBytes = blosc.decompress(dBytes)
         if uncomp_nbytes != len(uncompBytes):
-            msg = f'ERROR: uncomp_nbytes sent: {uncomp_nbytes} != recieved {comp_nbytes}'
+            msg = f'ERROR: uncomp_nbytes sent: {uncomp_nbytes} != received {comp_nbytes}'
             context.set_details(msg)
             context.set_code(grpc.StatusCode.DATA_LOSS)
             err = hangar_service_pb2.ErrorProto(code=15, message=msg)
@@ -380,20 +375,20 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         unpacker = msgpack.Unpacker(
             buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
         # hashTxn = self.txnregister.begin_writer_txn(self.env.hashenv)
-        recieved_data = []
+        received_data = []
         for data in unpacker:
             digest, schema_hash, dShape, dTypeN, dBytes = data
             tensor = np.frombuffer(dBytes, dtype=np.typeDict[dTypeN]).reshape(dShape)
-            recieved_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
-            if recieved_hash != digest:
-                msg = f'HASH MANGLED, recieved: {recieved_hash} != expected digest: {digest}'
+            received_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
+            if received_hash != digest:
+                msg = f'HASH MANGLED, received: {received_hash} != expected digest: {digest}'
                 context.set_details(msg)
                 context.set_code(grpc.StatusCode.DATA_LOSS)
                 err = hangar_service_pb2.ErrorProto(code=15, message=msg)
                 reply = hangar_service_pb2.PushDataReply(error=err)
                 return reply
-            recieved_data.append((recieved_hash, tensor))
-        saved_digests = self.CW.data(schema_hash, recieved_data)
+            received_data.append((received_hash, tensor))
+        saved_digests = self.CW.data(schema_hash, received_data)
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
         return reply
@@ -436,16 +431,16 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         req_digest = request.rec.digest
 
         uncompBlob = blosc.decompress(request.blob)
-        recieved_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
-        if recieved_hash != req_digest:
-            msg = f'HASH MANGED: recieved_hash: {recieved_hash} != digest: {req_digest}'
+        received_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
+        if received_hash != req_digest:
+            msg = f'HASH MANGED: received_hash: {received_hash} != digest: {req_digest}'
             context.set_details(msg)
             context.set_code(grpc.StatusCode.DATA_LOSS)
             err = hangar_service_pb2.ErrorProto(code=15, message=msg)
             reply = hangar_service_pb2.PushLabelReply(error=err)
             return reply
 
-        digest = self.CW.label(recieved_hash, uncompBlob)
+        digest = self.CW.label(received_hash, uncompBlob)
         if not digest:
             msg = f'HASH ALREADY EXISTS: {req_digest}'
             context.set_code(grpc.StatusCode.ALREADY_EXISTS)

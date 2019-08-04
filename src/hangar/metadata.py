@@ -1,6 +1,6 @@
 import os
 import hashlib
-from typing import Optional, Union, Iterable, Iterator, Tuple, Dict
+from typing import Optional, Union, Iterator, Tuple, Dict
 import logging
 
 import lmdb
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class MetadataReader(object):
     '''Class implementing get access to the metadata in a repository.
 
-    Unlike the :class:`hangar.dataset.DatasetDataReader` and
-    :class:`hangar.dataset.DatasetDataWriter`, the equivalent Metadata classes
+    Unlike the :class:`~.dataset.DatasetDataReader` and
+    :class:`~.dataset.DatasetDataWriter`, the equivalent Metadata classes
     do not need a factory function or class to coordinate access through the
     checkout. This is primarily because the metadata is only stored at a single
     level, and because the long term storage is must simpler than for array data
@@ -25,31 +25,18 @@ class MetadataReader(object):
 
     .. note::
 
-        It is important to realize that this is not intended to serve as a general
-        store large amounts of textual data, and has no optimization to support such
-        use cases at this time. This should only serve to attach helpful labels, or
-        other quick information primarily intended for human book-keeping, to the
-        main tensor data!
+       It is important to realize that this is not intended to serve as a general
+       store large amounts of textual data, and has no optimization to support such
+       use cases at this time. This should only serve to attach helpful labels, or
+       other quick information primarily intended for human book-keeping, to the
+       main tensor data!
 
     .. note::
 
        Write-enabled metadata objects are not thread or process safe. Read-only
        checkouts can use multithreading safety to retrieve data via the
-       standard :py:method:`~metadata.MetadataReader.get` calls
+       standard :py:meth:`.MetadataReader.get` calls
 
-    Parameters
-    ----------
-    mode : str
-        'r' for read-only, 'a' for write-enabled
-    repo_pth : os.PathLike
-        path to the repository on disk.
-    dataenv : lmdb.Environment
-        the lmdb environment in which the data records are stored. this is
-        the same as the dataset data record environments.
-    labelenv : lmdb.Environment
-        the lmdb environment in which the label hash key / values are stored
-        permanently. When opened in by this reader instance, no write access
-        is allowed.
     '''
 
     def __init__(self,
@@ -58,7 +45,22 @@ class MetadataReader(object):
                  dataenv: lmdb.Environment,
                  labelenv: lmdb.Environment,
                  *args, **kwargs):
+        '''Developer documentation for init method.
 
+        Parameters
+        ----------
+        mode : str
+            'r' for read-only, 'a' for write-enabled
+        repo_pth : os.PathLike
+            path to the repository on disk.
+        dataenv : lmdb.Environment
+            the lmdb environment in which the data records are stored. this is
+            the same as the dataset data record environments.
+        labelenv : lmdb.Environment
+            the lmdb environment in which the label hash key / values are stored
+            permanently. When opened in by this reader instance, no write access
+            is allowed.
+        '''
         self._mode = mode
         self._path = repo_pth
         self._is_conman: bool = False
@@ -127,7 +129,7 @@ class MetadataReader(object):
         else:
             return False
 
-    def __iter__(self) -> Iterable:
+    def __iter__(self) -> Iterator[Union[int, str]]:
         return self.keys()
 
     def _repr_pretty_(self, p, cycle):
@@ -236,7 +238,7 @@ class MetadataReader(object):
             metaVal = self._labelTxn.get(self._mspecs[key])
             meta_val = parsing.hash_meta_raw_val_from_db_val(metaVal)
         except KeyError:
-            msg = f'The checkout does not contain metdata with key: {key}'
+            msg = f'The checkout does not contain metadata with key: {key}'
             raise KeyError(msg)
         finally:
             if tmpconman:
@@ -248,8 +250,8 @@ class MetadataReader(object):
 class MetadataWriter(MetadataReader):
     '''Class implementing write access to repository metadata.
 
-    Similar to the :class:`hangar.dataset.DatasetDataWriter`, this class
-    inherits the functionality of the :class:`MetadataReader` for reading. The
+    Similar to the :class:`~.dataset.DatasetDataWriter`, this class
+    inherits the functionality of the :class:`~.metadata.MetadataReader` for reading. The
     only difference is that the reader will be initialized with data records
     pointing to the staging area, and not a commit which is checked out.
 
@@ -257,22 +259,23 @@ class MetadataWriter(MetadataReader):
 
        Write-enabled metadata objects are not thread or process safe. Read-only
        checkouts can use multithreading safety to retrieve data via the
-       standard :py:method:`~metadata.MetadataReader.get` calls
+       standard :py:meth:`.MetadataReader.get` calls
 
     .. seealso::
 
-        :class:`MetadataReader` for the intended use of this functionality.
-
-    Parameters
-    ----------
-    dataenv : lmdb.Environment
-        lmdb environment pointing to the staging area db which is opened in
-        write mode
-    labelenv : lmdb.Environment
-        lmdb environment pointing to the label hash/value store db.
+        :class:`.MetadataReader` for the intended use of this functionality.
     '''
 
     def __init__(self, *args, **kwargs):
+        '''Developer documentation of init method
+
+        Parameters
+        ----------
+        *args
+            Arguments passed to :class:`MetadataReader`
+        **kwargs
+            KeyWord arguments passed to :class:`MetadataReader`
+        '''
 
         super().__init__(*args, **kwargs)
 
@@ -312,7 +315,7 @@ class MetadataWriter(MetadataReader):
     def __delitem__(self, key: Union[str, int]) -> Union[str, int]:
         '''Remove a key/value pair from metadata. Convenience method to :meth:`remove`.
 
-        .. seealso:: :meth:`remove`
+        .. seealso:: :meth:`remove` for the function this calls into.
 
         Parameters
         ----------
@@ -331,7 +334,7 @@ class MetadataWriter(MetadataReader):
 
         Parameters
         ----------
-        key : string
+        key : Union[str, int]
             Name of the metadata piece, alphanumeric ascii characters only
         value : string
             Metadata value to store in the repository, any length of valid
@@ -414,13 +417,14 @@ class MetadataWriter(MetadataReader):
 
         Parameters
         ----------
-        key : str
+        key : Union[str, int]
             Metadata name to remove.
 
         Returns
         -------
-        str
-            name of the metadata key/value pair removed, if the operation was successful.
+        Union[str, int]
+            Name of the metadata key/value pair removed, if the operation was
+            successful.
 
         Raises
         ------
@@ -430,8 +434,6 @@ class MetadataWriter(MetadataReader):
         KeyError
             If the checkout does not contain metadata with the provided key.
         '''
-        # if not self._is_conman:
-        #     self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
         try:
             tmpconman = not self._is_conman
             if tmpconman:
@@ -466,6 +468,5 @@ class MetadataWriter(MetadataReader):
         finally:
             if tmpconman:
                 self.__exit__()
-            # if not self._is_conman:
-            #     self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
+
         return key

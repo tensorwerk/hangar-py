@@ -105,7 +105,7 @@ def select_merge_algorithm(message: str,
         branchHistory = rDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
 
         if branchHistory.canFF is True:
-            logger.info('Selected Fast-Forward Merge Stratagy')
+            logger.info('Selected Fast-Forward Merge Strategy')
             success = _fast_forward_merge(
                 branchenv=branchenv,
                 stageenv=stageenv,

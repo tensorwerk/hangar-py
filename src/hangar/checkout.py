@@ -1,21 +1,21 @@
 import atexit
-import os
 import logging
+import os
 import weakref
-from uuid import uuid4
-from os.path import join as pjoin
 from contextlib import suppress
 from functools import partial
+from os.path import join as pjoin
+from uuid import uuid4
 
 import lmdb
 
 from . import constants as c
 from .dataset import Datasets
-from .utils import cm_weakref_obj_proxy
-from .merger import select_merge_algorithm
-from .records import commiting, hashs, heads
 from .diff import ReaderUserDiff, WriterUserDiff
+from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
+from .records import commiting, hashs, heads
+from .utils import cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -39,29 +39,12 @@ class ReaderCheckout(object):
     sessions - an `atexit <https://docs.python.org/3/library/atexit.html>`_ hook
     is registered to :meth:`close`. If properly closed by the user, the hook is
     unregistered after completion with no ill effects. So long as a the process
-    is NOT terminated via non-python ``SIGKILL``, fatal interal python error, or
+    is NOT terminated via non-python ``SIGKILL``, fatal internal python error, or
     or special ``os exit`` methods, cleanup will occur on interpreter shutdown
     and resources will be freed. If a non-handled termination method does occur,
     the implications of holding resources varies on a per-OS basis. While no
     risk to data integrity is observed, repeated misuse may require a system
     reboot in order to achieve expected performance characteristics.
-
-    Parameters
-    ----------
-    base_path : str
-        directory path to the Hangar repository on disk
-    labelenv : lmdb.Environment
-        db where the label dat is stored
-    dataenv : lmdb.Environment
-        db where the checkout record data is unpacked and stored.
-    hashenv : lmdb.Environment
-        db where the hash records are stored.
-    branchenv : lmdb.Environment
-        db where the branch records are stored.
-    refenv : lmdb.Environment
-        db where the commit references are stored.
-    commit : str
-        specific commit hash to checkout
     '''
 
     def __init__(self,
@@ -69,7 +52,25 @@ class ReaderCheckout(object):
                  dataenv: lmdb.Environment, hashenv: lmdb.Environment,
                  branchenv: lmdb.Environment, refenv: lmdb.Environment,
                  commit: str):
+        '''Developer documentation of init method.
 
+        Parameters
+        ----------
+        base_path : str
+            directory path to the Hangar repository on disk
+        labelenv : lmdb.Environment
+            db where the label dat is stored
+        dataenv : lmdb.Environment
+            db where the checkout record data is unpacked and stored.
+        hashenv : lmdb.Environment
+            db where the hash records are stored.
+        branchenv : lmdb.Environment
+            db where the branch records are stored.
+        refenv : lmdb.Environment
+            db where the commit references are stored.
+        commit : str
+            specific commit hash to checkout
+        '''
         self._commit_hash = commit
         self._repo_path = base_path
         self._labelenv = labelenv
@@ -268,33 +269,11 @@ class WriterCheckout(object):
     <https://docs.python.org/3/library/atexit.html>`_ hook is registered to
     :meth:`close`. If properly closed by the user, the hook is unregistered
     after completion with no ill effects. So long as a the process is NOT
-    terminated via non-python SIGKILL, fatal interal python error, or or special
+    terminated via non-python SIGKILL, fatal internal python error, or or special
     os exit methods, cleanup will occur on interpreter shutdown and the writer
     lock will be released. If a non-handled termination method does occur, the
     :py:meth:`~.Repository.force_release_writer_lock` method must be called
     manually when a new python process wishes to open the writer checkout.
-
-    Parameters
-    ----------
-    repo_pth : str
-        local file path of the repository.
-    branch_name : str
-        name of the branch whose ``HEAD`` commit will for the starting state
-        of the staging area.
-    labelenv : lmdb.Environment
-        db where the label dat is stored
-    hashenv lmdb.Environment
-        db where the hash records are stored.
-    refenv : lmdb.Environment
-        db where the commit record data is unpacked and stored.
-    stagenv : lmdb.Environment
-        db where the stage record data is unpacked and stored.
-    branchenv : lmdb.Environment
-        db where the head record data is unpacked and stored.
-    stagehashenv: lmdb.Environment
-        db where the staged hash record data is stored.
-    mode : str, optional
-        open in write or read only mode, default is 'a' which is write-enabled.
     '''
 
     def __init__(self,
@@ -307,7 +286,30 @@ class WriterCheckout(object):
                  branchenv: lmdb.Environment,
                  stagehashenv: lmdb.Environment,
                  mode: str = 'a'):
+        '''Developer documentation of init method.
 
+        Parameters
+        ----------
+        repo_pth : str
+            local file path of the repository.
+        branch_name : str
+            name of the branch whose ``HEAD`` commit will for the starting state
+            of the staging area.
+        labelenv : lmdb.Environment
+            db where the label dat is stored
+        hashenv lmdb.Environment
+            db where the hash records are stored.
+        refenv : lmdb.Environment
+            db where the commit record data is unpacked and stored.
+        stagenv : lmdb.Environment
+            db where the stage record data is unpacked and stored.
+        branchenv : lmdb.Environment
+            db where the head record data is unpacked and stored.
+        stagehashenv: lmdb.Environment
+            db where the staged hash record data is stored.
+        mode : str, optional
+            open in write or read only mode, default is 'a' which is write-enabled.
+        '''
         self._repo_path = repo_pth
         self._branch_name = branch_name
         self._writer_lock = str(uuid4())

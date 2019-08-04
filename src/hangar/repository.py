@@ -242,7 +242,7 @@ class Repository(object):
         The clone method implemented here is very similar to a `git clone`
         operation. This method will pull all commit records, history, and data
         which are parents of the remote's `master` branch head commit. If a
-        :class:`hangar.repository.Repository` exists at the specified directory,
+        :class:`Repository` exists at the specified directory,
         the operation will fail.
 
         Parameters
