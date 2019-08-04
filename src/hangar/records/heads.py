@@ -11,8 +11,9 @@ from ..context import TxnRegister
 Write operation enabled lock methods
 ------------------------------------
 
-Any operation which wants to interact with the main storage services in a write-enabled
-way must aquire a lock to perform the operation. See docstrings below for more info
+Any operation which wants to interact with the main storage services in a
+write-enabled way must aquire a lock to perform the operation. See docstrings
+below for more info
 '''
 
 

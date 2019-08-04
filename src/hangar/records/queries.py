@@ -1,10 +1,10 @@
-from typing import Iterable, Tuple, Iterator, Set
+from typing import Tuple, Iterator, Set
 
 import lmdb
 
+from .. import constants as c
 from . import parsing
 from .parsing import RawDataRecordKey, RawDataRecordVal
-from .. import constants as c
 from ..context import TxnRegister
 
 RawDataTuple = Tuple[RawDataRecordKey, RawDataRecordVal]

@@ -12,6 +12,7 @@ import lmdb
 import yaml
 
 from . import constants as c
+from . import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ class TxnRegister(metaclass=TxnRegisterSingleton):
         '''
         ancestors = self.ReaderAncestors[lmdbenv]
         if ancestors == 0:
-            raise RuntimeError(f'hash ancestors are zero but commit called')
+            raise RuntimeError(f'hash ancestors are zero but abort called')
         elif ancestors == 1:
             self.ReaderTxn[lmdbenv].abort()
             self.ReaderTxn.__delitem__(lmdbenv)
@@ -170,7 +171,7 @@ Todo, refactor to avoid the need for these imports to be below TxnRegister,
 if they aren't right now, we get circular imports...
 '''
 
-from .records import commiting, heads
+from .records import commiting, heads, parsing, vcompat
 from .utils import readme_contents
 
 
@@ -217,11 +218,23 @@ class Environments(object):
         -----
         UserWarning
             Should the repository not exist at the provided repo path.
+
+        Raises
+        ------
+        RuntimeError
+            If the repository version is not compatible with the current software.
         '''
         if not os.path.isfile(pjoin(self.repo_path, c.LMDB_BRANCH_NAME)):
             msg = f'No repository exists at {self.repo_path}, please use `repo.init()` method'
             warnings.warn(msg, UserWarning)
             return False
+
+        repo_ver = vcompat.startup_check_repo_version(self.repo_path)
+        curr_ver = parsing.repo_version_raw_spec_from_raw_string(v_str=__version__)
+        if not vcompat.is_repo_software_version_compatible(repo_ver, curr_ver):
+            msg = f'repository written version: {repo_ver} is not comatible '\
+                  f'with the current Hangar software version: {curr_ver}'
+            raise RuntimeError(msg)
 
         self._open_environments()
         return True
@@ -274,6 +287,7 @@ class Environments(object):
             f.write(readmeTxt.getvalue())
 
         self._open_environments()
+        vcompat.set_repository_software_version(branchenv=self.branchenv, ver_str=__version__)
         heads.create_branch(self.branchenv, 'master', '')
         heads.set_staging_branch_head(self.branchenv, 'master')
         return self.repo_path

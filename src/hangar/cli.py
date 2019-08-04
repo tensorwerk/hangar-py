@@ -18,7 +18,6 @@ import time
 
 import click
 
-import hangar
 from hangar import Repository
 from hangar import serve
 from hangar.records.commiting import expand_short_commit_digest
@@ -30,6 +29,7 @@ from hangar.records.commiting import expand_short_commit_digest
 @click.pass_context
 def main(ctx, version):
     if version:
+        import hangar
         click.echo(hangar.__version__)
     pass
 

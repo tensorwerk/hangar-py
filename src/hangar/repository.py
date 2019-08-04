@@ -9,7 +9,7 @@ from . import constants as c
 from .remotes import Remotes
 from .context import Environments
 from .diagnostics import graphing, ecosystem
-from .records import heads, parsing, summarize
+from .records import heads, parsing, summarize, vcompat
 from .checkout import ReaderCheckout, WriterCheckout
 from .utils import is_valid_directory_path, is_suitable_user_key
 
@@ -152,6 +152,19 @@ class Repository(object):
         '''
         self.__verify_repo_initialized()
         return not heads.writer_lock_held(self._env.branchenv)
+
+    @property
+    def version(self) -> str:
+        '''Find the version of Hangar software the repository is written with
+
+        Returns
+        -------
+        str
+            semantic version of major, minor, micro version of repo software version.
+        '''
+        self.__verify_repo_initialized()
+        res = vcompat.get_repository_software_version_str(self._env.branchenv)
+        return res
 
     def checkout(self,
                  write: bool = False,

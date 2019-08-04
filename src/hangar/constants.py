@@ -15,6 +15,7 @@ K_STGMETA = f'l{SEP_KEY}'
 K_SCHEMA = f's{SEP_KEY}'
 K_HASH = f'h{SEP_KEY}'
 K_WLOCK = f'writerlock{SEP_KEY}'
+K_VERSION = 'software_version'
 
 WLOCK_SENTINAL = 'LOCK_AVAILABLE'
 
