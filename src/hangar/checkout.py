@@ -1,3 +1,4 @@
+import atexit
 import os
 import logging
 import weakref
@@ -22,9 +23,28 @@ logger = logging.getLogger(__name__)
 class ReaderCheckout(object):
     '''Checkout the repository as it exists at a particular branch.
 
-    if a commit hash is provided, it will take precedent over the branch name
+    If a commit hash is provided, it will take precedent over the branch name
     parameter. If neither a branch not commit is specified, the staging
-    environment's base branch HEAD commit hash will be read.
+    environment's base branch ``HEAD`` commit hash will be read.
+
+    Unlike :class:`WriterCheckout`, any number of :class:`ReaderCheckout`
+    objects can exist on the repository independently. Like the
+    ``write-enabled`` variant, the :meth:`close` method should be called after
+    performing the necessary operations on the repo. However, as there is no
+    concept of a ``lock`` for ``read-only`` checkouts, this is just to free up
+    memory resources, rather than changing recorded access state.
+
+    In order to reduce the chance that the python interpreter is shut down
+    without calling :meth:`close`,  - a common mistake during ipython / jupyter
+    sessions - an `atexit <https://docs.python.org/3/library/atexit.html>`_ hook
+    is registered to :meth:`close`. If properly closed by the user, the hook is
+    unregistered after completion with no ill effects. So long as a the process
+    is NOT terminated via non-python ``SIGKILL``, fatal interal python error, or
+    or special ``os exit`` methods, cleanup will occur on interpreter shutdown
+    and resources will be freed. If a non-handled termination method does occur,
+    the implications of holding resources varies on a per-OS basis. While no
+    risk to data integrity is observed, repeated misuse may require a system
+    reboot in order to achieve expected performance characteristics.
 
     Parameters
     ----------
@@ -69,6 +89,7 @@ class ReaderCheckout(object):
             commit_hash=self._commit_hash,
             branchenv=self._branchenv,
             refenv=self._refenv)
+        atexit.register(self.close)
 
     def _repr_pretty_(self, p, cycle):
         '''pretty repr for printing in jupyter notebooks
@@ -216,6 +237,7 @@ class ReaderCheckout(object):
         del self._hashenv
         del self._branchenv
         del self._refenv
+        atexit.unregister(self.close)
         return
 
 
@@ -226,24 +248,36 @@ class WriterCheckout(object):
     '''Checkout the repository at the head of a given branch for writing.
 
     This is the entry point for all writing operations to the repository, the
-    writer class records all interactions in a special "staging" area, which is
-    based off the state of the repository as it existed at the HEAD commit of a
-    branch.
+    writer class records all interactions in a special ``"staging"`` area, which
+    is based off the state of the repository as it existed at the ``HEAD``
+    commit of a branch.
 
     At the moment, only one instance of this class can write data to the staging
     area at a time. After the desired operations have been completed, it is
-    crucial to call :meth:`close` to release the writer lock. In addition,
-    after any changes have been made to the staging area, the branch HEAD cannot
-    be changed. In order to checkout another branch HEAD for writing, you must
-    either commit the changes, or perform a hard-reset of the staging area to
-    the last commit.
+    crucial to call :meth:`close` to release the writer lock. In addition, after
+    any changes have been made to the staging area, the branch ``HEAD`` cannot
+    be changed. In order to checkout another branch ``HEAD`` for writing, you
+    must either :meth:`commit` the changes, or perform a hard-reset of the
+    staging area to the last commit via :meth:`reset_staging_area`.
+
+    In order to reduce the chance that the python interpreter is shut down
+    without calling :meth:`close`, which releases the writer lock - a common mistake
+    during ipython / jupyter sessions - an `atexit
+    <https://docs.python.org/3/library/atexit.html>`_ hook is registered to
+    :meth:`close`. If properly closed by the user, the hook is unregistered
+    after completion with no ill effects. So long as a the process is NOT
+    terminated via non-python SIGKILL, fatal interal python error, or or special
+    os exit methods, cleanup will occur on interpreter shutdown and the writer
+    lock will be released. If a non-handled termination method does occur, the
+    :py:meth:`~.Repository.force_release_writer_lock` method must be called
+    manually when a new python process wishes to open the writer checkout.
 
     Parameters
     ----------
     repo_pth : str
         local file path of the repository.
     branch_name : str
-        name of the branch whose HEAD commit will for the starting state
+        name of the branch whose ``HEAD`` commit will for the starting state
         of the staging area.
     labelenv : lmdb.Environment
         db where the label dat is stored
@@ -289,6 +323,7 @@ class WriterCheckout(object):
         self._differ: WriterUserDiff = None
         self._metadata: MetadataWriter = None
         self.__setup()
+        atexit.register(self.close)
 
     def _repr_pretty_(self, p, cycle):
         '''pretty repr for printing in jupyter notebooks
@@ -380,7 +415,7 @@ class WriterCheckout(object):
         Returns
         -------
         str
-            name of the branch whose commit HEAD changes are staged from.
+            name of the branch whose commit ``HEAD`` changes are staged from.
         '''
         self.__acquire_writer_lock()
         return self._branch_name
@@ -499,7 +534,7 @@ class WriterCheckout(object):
         ------
         ValueError
             if there are changes previously made in the staging area which were
-            based on one branch's HEAD, but a different branch was specified to
+            based on one branch's ``HEAD``, but a different branch was specified to
             be used for the base of this checkout.
         '''
         self.__acquire_writer_lock()
@@ -549,7 +584,7 @@ class WriterCheckout(object):
         commit_message : str, optional
             user proved message for a log of what was changed in this commit.
             Should a fast forward commit be possible, this will NOT be added to
-            fast-forward HEAD.
+            fast-forward ``HEAD``.
 
         Returns
         -------
@@ -617,8 +652,8 @@ class WriterCheckout(object):
 
         Returns
         -------
-        string
-            commit hash of the head which the staging area is reset to.
+        str
+            Commit hash of the head which the staging area is reset to.
 
         Raises
         ------
@@ -709,4 +744,5 @@ class WriterCheckout(object):
         del self._branch_name
         del self._repo_stage_path
         del self._repo_store_path
+        atexit.unregister(self.close)
         return

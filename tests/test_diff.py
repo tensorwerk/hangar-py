@@ -328,6 +328,7 @@ class TestWriterDiff(object):
         assert 'hello_from_test' in diff['metadata']['master']['additions']
         co.commit('init metadata')
         assert co.diff.status() == 'CLEAN'
+        co.close()
 
     def test_status_and_staged_samples(self, written_repo):
         dummyData = np.zeros((5, 7))
@@ -344,6 +345,7 @@ class TestWriterDiff(object):
             assert key.data_name == '45'
         co.commit('adding')
         assert co.diff.status() == 'CLEAN'
+        co.close()
 
     def test_status_and_staged_dset(self, written_repo):
         repo = written_repo
@@ -355,3 +357,4 @@ class TestWriterDiff(object):
         assert '_dset' in diff['datasets']['master']['unchanged'].keys()
         co.commit('init dset')
         assert co.diff.status() == 'CLEAN'
+        co.close()

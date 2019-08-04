@@ -8,6 +8,7 @@ class TestDataset(object):
         co = repo.checkout(write=True)
         with pytest.raises(ValueError):
             co.datasets.init_dataset(name='invalid name', prototype=randomsizedarray)
+        co.close()
 
     def test_read_only_mode(self, written_repo):
         import hangar
@@ -451,6 +452,7 @@ class TestDataWithFixedSizedDataset(object):
         with pytest.raises(LookupError):
             # raises in another checkout
             dset['1'] = array5by7
+        co.close()
 
     @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_writer_context_manager_dataset_add_sample(self, dset_backend, repo, randomsizedarray):
@@ -620,6 +622,9 @@ class TestVariableSizedDataset(object):
             # make sure they can work after commit
             assert np.allclose(wd[k], v)
             assert np.allclose(rd[k], v)
+        wco.close()
+        rco.close()
+
 
     @pytest.mark.parametrize('dset_specs', [
         [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],

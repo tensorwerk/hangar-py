@@ -161,9 +161,9 @@ class Repository(object):
         '''Checkout the repo at some point in time in either `read` or `write` mode.
 
         Only one writer instance can exist at a time. Write enabled checkout
-        must must create a staging area from the HEAD commit of a branch. On the
-        contrary, any number of reader checkouts can exist at the same time and
-        can specify either a branch name or a commit hash.
+        must must create a staging area from the ``HEAD`` commit of a branch. On
+        the contrary, any number of reader checkouts can exist at the same time
+        and can specify either a branch name or a commit hash.
 
         Parameters
         ----------
@@ -171,11 +171,11 @@ class Repository(object):
             Specify if the checkout is write capable, defaults to False
         branch : str, optional
             name of the branch to checkout. This utilizes the state of the repo
-            as it existed at the branch HEAD commit when this checkout object
+            as it existed at the branch ``HEAD`` commit when this checkout object
             was instantiated, defaults to 'master'
         commit : str, optional
             specific hash of a commit to use for the checkout (instead of a
-            branch HEAD commit). This argument takes precedent over a branch
+            branch ``HEAD`` commit). This argument takes precedent over a branch
             name parameter if it is set. Note: this only will be used in
             non-writeable checkouts, defaults to ''
 
@@ -437,7 +437,7 @@ class Repository(object):
     def create_branch(self, name: str, base_commit: str = None) -> str:
         '''create a branch with the provided name from a certain commit.
 
-        If no base commit hash is specified, the current writer branch HEAD
+        If no base commit hash is specified, the current writer branch ``HEAD``
         commit is used as the base_commit hash for the branch. Note that
         creating a branch does not actually create a checkout object for
         interaction with the data. to interact you must use the repository
@@ -450,7 +450,7 @@ class Repository(object):
             name to assign to the new branch
         base_commit : str, optional
             commit hash to start the branch root at. if not specified, the
-            writer branch HEAD commit at the time of execution will be used,
+            writer branch ``HEAD`` commit at the time of execution will be used,
             defaults to None
 
         Returns

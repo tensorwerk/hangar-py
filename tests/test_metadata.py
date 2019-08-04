@@ -92,6 +92,7 @@ class TestMetadata(object):
         co.metadata.remove('a')
         co.commit('this is a commit message')
         assert list(co.metadata.keys()) == []
+        co.close()
 
     def test_writer_get_does_not_succeed_if_key_does_not_exist(self, repo):
         co = repo.checkout(write=True)
@@ -99,6 +100,7 @@ class TestMetadata(object):
         co.commit('this is a commit message')
         with pytest.raises(KeyError):
             co.metadata.get('randome')
+        co.close()
 
     def test_writer_remove_does_not_succeed_if_key_does_not_exist(self, repo):
         co = repo.checkout(write=True)
@@ -106,6 +108,7 @@ class TestMetadata(object):
         co.commit('this is a commit message')
         with pytest.raises(KeyError):
             co.metadata.remove('randome')
+        co.close()
 
     def test_writer_len_magic_works(self, repo):
         co = repo.checkout(write=True)
@@ -116,6 +119,7 @@ class TestMetadata(object):
         assert len(co.metadata) == 1
         del co.metadata['a']
         assert len(co.metadata) == 0
+        co.close()
 
     def test_writer_contains_magic_works(self, repo):
         co = repo.checkout(write=True)
@@ -124,6 +128,7 @@ class TestMetadata(object):
         assert 'a' in co.metadata
         assert '1' in co.metadata
         assert 'foo' not in co.metadata
+        co.close()
 
     def test_writer_iswriteable_property_is_true(self, repo):
         co = repo.checkout(write=True)
@@ -164,16 +169,19 @@ class TestMetadata(object):
         co = written_repo.checkout()
         with pytest.raises(AttributeError):
             co.metadata.add('a', 'b')
+        co.close()
 
     def test_reader_dict_style_add_not_permitted(self, written_repo):
         co = written_repo.checkout()
         with pytest.raises(TypeError):
             co.metadata['a'] = 'b'
+        co.close()
 
     def test_reader_remove_not_permitted(self, written_repo):
         co = written_repo.checkout()
         with pytest.raises(TypeError):
             del co.metadata['a']
+        co.close()
 
     def test_reader_len_magic_works(self, repo):
         wco = repo.checkout(write=True)
@@ -197,6 +205,7 @@ class TestMetadata(object):
         assert 'a' in rco.metadata
         assert '1' in rco.metadata
         assert 'foo' not in rco.metadata
+        rco.close()
 
     def test_reader_iswriteable_property_is_false(self, written_repo):
         co = written_repo.checkout(write=False)
@@ -237,3 +246,4 @@ class TestMetadata(object):
             assert co.metadata[f'k_{i}'] == v
         for i in range(limit):
             assert f'k_{i}' in co.metadata
+        co.close()

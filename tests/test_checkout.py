@@ -1,3 +1,4 @@
+import atexit
 import numpy as np
 import pytest
 
@@ -323,8 +324,9 @@ class TestCheckout(object):
             repo.checkout(write='True')
         with pytest.raises(ValueError):
             repo.checkout(branch=True)
-        repo.checkout(True)  # This should not raise any excpetion
-
+        co = repo.checkout(True)  # This should not raise any excpetion
+        # unregister close operation as conftest will close env before this is called.
+        atexit.unregister(co.close)
 
     @pytest.mark.parametrize("dset1_backend", ['00', '10'])
     @pytest.mark.parametrize("dset2_backend", ['00', '10'])
@@ -411,6 +413,8 @@ class TestBranching(object):
         co.commit('this is a commit message')
         with pytest.raises(PermissionError):
             written_repo.merge('test merge', 'master', branch)
+        # unregister close operation as conftest will close env before this is called.
+        atexit.unregister(co.close)
 
     def test_name_conflict(self, written_repo, array5by7):
         written_repo.create_branch('testbranch')

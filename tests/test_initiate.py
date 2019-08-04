@@ -141,6 +141,7 @@ def test_force_release_writer_lock(managed_tmpdir, monkeypatch):
         co.close()
     # replace, but rest of object is closed
     monkeypatch.setattr(co, '_writer_lock', orig_lock)
+    co.close()
     repo._env._close_environments()
 
 
