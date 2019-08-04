@@ -570,10 +570,10 @@ Functions to convert metadata records to/from python objects
 -------------------------------------------------------------
 '''
 
-MetadataRecordKey = NamedTuple('RawDataRecordKey', [('meta_name', Union[str, int])])
+MetadataRecordKey = NamedTuple('MetadataRecordKey', [('meta_name', Union[str, int])])
 MetadataRecordKey.__doc__ = 'Represents a Metadata Sample Record Key'
 
-MetadataRecordVal = NamedTuple('RawDataRecordVal', [('meta_hash', str)])
+MetadataRecordVal = NamedTuple('MetadataRecordVal', [('meta_hash', str)])
 MetadataRecordVal.__doc__ = 'Represents a Metadata Sample Record Hash Value'
 
 # -------------------- db -> raw (python) -----------------------------

@@ -2,6 +2,11 @@ import pytest
 import numpy as np
 
 
+def create_meta_nt(name):
+    from hangar.records.parsing import MetadataRecordKey
+    res = MetadataRecordKey(name)
+    return res
+
 class TestReaderDiff(object):
 
     def test_diff_by_commit_and_branch(self, repo_2_br_no_conf):
@@ -78,10 +83,10 @@ class TestReaderDiff(object):
         assert diffs['datasets']['dev']['mutations'] == {}
         assert diffs['datasets']['dev']['removals'] == {}
         assert 'dummy' in diffs['datasets']['master']['unchanged'].keys()
-        assert 'foo' in diffs['metadata']['dev']['additions'].keys()
+        assert create_meta_nt('foo' ) in diffs['metadata']['dev']['additions'].keys()
         assert len(diffs['metadata']['master']['additions'].keys()) == 0
-        assert 'hello' in diffs['metadata']['master']['unchanged'].keys()
-        assert 'hello' in diffs['metadata']['dev']['unchanged'].keys()
+        assert create_meta_nt('hello') in diffs['metadata']['master']['unchanged'].keys()
+        assert create_meta_nt('hello') in diffs['metadata']['dev']['unchanged'].keys()
         assert diffs['metadata']['dev']['mutations'] == {}
         assert diffs['metadata']['dev']['removals'] == {}
 
@@ -264,7 +269,7 @@ class TestReaderDiff(object):
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert conflicts['meta'].t1[0] == 'metatest'
+        assert conflicts['meta'].t1[0] == create_meta_nt('metatest')
         assert len(conflicts['meta'].t1) == 1
         co.close()
 
@@ -285,9 +290,9 @@ class TestReaderDiff(object):
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert conflicts['meta'].t21[0] == 'hello'
+        assert conflicts['meta'].t21[0] == create_meta_nt('hello')
         assert len(conflicts['meta'].t21) == 1
-        assert conflicts['meta'].t22[0] == 'somemetadatakey'
+        assert conflicts['meta'].t22[0] == create_meta_nt('somemetadatakey')
         assert len(conflicts['meta'].t22) == 1
         co.close()
 
@@ -306,7 +311,7 @@ class TestReaderDiff(object):
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert conflicts['meta'].t3[0] == 'hello'
+        assert conflicts['meta'].t3[0] == create_meta_nt('hello')
         assert len(conflicts['meta'].t3) == 1
         co.close()
 
@@ -327,7 +332,7 @@ class TestReaderDiff(object):
         co = repo.checkout(branch='testbranch')
         assert np.allclose(co.datasets['_dset'][101], array5by7)
         diff = co.diff.branch('master')[0]
-        assert 'crazykey' in diff['metadata']['master']['additions'].keys()
+        assert create_meta_nt('crazykey') in diff['metadata']['master']['additions'].keys()
         assert 'dset2' in diff['datasets']['master']['additions'].keys()
         for record in diff['samples']['master']['_dset']['additions']:
             assert record.data_name in [100, 101]
@@ -342,7 +347,7 @@ class TestWriterDiff(object):
         co.metadata['hello_from_test'] = 'hai to test'
         assert co.diff.status() == 'DIRTY'
         diff = co.diff.staged()[0]
-        assert 'hello_from_test' in diff['metadata']['master']['additions']
+        assert create_meta_nt('hello_from_test') in diff['metadata']['master']['additions']
         co.commit('init metadata')
         assert co.diff.status() == 'CLEAN'
         co.close()

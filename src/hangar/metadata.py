@@ -31,6 +31,12 @@ class MetadataReader(object):
         other quick information primarily intended for human book-keeping, to the
         main tensor data!
 
+    .. note::
+
+       Write-enabled metadata objects are not thread or process safe. Read-only
+       checkouts can use multithreading safety to retrieve data via the
+       standard :py:method:`~metadata.MetadataReader.get` calls
+
     Parameters
     ----------
     mode : str
@@ -70,13 +76,11 @@ class MetadataReader(object):
     def __enter__(self):
         self._is_conman = True
         self._labelTxn = self._TxnRegister.begin_reader_txn(self._labelenv)
-        # self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
         return self
 
     def __exit__(self, *exc):
         self._is_conman = False
         self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
-        # self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
 
     def __len__(self) -> int:
         '''Determine how many metadata key/value pairs are in the checkout
@@ -87,17 +91,6 @@ class MetadataReader(object):
             number of metadata key/value pairs.
         '''
         return len(self._mspecs)
-        # if not self._is_conman:
-        #     self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
-
-        # try:
-        #     metaCountKey = parsing.metadata_count_db_key()
-        #     metaCountVal = self._dataTxn.get(metaCountKey, default='0'.encode())
-        #     meta_count = parsing.metadata_count_raw_val_from_db_val(metaCountVal)
-        # finally:
-        #     if not self._is_conman:
-        #         self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
-        # return meta_count
 
     def __getitem__(self, key: Union[str, int]) -> str:
         '''Retrieve a metadata sample with a key. Convenience method for dict style access.
@@ -133,9 +126,6 @@ class MetadataReader(object):
             return True
         else:
             return False
-        # names = self._Query.metadata_names()
-        # ret = True if key in names else False
-        # return ret
 
     def __iter__(self) -> Iterable:
         return self.keys()
@@ -169,7 +159,7 @@ class MetadataReader(object):
         For write enabled checkouts, is technically possible to iterate over the
         metadata object while adding/deleting data, in order to avoid internal
         python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.) While
+        have to make a copy of they key list before beginning the loop.) While
         not necessary for read checkouts, we perform the same operation for both
         read and write checkouts in order in order to avoid differences.
 
@@ -178,7 +168,6 @@ class MetadataReader(object):
         Iterator[Union[str, int]]
             keys of one metadata sample at a time
         '''
-        # names = self._Query.metadata_names()
         for name in tuple(self._mspecs.keys()):
             yield name
 
@@ -188,7 +177,7 @@ class MetadataReader(object):
         For write enabled checkouts, is technically possible to iterate over the
         metadata object while adding/deleting data, in order to avoid internal
         python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.) While
+        have to make a copy of they key list before beginning the loop.) While
         not necessary for read checkouts, we perform the same operation for both
         read and write checkouts in order in order to avoid differences.
 
@@ -197,7 +186,6 @@ class MetadataReader(object):
         Iterator[str]
             values of one metadata piece at a time
         '''
-        # names = self._Query.metadata_names()
         for name in tuple(self._mspecs.keys()):
             yield self.get(name)
 
@@ -207,7 +195,7 @@ class MetadataReader(object):
         For write enabled checkouts, is technically possible to iterate over the
         metadata object while adding/deleting data, in order to avoid internal
         python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.) While
+        have to make a copy of they key list before beginning the loop.) While
         not necessary for read checkouts, we perform the same operation for both
         read and write checkouts in order in order to avoid differences.
 
@@ -216,7 +204,6 @@ class MetadataReader(object):
         Iterator[Tuple[Union[str, int], np.ndarray]]
             metadata key and stored value for every piece in the checkout.
         '''
-        # names = self._Query.metadata_names()
         for name in tuple(self._mspecs.keys()):
             yield (name, self.get(name))
 
@@ -241,35 +228,19 @@ class MetadataReader(object):
         KeyError
             If no metadata exists in the checkout with the provided key.
         '''
-        if not self._is_conman:
-            self._labelTxn = self._TxnRegister.begin_reader_txn(self._labelenv)
-            # self._dataTxn = self._TxnRegister.begin_reader_txn(self._dataenv)
-
         try:
-            # if not is_suitable_user_key(key):
-            #     raise ValueError(
-            #         f'metadata key: `{key}` not allowed. Can only contain '
-            #         f'alpha-numeric or "." "_" "-" ascii characters.')
+            tmpconman = not self._is_conman
+            if tmpconman:
+                self.__enter__()
 
-            # refKey = parsing.metadata_record_db_key_from_raw_key(key)
-            # hashVal = self._dataTxn.get(refKey, default=False)
-            # if hashVal is False:
-            #     raise KeyError(f'No metadata key: `{key}` exists in checkout')
-
-            # hash_spec = parsing.metadata_record_raw_val_from_db_val(hashVal)
-            # metaKey = parsing.hash_meta_db_key_from_raw_key(hash_spec)
             metaVal = self._labelTxn.get(self._mspecs[key])
-            # metaVal = self._labelTxn.get(metaKey)
             meta_val = parsing.hash_meta_raw_val_from_db_val(metaVal)
-
-        except KeyError as e:
-            logger.error(e, exc_info=False)
-            raise
-
+        except KeyError:
+            msg = f'The checkout does not contain metdata with key: {key}'
+            raise KeyError(msg)
         finally:
-            if not self._is_conman:
-                self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
-                # self._dataTxn = self._TxnRegister.abort_reader_txn(self._dataenv)
+            if tmpconman:
+                self.__exit__()
 
         return meta_val
 
@@ -279,9 +250,14 @@ class MetadataWriter(MetadataReader):
 
     Similar to the :class:`hangar.dataset.DatasetDataWriter`, this class
     inherits the functionality of the :class:`MetadataReader` for reading. The
-    only difference is that the reader will be initialized with a data record
-    lmdb environment pointing to the staging area, and not a commit which is
-    checked out.
+    only difference is that the reader will be initialized with data records
+    pointing to the staging area, and not a commit which is checked out.
+
+    .. note::
+
+       Write-enabled metadata objects are not thread or process safe. Read-only
+       checkouts can use multithreading safety to retrieve data via the
+       standard :py:method:`~metadata.MetadataReader.get` calls
 
     .. seealso::
 
@@ -454,10 +430,13 @@ class MetadataWriter(MetadataReader):
         KeyError
             If the checkout does not contain metadata with the provided key.
         '''
-        if not self._is_conman:
-            self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
-
+        # if not self._is_conman:
+        #     self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
         try:
+            tmpconman = not self._is_conman
+            if tmpconman:
+                self.__enter__()
+
             if not is_suitable_user_key(key):
                 msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Must be str'\
                       f'containing alpha-numeric or "." "_" "-" ascii characters (no whitespace).'
@@ -485,6 +464,8 @@ class MetadataWriter(MetadataReader):
             raise e from None
 
         finally:
-            if not self._is_conman:
-                self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
+            if tmpconman:
+                self.__exit__()
+            # if not self._is_conman:
+            #     self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
         return key

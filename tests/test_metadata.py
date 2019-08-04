@@ -247,3 +247,67 @@ class TestMetadata(object):
         for i in range(limit):
             assert f'k_{i}' in co.metadata
         co.close()
+
+
+def test_get_multi_threading_pool(repo):
+    from multiprocessing import dummy
+
+    masterCmtList = []
+    co = repo.checkout(write=True)
+    masterSampKeyList = []
+    masterSampValList = []
+    for cIdx in range(2):
+        if cIdx != 0:
+            co = repo.checkout(write=True)
+        with co.metadata as m:
+            kstart = 500 * cIdx
+            for sIdx in range(500):
+                sName = str(sIdx + kstart)
+                m[sName] = f'{cIdx}_{sIdx}'
+                masterSampKeyList.append(sName)
+                masterSampValList.append(f'{cIdx}_{sIdx}')
+        cmt = co.commit(f'master commit number: {cIdx}')
+        masterCmtList.append((cmt, list(masterSampKeyList), list(masterSampValList)))
+        co.close()
+
+    for cmt, sampKeyList, sampValList in masterCmtList:
+        nco = repo.checkout(write=False, commit=cmt)
+        with dummy.Pool(2) as p:
+            with nco.metadata as m:
+                out = p.map(m.get, sampKeyList)
+        for expected, recieved in zip(sampValList, out):
+            assert expected == recieved
+        nco.close()
+
+
+def test_get_multi_process_pool_fails(repo):
+    from multiprocessing import get_context
+
+    masterCmtList = []
+    co = repo.checkout(write=True)
+    masterSampKeyList = []
+    masterSampValList = []
+    for cIdx in range(2):
+        if cIdx != 0:
+            co = repo.checkout(write=True)
+        with co.metadata as m:
+            kstart = 500 * cIdx
+            for sIdx in range(500):
+                sName = str(sIdx + kstart)
+                m[sName] = f'{cIdx}_{sIdx}'
+                masterSampKeyList.append(sName)
+                masterSampValList.append(f'{cIdx}_{sIdx}')
+        cmt = co.commit(f'master commit number: {cIdx}')
+        masterCmtList.append((cmt, list(masterSampKeyList), list(masterSampValList)))
+        co.close()
+
+    for cmt, sampKeyList, sampValList in masterCmtList:
+        nco = repo.checkout(write=False, commit=cmt)
+        with pytest.raises(TypeError):
+            with get_context('spawn').Pool(2) as p:
+                out = p.map(nco.metadata.get, sampKeyList)
+        with nco.metadata as m:
+            for idx, k in enumerate(sampKeyList):
+                out = m.get(k)
+                assert out == sampValList[idx]
+        nco.close()

@@ -1,11 +1,13 @@
 from functools import partial
-from typing import MutableMapping, NamedTuple, Optional, Tuple, Union, Set
+from typing import MutableMapping, NamedTuple, Optional, Tuple, Union, Set, Dict
 
 import lmdb
 
 from .records import commiting
 from .records import heads
-from .records import parsing
+from .records.parsing import RawDataRecordKey, RawDataRecordVal
+from .records.parsing import MetadataRecordKey, MetadataRecordVal
+from .records.parsing import RawDatasetSchemaVal
 from .records.queries import RecordQuery
 
 HistoryDiffStruct = NamedTuple('HistoryDiffStruct', [('masterHEAD', str),
@@ -366,34 +368,38 @@ MetaRecord = NamedTuple('MetaRecord', [
     ('meta_key', str),
     ('meta_hash', str)
 ])
+MetaRecordKV = Dict[MetadataRecordKey, MetadataRecordVal]
 
 
-def _meta_mutation_finder(a_unchanged_kv: dict, d_unchanged_kv: dict) -> Set[str]:
+def _meta_mutation_finder(a_unchanged_kv: MetaRecordKV,
+                          d_unchanged_kv: MetaRecordKV
+                          ) -> Set[MetadataRecordKey]:
     '''Determine mutated metadata records between an ancestor and dev commit
 
     Parameters
     ----------
-    a_unchanged_kv : dict
+    a_unchanged_kv : MetaRecordKV
         dict containing metadata names as keys and hash values as samples for
         the ancestor commit
-    d_unchanged_kv : dict
+    d_unchanged_kv : MetaRecordKV
         dict containing metadata names as keys and hash values as samples for
         the dev commit
 
     Returns
     -------
-    Set[str]
+    Set[MetadataRecordKey]
         metadata names (keys in the input dicts) which changed hash value from
         ancestor to dev.
     '''
-    def meta_nt_func(record_dict: dict) -> Set[MetaRecord]:
+    def meta_nt_func(record_dict: MetaRecordKV) -> Set[MetaRecord]:
         records = set()
         for k, v in record_dict.items():
-            records.add(MetaRecord(meta_key=k, meta_hash=v))
+            records.add(MetaRecord(meta_key=k.meta_name, meta_hash=v.meta_hash))
         return records
 
-    arecords, drecords = meta_nt_func(a_unchanged_kv), meta_nt_func(d_unchanged_kv)
-    mutations = set([m.meta_key for m in arecords.difference(drecords)])
+    arecs = meta_nt_func(a_unchanged_kv)
+    drecs = meta_nt_func(d_unchanged_kv)
+    mutations = set([MetadataRecordKey(m.meta_key) for m in arecs.difference(drecs)])
     return mutations
 
 # -------------------- Dataset Schemas Differ ---------------------------------
@@ -407,20 +413,21 @@ DatasetSchemaRecord = NamedTuple('DatasetSchemaRecord', [
     ('schema_max_shape', Tuple[int]),
     ('schema_is_named', bool),
 ])
+DatasetSchemaKV = Dict[str, RawDatasetSchemaVal]
 
 
-def _isolate_dset_schemas(dataset_specs: dict) -> dict:
-    '''Isolate only the schema specification from a full dataset records dict
+def _isolate_dset_schemas(dataset_specs: Dict[str, dict]) -> DatasetSchemaKV:
+    '''Isolate only the schema specification from a full dataset records dict.
 
     Parameters
     ----------
-    dataset_specs : dict
-        dict containing both `schema` and `data` record specification for any
-        number of datasets
+    dataset_specs :  Dict[str, dict]
+        dict containing both dataset names and keys of `schema` and `data`
+        record specification for any number of datasets
 
     Returns
     -------
-    dict
+    DatasetSchemaKV
         containing keys for dataset names and values of the schema specification
     '''
     schemas_dict = {}
@@ -429,7 +436,7 @@ def _isolate_dset_schemas(dataset_specs: dict) -> dict:
     return schemas_dict
 
 
-def _schema_dict_to_nt(record_dict: dict) -> Set[DatasetSchemaRecord]:
+def _schema_dict_to_nt(record_dict: Dict[str, Union[int, str]]) -> Set[DatasetSchemaRecord]:
     '''Convert schema records specification dict into set of named tuples
 
     Parameters
@@ -490,26 +497,29 @@ SamplesDataRecord = NamedTuple('SamplesDataRecord', [
     ('data_name', str),
     ('data_hash', str),
 ])
+SamplesDataKV = Dict[RawDataRecordKey, RawDataRecordVal]
 
 
-def _samples_mutation_finder(a_unchanged_kv: dict, d_unchanged_kv: dict) -> Set[parsing.RawDataRecordKey]:
+def _samples_mutation_finder(a_unchanged_kv: SamplesDataKV,
+                             d_unchanged_kv: SamplesDataKV
+                             ) -> Set[RawDataRecordKey]:
     '''Determine mutated sample records between an ancestor and dev commit
 
     Parameters
     ----------
-    a_unchanged_kv : dict
+    a_unchanged_kv : SamplesDataKV
         of dset & sample names / hash values for ancestor commit
-    d_unchanged_kv : dict
+    d_unchanged_kv : SamplesDataKV
         of dset & sample names / hash values for dev commit
 
     Returns
     -------
-    Set[parsing.RawDataRecordKey]
+    Set[RawDataRecordKey]
         of named tuples each specifying dset & sample name for mutated sample
         records
     '''
 
-    def samp_nt_func(record_dict: dict) -> Set[SamplesDataRecord]:
+    def samp_nt_func(record_dict: SamplesDataKV) -> Set[SamplesDataRecord]:
         records = set()
         for k, v in record_dict.items():
             rec = SamplesDataRecord(
@@ -521,7 +531,7 @@ def _samples_mutation_finder(a_unchanged_kv: dict, d_unchanged_kv: dict) -> Set[
     arecords = samp_nt_func(a_unchanged_kv)
     drecords = samp_nt_func(d_unchanged_kv)
     for m in arecords.difference(drecords):
-        rec = parsing.RawDataRecordKey(dset_name=m.dset_name, data_name=m.data_name)
+        rec = RawDataRecordKey(dset_name=m.dset_name, data_name=m.data_name)
         mutations.add(rec)
     return mutations
 

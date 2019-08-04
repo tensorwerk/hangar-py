@@ -1,3 +1,4 @@
+import os
 import logging
 
 import lmdb
@@ -11,9 +12,9 @@ logger = logging.getLogger(__name__)
 Merge Methods
 -------------
 
-In the current implementation, only fast-forward and a very simple three-way merge
-algorithm are implemented. All user facing API calls should be funneled through the
-:function:`select_merge_algorithm` function
+In the current implementation only fast-forward and a competent, but limited,
+three-way merge algorithm are implemented. All user facing API calls should be
+funneled through the :function:`select_merge_algorithm` function
 
 .. note::
 
@@ -142,9 +143,12 @@ def select_merge_algorithm(message: str,
 
 
 def _fast_forward_merge(branchenv: lmdb.Environment,
-                        stageenv: lmdb.Environment, refenv: lmdb.Environment,
-                        stagehashenv: lmdb.Environment, master_branch: str,
-                        new_masterHEAD: str, repo_path: str) -> str:
+                        stageenv: lmdb.Environment,
+                        refenv: lmdb.Environment,
+                        stagehashenv: lmdb.Environment,
+                        master_branch: str,
+                        new_masterHEAD: str,
+                        repo_path: os.PathLike) -> str:
     '''Update branch head pointer to perform a fast-forward merge.
 
     This method does not check that it is safe to do this operation, all
@@ -164,7 +168,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
         name of the merge_master branch which should be updated
     new_masterHEAD : str
         commit hash to update the master_branch name to point to.
-    repo_path: str
+    repo_path: os.PathLike
         path to the repository on disk.
 
     Returns
@@ -194,9 +198,17 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
 # ----------------------- Three-Way Merge Methods -----------------------------
 
 
-def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
-                     devHEAD, ancestorHEAD, branchenv, stageenv, refenv, stagehashenv,
-                     repo_path):
+def _three_way_merge(message: str,
+                     master_branch_name: str,
+                     masterHEAD: str,
+                     dev_branch_name: str,
+                     devHEAD: str,
+                     ancestorHEAD: str,
+                     branchenv: lmdb.Environment,
+                     stageenv: lmdb.Environment,
+                     refenv: lmdb.Environment,
+                     stagehashenv: lmdb.Environment,
+                     repo_path: os.PathLike) -> str:
     '''Merge strategy with diff/patch computed from changes since last common ancestor.
 
     Parameters
@@ -222,7 +234,7 @@ def _three_way_merge(message, master_branch_name, masterHEAD, dev_branch_name,
         db where the merge commit records are stored.
     stagehashenv: lmdb.Environment
         db where the staged hash records are stored
-    repo_path: str
+    repo_path: os.PathLike
         path to the repository on disk.
 
     Returns
@@ -438,8 +450,8 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
     entries.append((numMetaKey, numMetaVal))
 
     for metaRecRawKey, metaRecRawVal in patchedRecs['metadata'].items():
-        metaRecKey = parsing.metadata_record_db_key_from_raw_key(metaRecRawKey)
-        metaRecVal = parsing.metadata_record_db_val_from_raw_val(metaRecRawVal)
+        metaRecKey = parsing.metadata_record_db_key_from_raw_key(metaRecRawKey.meta_name)
+        metaRecVal = parsing.metadata_record_db_val_from_raw_val(metaRecRawVal.meta_hash)
         entries.append((metaRecKey, metaRecVal))
 
     sortedEntries = sorted(entries, key=lambda x: x[0])
