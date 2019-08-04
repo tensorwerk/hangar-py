@@ -452,6 +452,7 @@ class TestBranching(object):
         assert len(co.datasets) == 1
         assert len(co.datasets['_dset']) == 2
         assert list(co.metadata.keys()) == ['a1', 'a2']
+        co.close()
 
     def test_merge_multiple_checkouts_multiple_dset(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
@@ -474,6 +475,7 @@ class TestBranching(object):
         assert len(co.datasets) == 2
         assert len(co.datasets['_dset']) == 1
         assert len(co.datasets['second_dset']) == 1
+        co.close()
 
     def test_merge_diverged_conflict(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')

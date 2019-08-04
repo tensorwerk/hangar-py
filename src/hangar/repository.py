@@ -78,7 +78,7 @@ class Repository(object):
         '''
         self.__verify_repo_initialized()
         res = f'Hangar {self.__class__.__name__}\
-               \n    Repository Path  : {os.path.dirname(self._repo_path)}\
+               \n    Repository Path  : {self.path}\
                \n    Writer-Lock Free : {heads.writer_lock_held(self._env.branchenv)}\n'
         p.text(res)
 
@@ -131,7 +131,7 @@ class Repository(object):
         return proxy
 
     @property
-    def repo_path(self) -> os.PathLike:
+    def path(self) -> os.PathLike:
         '''Return the path to the repository on disk, read-only attribute
 
         Returns
@@ -139,6 +139,7 @@ class Repository(object):
         os.PathLike
             path to the specified repository, not including `.hangar` directory
         '''
+        self.__verify_repo_initialized()
         return os.path.dirname(self._repo_path)
 
     @property

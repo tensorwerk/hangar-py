@@ -449,9 +449,10 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                         arr = d[str(idx)]
                         assert np.allclose(samp, arr)
                         totalSeen += arr.nbytes
-                        assert totalSeen <= fetchNbytes
                     except FileNotFoundError:
-                        continue
+                        pass
+                    assert totalSeen <= fetchNbytes
+
         # compare both dsets at the same time
         else:
             d = co.datasets['_dset']
@@ -468,14 +469,15 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                         arr1 = d[str(idx)]
                         assert np.allclose(ds1, arr1)
                         totalSeen += arr1.nbytes
-                        assert totalSeen <= fetchNbytes
-
+                    except FileNotFoundError:
+                        pass
+                    try:
                         arr2 = dd[str(idx)]
                         assert np.allclose(ds2, arr2)
                         totalSeen += arr2.nbytes
-                        assert totalSeen <= fetchNbytes
                     except FileNotFoundError:
-                        continue
+                        pass
+                    assert totalSeen <= fetchNbytes
         co.close()
     newRepo._env._close_environments()
 

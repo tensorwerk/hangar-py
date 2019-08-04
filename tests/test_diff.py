@@ -11,6 +11,8 @@ class TestReaderDiff(object):
         commit_diffs = masterco.diff.commit(testco.commit_hash)
         branch_diffs = masterco.diff.branch('testbranch')
         assert commit_diffs == branch_diffs
+        testco.close()
+        masterco.close()
 
     def test_diff_with_wrong_commit_hash(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
@@ -19,12 +21,15 @@ class TestReaderDiff(object):
         wrong_commit_hash = testco.commit_hash + 'WrongHash'
         with pytest.raises(ValueError):
             masterco.diff.commit(wrong_commit_hash)
+        testco.close()
+        masterco.close()
 
     def test_diff_with_wrong_branch_name(self, repo_1_br_no_conf):
         repo = repo_1_br_no_conf
         masterco = repo.checkout(branch='master')
         with pytest.raises(ValueError):
             masterco.diff.branch('wrong_branch_name')
+        masterco.close()
 
     def test_comparing_diffs_of_dev_and_master(self, repo_1_br_no_conf):
         repo = repo_1_br_no_conf
@@ -48,6 +53,7 @@ class TestReaderDiff(object):
         assert diffs1['samples']['dev']['dummy']['mutations'] == diffs2['samples']['master']['dummy']['mutations']
         assert diffs1['samples']['dev']['dummy']['removals'] == diffs2['samples']['master']['dummy']['removals']
         assert diffs1['samples']['dev']['dummy']['unchanged'] == diffs2['samples']['master']['dummy']['unchanged']
+        co.close()
 
     def test_diff_data_samples(self, repo_1_br_no_conf):
         repo = repo_1_br_no_conf
@@ -88,6 +94,7 @@ class TestReaderDiff(object):
             removed.data_name == 2
         for mutated in diffs['samples']['dev']['dummy']['mutations']:
             mutated.data_name == 1
+        co.close()
 
     def test_sample_addition_conflict(self, repo_1_br_no_conf):
         # t1
@@ -113,6 +120,7 @@ class TestReaderDiff(object):
         assert conflicts['conflict_found'] is True
         assert len(conflicts['sample']['dummy'].t1) == 1
         assert conflicts['sample']['dummy'].t1[0].data_name == '55'
+        co.close()
 
     def test_sample_removal_conflict(self, repo_1_br_no_conf):
         # t21 and t22
@@ -137,6 +145,7 @@ class TestReaderDiff(object):
         assert len(conflicts['sample']['dummy'].t22) == 1
         assert conflicts['sample']['dummy'].t21[0].data_name == '6'
         assert conflicts['sample']['dummy'].t22[0].data_name == '7'
+        co.close()
 
     def test_sample_mutation_conflict(self, repo_1_br_no_conf):
         # t3
@@ -158,6 +167,7 @@ class TestReaderDiff(object):
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts['sample']['dummy'].t3) == 1
         assert conflicts['sample']['dummy'].t3[0].data_name == '7'
+        co.close()
 
     def test_dset_addition_conflict(self, written_repo):
         # t1
@@ -178,6 +188,7 @@ class TestReaderDiff(object):
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts['dset'].t1) == 1
         assert conflicts['dset'].t1[0] == 'testing_dset'
+        co.close()
 
     def test_dset_removal_conflict(self, written_repo):
         # t21 and t22
@@ -209,6 +220,7 @@ class TestReaderDiff(object):
         assert len(conflicts['dset'].t22) == 1
         assert conflicts['dset'].t21[0] == 'testing_dset1'
         assert conflicts['dset'].t22[0] == 'testing_dset2'
+        co.close()
 
     def test_dset_mutation_conflict(self, written_repo):
         # t3

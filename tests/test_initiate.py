@@ -119,6 +119,13 @@ def test_cannot_operate_without_repo_init(managed_tmpdir):
     with pytest.raises(RuntimeError):
         repo.remove_branch('master')
 
+    with pytest.raises(RuntimeError):
+        repo.path
+    with pytest.raises(RuntimeError):
+        repo.version
+    with pytest.raises(RuntimeError):
+        repo.writer_lock_held
+
     assert repo._env.repo_is_initialized is False
 
 
@@ -171,3 +178,9 @@ def test_get_ecosystem_details(managed_tmpdir):
     for package_name, version in eco['packages']:
         assert version is not None
     repo._env._close_environments()
+
+
+def test_check_repository_version(written_repo):
+    from hangar import __version__
+    repo = written_repo
+    assert repo.version == __version__
