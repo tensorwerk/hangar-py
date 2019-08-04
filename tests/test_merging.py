@@ -34,6 +34,8 @@ def test_ff_merge_no_conf_correct_contents_for_name_or_hash_checkout(repo_1_br_n
         meta_byHash = coByHash.metadata[metaKey]
         meta_byName = coByName.metadata[metaKey]
         assert meta_byHash == meta_byName
+    coByHash.close()
+    coByName.close()
 
 
 def test_ff_merge_no_conf_updates_head_commit_of_branches(repo_1_br_no_conf):
@@ -89,6 +91,7 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
         assert str(genKey) in dset_keys
         dset_keys.remove(str(genKey))
     assert len(dset_keys) == 20
+    co.close()
 
 
 def test_3_way_merge_updates_head_commit_of_branches(repo_2_br_no_conf):
@@ -182,6 +185,7 @@ class TestMetadataConflicts(object):
         assert co.metadata['bothadd'] == 'this value'
         assert co.metadata['hello'] == 'world'
         assert co.metadata['foo'] == 'bar'
+        co.close()
 
 
 class TestDatasetSampleConflicts(object):
@@ -242,6 +246,7 @@ class TestDatasetSampleConflicts(object):
         dset = co.datasets['dummy']
         assert np.allclose(dset['15'], newdata)
         assert np.allclose(dset[15], newdata)
+        co.close()
 
     def test_conflict_mutations_same_name_different_value(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf

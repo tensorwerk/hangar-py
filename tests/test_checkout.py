@@ -405,6 +405,7 @@ class TestBranching(object):
         co = written_repo.checkout()
         assert (co.datasets['_dset']['1'] == array5by7).all()
         assert co.metadata.get('a') == 'b'
+        co.close()
 
     def test_merge_without_closing_previous_checkout(self, written_repo, array5by7):
         branch = written_repo.create_branch('testbranch')

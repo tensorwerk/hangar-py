@@ -235,6 +235,7 @@ class TestReaderDiff(object):
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts['dset'].t3) == 1
         assert conflicts['dset'].t3[0] == 'testing_dset'
+        co.close()
 
     def test_meta_addition_conflict(self, repo_1_br_no_conf):
         # t1
@@ -253,6 +254,7 @@ class TestReaderDiff(object):
         conflicts = co.diff.branch('testbranch')[1]
         assert conflicts['meta'].t1[0] == 'metatest'
         assert len(conflicts['meta'].t1) == 1
+        co.close()
 
     def test_meta_removal_conflict(self, repo_1_br_no_conf):
         # t21 and t22
@@ -275,6 +277,7 @@ class TestReaderDiff(object):
         assert len(conflicts['meta'].t21) == 1
         assert conflicts['meta'].t22[0] == 'somemetadatakey'
         assert len(conflicts['meta'].t22) == 1
+        co.close()
 
     def test_meta_mutation_conflict(self, repo_1_br_no_conf):
         # t3
@@ -293,6 +296,7 @@ class TestReaderDiff(object):
         conflicts = co.diff.branch('testbranch')[1]
         assert conflicts['meta'].t3[0] == 'hello'
         assert len(conflicts['meta'].t3) == 1
+        co.close()
 
     def test_commits_inside_cm(self, written_repo, array5by7):
         repo = written_repo
@@ -315,6 +319,7 @@ class TestReaderDiff(object):
         assert 'dset2' in diff['datasets']['master']['additions'].keys()
         for record in diff['samples']['master']['_dset']['additions']:
             assert record.data_name in [100, 101]
+        co.close()
 
 
 class TestWriterDiff(object):
