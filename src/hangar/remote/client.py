@@ -107,7 +107,6 @@ class HangarClient(object):
                     raise err
             else:
                 break
-            logger.debug(f'Wait-for-ready: {self.wait_ready}, time elapsed: {t_tot}')
             time.sleep(0.05)
             t_tot = time.time() - t_init
         else:

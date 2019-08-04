@@ -1,4 +1,3 @@
-import logging
 import hashlib
 import os
 import tempfile
@@ -15,7 +14,6 @@ from ..context import TxnRegister
 from .queries import RecordQuery
 from ..utils import symlink_rel
 
-logger = logging.getLogger(__name__)
 
 '''
 Reading commit specifications and parents.
@@ -312,7 +310,8 @@ def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
         try:
             cursor.close()
         except Exception as e:
-            logger.error('could not close cursor', e, exc_info=True)
+            msg = 'could not close cursor cmttxn: {cmttxn} commit_hash: {commit_hash}'
+            e.args = (*e.args, msg)
             raise e
     finally:
         TxnRegister().commit_writer_txn(cmtrefenv)

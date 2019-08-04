@@ -1,4 +1,3 @@
-import logging
 from collections import defaultdict
 import warnings
 
@@ -6,9 +5,6 @@ import lmdb
 
 from . import parsing
 from ..context import TxnRegister
-
-
-logger = logging.getLogger(__name__)
 
 
 '''

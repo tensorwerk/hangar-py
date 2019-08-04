@@ -58,15 +58,11 @@ Technical Notes
 '''
 import os
 import re
-import logging
 from typing import NamedTuple, Match
 
 import numpy as np
 
 from .. import constants as c
-
-logger = logging.getLogger(__name__)
-
 
 # -------------------------------- Parser Implementation ----------------------
 
@@ -135,7 +131,6 @@ class REMOTE_50_Handler(object):
     def delete_in_process_data(*args, **kwargs) -> None:
         '''mockup of clearing staged directory for upstream calls.
         '''
-        logger.debug(f'delete_in_process_data for REMOTE_50_Handler called.')
         return
 
     def read_data(self, hashVal: REMOTE_50_DataHashSpec) -> None:

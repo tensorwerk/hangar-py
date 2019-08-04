@@ -236,7 +236,7 @@ class MetadataWriter(MetadataReader):
         lmdb environment pointing to the label hash/value store db.
     '''
 
-    def __init__(self, dataenv, labelenv):
+    def __init__(self, dataenv: lmdb.Environment, labelenv: lmdb.Environment):
 
         super().__init__(dataenv, labelenv)
         self._is_conman: bool = False

@@ -84,7 +84,6 @@ Technical Notes
 '''
 import os
 import re
-import logging
 from collections import ChainMap
 from functools import partial
 from os.path import join as pjoin
@@ -97,8 +96,6 @@ from numpy.lib.format import open_memmap
 
 from .. import constants as c
 from ..utils import random_string, symlink_rel
-
-logger = logging.getLogger(__name__)
 
 
 # ----------------------------- Configuration ---------------------------------
