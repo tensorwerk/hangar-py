@@ -31,7 +31,7 @@ def managed_tmpdir(tmp_path):
 
 @pytest.fixture()
 def repo(managed_tmpdir) -> Repository:
-    repo_obj = Repository(path=managed_tmpdir)
+    repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     yield repo_obj
     repo_obj._env._close_environments()
@@ -97,7 +97,7 @@ def written_two_cmt_repo(repo, array5by7):
 def repo_1_br_no_conf(request, repo):
 
     dummyData = np.arange(50)
-    co1 = repo.checkout(write=True, branch_name='master')
+    co1 = repo.checkout(write=True, branch='master')
     co1.datasets.init_dataset(
         name='dummy', prototype=dummyData, named_samples=True, backend=request.param)
     for idx in range(10):
@@ -109,7 +109,7 @@ def repo_1_br_no_conf(request, repo):
     co1.close()
 
     repo.create_branch('testbranch')
-    co2 = repo.checkout(write=True, branch_name='testbranch')
+    co2 = repo.checkout(write=True, branch='testbranch')
     for idx in range(10, 20):
         dummyData[:] = idx
         co2.datasets['dummy'][str(idx)] = dummyData
@@ -125,7 +125,7 @@ def repo_2_br_no_conf(repo_1_br_no_conf):
 
     dummyData = np.arange(50)
     repo = repo_1_br_no_conf
-    co1 = repo.checkout(write=True, branch_name='master')
+    co1 = repo.checkout(write=True, branch='master')
     for idx in range(20, 30):
         dummyData[:] = idx
         co1.datasets['dummy'][str(idx)] = dummyData

@@ -38,7 +38,7 @@ def init(ctx, name, email, overwrite):
     '''Initialize an empty repository at the current path
     '''
     P = os.getcwd()
-    repo = Repository(path=P)
+    repo = Repository(path=P, exists=False)
     try:
         repo.init(user_name=name, user_email=email, remove_old=overwrite)
         click.echo(f'Hangar repository initialized at {P}')
@@ -59,7 +59,7 @@ def clone(ctx, remote, name, email, overwrite):
     into the ``fetch-data`` command.
     '''
     P = os.getcwd()
-    repo = Repository(path=P)
+    repo = Repository(path=P, exists=False)
     repo.clone(user_name=name,
                user_email=email,
                remote_address=remote,
@@ -208,7 +208,7 @@ def summary(ctx, startpoint):
     if startpoint is None:
         click.echo(repo.summary())
     elif startpoint in repo.list_branches():
-        click.echo(repo.summary(branch_name=startpoint))
+        click.echo(repo.summary(branch=startpoint))
     else:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
         click.echo(repo.summary(commit=base_commit))
@@ -228,10 +228,10 @@ def log(ctx, startpoint):
     if startpoint is None:
         click.echo(repo.log())
     elif startpoint in repo.list_branches():
-        click.echo(repo.log(branch_name=startpoint))
+        click.echo(repo.log(branch=startpoint))
     else:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
-        click.echo(repo.log(commit_hash=base_commit))
+        click.echo(repo.log(commit=base_commit))
 
 
 @main.group(no_args_is_help=True, add_help_option=True)
@@ -355,7 +355,7 @@ def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
         click.echo(f'NO HANGAR INSTALLATION AT PATH: {P}')
         return
 
-    envs = Environments(repo_path=repo_path)
+    envs = Environments(pth=repo_path)
     if a:
         b, r, d, m, s, z = True, True, True, True, True, True
     if b:

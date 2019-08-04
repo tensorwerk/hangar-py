@@ -6,23 +6,23 @@ class TestReaderDiff(object):
 
     def test_diff_by_commit_and_branch(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        testco = repo.checkout(branch_name='testbranch')
-        masterco = repo.checkout(branch_name='master')
+        testco = repo.checkout(branch='testbranch')
+        masterco = repo.checkout(branch='master')
         commit_diffs = masterco.diff.commit(testco.commit_hash)
         branch_diffs = masterco.diff.branch('testbranch')
         assert commit_diffs == branch_diffs
 
     def test_diff_with_wrong_commit_hash(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        testco = repo.checkout(branch_name='testbranch')
-        masterco = repo.checkout(branch_name='master')
+        testco = repo.checkout(branch='testbranch')
+        masterco = repo.checkout(branch='master')
         wrong_commit_hash = testco.commit_hash + 'WrongHash'
         with pytest.raises(ValueError):
             masterco.diff.commit(wrong_commit_hash)
 
     def test_diff_with_wrong_branch_name(self, repo_1_br_no_conf):
         repo = repo_1_br_no_conf
-        masterco = repo.checkout(branch_name='master')
+        masterco = repo.checkout(branch='master')
         with pytest.raises(ValueError):
             masterco.diff.branch('wrong_branch_name')
 
@@ -31,17 +31,17 @@ class TestReaderDiff(object):
         dummyData = np.arange(50)
 
         # mutating and removing data from testbranch
-        testco = repo.checkout(write=True, branch_name='testbranch')
+        testco = repo.checkout(write=True, branch='testbranch')
         testco.datasets['dummy']['1'] = dummyData
         del testco.datasets['dummy']['2']
         testco.commit("mutation and removal")
         testco.close()
 
-        co = repo.checkout(branch_name='master')
+        co = repo.checkout(branch='master')
         diffdata = co.diff.branch('testbranch')
         diffs1 = diffdata[0]
 
-        co = repo.checkout(branch_name='testbranch')
+        co = repo.checkout(branch='testbranch')
         diffdata = co.diff.branch('master')
         diffs2 = diffdata[0]
         assert diffs1['samples']['dev']['dummy']['additions'] == diffs2['samples']['master']['dummy']['additions']
@@ -54,13 +54,13 @@ class TestReaderDiff(object):
         dummyData = np.arange(50)
 
         # mutating and removing data from testbranch
-        testco = repo.checkout(write=True, branch_name='testbranch')
+        testco = repo.checkout(write=True, branch='testbranch')
         testco.datasets['dummy']['1'] = dummyData
         del testco.datasets['dummy']['2']
         testco.commit("mutation and removal")
         testco.close()
 
-        co = repo.checkout(branch_name='master')
+        co = repo.checkout(branch='master')
         diffdata = co.diff.branch('testbranch')
         conflict_dict = diffdata[1]
         assert conflict_dict['conflict_found'] is False
@@ -102,7 +102,7 @@ class TestReaderDiff(object):
         co.close()
 
         # adding data in testbranch
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         dummyData[:] = 234
         co.datasets['dummy']['55'] = dummyData
         co.commit('adding data in testbranch')
@@ -125,7 +125,7 @@ class TestReaderDiff(object):
         co.commit('removal & mutation in master')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.datasets['dummy']['6'] = dummyData
         del co.datasets['dummy']['7']
         co.commit('removal & mutation in dev')
@@ -148,7 +148,7 @@ class TestReaderDiff(object):
         co.commit('mutation in master')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         dummyData[:] = 234
         co.datasets['dummy']['7'] = dummyData
         co.commit('mutation in dev')
@@ -169,7 +169,7 @@ class TestReaderDiff(object):
         co.commit('dset init in master')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.datasets.init_dataset(name='testing_dset', shape=(7, 7), dtype=np.float64)
         co.commit('dset init in dev')
         co.close()
@@ -196,7 +196,7 @@ class TestReaderDiff(object):
         co.commit('mutation and removal from master')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         del co.datasets['testing_dset1']
         del co.datasets['testing_dset2']
         co.datasets.init_dataset(name='testing_dset1', shape=(5, 7), dtype=np.float32)
@@ -225,7 +225,7 @@ class TestReaderDiff(object):
         co.commit('mutation from master')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         del co.datasets['testing_dset']
         co.datasets.init_dataset(name='testing_dset', shape=(5, 7), dtype=np.float32)
         co.commit('mutation from dev')
@@ -239,7 +239,7 @@ class TestReaderDiff(object):
     def test_meta_addition_conflict(self, repo_1_br_no_conf):
         # t1
         repo = repo_1_br_no_conf
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.metadata['metatest'] = 'value1'
         co.commit('metadata addition')
         co.close()
@@ -257,7 +257,7 @@ class TestReaderDiff(object):
     def test_meta_removal_conflict(self, repo_1_br_no_conf):
         # t21 and t22
         repo = repo_1_br_no_conf
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.metadata['hello'] = 'again'  # this is world in master
         del co.metadata['somemetadatakey']
         co.commit('removed & mutated')
@@ -279,7 +279,7 @@ class TestReaderDiff(object):
     def test_meta_mutation_conflict(self, repo_1_br_no_conf):
         # t3
         repo = repo_1_br_no_conf
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.metadata['hello'] = 'again'  # this is world in master
         co.commit('mutated')
         co.close()
@@ -297,7 +297,7 @@ class TestReaderDiff(object):
     def test_commits_inside_cm(self, written_repo, array5by7):
         repo = written_repo
         repo.create_branch('testbranch')
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         dset = co.datasets['_dset']
         dset2 = co.datasets.init_dataset('dset2', prototype=array5by7)
         dset2[1] = array5by7
@@ -308,7 +308,7 @@ class TestReaderDiff(object):
             dset[101] = array5by7
             co.commit('another commit inside cm')
         co.close()
-        co = repo.checkout(branch_name='testbranch')
+        co = repo.checkout(branch='testbranch')
         assert np.allclose(co.datasets['_dset'][101], array5by7)
         diff = co.diff.branch('master')[0]
         assert 'crazykey' in diff['metadata']['master']['additions'].keys()
@@ -355,4 +355,3 @@ class TestWriterDiff(object):
         assert '_dset' in diff['datasets']['master']['unchanged'].keys()
         co.commit('init dset')
         assert co.diff.status() == 'CLEAN'
-

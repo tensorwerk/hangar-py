@@ -243,23 +243,21 @@ def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
     ------
     TypeError
         If the provided path argument is not a pathlike object
-    OSError
+    NotADirectoryError
         If the path does not exist, or is not a directory on disk
     PermissionError
         If the user does not have write access to the specified path
     '''
     try:
         usr_path = os.path.expanduser(p)
-        isDir = os.path.isdir(usr_path)
-        isWriteable = os.access(usr_path, os.W_OK)
     except TypeError:
         msg = f'Path arg `p`: {p} of type: {type(p)} is not valid path specifier'
         raise TypeError(msg)
 
-    if not isDir:
+    if not os.path.isdir(usr_path):
         msg = f'Path arg `p`: {p} is not a directory.'
-        raise OSError(msg)
-    elif not isWriteable:
+        raise NotADirectoryError(msg)
+    if not os.access(usr_path, os.W_OK):
         msg = f'User does not have permission to write to directory path: {p}'
         raise PermissionError(msg)
 

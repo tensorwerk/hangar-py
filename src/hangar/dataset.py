@@ -120,7 +120,7 @@ class DatasetDataReader(object):
     def __getitem__(self, key):
         '''Retrieve a sample with a given key. Convenience method for dict style access.
 
-        .. seealso:: :meth:`get()`
+        .. seealso:: :meth:`get`
 
         Parameters
         ----------

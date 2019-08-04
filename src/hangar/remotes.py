@@ -245,7 +245,7 @@ class Remotes(object):
             fetchBranchName = f'{remote}/{branch}'
             try:
                 heads.create_branch(
-                    self._env.branchenv, branch_name=fetchBranchName, base_commit=sHEAD)
+                    self._env.branchenv, name=fetchBranchName, base_commit=sHEAD)
             except ValueError:
                 heads.set_branch_head_commit(
                     self._env.branchenv, branch_name=fetchBranchName, commit_hash=sHEAD)
@@ -539,7 +539,7 @@ class Remotes(object):
                 cRemoteBranch = f'{remote}/{branch}'
                 if cRemoteBranch not in heads.get_branch_names(self._env.branchenv):
                     heads.create_branch(branchenv=self._env.branchenv,
-                                        branch_name=cRemoteBranch,
+                                        name=cRemoteBranch,
                                         base_commit=branchHead)
                 else:
                     heads.set_branch_head_commit(branchenv=self._env.branchenv,

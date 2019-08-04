@@ -322,7 +322,7 @@ class TestCheckout(object):
         with pytest.raises(ValueError):
             repo.checkout(write='True')
         with pytest.raises(ValueError):
-            repo.checkout(branch_name=True)
+            repo.checkout(branch=True)
         repo.checkout(True)  # This should not raise any excpetion
 
 
@@ -393,7 +393,7 @@ class TestBranching(object):
     def test_merge(self, written_repo, array5by7):
         branch = written_repo.create_branch('testbranch')
         assert type(branch) is str
-        co = written_repo.checkout(write=True, branch_name=branch)
+        co = written_repo.checkout(write=True, branch=branch)
         assert co._branch_name == branch
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a', 'b')
@@ -406,7 +406,7 @@ class TestBranching(object):
 
     def test_merge_without_closing_previous_checkout(self, written_repo, array5by7):
         branch = written_repo.create_branch('testbranch')
-        co = written_repo.checkout(write=True, branch_name=branch)
+        co = written_repo.checkout(write=True, branch=branch)
         co.datasets['_dset']['1'] = array5by7
         co.commit('this is a commit message')
         with pytest.raises(PermissionError):
@@ -427,14 +427,14 @@ class TestBranching(object):
 
     def test_merge_multiple_checkouts_same_dset(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
-        co = written_repo.checkout(write=True, branch_name=branch1)
+        co = written_repo.checkout(write=True, branch=branch1)
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a1', 'b1')
         co.commit('this is a commit message')
         co.close()
 
         branch2 = written_repo.create_branch('testbranch2')
-        co = written_repo.checkout(write=True, branch_name=branch2)
+        co = written_repo.checkout(write=True, branch=branch2)
         co.datasets['_dset']['2'] = array5by7
         co.metadata.add('a2', 'b2')
         co.commit('this is a commit message')
@@ -443,20 +443,20 @@ class TestBranching(object):
         written_repo.merge('test merge 1', 'master', branch1)
         written_repo.merge('test merge 2', 'master', branch2)
 
-        co = written_repo.checkout(branch_name='master')
+        co = written_repo.checkout(branch='master')
         assert len(co.datasets) == 1
         assert len(co.datasets['_dset']) == 2
         assert list(co.metadata.keys()) == ['a1', 'a2']
 
     def test_merge_multiple_checkouts_multiple_dset(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
-        co = written_repo.checkout(write=True, branch_name=branch1)
+        co = written_repo.checkout(write=True, branch=branch1)
         co.datasets['_dset']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
 
         branch2 = written_repo.create_branch('testbranch2')
-        co = written_repo.checkout(write=True, branch_name=branch2)
+        co = written_repo.checkout(write=True, branch=branch2)
         second_dset = co.datasets.init_dataset(name='second_dset', prototype=array5by7)
         second_dset['1'] = array5by7
         co.commit('this is a commit message')
@@ -465,7 +465,7 @@ class TestBranching(object):
         written_repo.merge('test merge 1', 'master', branch1)
         written_repo.merge('test merge 2', 'master', branch2)
 
-        co = written_repo.checkout(branch_name='master')
+        co = written_repo.checkout(branch='master')
         assert len(co.datasets) == 2
         assert len(co.datasets['_dset']) == 1
         assert len(co.datasets['second_dset']) == 1
@@ -474,13 +474,13 @@ class TestBranching(object):
         branch1 = written_repo.create_branch('testbranch1')
         branch2 = written_repo.create_branch('testbranch2')
 
-        co = written_repo.checkout(write=True, branch_name=branch1)
+        co = written_repo.checkout(write=True, branch=branch1)
         co.datasets['_dset']['1'] = array5by7
         co.metadata.add('a', 'b')
         co.commit('this is a commit message')
         co.close()
 
-        co = written_repo.checkout(write=True, branch_name=branch2)
+        co = written_repo.checkout(write=True, branch=branch2)
         newarray = np.zeros_like(array5by7)
         co.datasets['_dset']['1'] = newarray
         co.metadata.add('a', 'c')
@@ -495,20 +495,20 @@ class TestBranching(object):
     def test_new_branch_from_where(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
         branch2 = written_repo.create_branch('testbranch2')
-        co1 = written_repo.checkout(write=True, branch_name=branch1)
-        h1 = written_repo.log(branch_name=co1.branch_name, return_contents=True)
+        co1 = written_repo.checkout(write=True, branch=branch1)
+        h1 = written_repo.log(branch=co1.branch_name, return_contents=True)
         co1.close()
 
-        co2 = written_repo.checkout(write=True, branch_name=branch2)
+        co2 = written_repo.checkout(write=True, branch=branch2)
         co2.datasets.init_dataset('dset2', prototype=array5by7)
         co2.datasets['dset2']['2'] = array5by7
         co2.commit('this is a merge message')
         co2.close()
-        h2 = written_repo.log(branch_name=branch2, return_contents=True)
+        h2 = written_repo.log(branch=branch2, return_contents=True)
 
         branch3 = written_repo.create_branch('testbranch3')
-        co3 = written_repo.checkout(write=True, branch_name=branch3)
-        h3 = written_repo.log(branch_name=co3.branch_name, return_contents=True)
+        co3 = written_repo.checkout(write=True, branch=branch3)
+        h3 = written_repo.log(branch=co3.branch_name, return_contents=True)
         co3.close()
 
         assert h2['head'] == h3['head']
@@ -518,22 +518,22 @@ class TestBranching(object):
     def test_cannot_checkout_branch_with_staged_changes(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
         branch2 = written_repo.create_branch('testbranch2')
-        co1 = written_repo.checkout(write=True, branch_name=branch1)
+        co1 = written_repo.checkout(write=True, branch=branch1)
         initial_cmt = co1.commit_hash
         co1.datasets.init_dataset('dset2', prototype=array5by7)
         co1.datasets['dset2']['2'] = array5by7
         co1.close()
 
         with pytest.raises(ValueError):
-            con = written_repo.checkout(write=True, branch_name=branch2)
+            con = written_repo.checkout(write=True, branch=branch2)
 
-        co1 = written_repo.checkout(write=True, branch_name=branch1)
+        co1 = written_repo.checkout(write=True, branch=branch1)
         co1.commit('hi')
         assert co1.commit_hash != initial_cmt
         assert co1.branch_name == branch1
         co1.close()
 
-        co2 = written_repo.checkout(write=True, branch_name=branch2)
+        co2 = written_repo.checkout(write=True, branch=branch2)
         assert co2.branch_name == branch2
         assert co2.commit_hash == initial_cmt
         co2.close()
@@ -543,7 +543,7 @@ def test_full_from_short_commit_digest(written_two_cmt_repo):
     from hangar.records.commiting import expand_short_commit_digest
 
     repo = written_two_cmt_repo
-    history = repo.log(branch_name='master', return_contents=True)
+    history = repo.log(branch='master', return_contents=True)
     commits = history['order']
     for full_cmt in commits:
         short_cmt = full_cmt[:18]

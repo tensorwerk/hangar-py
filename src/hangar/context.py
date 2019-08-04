@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import platform
-import weakref
+import warnings
 import tempfile
 from typing import MutableMapping, Optional
 from collections import Counter
@@ -175,9 +175,9 @@ from .records import commiting, heads
 
 class Environments(object):
 
-    def __init__(self, repo_path: os.PathLike):
+    def __init__(self, pth: os.PathLike):
 
-        self.repo_path: os.PathLike = repo_path
+        self.repo_path: os.PathLike = pth
         self.refenv: Optional[lmdb.Environment] = None
         self.hashenv: Optional[lmdb.Environment] = None
         self.stageenv: Optional[lmdb.Environment] = None
@@ -212,11 +212,14 @@ class Environments(object):
         bool
             False if no repository exists at the given path, otherwise True
 
+        Warns
+        -----
+        UserWarning
+            Should the repository not exist at the provided repo path.
         '''
-        if not os.path.isdir(self.repo_path):
-            msg = f'HANGAR RUNTIME WARNING: no repository exists at {self.repo_path}, '\
-                  f'please use `init_repo` function'
-            logger.warning(msg)
+        if not os.path.isfile(pjoin(self.repo_path, c.LMDB_BRANCH_NAME)):
+            msg = f'No repository exists at {self.repo_path}, please use `repo.init()` method'
+            warnings.warn(msg, UserWarning)
             return False
 
         self._open_environments()
@@ -249,11 +252,11 @@ class Environments(object):
             If a hangar repository exists at the specified path, and `remove_old`
             was not set to ``True``.
         '''
-        if os.path.isdir(self.repo_path):
+        if os.path.isfile(pjoin(self.repo_path, c.LMDB_BRANCH_NAME)):
             if remove_old is True:
                 shutil.rmtree(self.repo_path)
             else:
-                raise OSError(f'invariant dir: {self.repo_path} already exists')
+                raise OSError(f'Hangar Directory: {self.repo_path} already exists')
 
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STORE))
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STAGE))

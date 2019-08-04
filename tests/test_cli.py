@@ -77,10 +77,10 @@ def test_push_fetch_records(server_instance, backend):
 
     runner = CliRunner()
     with runner.isolated_filesystem():
-        repo = Repository(getcwd())
+        repo = Repository(getcwd(), exists=False)
         repo.init('foo', 'bar')
         dummyData = np.arange(50)
-        co1 = repo.checkout(write=True, branch_name='master')
+        co1 = repo.checkout(write=True, branch='master')
         co1.datasets.init_dataset(
             name='dummy', prototype=dummyData, named_samples=True, backend=backend)
         for idx in range(10):
@@ -92,7 +92,7 @@ def test_push_fetch_records(server_instance, backend):
         co1.close()
 
         repo.create_branch('testbranch')
-        co2 = repo.checkout(write=True, branch_name='testbranch')
+        co2 = repo.checkout(write=True, branch='testbranch')
         for idx in range(10, 20):
             dummyData[:] = idx
             co2.datasets['dummy'][str(idx)] = dummyData
@@ -126,10 +126,10 @@ def test_fetch_records_and_data(server_instance, backend, options):
 
     runner = CliRunner()
     with runner.isolated_filesystem():
-        repo = Repository(getcwd())
+        repo = Repository(getcwd(), exists=False)
         repo.init('foo', 'bar')
         dummyData = np.arange(50)
-        co1 = repo.checkout(write=True, branch_name='master')
+        co1 = repo.checkout(write=True, branch='master')
         co1.datasets.init_dataset(
             name='dummy', prototype=dummyData, named_samples=True, backend=backend)
         for idx in range(10):
@@ -141,7 +141,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
         co1.close()
 
         repo.create_branch('testbranch')
-        co2 = repo.checkout(write=True, branch_name='testbranch')
+        co2 = repo.checkout(write=True, branch='testbranch')
         for idx in range(10, 20):
             dummyData[:] = idx
             co2.datasets['dummy'][str(idx)] = dummyData

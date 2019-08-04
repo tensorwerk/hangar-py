@@ -30,19 +30,37 @@ class Repository(object):
     ----------
     path : str
         local directory path where the Hangar repository exists (or initialized)
+    exists : bool, optional
+        True if a Hangar repository should exist at the given directory path.
+        Should no Hangar repository exists at that location, a UserWarning will
+        be raised indicating that the :meth:`init` method needs to be called.
+
+        False if the provided path does not need to (but optionally can) contain a
+        Hangar repository.  if a Hangar repository does not exist at that path, the
+        usual UserWarning will be suppressed.
+
+        In both cases, the path must exist and the user must have sufficient OS
+        permissions to write to that location. Default = True
     '''
 
-    def __init__(self, path):
+    def __init__(self, path: os.PathLike, exists: bool = True):
 
         try:
             usr_path = is_valid_directory_path(path)
-        except (TypeError, OSError, PermissionError) as e:
+        except (TypeError, NotADirectoryError, PermissionError) as e:
             logger.error(e, exc_info=False)
             raise
 
         repo_pth = os.path.join(usr_path, c.DIR_HANGAR)
-        self._env: Environments = Environments(repo_path=repo_pth)
-        self._repo_path: os.PathLike = self._env.repo_path
+        if exists is False:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', UserWarning)
+                envs = Environments(pth=repo_pth)
+        else:
+            envs = Environments(pth=repo_pth)
+
+        self._repo_path: os.PathLike = repo_pth
+        self._env: Environments = envs
         self._remote: Remotes = Remotes(self._env)
 
     def _repr_pretty_(self, p, cycle):
@@ -58,6 +76,7 @@ class Repository(object):
             required.
 
         '''
+        self.__verify_repo_initialized()
         res = f'Hangar {self.__class__.__name__}\
                \n    Repository Path  : {self._repo_path}\
                \n    Writer-Lock Free : {heads.writer_lock_held(self._env.branchenv)}\n'
@@ -137,7 +156,7 @@ class Repository(object):
     def checkout(self,
                  write: bool = False,
                  *,
-                 branch_name: str = 'master',
+                 branch: str = 'master',
                  commit: str = '') -> Union[ReaderCheckout, WriterCheckout]:
         '''Checkout the repo at some point in time in either `read` or `write` mode.
 
@@ -150,7 +169,7 @@ class Repository(object):
         ----------
         write : bool, optional
             Specify if the checkout is write capable, defaults to False
-        branch_name : str, optional
+        branch : str, optional
             name of the branch to checkout. This utilizes the state of the repo
             as it existed at the branch HEAD commit when this checkout object
             was instantiated, defaults to 'master'
@@ -176,7 +195,7 @@ class Repository(object):
             if write is True:
                 co = WriterCheckout(
                     repo_pth=self._repo_path,
-                    branch_name=branch_name,
+                    branch_name=branch,
                     labelenv=self._env.labelenv,
                     hashenv=self._env.hashenv,
                     refenv=self._env.refenv,
@@ -186,7 +205,7 @@ class Repository(object):
                 return co
             elif write is False:
                 commit_hash = self._env.checkout_commit(
-                    branch_name=branch_name, commit=commit)
+                    branch_name=branch, commit=commit)
                 co = ReaderCheckout(
                     base_path=self._repo_path,
                     labelenv=self._env.labelenv,
@@ -244,7 +263,7 @@ class Repository(object):
         heads.set_branch_head_commit(self._env.branchenv, 'master', HEAD)
         with warnings.catch_warnings(record=False):
             warnings.simplefilter('ignore', category=UserWarning)
-            co = self.checkout(write=True, branch_name='master')
+            co = self.checkout(write=True, branch='master')
             co.reset_staging_area()
             co.close()
         return 'master'
@@ -279,8 +298,8 @@ class Repository(object):
         return pth
 
     def log(self,
-            branch_name: str = None,
-            commit_hash: str = None,
+            branch: str = None,
+            commit: str = None,
             *,
             return_contents: bool = False,
             show_time: bool = False,
@@ -295,10 +314,10 @@ class Repository(object):
 
         Parameters
         ----------
-        branch_name : str
+        branch : str, optional
             The name of the branch to start the log process from. (Default value
             = None)
-        commit_hash : str
+        commit : str, optional
             The commit hash to start the log process from. (Default value = None)
         return_contents : bool, optional, kwarg only
             If true, return the commit graph specifications in a dictionary
@@ -318,8 +337,8 @@ class Repository(object):
         res = summarize.list_history(
             refenv=self._env.refenv,
             branchenv=self._env.branchenv,
-            branch_name=branch_name,
-            commit_hash=commit_hash)
+            branch_name=branch,
+            commit_hash=commit)
 
         if return_contents:
             return res
@@ -334,7 +353,7 @@ class Repository(object):
                          show_time=show_time,
                          show_user=show_user)
 
-    def summary(self, *, branch_name: str = '', commit: str = '',
+    def summary(self, *, branch: str = '', commit: str = '',
                 return_contents: bool = False) -> Optional[dict]:
         '''Print a summary of the repository contents to the terminal
 
@@ -344,10 +363,10 @@ class Repository(object):
 
         Parameters
         ----------
-        branch_name : str
+        branch : str, optional
             A specific branch name whose head commit will be used as the summary
             point (Default value = '')
-        commit : str
+        commit : str, optional
             A specific commit hash which should be used as the summary point.
             (Default value = '')
         return_contents : bool
@@ -360,7 +379,7 @@ class Repository(object):
             contents of the entire repository (if `return_contents=True`)
         '''
         self.__verify_repo_initialized()
-        ppbuf, res = summarize.summary(self._env, branch_name=branch_name, commit=commit)
+        ppbuf, res = summarize.summary(self._env, branch=branch, commit=commit)
         if return_contents is True:
             return res
         else:
@@ -415,7 +434,7 @@ class Repository(object):
 
         return commit_hash
 
-    def create_branch(self, branch_name: str, base_commit: str = None) -> str:
+    def create_branch(self, name: str, base_commit: str = None) -> str:
         '''create a branch with the provided name from a certain commit.
 
         If no base commit hash is specified, the current writer branch HEAD
@@ -427,7 +446,7 @@ class Repository(object):
 
         Parameters
         ----------
-        branch_name : str
+        name : str
             name to assign to the new branch
         base_commit : str, optional
             commit hash to start the branch root at. if not specified, the
@@ -440,21 +459,22 @@ class Repository(object):
             name of the branch which was created
         '''
         self.__verify_repo_initialized()
-        if not is_suitable_user_key(branch_name):
-            msg = f'HANGAR VALUE ERROR:: branch name provided: `{branch_name}` invalid. '\
-                  f'Must only contain alpha-numeric or "." "_" "-" ascii characters.'
+        if not is_suitable_user_key(name):
+            msg = f'Branch name provided: `{name}` invalid. Must only contain '\
+                  f'alpha-numeric or "." "_" "-" ascii characters.'
             e = ValueError(msg)
             logger.error(e, exc_info=False)
             raise e
         didCreateBranch = heads.create_branch(
             branchenv=self._env.branchenv,
-            branch_name=branch_name,
+            name=name,
             base_commit=base_commit)
         return didCreateBranch
 
-    def remove_branch(self, branch_name):
+    def remove_branch(self, name):
         '''Not Implemented
         '''
+        self.__verify_repo_initialized()
         raise NotImplementedError()
 
     def list_branches(self) -> List[str]:

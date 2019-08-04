@@ -88,7 +88,7 @@ class MetadataReader(object):
     def __getitem__(self, key: Union[str, int]) -> str:
         '''Retrieve a metadata sample with a key. Convenience method for dict style access.
 
-        .. seealso:: :meth:`get()`
+        .. seealso:: :meth:`get`
 
         Parameters
         ----------

@@ -231,7 +231,7 @@ class WriterCheckout(object):
 
     At the moment, only one instance of this class can write data to the staging
     area at a time. After the desired operations have been completed, it is
-    crucial to call :py:meth:`close` to release the writer lock. In addition,
+    crucial to call :meth:`close` to release the writer lock. In addition,
     after any changes have been made to the staging area, the branch HEAD cannot
     be changed. In order to checkout another branch HEAD for writing, you must
     either commit the changes, or perform a hard-reset of the staging area to

@@ -165,7 +165,7 @@ is used as the ``base_commit`` hash for the branch automatically.
 
 .. code:: python
 
-   >>> branch_1 = repo.create_branch(branch_name='testbranch')
+   >>> branch_1 = repo.create_branch(name='testbranch')
    >>> branch_1
    'testbranch'
 
@@ -187,7 +187,7 @@ name) we see we do actually get a third branch. pointing to the same commit as
 
 .. code:: python
 
-   >>> branch_2 = repo.create_branch(branch_name='new', base_commit=initialCommitHash)
+   >>> branch_2 = repo.create_branch(name='new', base_commit=initialCommitHash)
    >>> branch_2
    'new'
 
@@ -204,7 +204,7 @@ one sample labeled ``0``)
 
 .. code:: python
 
-   >>> co = repo.checkout(write=True, branch_name='new')
+   >>> co = repo.checkout(write=True, branch='new')
    >>> co.datasets
     Hangar Datasets
         Writeable: True
@@ -302,7 +302,7 @@ merge method will be explained a bit more later in this tutorail
 
 .. code:: python
 
-   >>> co = repo.checkout(write=True, branch_name='master')
+   >>> co = repo.checkout(write=True, branch='master')
 
 Performing the Merge
 --------------------
@@ -362,7 +362,7 @@ we can see what happens when changes don’t follow a linear history.
 
 .. code:: python
 
-   >>> co = repo.checkout(write=True, branch_name='testbranch')
+   >>> co = repo.checkout(write=True, branch='testbranch')
    >>> co.datasets
     Hangar Datasets
         Writeable: True
@@ -461,7 +461,7 @@ Create a new ``commit`` containing the merge results reference both branch
 
 .. code:: python
 
-   >>> co = repo.checkout(write=True, branch_name='master')
+   >>> co = repo.checkout(write=True, branch='master')
 
 Once again, as a user, the details are completly irrelevent, and the operation
 occurs from the same one-liner call we used before for the FF Merge.
@@ -583,7 +583,7 @@ necessary changes in each branch before reattempting a merge operation.
 
 .. code:: python
 
-   >>> co = repo.checkout(write=True, branch_name='new')
+   >>> co = repo.checkout(write=True, branch='new')
    >>> co.metadata['hello'] = 'foo conflict... BOO!'
    >>> co.commit ('commit on new branch to hello metadata key so we can demonstrate a conflict')
    Commit operation requested with message: commit on new branch to hello metadata key so we can demonstrate a conflict

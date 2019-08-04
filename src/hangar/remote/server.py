@@ -2,6 +2,7 @@ import hashlib
 import io
 import os
 import tempfile
+import warnings
 import threading
 import time
 from concurrent import futures
@@ -37,7 +38,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
     def __init__(self, repo_path, overwrite=False):
 
-        self.env = Environments(repo_path=repo_path)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            envs = Environments(pth=repo_path)
+        self.env: Environments = envs
+
         try:
             self.env._init_repo(
                 user_name='SERVER_USER',
@@ -113,7 +118,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         commit = request.rec.commit
         branch_names = heads.get_branch_names(self.env.branchenv)
         if branch_name not in branch_names:
-            heads.create_branch(self.env.branchenv, branch_name=branch_name, base_commit=commit)
+            heads.create_branch(self.env.branchenv, name=branch_name, base_commit=commit)
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         else:
             current_head = heads.get_branch_head_commit(self.env.branchenv, branch_name)
