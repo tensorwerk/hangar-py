@@ -8,7 +8,7 @@ from ..records import parsing
 
 
 class ContentWriter(object):
-    '''Common methods to client & server which write content recieved.
+    '''Common methods to client & server which write content received.
 
     These are special methods configured especially for remote operations.
     They do not honor the public facing API or data write/read conventions
@@ -90,7 +90,7 @@ class ContentWriter(object):
 
     def data(self,
              schema_hash: str,
-             recieved_data: Sequence[Tuple[str, np.ndarray]],
+             received_data: Sequence[Tuple[str, np.ndarray]],
              backend: str = None) -> List[str]:
         '''Write data content to the hash records database
 
@@ -98,7 +98,7 @@ class ContentWriter(object):
         ----------
         schema_hash : str
             schema_hash currently being written
-        recieved_data : Sequence[Tuple[str, np.ndarray]]
+        received_data : Sequence[Tuple[str, np.ndarray]]
             list of tuples, each specifying (digest, tensor) for data retrieved
             from the server. However, if a backend is manually specified which
             requires different input to the ``write_data`` method than a tensor,
@@ -133,7 +133,7 @@ class ContentWriter(object):
         saved_digests = []
         hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
         try:
-            for hdigest, tensor in recieved_data:
+            for hdigest, tensor in received_data:
                 hashVal = backend.write_data(tensor, remote_operation=True)
                 hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
                 hashTxn.put(hashKey, hashVal)

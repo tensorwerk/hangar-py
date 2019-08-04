@@ -1,57 +1,38 @@
-import os
 import hashlib
 import logging
+import os
 import warnings
-from typing import Optional, MutableMapping, List, Union, Mapping, Iterator, Tuple
-from multiprocessing import get_context, cpu_count
+from multiprocessing import cpu_count, get_context
+from typing import (
+    Iterator, Iterable, List, Mapping, Optional, Tuple, Union)
 
 import lmdb
 import numpy as np
 
+from .backends import BACKEND_ACCESSOR_MAP
+from .backends import backend_decoder, backend_from_heuristics
 from .context import TxnRegister
-from .backends import backend_decoder, BACKEND_ACCESSOR_MAP, backend_from_heuristics
 from .records import parsing
 from .records.queries import RecordQuery
-from .utils import is_suitable_user_key, cm_weakref_obj_proxy
+from .utils import cm_weakref_obj_proxy, is_suitable_user_key
 
 logger = logging.getLogger(__name__)
 
 
 class DatasetDataReader(object):
-    '''Class implementing get access to data in a dataset
+    '''Class implementing get access to data in a dataset.
 
-    The location of the data references can be transparently specified by
-    feeding in a different dataenv argument. For staged reads -> ``dataenv =
-    lmdb.Environment(STAGING_DB)``. For commit read -> ``dataenv =
-    lmdb.Environment(COMMIT_DB)``.
-
-    Parameters
-    ----------
-    repo_pth : str
-        path to the repository on disk.
-    dset_name : str
-        name of the dataset
-    schema_hashes : list of str
-        list of all schemas referenced in the dataset
-    samplesAreNamed : bool
-        do samples have names or not.
-    isVar : bool
-        is the dataset schema variable shape or not
-    varMaxShape : list or tuple of int
-        schema size (max) of the dataset data
-    varDtypeNum : int
-        datatype numeric code of the dataset data
-    dataenv : lmdb.Environment
-        environment of the dataset references to read
-    hashenv : lmdb.Environment
-        environment of the repository hash records
-    mode : str, optional
-        mode to open the file handles in. 'r' for read only, 'a' for read/write, defaults
-        to 'r'
+    The methods implemented here are common to the :class:`DatasetDataWriter`
+    accessor class as well as to this ``"read-only"`` method. Though minimal,
+    the behavior of read and write checkouts is slightly unique, with the main
+    difference being that ``"read-only"`` checkouts implement both thread and
+    process safe access methods. This is not possible for ``"write-enabled"``
+    checkouts, and attempts at multiprocess/threaded writes will generally
+    fail with cryptic error messages.
     '''
 
     def __init__(self,
-                 repo_pth: str,
+                 repo_pth: os.PathLike,
                  dset_name: str,
                  default_schema_hash: str,
                  samplesAreNamed: bool,
@@ -62,7 +43,37 @@ class DatasetDataReader(object):
                  hashenv: lmdb.Environment,
                  mode: str,
                  *args, **kwargs):
+        '''Developer documentation for init method
 
+        The location of the data references can be transparently specified by
+        feeding in a different dataenv argument. For staged reads -> ``dataenv =
+        lmdb.Environment(STAGING_DB)``. For commit read -> ``dataenv =
+        lmdb.Environment(COMMIT_DB)``.
+
+        Parameters
+        ----------
+        repo_pth : os.PathLike
+            path to the repository on disk.
+        dset_name : str
+            name of the dataset
+        schema_hashes : list of str
+            list of all schemas referenced in the dataset
+        samplesAreNamed : bool
+            do samples have names or not.
+        isVar : bool
+            is the dataset schema variable shape or not
+        varMaxShape : list or tuple of int
+            schema size (max) of the dataset data
+        varDtypeNum : int
+            datatype numeric code of the dataset data
+        dataenv : lmdb.Environment
+            environment of the dataset references to read
+        hashenv : lmdb.Environment
+            environment of the repository hash records
+        mode : str, optional
+            mode to open the file handles in. 'r' for read only, 'a' for read/write, defaults
+            to 'r'
+        '''
         self._mode = mode
         self._path = repo_pth
         self._dsetn = dset_name
@@ -120,7 +131,7 @@ class DatasetDataReader(object):
     def __getitem__(self, key):
         '''Retrieve a sample with a given key. Convenience method for dict style access.
 
-        .. seealso:: :meth:`get()`
+        .. seealso:: :meth:`get`
 
         Parameters
         ----------
@@ -253,49 +264,58 @@ class DatasetDataReader(object):
                     remote_keys.append(sampleName)
         return remote_keys
 
-    def keys(self) -> Iterator[str]:
+    def keys(self) -> Iterator[Union[str, int]]:
         '''generator which yields the names of every sample in the dataset
 
-        unlike write-enabled checkouts, reader checkouts do not make a copy
-        of the key list while iterating as the checkout has no way to modify
-        the contents of the list.
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginning the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
 
         Yields
         ------
-        Iterator[str]
+        Iterator[Union[str, int]]
             keys of one sample at a time inside the dataset
         '''
-        for name in self._sspecs:
+        for name in tuple(self._sspecs.keys()):
             yield name
 
     def values(self) -> Iterator[np.ndarray]:
         '''generator which yields the tensor data for every sample in the dataset
 
-        unlike write-enabled checkouts, reader checkouts do not make a copy
-        of the key/value list while iterating as the checkout has no way to modify
-        the contents of the list.
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginning the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
 
         Yields
         ------
         Iterator[np.ndarray]
             values of one sample at a time inside the dataset
         '''
-        for name in self._sspecs:
+        for name in tuple(self._sspecs.keys()):
             yield self.get(name)
 
-    def items(self) -> Iterator[Tuple[str, np.ndarray]]:
+    def items(self) -> Iterator[Tuple[Union[str, int], np.ndarray]]:
         '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
 
-        unlike write-enabled checkouts, reader checkouts do not make a copy
-        of the key/values list while iterating as the checkout has no way to modify
-        the contents of the list.
+        For write enabled checkouts, is technically possible to iterate over the
+        dataset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginning the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
 
         Yields
         ------
-        Iterator[Tuple[str, np.ndarray]]
+        Iterator[Tuple[Union[str, int], np.ndarray]]
             sample name and stored value for every sample inside the dataset
         '''
-        for name in self._sspecs:
+        for name in tuple(self._sspecs.keys()):
             yield (name, self.get(name))
 
     def get(self, name: str) -> np.ndarray:
@@ -388,23 +408,35 @@ class DatasetDataReader(object):
 class DatasetDataWriter(DatasetDataReader):
     '''Class implementing methods to write data to a dataset.
 
-    Extends the functionality of the DatasetDataReader class. The __init__
-    method requires quite a number of ``**kwargs`` to be passed along to the
-    :class:`DatasetDataReader` class.
+    Writer specific methods are contained here, and while read functionality is
+    shared with the methods common to :class:`DatasetDataReader`. Write-enabled
+    checkouts are not thread/process safe for either ``writes`` OR ``reads``,
+    a restriction we impose for ``write-enabled`` checkouts in order to ensure
+    data integrity above all else.
 
     .. seealso:: :class:`DatasetDataReader`
 
-    Parameters
-    ----------
-        stagehashenv : lmdb.Environment
-            db where the newly added staged hash data records are stored
-        default_schema_backend : str
-            backend code to act as default where new data samples are added.
-        **kwargs:
-            See args of :class:`DatasetDataReader`
     '''
 
-    def __init__(self, stagehashenv, default_schema_backend, *args, **kwargs):
+    def __init__(self,
+                 stagehashenv: lmdb.Environment,
+                 default_schema_backend: str,
+                 *args, **kwargs):
+        '''Developer documentation for init method.
+
+        Extends the functionality of the DatasetDataReader class. The __init__
+        method requires quite a number of ``**kwargs`` to be passed along to the
+        :class:`DatasetDataReader` class.
+
+        Parameters
+        ----------
+            stagehashenv : lmdb.Environment
+                db where the newly added staged hash data records are stored
+            default_schema_backend : str
+                backend code to act as default where new data samples are added.
+            **kwargs:
+                See args of :class:`DatasetDataReader`
+        '''
 
         super().__init__(*args, **kwargs)
 
@@ -414,7 +446,6 @@ class DatasetDataWriter(DatasetDataReader):
         self._hashenv: lmdb.Environment = kwargs['hashenv']
 
         self._TxnRegister = TxnRegister()
-        self._Query = RecordQuery(self._dataenv)
         self._hashTxn: Optional[lmdb.Transaction] = None
         self._dataTxn: Optional[lmdb.Transaction] = None
 
@@ -483,61 +514,8 @@ class DatasetDataWriter(DatasetDataReader):
         '''
         return self._dflt_backend
 
-    def keys(self) -> Iterator[str]:
-        '''generator which yields the names of every sample in the dataset
-
-        For write enabled checkouts, is technically possible to iterate over the
-        dataset object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.)
-        However, in order to avoid differences between read-write checkouts we
-        still just return the results as a generator to the user.
-
-        Yields
-        ------
-        Iterator[str]
-            name of keys inside the dataset
-        '''
-        for name in list(self._sspecs):
-            yield name
-
-    def values(self) -> Iterator[np.ndarray]:
-        '''generator which yields the tensor data for every sample in the dataset
-
-        For write enabled checkouts, is technically possible to iterate over the
-        dataset object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.)
-        However, in order to avoid differences between read-write checkouts we
-        still just return the results as a generator to the user.
-
-        Yields
-        ------
-        Iterator[np.ndarray]
-            values of one sample at a time inside the dataset
-        '''
-        for name in list(self._sspecs):
-            yield self.get(name)
-
-    def items(self) -> Iterator[Tuple[str, np.ndarray]]:
-        '''generator yielding two-tuple of (name, tensor), for every sample in the dataset.
-
-        For write enabled checkouts, is technically possible to iterate over the
-        dataset object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginging the loop.)
-        However, in order to avoid differences between read-write checkouts we
-        still just return the results as a generator to the user.
-
-        Yields
-        ------
-        Iterator[Tuple[str, np.ndarray]]
-            sample name and stored value for every sample inside the dataset
-        '''
-        for name in list(self._sspecs):
-            yield (name, self.get(name))
-
-    def add(self, data: np.ndarray, name: Union[str, int] = None, **kwargs) -> Union[str, int]:
+    def add(self, data: np.ndarray, name: Union[str, int] = None,
+            **kwargs) -> Union[str, int]:
         '''Store a piece of data in a dataset
 
         Parameters
@@ -756,29 +734,11 @@ Constructor and Interaction Class for Datasets
 class Datasets(object):
     '''Common access patterns and initialization/removal of datasets in a checkout.
 
-    .. warning::
-
-        This class should not be instantiated directly. Instead use the factory
-        functions :py:meth:`_from_commit` or :py:meth:`_from_staging` to
-        return a pre-initialized class instance appropriately constructed for
-        either a read-only or write-enabled checkout.
-
-    Parameters
-    ----------
-    mode : str
-        one of 'r' or 'a' to indicate read or write mode
-    repo_pth : os.PathLike
-        path to the repository on disk
-    datasets : dict of obj
-        dictionary of DatasetData objects
-    hashenv : lmdb.Environment
-        environment handle for hash records
-    dataenv : lmdb.Environment
-        environment handle for the unpacked records. `data` is means to refer to
-        the fact that the stageenv is passed in for for write-enabled, and a
-        cmtrefenv for read-only checkouts.
-    stagehashenv : lmdb.Environment
-        environment handle for newly added staged data hash records.
+    This object is the entry point to all tensor data stored in their individual
+    datasets. Each dataset contains a common schema which dictates the general
+    shape, dtype, and access patters which the backends optimize access for. The
+    methods contained within allow us to create, remove, query, and access these
+    collections of common tensors.
     '''
 
     def __init__(self,
@@ -788,7 +748,32 @@ class Datasets(object):
                  hashenv: Optional[lmdb.Environment] = None,
                  dataenv: Optional[lmdb.Environment] = None,
                  stagehashenv: Optional[lmdb.Environment] = None):
+        '''Developer documentation for init method.
 
+        .. warning::
+
+            This class should not be instantiated directly. Instead use the factory
+            functions :py:meth:`_from_commit` or :py:meth:`_from_staging` to return
+            a pre-initialized class instance appropriately constructed for either a
+            read-only or write-enabled checkout.
+
+        Parameters
+        ----------
+        mode : str
+            one of 'r' or 'a' to indicate read or write mode
+        repo_pth : os.PathLike
+            path to the repository on disk
+        datasets : Mapping[str, Union[DatasetDataReader, DatasetDataWriter]]
+            dictionary of DatasetData objects
+        hashenv : Optional[lmdb.Environment]
+            environment handle for hash records
+        dataenv : Optional[lmdb.Environment]
+            environment handle for the unpacked records. `data` is means to refer to
+            the fact that the stageenv is passed in for for write-enabled, and a
+            cmtrefenv for read-only checkouts.
+        stagehashenv : Optional[lmdb.Environment]
+            environment handle for newly added staged data hash records.
+        '''
         self._mode = mode
         self._repo_pth = repo_pth
         self._datasets = datasets
@@ -799,7 +784,6 @@ class Datasets(object):
             self._hashenv = hashenv
             self._dataenv = dataenv
             self._stagehashenv = stagehashenv
-            self._Query = RecordQuery(self._dataenv)
 
         self.__setup()
 
@@ -829,7 +813,7 @@ class Datasets(object):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Dataset Names / Partial Remote References:\
-                \n      - '                            + '\n      - '.join(
+                \n      - ' + '\n      - '.join(
             f'{dsetn} / {dset.contains_remote_references}'
             for dsetn, dset in self._datasets.items())
         p.text(res)
@@ -886,7 +870,20 @@ class Datasets(object):
         msg = f'HANGAR NOT ALLOWED:: To add a dataset use `init_dataset` method.'
         raise PermissionError(msg)
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:
+        '''Determine if a dataset with a particular name is stored in the checkout
+
+        Parameters
+        ----------
+        key : str
+            name of the dataset to check for
+
+        Returns
+        -------
+        bool
+            True if a dataset with the provided name exists in the checkout,
+            otherwise False.
+        '''
         return True if key in self._datasets else False
 
     def __len__(self):
@@ -902,47 +899,52 @@ class Datasets(object):
         return False if self._mode == 'r' else True
 
     @property
-    def contains_remote_references(self) -> MutableMapping[str, bool]:
+    def contains_remote_references(self) -> Mapping[str, bool]:
         '''Dict of bool indicating data reference locality in each dataset.
 
-        False is all samples in dataset exist locally, True if some reference remote sources.
+        Returns
+        -------
+        Mapping[str, bool]
+            For each dataset name key, boolean value where False indicates all
+            samples in dataset exist locally, True if some reference remote
+            sources.
         '''
-        res = {}
+        res: Mapping[str, bool] = {}
         for dsetn, dset in self._datasets.items():
             res[dsetn] = dset.contains_remote_references
         return res
 
     @property
-    def remote_reference_dset_sample_keys(self) -> MutableMapping[str, List[str]]:
-        '''Return list of sample keys containing data stored in a remote reference for each dataset
+    def remote_sample_keys(self) -> Mapping[str, Iterable[Union[int, str]]]:
+        '''Determine datasets samples names which reference remote sources.
 
         Returns
         -------
-        MutableMapping[str, List[str]]
-            dict where keys are dataset names and values are samples in the dataset containing
-            remote references
+        Mapping[str, Iterable[Union[int, str]]]
+            dict where keys are dataset names and values are iterables of
+            samples in the dataset containing remote references
         '''
-        res: MutableMapping[str, List[str]] = {}
+        res: Mapping[str, Iterable[Union[int, str]]] = {}
         for dsetn, dset in self._datasets.items():
             res[dsetn] = dset.remote_reference_sample_keys
         return res
 
-    def keys(self):
+    def keys(self) -> List[str]:
         '''list all dataset keys (names) in the checkout
 
         Returns
         -------
-        list of str
+        List[str]
             list of dataset names
         '''
-        return self._datasets.keys()
+        return list(self._datasets.keys())
 
-    def values(self):
-        '''list all dataset object instances in the checkout
+    def values(self) -> Iterable[Union[DatasetDataReader, DatasetDataWriter]]:
+        '''yield all dataset object instances in the checkout.
 
         Yields
         -------
-        object
+        Iterable[Union[DatasetDataReader, DatasetDataWriter]]
             Generator of DatasetData accessor objects (set to read or write mode
             as appropriate)
         '''
@@ -950,20 +952,19 @@ class Datasets(object):
             wr = cm_weakref_obj_proxy(dsetObj)
             yield wr
 
-    def items(self):
+    def items(self) -> Iterable[Tuple[str, Union[DatasetDataReader, DatasetDataWriter]]]:
         '''generator providing access to dataset_name, :class:`Datasets`
 
         Yields
         ------
-        tuple
-            containing (name, :class:`Datasets`) for all datasets.
-
+        Iterable[Tuple[str, Union[DatasetDataReader, DatasetDataWriter]]]
+            returns two tuple of all all dataset names/object pairs in the checkout.
         '''
         for dsetN, dsetObj in self._datasets.items():
             wr = cm_weakref_obj_proxy(dsetObj)
             yield (dsetN, wr)
 
-    def get(self, name):
+    def get(self, name: str) -> Union[DatasetDataReader, DatasetDataWriter]:
         '''Returns a dataset access object.
 
         This can be used in lieu of the dictionary style access.
@@ -975,8 +976,9 @@ class Datasets(object):
 
         Returns
         -------
-        ObjectProxy
-            DatasetData accessor (set to read or write mode as appropriate) proxy
+        Union[DatasetDataReader, DatasetDataWriter]
+            DatasetData accessor (set to read or write mode as appropriate) which
+            governs interaction with the data
 
         Raises
         ------
@@ -993,22 +995,27 @@ class Datasets(object):
 
 # ------------------------ Writer-Enabled Methods Only ------------------------------
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str) -> str:
         '''remove a dataset and all data records if write-enabled process.
 
         Parameters
         ----------
-        key : string
-            name of the dataset to remove from the repository. This will remove
+        key : str
+            Name of the dataset to remove from the repository. This will remove
             all records from the staging area (though the actual data and all
             records are still accessible) if they were previously committed
+
+        Returns
+        -------
+        str
+            If successful, the name of the removed dataset.
 
         Raises
         ------
         PermissionError
             If this is a read-only checkout, no operation is permitted.
         '''
-        self.remove_dset(key)
+        return self.remove_dset(key)
 
     def __enter__(self):
         self._is_conman = True
@@ -1081,8 +1088,15 @@ class Datasets(object):
 
         return data_name
 
-    def init_dataset(self, name: str, shape=None, dtype=None, prototype=None,
-                     named_samples=True, variable_shape=False, *, backend: str = None):
+    def init_dataset(self,
+                     name: str,
+                     shape: Union[int, Tuple[int]] = None,
+                     dtype: np.dtype = None,
+                     prototype: np.ndarray = None,
+                     named_samples: bool = True,
+                     variable_shape: bool = False,
+                     *,
+                     backend: str = None):
         '''Initializes a dataset in the repository.
 
         Datasets are groups of related data pieces (samples). All samples within
@@ -1100,14 +1114,14 @@ class Datasets(object):
         ----------
         name : str
             The name assigned to this dataset.
-        shape : tuple, optional
+        shape : Union[int, Tuple[int]]
             The shape of the data samples which will be written in this dataset.
             This argument and the `dtype` argument are required if a `prototype`
             is not provided, defaults to None.
-        dtype : np.dtype, optional
+        dtype : np.dtype
             The datatype of this dataset. This argument and the `shape` argument
             are required if a `prototype` is not provided., defaults to None.
-        prototype : np.array, optional
+        prototype : np.ndarray
             A sample array of correct datatype and shape which will be used to
             initialize the dataset storage mechanisms. If this is provided, the
             `shape` and `dtype` arguments must not be set, defaults to None.
@@ -1238,7 +1252,7 @@ class Datasets(object):
 
         return self.get(name)
 
-    def remove_dset(self, dset_name):
+    def remove_dset(self, dset_name: str) -> str:
         '''remove the dataset and all data contained within it from the repository.
 
         Parameters
@@ -1317,7 +1331,7 @@ class Datasets(object):
         :class:`Datasets`
             Interface class with write-enabled attributes activated and any
             datasets existing initialized in write mode via
-            :class:`DatasetDataWriter`.
+            :class:`.dataset.DatasetDataWriter`.
         '''
 
         datasets = {}
@@ -1342,7 +1356,7 @@ class Datasets(object):
 
     @classmethod
     def _from_commit(cls, repo_pth, hashenv, cmtrefenv):
-        '''Class method factory to checkout :class:`Datasets` in read-only mode
+        '''Class method factory to checkout :class:`.dataset.Datasets` in read-only mode
 
         This is not a user facing operation, and should never be manually called
         in normal operation. For read mode, no locks need to be verified, but
@@ -1362,7 +1376,7 @@ class Datasets(object):
         -------
         :class:`Datasets`
             Interface class with all write-enabled attributes deactivated
-            datasets initialized in read mode via :class:`DatasetDataReader`.
+            datasets initialized in read mode via :class:`.dataset.DatasetDataReader`.
         '''
         datasets = {}
         query = RecordQuery(cmtrefenv)

@@ -96,7 +96,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
 
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
-    newRepo = Repository(path=new_tmpdir)
+    newRepo = Repository(path=new_tmpdir, exists=False)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in cmtList:
@@ -152,7 +152,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
 
     branch = repo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
-        co = repo.checkout(write=True, branch_name=branch)
+        co = repo.checkout(write=True, branch=branch)
         devSampList = []
         with co.datasets['_dset'] as d:
             for prevKey in list(d.keys())[1:]:
@@ -205,7 +205,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     devCmtList = []
     branch = repo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
-        co = repo.checkout(write=True, branch_name=branch)
+        co = repo.checkout(write=True, branch=branch)
         devSampList = []
         with co.datasets['_dset'] as d:
             for prevKey in list(d.keys())[1:]:
@@ -225,7 +225,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
-    newRepo = Repository(path=new_tmpdir)
+    newRepo = Repository(path=new_tmpdir, exists=False)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in masterCmtList:
@@ -354,7 +354,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     devCmts = masterCmts.copy()
     branch = repo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
-        co = repo.checkout(write=True, branch_name=branch)
+        co = repo.checkout(write=True, branch=branch)
         devSampList1 = []
         devSampList2 = []
         with co.datasets['_dset'] as d, co.datasets['_two'] as dd:
@@ -382,7 +382,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
-    newRepo = Repository(path=new_tmpdir)
+    newRepo = Repository(path=new_tmpdir, exists=False)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     newRepo.remote.fetch('origin', branch=branch)
     newRepo.create_branch('testbranch', base_commit=branchHist['head'])
@@ -449,9 +449,10 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                         arr = d[str(idx)]
                         assert np.allclose(samp, arr)
                         totalSeen += arr.nbytes
-                        assert totalSeen <= fetchNbytes
                     except FileNotFoundError:
-                        continue
+                        pass
+                    assert totalSeen <= fetchNbytes
+
         # compare both dsets at the same time
         else:
             d = co.datasets['_dset']
@@ -468,14 +469,15 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                         arr1 = d[str(idx)]
                         assert np.allclose(ds1, arr1)
                         totalSeen += arr1.nbytes
-                        assert totalSeen <= fetchNbytes
-
+                    except FileNotFoundError:
+                        pass
+                    try:
                         arr2 = dd[str(idx)]
                         assert np.allclose(ds2, arr2)
                         totalSeen += arr2.nbytes
-                        assert totalSeen <= fetchNbytes
                     except FileNotFoundError:
-                        continue
+                        pass
+                    assert totalSeen <= fetchNbytes
         co.close()
     newRepo._env._close_environments()
 
@@ -531,12 +533,12 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
     push2 = repo_2_br_no_conf.remote.push('origin', 'testbranch')
     assert push2 == 'testbranch'
 
-    test_head = repo_2_br_no_conf.log(branch_name='testbranch', return_contents=True)['head']
-    master_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
+    test_head = repo_2_br_no_conf.log(branch='testbranch', return_contents=True)['head']
+    master_head = repo_2_br_no_conf.log(branch='master', return_contents=True)['head']
 
     merge_cmt = repo_2_br_no_conf.merge('merge commit', 'master', 'testbranch')
-    merge_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
-    merge_order = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['order']
+    merge_head = repo_2_br_no_conf.log(branch='master', return_contents=True)['head']
+    merge_order = repo_2_br_no_conf.log(branch='master', return_contents=True)['order']
     merge_push = repo_2_br_no_conf.remote.push('origin', 'master')
     assert merge_push == 'master'
     assert merge_head != master_head
@@ -544,11 +546,11 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
 
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
-    newRepo = Repository(path=new_tmpdir)
+    newRepo = Repository(path=new_tmpdir, exists=False)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
 
-    clone_head = newRepo.log(branch_name='master', return_contents=True)['head']
-    clone_order = newRepo.log(branch_name='master', return_contents=True)['order']
+    clone_head = newRepo.log(branch='master', return_contents=True)['head']
+    clone_order = newRepo.log(branch='master', return_contents=True)['order']
     assert clone_head == merge_head == merge_cmt
     assert merge_order == clone_order
     newRepo._env._close_environments()
@@ -587,7 +589,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
-    newRepo = Repository(path=new_tmpdir)
+    newRepo = Repository(path=new_tmpdir, exists=False)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in masterCmtList:
@@ -634,7 +636,7 @@ def test_push_restricted_with_right_username_password(server_instance_push_restr
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
-    newRepo = Repository(path=new_tmpdir)
+    newRepo = Repository(path=new_tmpdir, exists=False)
     newRepo.clone('Test User', 'tester@foo.com', server_instance_push_restricted, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
     for cmt, sampList in masterCmtList:

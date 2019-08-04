@@ -93,8 +93,6 @@ Technical Notes
    implemented by the high level ``pickle`` reduction ``__set_state__()``,
    ``__get_state__()`` class methods.
 '''
-
-import logging
 import math
 import os
 import re
@@ -112,7 +110,6 @@ from .. import __version__
 from .. import constants as c
 from ..utils import find_next_prime, symlink_rel, random_string, set_blosc_nthreads
 
-logger = logging.getLogger(__name__)
 set_blosc_nthreads()
 
 
@@ -143,8 +140,6 @@ filter_opts = {
 }
 hdf5BloscAvail = h5py.h5z.filter_avail(32001)
 HDF5_FILTER = filter_opts['default'] if hdf5BloscAvail else filter_opts['backup']
-
-logger.info(f'hdf5-blosc available: {hdf5BloscAvail}. Filter opts: {HDF5_FILTER}')
 
 
 # -------------------------------- Parser Implementation ----------------------
@@ -530,7 +525,6 @@ class HDF5_00_FileHandles(object):
 
         uid = random_string()
         file_path = pjoin(self.DATADIR, f'{uid}.hdf5')
-        logger.debug(f'creating: {file_path}')
         self.wFp[uid] = h5py.File(file_path,
                                   mode='w',
                                   libver='latest',

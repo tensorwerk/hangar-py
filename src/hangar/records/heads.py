@@ -1,4 +1,3 @@
-import logging
 from collections import defaultdict
 import warnings
 
@@ -8,15 +7,13 @@ from . import parsing
 from ..context import TxnRegister
 
 
-logger = logging.getLogger(__name__)
-
-
 '''
 Write operation enabled lock methods
 ------------------------------------
 
-Any operation which wants to interact with the main storage services in a write-enabled
-way must aquire a lock to perform the operation. See docstrings below for more info
+Any operation which wants to interact with the main storage services in a
+write-enabled way must aquire a lock to perform the operation. See docstrings
+below for more info
 '''
 
 
@@ -173,14 +170,14 @@ Methods to interact with the branch head records
 # ---------------- branch creation and deletion operations ------------------------------
 
 
-def create_branch(branchenv, branch_name, base_commit):
+def create_branch(branchenv, name, base_commit):
     '''Internal operations used to create a branch.
 
     Parameters
     ----------
     branchenv : lmdb.Environment
         lmdb environment of the branch db
-    branch_name : str
+    name : str
         Name of the branch to create, if a branch with this name exists no
         operation  will occur and a `ValueError` will be thrown.
     base_commit : str
@@ -207,20 +204,20 @@ def create_branch(branchenv, branch_name, base_commit):
                   '(`master`) branch before new branches can be created'
             raise RuntimeError(msg)
 
-    branchHeadKey = parsing.repo_branch_head_db_key_from_raw_key(branch_name)
+    branchHeadKey = parsing.repo_branch_head_db_key_from_raw_key(name)
     branchHeadVal = parsing.repo_branch_head_db_val_from_raw_val(base_commit)
 
     branchtxn = TxnRegister().begin_writer_txn(branchenv)
     try:
         success = branchtxn.put(branchHeadKey, branchHeadVal, overwrite=False)
         if success is False:
-            err = f'A branch with the name {branch_name} already exists, please specify'\
+            err = f'A branch with the name {name} already exists, please specify'\
                   f'a different name or delete the branch.'
             raise ValueError(err)
     finally:
         TxnRegister().commit_writer_txn(branchenv)
 
-    return branch_name
+    return name
 
 
 # ------------- set and get with staging area HEAD branch name --------------------------

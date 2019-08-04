@@ -1,13 +1,9 @@
-import logging
-
 import lmdb
 
 from . import parsing
 from .. import constants as c
 from ..context import TxnRegister
 from ..backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP
-
-logger = logging.getLogger(__name__)
 
 
 class HashQuery(object):
@@ -180,6 +176,5 @@ def remove_stage_hash_records_from_hashenv(hashenv, stagehashenv):
     stageHashKeys = HashQuery(stagehashenv).list_all_hash_keys_db()
     hashtxn = TxnRegister().begin_writer_txn(hashenv)
     for hashKey in stageHashKeys:
-        logger.info(f'deleting: {hashKey}')
         hashtxn.delete(hashKey)
     TxnRegister().commit_writer_txn(hashenv)

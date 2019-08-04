@@ -8,6 +8,7 @@ class TestDataset(object):
         co = repo.checkout(write=True)
         with pytest.raises(ValueError):
             co.datasets.init_dataset(name='invalid name', prototype=randomsizedarray)
+        co.close()
 
     def test_read_only_mode(self, written_repo):
         import hangar
@@ -39,6 +40,7 @@ class TestDataset(object):
         assert dsetOldPath == dsetNew._path
         assert dsetOldDsetn == dsetNew._dsetn
         assert dsetOldDefaultSchemaHash == dsetNew._default_schema_hash
+        co.close()
 
     @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_remove_dataset(self, dset_backend, written_repo):
@@ -105,7 +107,7 @@ class TestDataset(object):
         dset2 = co.datasets['dset2']
         assert np.allclose(dset1['1'], arr)
         assert np.allclose(dset2['1'], arr)
-
+        co.close()
 
     @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_dataset_with_int_specifier_as_dimension(self, dset_backend, repo):
@@ -124,6 +126,7 @@ class TestDataset(object):
         dset2 = co.datasets['dset2']
         assert np.allclose(dset1['1'], arr)
         assert np.allclose(dset2['1'], arr2)
+        co.close()
 
 
 class TestDataWithFixedSizedDataset(object):
@@ -185,10 +188,8 @@ class TestDataWithFixedSizedDataset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        assert np.allclose(
-            co.datasets['_dset']['1'],
-            co.datasets.get('_dset').get('1'),
-            array5by7)
+        assert np.allclose(co.datasets['_dset']['1'], co.datasets.get('_dset').get('1'), array5by7)
+        co.close()
 
     def test_add_data_str_keys(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
@@ -451,6 +452,7 @@ class TestDataWithFixedSizedDataset(object):
         with pytest.raises(LookupError):
             # raises in another checkout
             dset['1'] = array5by7
+        co.close()
 
     @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_writer_context_manager_dataset_add_sample(self, dset_backend, repo, randomsizedarray):
@@ -462,6 +464,7 @@ class TestDataWithFixedSizedDataset(object):
         co.close()
         co = repo.checkout()
         assert np.allclose(co.datasets['dset']['1'], randomsizedarray)
+        co.close()
 
     def test_writer_context_manager_metadata_add(self, repo):
         co = repo.checkout(write=True)
@@ -471,6 +474,7 @@ class TestDataWithFixedSizedDataset(object):
         co.close()
         co = repo.checkout()
         assert co.metadata['key'] == 'val'
+        co.close()
 
     @pytest.mark.parametrize("dset_backend", ['00', '10'])
     def test_dataset_context_manager_dset_sample_and_metadata_add(self, dset_backend, repo, randomsizedarray):
@@ -491,6 +495,7 @@ class TestDataWithFixedSizedDataset(object):
         assert np.allclose(co.datasets['dset'].get('2'), newarr)
         assert co.metadata['key'] == 'val'
         assert co.metadata.get('hello') == 'world'
+        co.close()
 
     @pytest.mark.parametrize("dset1_backend", ['00', '10'])
     @pytest.mark.parametrize("dset2_backend", ['00', '10'])
@@ -620,6 +625,9 @@ class TestVariableSizedDataset(object):
             # make sure they can work after commit
             assert np.allclose(wd[k], v)
             assert np.allclose(rd[k], v)
+        wco.close()
+        rco.close()
+
 
     @pytest.mark.parametrize('dset_specs', [
         [['dset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],

@@ -11,14 +11,14 @@ def test_merge_fails_with_invalid_branch_name(repo_1_br_no_conf):
 
 
 def test_is_ff_merge(repo_1_br_no_conf):
-    testbranch_head = repo_1_br_no_conf.log(branch_name='testbranch', return_contents=True)['head']
+    testbranch_head = repo_1_br_no_conf.log(branch='testbranch', return_contents=True)['head']
     cmt_hash = repo_1_br_no_conf.merge('merge commit', 'master', 'testbranch')
     assert cmt_hash == testbranch_head
 
 
 def test_ff_merge_no_conf_correct_contents_for_name_or_hash_checkout(repo_1_br_no_conf):
     cmt_hash = repo_1_br_no_conf.merge('merge commit', 'master', 'testbranch')
-    coByName = repo_1_br_no_conf.checkout(branch_name='master')
+    coByName = repo_1_br_no_conf.checkout(branch='master')
     coByHash = repo_1_br_no_conf.checkout(commit=cmt_hash)
 
     assert len(coByHash.datasets) == len(coByName.datasets)
@@ -34,29 +34,31 @@ def test_ff_merge_no_conf_correct_contents_for_name_or_hash_checkout(repo_1_br_n
         meta_byHash = coByHash.metadata[metaKey]
         meta_byName = coByName.metadata[metaKey]
         assert meta_byHash == meta_byName
+    coByHash.close()
+    coByName.close()
 
 
 def test_ff_merge_no_conf_updates_head_commit_of_branches(repo_1_br_no_conf):
     repo = repo_1_br_no_conf
-    co = repo.checkout(write=True, branch_name='master')
+    co = repo.checkout(write=True, branch='master')
     co.close()
     repo.create_branch('NotUpdatedBranch')
-    old_branch_head = repo.log(branch_name='NotUpdatedBranch', return_contents=True)['head']
+    old_branch_head = repo.log(branch='NotUpdatedBranch', return_contents=True)['head']
 
     cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
-    master_head = repo.log(branch_name='master', return_contents=True)['head']
-    testbranch_head = repo.log(branch_name='testbranch', return_contents=True)['head']
+    master_head = repo.log(branch='master', return_contents=True)['head']
+    testbranch_head = repo.log(branch='testbranch', return_contents=True)['head']
     assert master_head == testbranch_head
     assert cmt_hash == master_head
 
-    check_old_branch = repo.log(branch_name='NotUpdatedBranch', return_contents=True)['head']
+    check_old_branch = repo.log(branch='NotUpdatedBranch', return_contents=True)['head']
     assert check_old_branch == old_branch_head
     assert check_old_branch != master_head
 
 
 def test_is_3_way_merge(repo_2_br_no_conf):
-    testbranch_head = repo_2_br_no_conf.log(branch_name='testbranch', return_contents=True)['head']
-    masterbranch_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
+    testbranch_head = repo_2_br_no_conf.log(branch='testbranch', return_contents=True)['head']
+    masterbranch_head = repo_2_br_no_conf.log(branch='master', return_contents=True)['head']
     cmt_hash = repo_2_br_no_conf.merge('merge commit', 'master', 'testbranch')
     assert cmt_hash != testbranch_head
     assert cmt_hash != masterbranch_head
@@ -64,7 +66,7 @@ def test_is_3_way_merge(repo_2_br_no_conf):
 
 def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     cmt_hash = repo_2_br_no_conf.merge('merge commit', 'master', 'testbranch')
-    co = repo_2_br_no_conf.checkout(branch_name='master')
+    co = repo_2_br_no_conf.checkout(branch='master')
     # metadata
     assert len(co.metadata) == 3
     assert co.metadata['hello'] == 'world'
@@ -89,16 +91,17 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
         assert str(genKey) in dset_keys
         dset_keys.remove(str(genKey))
     assert len(dset_keys) == 20
+    co.close()
 
 
 def test_3_way_merge_updates_head_commit_of_branches(repo_2_br_no_conf):
-    orig_testbranch_head = repo_2_br_no_conf.log(branch_name='testbranch', return_contents=True)['head']
-    orig_masterbranch_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
+    orig_testbranch_head = repo_2_br_no_conf.log(branch='testbranch', return_contents=True)['head']
+    orig_masterbranch_head = repo_2_br_no_conf.log(branch='master', return_contents=True)['head']
 
     cmt_hash = repo_2_br_no_conf.merge('merge commit', 'master', 'testbranch')
 
-    new_testbranch_head = repo_2_br_no_conf.log(branch_name='testbranch', return_contents=True)['head']
-    new_masterbranch_head = repo_2_br_no_conf.log(branch_name='master', return_contents=True)['head']
+    new_testbranch_head = repo_2_br_no_conf.log(branch='testbranch', return_contents=True)['head']
+    new_masterbranch_head = repo_2_br_no_conf.log(branch='master', return_contents=True)['head']
 
     assert orig_testbranch_head == new_testbranch_head
     assert orig_masterbranch_head != new_masterbranch_head
@@ -109,7 +112,7 @@ class TestMetadataConflicts(object):
 
     def test_conflict_additions_same_names_different_vals(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.metadata['foo'] = 'this should be a conflict'
         co.commit('commit on master')
         co.close()
@@ -119,12 +122,12 @@ class TestMetadataConflicts(object):
 
     def test_conflict_removal_and_mutation(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.metadata['hello'] = 'this is the mutation of the hello key'
         co.commit('commit on master mutating hello')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.metadata.remove('hello')
         co.commit('this was the removal of the hello key on testbranch')
         co.close()
@@ -134,12 +137,12 @@ class TestMetadataConflicts(object):
 
     def test_conflict_mutate_with_different_vals(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.metadata['hello'] = 'this is the mutation of the hello key'
         co.commit('commit on master mutating hello')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.metadata['hello'] = 'a different mutation of the hello key'
         co.commit('this was a differnt of the hello key on testbranch')
         co.close()
@@ -149,12 +152,12 @@ class TestMetadataConflicts(object):
 
     def test_no_conflict_both_remove(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.metadata.remove('hello')
         co.commit('commit on master removing hellow')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.metadata.remove('hello')
         co.commit('this was the removal of the hello key on testbranch')
         co.close()
@@ -166,12 +169,12 @@ class TestMetadataConflicts(object):
 
     def test_no_conflict_both_add_same(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.metadata['bothadd'] = 'this value'
         co.commit('commit on master adding kv')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.metadata['bothadd'] = 'this value'
         co.commit('this was the addition on testbranching adding kv')
         co.close()
@@ -182,6 +185,7 @@ class TestMetadataConflicts(object):
         assert co.metadata['bothadd'] == 'this value'
         assert co.metadata['hello'] == 'world'
         assert co.metadata['foo'] == 'bar'
+        co.close()
 
 
 class TestDatasetSampleConflicts(object):
@@ -191,7 +195,7 @@ class TestDatasetSampleConflicts(object):
         newdata = newdata * 2
 
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.datasets['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
@@ -204,7 +208,7 @@ class TestDatasetSampleConflicts(object):
         newdata = newdata * 2
 
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.datasets['dummy'][15] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
@@ -217,7 +221,7 @@ class TestDatasetSampleConflicts(object):
         newdata = newdata * 2
 
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.datasets['dummy'][15] = newdata
         co.datasets['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
@@ -231,7 +235,7 @@ class TestDatasetSampleConflicts(object):
         newdata[:] = 15
 
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.datasets['dummy']['15'] = newdata
         co.datasets['dummy'][15] = newdata
         co.commit('commit on master with same value data')
@@ -242,16 +246,17 @@ class TestDatasetSampleConflicts(object):
         dset = co.datasets['dummy']
         assert np.allclose(dset['15'], newdata)
         assert np.allclose(dset[15], newdata)
+        co.close()
 
     def test_conflict_mutations_same_name_different_value(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         newdata = np.arange(50)
         co.datasets['dummy']['0'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         newdata = newdata * 2
         co.datasets['dummy']['0'] = newdata
         co.commit('commit on testbranch with conflicting data')
@@ -262,13 +267,13 @@ class TestDatasetSampleConflicts(object):
 
     def test_conflict_mutation_and_removal(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         newdata = np.arange(50)
         co.datasets['dummy']['0'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.datasets['dummy'].remove('0')
         co.commit('commit on testbranch with removal')
         co.close()
@@ -278,13 +283,13 @@ class TestDatasetSampleConflicts(object):
 
     def test_no_conflict_both_removal(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
-        co = repo.checkout(write=True, branch_name='master')
+        co = repo.checkout(write=True, branch='master')
         co.datasets['dummy'].remove('0')
         del co.datasets['dummy'][21]
         co.commit('commit on master with removal')
         co.close()
 
-        co = repo.checkout(write=True, branch_name='testbranch')
+        co = repo.checkout(write=True, branch='testbranch')
         co.datasets['dummy'].remove('0')
         del co.datasets['dummy'][10]
         co.commit('commit on testbranch with removal')

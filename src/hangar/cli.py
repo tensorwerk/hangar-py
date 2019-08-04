@@ -23,9 +23,14 @@ from hangar import serve
 from hangar.records.commiting import expand_short_commit_digest
 
 
-@click.group(no_args_is_help=True, add_help_option=True)
+@click.group(no_args_is_help=True, add_help_option=True, invoke_without_command=True)
+@click.option('--version', '-v', is_flag=True, default=False, required=False,
+              help='display the Hangar version currently installed')
 @click.pass_context
-def main(ctx):
+def main(ctx, version):
+    if version:
+        import hangar
+        click.echo(hangar.__version__)
     pass
 
 
@@ -38,7 +43,7 @@ def init(ctx, name, email, overwrite):
     '''Initialize an empty repository at the current path
     '''
     P = os.getcwd()
-    repo = Repository(path=P)
+    repo = Repository(path=P, exists=False)
     try:
         repo.init(user_name=name, user_email=email, remove_old=overwrite)
         click.echo(f'Hangar repository initialized at {P}')
@@ -59,7 +64,7 @@ def clone(ctx, remote, name, email, overwrite):
     into the ``fetch-data`` command.
     '''
     P = os.getcwd()
-    repo = Repository(path=P)
+    repo = Repository(path=P, exists=False)
     repo.clone(user_name=name,
                user_email=email,
                remote_address=remote,
@@ -97,7 +102,7 @@ def fetch_data(ctx, remote, startpoint, dset, nbytes, all_):
     '''Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
-    commmit of a branch. Please review optional arguments for other behaviors
+    commit of a branch. Please review optional arguments for other behaviors
     '''
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
     from hangar.utils import parse_bytes
@@ -208,7 +213,7 @@ def summary(ctx, startpoint):
     if startpoint is None:
         click.echo(repo.summary())
     elif startpoint in repo.list_branches():
-        click.echo(repo.summary(branch_name=startpoint))
+        click.echo(repo.summary(branch=startpoint))
     else:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
         click.echo(repo.summary(commit=base_commit))
@@ -220,7 +225,7 @@ def summary(ctx, startpoint):
 def log(ctx, startpoint):
     '''Display commit graph starting at STARTPOINT (short-digest or name)
 
-    If no argument is passed in, the staging area branch HEAD wil be used as the
+    If no argument is passed in, the staging area branch HEAD will be used as the
     starting point.
     '''
     P = os.getcwd()
@@ -228,10 +233,10 @@ def log(ctx, startpoint):
     if startpoint is None:
         click.echo(repo.log())
     elif startpoint in repo.list_branches():
-        click.echo(repo.log(branch_name=startpoint))
+        click.echo(repo.log(branch=startpoint))
     else:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
-        click.echo(repo.log(commit_hash=base_commit))
+        click.echo(repo.log(commit=base_commit))
 
 
 @main.group(no_args_is_help=True, add_help_option=True)
@@ -303,7 +308,7 @@ def server(overwrite, ip, port, timeout):
     similar, though significantly different enough to the regular user "client"
     implementation that it is not possible to fully access all information via
     regular API methods. These changes occur as a result of the uniformity of
-    operations promissed by both the RPC structure and negotiations between the
+    operations promised by both the RPC structure and negotiations between the
     client/server upon connection.
 
     More simply put, we know more, so we can optimize access more; similar, but
@@ -355,7 +360,7 @@ def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
         click.echo(f'NO HANGAR INSTALLATION AT PATH: {P}')
         return
 
-    envs = Environments(repo_path=repo_path)
+    envs = Environments(pth=repo_path)
     if a:
         b, r, d, m, s, z = True, True, True, True, True, True
     if b:

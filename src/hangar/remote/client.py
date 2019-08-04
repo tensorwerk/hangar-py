@@ -48,7 +48,7 @@ class HangarClient(object):
     auth_password : str, optional, kwarg-only, by default ''.
         credentials to use for authentication, by default ''.
     wait_for_ready : bool, optional, kwarg-only, be default True.
-        If the client should wait before erroring for a short period of time
+        If the client should wait before erring for a short period of time
         while a server is `UNAVAILABLE`, typically due to it just starting up
         at the time the connection was made
     wait_for_read_timeout : float, optional, kwarg-only, by default 5.
@@ -107,7 +107,6 @@ class HangarClient(object):
                     raise err
             else:
                 break
-            logger.debug(f'Wait-for-ready: {self.wait_ready}, time elapsed: {t_tot}')
             time.sleep(0.05)
             t_tot = time.time() - t_init
         else:
@@ -291,19 +290,19 @@ class HangarClient(object):
                    digests: Sequence[str]) -> Sequence[Tuple[str, np.ndarray]]:
         '''Fetch data hash digests for a particular schema.
 
-        As the total size of the data to be transfered isn't known before this
+        As the total size of the data to be transferred isn't known before this
         operation occurs, if more tensor data digests are requested then the
         Client is configured to allow in memory at a time, only a portion of the
-        requested digests will actually be materialized. The recieved digests
+        requested digests will actually be materialized. The received digests
         are listed as the return value of this function, be sure to check that
-        all requested digests have been recieved!
+        all requested digests have been received!
 
         Parameters
         ----------
         schema_hash : str
             hash of the schema each of the digests is associated with
         digests : Sequence[str]
-            iterable of data digests to recieve
+            iterable of data digests to receive
 
         Returns
         -------
@@ -313,7 +312,7 @@ class HangarClient(object):
         Raises
         ------
         RuntimeError
-            if recieved digest != requested or what was reported to be sent.
+            if received digest != requested or what was reported to be sent.
         '''
         totalSize, buf = 0, io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
@@ -344,20 +343,20 @@ class HangarClient(object):
 
         uncompBytes = blosc.decompress(dBytes)
         if uncomp_nbytes != len(uncompBytes):
-            raise RuntimeError(f'uncomp_nbytes: {uncomp_nbytes} != recieved {comp_nbytes}')
+            raise RuntimeError(f'uncomp_nbytes: {uncomp_nbytes} != received {comp_nbytes}')
         buff = io.BytesIO(uncompBytes)
         unpacker = msgpack.Unpacker(
             buff, use_list=True, raw=False, max_buffer_size=1_000_000_000)
 
-        recieved_data = []
+        received_data = []
         for data in unpacker:
             hdigest, dShape, dTypeN, ddBytes = data
             tensor = np.frombuffer(ddBytes, dtype=np.typeDict[dTypeN]).reshape(dShape)
-            recieved_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
-            if recieved_hash != hdigest:
-                raise RuntimeError(f'MANGLED! got: {recieved_hash} != requested: {hdigest}')
-            recieved_data.append((recieved_hash, tensor))
-        return recieved_data
+            received_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
+            if received_hash != hdigest:
+                raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {hdigest}')
+            received_data.append((received_hash, tensor))
+        return received_data
 
     def push_data(self,
                   schema_hash: str,
@@ -384,7 +383,7 @@ class HangarClient(object):
         KeyError
             if one of the input digests does not exist on the client
         rpc_error
-            if the server recieved corrupt data
+            if the server received corrupt data
         '''
         totalSize, buf = 0, io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
@@ -443,17 +442,17 @@ class HangarClient(object):
         Raises
         ------
         RuntimeError
-            if the recieved data does not match the requested hash value
+            if the received data does not match the requested hash value
         '''
         rec = hangar_service_pb2.HashRecord(digest=digest)
         request = hangar_service_pb2.FetchLabelRequest(rec=rec)
         reply = self.stub.FetchLabel(request)
 
         uncompBlob = blosc.decompress(reply.blob)
-        recieved_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
-        if recieved_hash != digest:
-            raise RuntimeError(f'recieved_hash: {recieved_hash} != digest: {digest}')
-        return (recieved_hash, uncompBlob)
+        received_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
+        if received_hash != digest:
+            raise RuntimeError(f'received_hash: {received_hash} != digest: {digest}')
+        return (received_hash, uncompBlob)
 
     def push_label(self, digest: str, labelVal: bytes) -> hangar_service_pb2.PushLabelReply:
         '''send a label/metadata digest & value to the remote server
@@ -517,8 +516,8 @@ class HangarClient(object):
 
         uncompBytes = blosc.decompress(hBytes)
         missing_hashs = msgpack.unpackb(uncompBytes, raw=False, use_list=False)
-        recieved_data = [(digest, schema_hash) for digest, schema_hash in missing_hashs]
-        return recieved_data
+        received_data = [(digest, schema_hash) for digest, schema_hash in missing_hashs]
+        return received_data
 
     def push_find_missing_hash_records(self, commit, tmpDB: lmdb.Environment = None):
 

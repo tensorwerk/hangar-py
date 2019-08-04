@@ -65,7 +65,7 @@ setup(
         'click',
         'grpcio',
         'h5py==2.9.0',
-        'lmdb==0.94',
+        'lmdb>=0.94,<=0.96',
         'msgpack==0.6.1',
         'numpy',
         'pyyaml',

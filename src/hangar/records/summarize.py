@@ -109,7 +109,7 @@ def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no co
     return buf
 
 
-def summary(env, *, branch_name='', commit=''):
+def summary(env, *, branch='', commit=''):
     '''Summary of data set stored in repository.
 
     Parameters
@@ -118,7 +118,7 @@ def summary(env, *, branch_name='', commit=''):
         class which contains all of the lmdb environments pre-initialized for use.
     commit : str
         commit hash to query. if left empty, HEAD commit is used (Default value = '')
-    branch_name : str
+    branch : str
         branch name to query, if left empty, HEAD will be used. (Default value = '')
 
     Returns
@@ -128,8 +128,8 @@ def summary(env, *, branch_name='', commit=''):
     '''
     if commit != '':
         cmt = commit
-    elif branch_name != '':
-        cmt = heads.get_branch_head_commit(env.branchenv, branch_name)
+    elif branch != '':
+        cmt = heads.get_branch_head_commit(env.branchenv, branch)
     else:
         headBranch = heads.get_staging_branch_head(env.branchenv)
         cmt = heads.get_branch_head_commit(env.branchenv, headBranch)
@@ -148,7 +148,7 @@ def summary(env, *, branch_name='', commit=''):
     buf.write(f'================== \n')
     buf.write(f'| Repository Info \n')
     buf.write(f'|----------------- \n')
-    buf.write(f'|  Directory: {env.repo_path} \n')
+    buf.write(f'|  Base Directory: {os.path.dirname(env.repo_path)} \n')
     buf.write(f'|  Disk Usage: {humanBytes} \n')
     buf.write(f' \n')
 

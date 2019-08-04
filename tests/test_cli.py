@@ -19,7 +19,8 @@ from hangar import Repository, cli
 help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '\n'\
            'Options:\n'\
-           '  --help  Show this message and exit.\n'\
+           '  -v, --version  display the Hangar version currently installed\n'\
+           '  --help         Show this message and exit.\n'\
            '\n'\
            'Commands:\n'\
            '  branch      operate on and list branch pointers.\n'\
@@ -42,6 +43,22 @@ def test_help():
     res = runner.invoke(cli.main, ['--help'])
     assert res.exit_code == 0
     assert res.stdout == help_res
+
+
+def test_version_long_option():
+    import hangar
+    runner = CliRunner()
+    res = runner.invoke(cli.main, ['--version'])
+    assert res.exit_code == 0
+    assert res.stdout == f'{hangar.__version__}\n'
+
+
+def test_version_short_option():
+    import hangar
+    runner = CliRunner()
+    res = runner.invoke(cli.main, ['-v'])
+    assert res.exit_code == 0
+    assert res.stdout == f'{hangar.__version__}\n'
 
 
 def test_init_repo():
@@ -77,10 +94,10 @@ def test_push_fetch_records(server_instance, backend):
 
     runner = CliRunner()
     with runner.isolated_filesystem():
-        repo = Repository(getcwd())
+        repo = Repository(getcwd(), exists=False)
         repo.init('foo', 'bar')
         dummyData = np.arange(50)
-        co1 = repo.checkout(write=True, branch_name='master')
+        co1 = repo.checkout(write=True, branch='master')
         co1.datasets.init_dataset(
             name='dummy', prototype=dummyData, named_samples=True, backend=backend)
         for idx in range(10):
@@ -92,7 +109,7 @@ def test_push_fetch_records(server_instance, backend):
         co1.close()
 
         repo.create_branch('testbranch')
-        co2 = repo.checkout(write=True, branch_name='testbranch')
+        co2 = repo.checkout(write=True, branch='testbranch')
         for idx in range(10, 20):
             dummyData[:] = idx
             co2.datasets['dummy'][str(idx)] = dummyData
@@ -126,10 +143,10 @@ def test_fetch_records_and_data(server_instance, backend, options):
 
     runner = CliRunner()
     with runner.isolated_filesystem():
-        repo = Repository(getcwd())
+        repo = Repository(getcwd(), exists=False)
         repo.init('foo', 'bar')
         dummyData = np.arange(50)
-        co1 = repo.checkout(write=True, branch_name='master')
+        co1 = repo.checkout(write=True, branch='master')
         co1.datasets.init_dataset(
             name='dummy', prototype=dummyData, named_samples=True, backend=backend)
         for idx in range(10):
@@ -141,7 +158,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
         co1.close()
 
         repo.create_branch('testbranch')
-        co2 = repo.checkout(write=True, branch_name='testbranch')
+        co2 = repo.checkout(write=True, branch='testbranch')
         for idx in range(10, 20):
             dummyData[:] = idx
             co2.datasets['dummy'][str(idx)] = dummyData

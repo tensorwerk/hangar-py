@@ -1,20 +1,21 @@
-import os
+import atexit
 import logging
+import os
 import weakref
-from uuid import uuid4
-from os.path import join as pjoin
 from contextlib import suppress
 from functools import partial
+from os.path import join as pjoin
+from uuid import uuid4
 
 import lmdb
 
 from . import constants as c
 from .dataset import Datasets
-from .utils import cm_weakref_obj_proxy
-from .merger import select_merge_algorithm
-from .records import commiting, hashs, heads
 from .diff import ReaderUserDiff, WriterUserDiff
+from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
+from .records import commiting, hashs, heads
+from .utils import cm_weakref_obj_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -22,33 +23,54 @@ logger = logging.getLogger(__name__)
 class ReaderCheckout(object):
     '''Checkout the repository as it exists at a particular branch.
 
-    if a commit hash is provided, it will take precedent over the branch name
+    If a commit hash is provided, it will take precedent over the branch name
     parameter. If neither a branch not commit is specified, the staging
-    environment's base branch HEAD commit hash will be read.
+    environment's base branch ``HEAD`` commit hash will be read.
 
-    Parameters
-    ----------
-    base_path : str
-        directory path to the Hangar repository on disk
-    labelenv : lmdb.Environment
-        db where the label dat is stored
-    dataenv : lmdb.Environment
-        db where the checkout record data is unpacked and stored.
-    hashenv : lmdb.Environment
-        db where the hash records are stored.
-    branchenv : lmdb.Environment
-        db where the branch records are stored.
-    refenv : lmdb.Environment
-        db where the commit references are stored.
-    commit : str
-        specific commit hash to checkout
+    Unlike :class:`WriterCheckout`, any number of :class:`ReaderCheckout`
+    objects can exist on the repository independently. Like the
+    ``write-enabled`` variant, the :meth:`close` method should be called after
+    performing the necessary operations on the repo. However, as there is no
+    concept of a ``lock`` for ``read-only`` checkouts, this is just to free up
+    memory resources, rather than changing recorded access state.
+
+    In order to reduce the chance that the python interpreter is shut down
+    without calling :meth:`close`,  - a common mistake during ipython / jupyter
+    sessions - an `atexit <https://docs.python.org/3/library/atexit.html>`_ hook
+    is registered to :meth:`close`. If properly closed by the user, the hook is
+    unregistered after completion with no ill effects. So long as a the process
+    is NOT terminated via non-python ``SIGKILL``, fatal internal python error, or
+    or special ``os exit`` methods, cleanup will occur on interpreter shutdown
+    and resources will be freed. If a non-handled termination method does occur,
+    the implications of holding resources varies on a per-OS basis. While no
+    risk to data integrity is observed, repeated misuse may require a system
+    reboot in order to achieve expected performance characteristics.
     '''
 
-    def __init__(self, base_path: os.PathLike, labelenv: lmdb.Environment,
+    def __init__(self,
+                 base_path: os.PathLike, labelenv: lmdb.Environment,
                  dataenv: lmdb.Environment, hashenv: lmdb.Environment,
                  branchenv: lmdb.Environment, refenv: lmdb.Environment,
                  commit: str):
+        '''Developer documentation of init method.
 
+        Parameters
+        ----------
+        base_path : str
+            directory path to the Hangar repository on disk
+        labelenv : lmdb.Environment
+            db where the label dat is stored
+        dataenv : lmdb.Environment
+            db where the checkout record data is unpacked and stored.
+        hashenv : lmdb.Environment
+            db where the hash records are stored.
+        branchenv : lmdb.Environment
+            db where the branch records are stored.
+        refenv : lmdb.Environment
+            db where the commit references are stored.
+        commit : str
+            specific commit hash to checkout
+        '''
         self._commit_hash = commit
         self._repo_path = base_path
         self._labelenv = labelenv
@@ -58,6 +80,8 @@ class ReaderCheckout(object):
         self._refenv = refenv
 
         self._metadata = MetadataReader(
+            mode='r',
+            repo_pth=self._repo_path,
             dataenv=self._dataenv,
             labelenv=self._labelenv)
         self._datasets = Datasets._from_commit(
@@ -68,6 +92,7 @@ class ReaderCheckout(object):
             commit_hash=self._commit_hash,
             branchenv=self._branchenv,
             refenv=self._refenv)
+        atexit.register(self.close)
 
     def _repr_pretty_(self, p, cycle):
         '''pretty repr for printing in jupyter notebooks
@@ -197,12 +222,12 @@ class ReaderCheckout(object):
 
         for attr in list(self._datasets.__dir__()):
             with suppress(AttributeError, TypeError):
-                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
+                # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                 delattr(self._datasets, f'_self_{attr}')
 
         for attr in list(self._metadata.__dir__()):
             with suppress(AttributeError, TypeError):
-                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
+                # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                 delattr(self._metadata, f'_self_{attr}')
 
         del self._datasets
@@ -215,6 +240,7 @@ class ReaderCheckout(object):
         del self._hashenv
         del self._branchenv
         del self._refenv
+        atexit.unregister(self.close)
         return
 
 
@@ -225,39 +251,29 @@ class WriterCheckout(object):
     '''Checkout the repository at the head of a given branch for writing.
 
     This is the entry point for all writing operations to the repository, the
-    writer class records all interactions in a special "staging" area, which is
-    based off the state of the repository as it existed at the HEAD commit of a
-    branch.
+    writer class records all interactions in a special ``"staging"`` area, which
+    is based off the state of the repository as it existed at the ``HEAD``
+    commit of a branch.
 
     At the moment, only one instance of this class can write data to the staging
     area at a time. After the desired operations have been completed, it is
-    crucial to call :py:meth:`close` to release the writer lock. In addition,
-    after any changes have been made to the staging area, the branch HEAD cannot
-    be changed. In order to checkout another branch HEAD for writing, you must
-    either commit the changes, or perform a hard-reset of the staging area to
-    the last commit.
+    crucial to call :meth:`close` to release the writer lock. In addition, after
+    any changes have been made to the staging area, the branch ``HEAD`` cannot
+    be changed. In order to checkout another branch ``HEAD`` for writing, you
+    must either :meth:`commit` the changes, or perform a hard-reset of the
+    staging area to the last commit via :meth:`reset_staging_area`.
 
-    Parameters
-    ----------
-    repo_pth : str
-        local file path of the repository.
-    branch_name : str
-        name of the branch whose HEAD commit will for the starting state
-        of the staging area.
-    labelenv : lmdb.Environment
-        db where the label dat is stored
-    hashenv lmdb.Environment
-        db where the hash records are stored.
-    refenv : lmdb.Environment
-        db where the commit record data is unpacked and stored.
-    stagenv : lmdb.Environment
-        db where the stage record data is unpacked and stored.
-    branchenv : lmdb.Environment
-        db where the head record data is unpacked and stored.
-    stagehashenv: lmdb.Environment
-        db where the staged hash record data is stored.
-    mode : str, optional
-        open in write or read only mode, default is 'a' which is write-enabled.
+    In order to reduce the chance that the python interpreter is shut down
+    without calling :meth:`close`, which releases the writer lock - a common mistake
+    during ipython / jupyter sessions - an `atexit
+    <https://docs.python.org/3/library/atexit.html>`_ hook is registered to
+    :meth:`close`. If properly closed by the user, the hook is unregistered
+    after completion with no ill effects. So long as a the process is NOT
+    terminated via non-python SIGKILL, fatal internal python error, or or special
+    os exit methods, cleanup will occur on interpreter shutdown and the writer
+    lock will be released. If a non-handled termination method does occur, the
+    :py:meth:`~.Repository.force_release_writer_lock` method must be called
+    manually when a new python process wishes to open the writer checkout.
     '''
 
     def __init__(self,
@@ -270,7 +286,30 @@ class WriterCheckout(object):
                  branchenv: lmdb.Environment,
                  stagehashenv: lmdb.Environment,
                  mode: str = 'a'):
+        '''Developer documentation of init method.
 
+        Parameters
+        ----------
+        repo_pth : str
+            local file path of the repository.
+        branch_name : str
+            name of the branch whose ``HEAD`` commit will for the starting state
+            of the staging area.
+        labelenv : lmdb.Environment
+            db where the label dat is stored
+        hashenv lmdb.Environment
+            db where the hash records are stored.
+        refenv : lmdb.Environment
+            db where the commit record data is unpacked and stored.
+        stagenv : lmdb.Environment
+            db where the stage record data is unpacked and stored.
+        branchenv : lmdb.Environment
+            db where the head record data is unpacked and stored.
+        stagehashenv: lmdb.Environment
+            db where the staged hash record data is stored.
+        mode : str, optional
+            open in write or read only mode, default is 'a' which is write-enabled.
+        '''
         self._repo_path = repo_pth
         self._branch_name = branch_name
         self._writer_lock = str(uuid4())
@@ -288,16 +327,17 @@ class WriterCheckout(object):
         self._differ: WriterUserDiff = None
         self._metadata: MetadataWriter = None
         self.__setup()
+        atexit.register(self.close)
 
     def _repr_pretty_(self, p, cycle):
         '''pretty repr for printing in jupyter notebooks
         '''
         self.__acquire_writer_lock()
-        res = f'\n Hangar {self.__class__.__name__}\
-                \n     Writer       : True\
-                \n     Base Branch  : {self._branch_name}\
-                \n     Num Datasets : {len(self._datasets)}\
-                \n     Num Metadata : {len(self._metadata)}\n'
+        res = f'Hangar {self.__class__.__name__}\
+                \n    Writer       : True\
+                \n    Base Branch  : {self._branch_name}\
+                \n    Num Datasets : {len(self._datasets)}\
+                \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -379,7 +419,7 @@ class WriterCheckout(object):
         Returns
         -------
         str
-            name of the branch whose commit HEAD changes are staged from.
+            name of the branch whose commit ``HEAD`` changes are staged from.
         '''
         self.__acquire_writer_lock()
         return self._branch_name
@@ -434,6 +474,8 @@ class WriterCheckout(object):
                 dsetHandle._close()
 
         self._metadata = MetadataWriter(
+            mode='a',
+            repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
         self._datasets = Datasets._from_staging_area(
@@ -498,7 +540,7 @@ class WriterCheckout(object):
         ------
         ValueError
             if there are changes previously made in the staging area which were
-            based on one branch's HEAD, but a different branch was specified to
+            based on one branch's ``HEAD``, but a different branch was specified to
             be used for the base of this checkout.
         '''
         self.__acquire_writer_lock()
@@ -527,6 +569,8 @@ class WriterCheckout(object):
                     branchenv=self._branchenv, branch_name=self._branch_name)
 
         self._metadata = MetadataWriter(
+            mode='a',
+            repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
         self._datasets = Datasets._from_staging_area(
@@ -548,7 +592,7 @@ class WriterCheckout(object):
         commit_message : str, optional
             user proved message for a log of what was changed in this commit.
             Should a fast forward commit be possible, this will NOT be added to
-            fast-forward HEAD.
+            fast-forward ``HEAD``.
 
         Returns
         -------
@@ -616,8 +660,8 @@ class WriterCheckout(object):
 
         Returns
         -------
-        string
-            commit hash of the head which the staging area is reset to.
+        str
+            Commit hash of the head which the staging area is reset to.
 
         Raises
         ------
@@ -645,6 +689,8 @@ class WriterCheckout(object):
 
         logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
         self._metadata = MetadataWriter(
+            mode='a',
+            repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
         self._datasets = Datasets._from_staging_area(
@@ -678,13 +724,13 @@ class WriterCheckout(object):
 
             for attr in list(self._datasets.__dir__()):
                 with suppress(AttributeError, TypeError):
-                    # prepending `_self_` addresses `WeakrefProxy` in `ObjectPRoxy`
+                    # prepending `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                     delattr(self._datasets, f'_self_{attr}')
 
         if hasattr(self, '_metadata') and (getattr(self, '_datasets') is not None):
             for attr in list(self._metadata.__dir__()):
                 with suppress(AttributeError, TypeError):
-                    # prepending `_self_` addresses `WeakrefProxy` in `ObjectPRoxy`
+                    # prepending `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                     delattr(self._metadata, f'_self_{attr}')
 
         with suppress(AttributeError):
@@ -708,4 +754,5 @@ class WriterCheckout(object):
         del self._branch_name
         del self._repo_stage_path
         del self._repo_store_path
+        atexit.unregister(self.close)
         return

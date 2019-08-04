@@ -50,8 +50,8 @@ extlinks = {
 # on_rtd is whether we are on readthedocs.org
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
-if not on_rtd:  # only set the theme if we're building docs locally
-    html_theme = 'sphinx_rtd_theme'
+# if not on_rtd:  # only set the theme if we're building docs locally
+html_theme = 'sphinx_rtd_theme'
 
 html_use_smartypants = True
 html_last_updated_fmt = '%b %d, %Y'
@@ -68,6 +68,7 @@ napoleon_include_init_with_doc = True
 
 add_module_names = False
 doctest_test_doctest_blocks = None
+autoclass_content = 'class'
 
 html_theme_options = {
     'style_nav_header_background': 'orange'

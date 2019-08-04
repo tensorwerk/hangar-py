@@ -44,7 +44,7 @@ you do want to create the underlying data files hangar uses on disk.
    # when the Repository object is initialized it will let you know that you need to run `init()`
 
    >>> repo.init(user_name='Rick Izzo', user_email='foo@email.com')
-   directory initialized at: /Users/rick/projects/tensorwerk/hangar-dev-repo/__hangar
+   directory initialized at: /Users/rick/projects/tensorwerk/hangar-dev-repo/.hangar
 
 
 Checking out the repo for writing
@@ -401,7 +401,7 @@ general has been built to be the only way to directly access it!
     ==================
     | Repository Info
     |-----------------
-    |  Directory: /Users/rick/projects/tensorwerk/hangar-dev-repo/__hangar
+    |  Directory: /Users/rick/projects/tensorwerk/hangar-dev-repo/.hangar
     |  Disk Usage: 46.13 MB
 
     ===================

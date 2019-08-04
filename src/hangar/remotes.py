@@ -25,6 +25,18 @@ RemoteInfo = NamedTuple('RemoteInfo', [('name', str), ('address', str)])
 
 class Remotes(object):
 
+    '''Class which governs access to remote interactor objects.
+
+    .. note::
+
+       The remote-server implementation is under heavy development, and
+       is likely to undergo changes in the Future. While we intend to
+       ensure compatability between software versions of Hangar repositories
+       written to disk, the API is likely to change. Please follow our
+       process at: https://www.github.com/tensorwerk/hangar-py
+
+    '''
+
     def __init__(self, env: Environments):
 
         self._env: Environments = env
@@ -219,8 +231,8 @@ class Remotes(object):
                 # Get missing label (metadata) digest & values
                 m_labels = set(client.fetch_find_missing_labels(commit))
                 for label in m_labels:
-                    recieved_hash, labelVal = client.fetch_label(label)
-                    CW.label(recieved_hash, labelVal)
+                    received_hash, labelVal = client.fetch_label(label)
+                    CW.label(received_hash, labelVal)
                 # Get missing data schema digests & values
                 mSchemaResponse = client.fetch_find_missing_schemas(commit)
                 for schema in mSchemaResponse.schema_digests:
@@ -231,8 +243,8 @@ class Remotes(object):
                 m_schema_hash_map = defaultdict(list)
                 for digest, schema_hash in m_hashes:
                     m_schema_hash_map[schema_hash].append((digest, schema_hash))
-                for schema_hash, recieved_data in m_schema_hash_map.items():
-                    CW.data(schema_hash, recieved_data, backend='50')
+                for schema_hash, received_data in m_schema_hash_map.items():
+                    CW.data(schema_hash, received_data, backend='50')
 
             # Get missing commit reference specification
             for commit in tqdm(m_cmts, desc='fetching commit spec'):
@@ -245,7 +257,7 @@ class Remotes(object):
             fetchBranchName = f'{remote}/{branch}'
             try:
                 heads.create_branch(
-                    self._env.branchenv, branch_name=fetchBranchName, base_commit=sHEAD)
+                    self._env.branchenv, name=fetchBranchName, base_commit=sHEAD)
             except ValueError:
                 heads.set_branch_head_commit(
                     self._env.branchenv, branch_name=fetchBranchName, commit_hash=sHEAD)
@@ -539,7 +551,7 @@ class Remotes(object):
                 cRemoteBranch = f'{remote}/{branch}'
                 if cRemoteBranch not in heads.get_branch_names(self._env.branchenv):
                     heads.create_branch(branchenv=self._env.branchenv,
-                                        branch_name=cRemoteBranch,
+                                        name=cRemoteBranch,
                                         base_commit=branchHead)
                 else:
                     heads.set_branch_head_commit(branchenv=self._env.branchenv,

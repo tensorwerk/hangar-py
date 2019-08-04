@@ -1,17 +1,19 @@
 import logging
 import os
-import shutil
 import platform
-import weakref
+import shutil
 import tempfile
-from typing import MutableMapping, Optional
+import warnings
 from collections import Counter
 from os.path import join as pjoin
+from typing import MutableMapping
+from typing import Optional
 
 import lmdb
 import yaml
 
 from . import constants as c
+from . import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +156,7 @@ class TxnRegister(metaclass=TxnRegisterSingleton):
         '''
         ancestors = self.ReaderAncestors[lmdbenv]
         if ancestors == 0:
-            raise RuntimeError(f'hash ancestors are zero but commit called')
+            raise RuntimeError(f'hash ancestors are zero but abort called')
         elif ancestors == 1:
             self.ReaderTxn[lmdbenv].abort()
             self.ReaderTxn.__delitem__(lmdbenv)
@@ -170,14 +172,15 @@ Todo, refactor to avoid the need for these imports to be below TxnRegister,
 if they aren't right now, we get circular imports...
 '''
 
-from .records import commiting, heads
+from .records import commiting, heads, parsing, vcompat
+from .utils import readme_contents
 
 
 class Environments(object):
 
-    def __init__(self, repo_path: os.PathLike):
+    def __init__(self, pth: os.PathLike):
 
-        self.repo_path: os.PathLike = repo_path
+        self.repo_path: os.PathLike = pth
         self.refenv: Optional[lmdb.Environment] = None
         self.hashenv: Optional[lmdb.Environment] = None
         self.stageenv: Optional[lmdb.Environment] = None
@@ -212,12 +215,27 @@ class Environments(object):
         bool
             False if no repository exists at the given path, otherwise True
 
+        Warns
+        -----
+        UserWarning
+            Should the repository not exist at the provided repo path.
+
+        Raises
+        ------
+        RuntimeError
+            If the repository version is not compatible with the current software.
         '''
-        if not os.path.isdir(self.repo_path):
-            msg = f'HANGAR RUNTIME WARNING: no repository exists at {self.repo_path}, '\
-                  f'please use `init_repo` function'
-            logger.warning(msg)
+        if not os.path.isfile(pjoin(self.repo_path, c.LMDB_BRANCH_NAME)):
+            msg = f'No repository exists at {self.repo_path}, please use `repo.init()` method'
+            warnings.warn(msg, UserWarning)
             return False
+
+        repo_ver = vcompat.startup_check_repo_version(self.repo_path)
+        curr_ver = parsing.repo_version_raw_spec_from_raw_string(v_str=__version__)
+        if not vcompat.is_repo_software_version_compatible(repo_ver, curr_ver):
+            msg = f'repository written version: {repo_ver} is not comatible '\
+                  f'with the current Hangar software version: {curr_ver}'
+            raise RuntimeError(msg)
 
         self._open_environments()
         return True
@@ -249,11 +267,11 @@ class Environments(object):
             If a hangar repository exists at the specified path, and `remove_old`
             was not set to ``True``.
         '''
-        if os.path.isdir(self.repo_path):
+        if os.path.isfile(pjoin(self.repo_path, c.LMDB_BRANCH_NAME)):
             if remove_old is True:
                 shutil.rmtree(self.repo_path)
             else:
-                raise OSError(f'invariant dir: {self.repo_path} already exists')
+                raise OSError(f'Hangar Directory: {self.repo_path} already exists')
 
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STORE))
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STAGE))
@@ -262,10 +280,15 @@ class Environments(object):
         logger.info(f'Hangar Repo initialized at: {self.repo_path}')
 
         userConf = {'name': user_name, 'email': user_email}
-        with open(os.path.join(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
+        with open(pjoin(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
             yaml.safe_dump(userConf, f, default_flow_style=False)
 
+        readmeTxt = readme_contents(user_name, user_email)
+        with open(pjoin(self.repo_path, c.README_FILE_NAME), 'w') as f:
+            f.write(readmeTxt.getvalue())
+
         self._open_environments()
+        vcompat.set_repository_software_version(branchenv=self.branchenv, ver_str=__version__)
         heads.create_branch(self.branchenv, 'master', '')
         heads.set_staging_branch_head(self.branchenv, 'master')
         return self.repo_path

@@ -1,8 +1,28 @@
+# parsing constants
+
+SEP_KEY = ':'
+SEP_LST = ' '
+SEP_CMT = ' << '
+SEP_SLC = "*"
+SEP_HSH = '$'
+
+K_INT = f'#'
+K_BRANCH = f'branch{SEP_KEY}'
+K_HEAD = 'head'
+K_REMOTES = f'remote{SEP_KEY}'
+K_STGARR = f'a{SEP_KEY}'
+K_STGMETA = f'l{SEP_KEY}'
+K_SCHEMA = f's{SEP_KEY}'
+K_HASH = f'h{SEP_KEY}'
+K_WLOCK = f'writerlock{SEP_KEY}'
+K_VERSION = 'software_version'
+
+WLOCK_SENTINAL = 'LOCK_AVAILABLE'
 
 # directory names
 
-DIR_HANGAR = '__hangar'
-DIR_HANGAR_SERVER = '__hangar_server'
+DIR_HANGAR = '.hangar'
+DIR_HANGAR_SERVER = '.hangar_server'
 DIR_DATA = 'data'
 DIR_DATA_STORE = 'store_data'
 DIR_DATA_STAGE = 'stage_data'
@@ -30,22 +50,7 @@ LMDB_BRANCH_NAME = 'branch.lmdb'
 LMDB_STAGE_REF_NAME = 'stage_ref.lmdb'
 LMDB_STAGE_HASH_NAME = 'stage_hash.lmdb'
 
-# parsing constants
 
-SEP_KEY = ':'
-SEP_LST = ' '
-SEP_CMT = ' << '
-SEP_SLC = "*"
-SEP_HSH = '$'
+# readme file
 
-K_INT = f'#'
-K_BRANCH = f'branch{SEP_KEY}'
-K_HEAD = 'head'
-K_REMOTES = f'remote{SEP_KEY}'
-K_STGARR = f'a{SEP_KEY}'
-K_STGMETA = f'l{SEP_KEY}'
-K_SCHEMA = f's{SEP_KEY}'
-K_HASH = f'h{SEP_KEY}'
-K_WLOCK = f'writerlock{SEP_KEY}'
-
-WLOCK_SENTINAL = 'LOCK_AVAILABLE'
+README_FILE_NAME = 'README.txt'

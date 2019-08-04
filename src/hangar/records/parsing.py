@@ -30,12 +30,120 @@ def generate_sample_name() -> str:
 Parsing functions used to deal with repository state The parsers defined in this
 section handle repo/branch records.
 
+Methods working with repository version specifiers
+--------------------------------------------------
+'''
 
+VersionSpec = NamedTuple('VersionSpec', [
+    ('major', int),
+    ('minor', int),
+    ('micro', int),
+])
+
+
+def repo_version_raw_spec_from_raw_string(v_str: str) -> VersionSpec:
+    '''Convert from user facing string representation to VersionSpec NamedTuple
+
+    Parameters
+    ----------
+    v_str : str
+        concatenated string with '.' between each `major`, `minor`, `micro` field
+        in semantic version style.
+
+    Returns
+    -------
+    VersionSpec
+        NamedTuple containing int fileds of `major`, `minor`, `micro` version.
+    '''
+    smajor, sminor, smicro = v_str.split('.')
+    res = VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro))
+    return res
+
+
+def repo_version_raw_string_from_raw_spec(v_spec: VersionSpec) -> str:
+    '''Convert from VersionSpec NamedTuple to user facing string representation.
+
+    version string always seperated by `.`
+
+    Parameters
+    ----------
+    v_spec : VersionSpec
+        NamedTuple containing int fields of `major`, `minor`, `micro` version
+        in semantic version style.
+
+    Returns
+    -------
+    str
+        concatenated string with '.' between each major, minor, micro
+    '''
+    res = f'{v_spec.major}.{v_spec.minor}.{v_spec.micro}'
+    return res
+
+
+# ------------------------- db version key is fixed -----------------
+
+
+def repo_version_db_key() -> bytes:
+    '''The db formated key which version information can be accessed at
+
+    Returns
+    -------
+    bytes
+        db formatted key to use to get/set the repository software version.
+    '''
+    db_key = c.K_VERSION.encode()
+    return db_key
+
+
+# ------------------------ raw -> db --------------------------------
+
+
+def repo_version_db_val_from_raw_val(v_spec: VersionSpec) -> bytes:
+    '''determine repository version db specifier from version spec.
+
+    Parameters
+    ----------
+    v_spec : VersionSpec
+        NamedTuple containing int fields of `major`, `minor`, `micro` version
+        in semantic version style
+
+    Returns
+    -------
+    bytes
+        db formatted specification of version
+    '''
+    db_val = f'{v_spec.major}{c.SEP_KEY}{v_spec.minor}{c.SEP_KEY}{v_spec.micro}'
+    return db_val.encode()
+
+
+# ---------------------------- db -> raw ----------------------------
+
+
+def repo_version_raw_val_from_db_val(db_val: bytes) -> VersionSpec:
+    '''determine software version of hangar repository is writter for.
+
+    Parameters
+    ----------
+    db_val : bytes
+        db formatted specification of version string
+
+    Returns
+    -------
+    VersionSpec
+        NamedTuple containing major, minor, micro fields as ints.
+    '''
+    db_str = db_val.decode()
+    smajor, sminor, smicro = db_str.split(c.SEP_KEY)
+    res = VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro))
+    return res
+
+
+'''
 Methods working with writer HEAD branch name
 --------------------------------------------
 '''
 
-# --------------------- db HEAD key is fixed ----------------------
+# --------------------- db HEAD key is fixed ------------------------
 
 
 def repo_head_db_key() -> bytes:
@@ -50,13 +158,15 @@ def repo_head_db_key() -> bytes:
     return db_key
 
 
-# --------------------- raw -> db --------------------------------
+# --------------------- raw -> db -----------------------------------
 
 
 def repo_head_db_val_from_raw_val(branch_name: str) -> bytes:
     db_val = f'{c.K_BRANCH}{branch_name}'.encode()
     return db_val
 
+
+# --------------------- db -> raw -----------------------------------
 
 def repo_head_raw_val_from_db_val(db_val: str) -> bytes:
     raw_val = db_val.decode().replace(c.K_BRANCH, '', 1)
@@ -460,11 +570,16 @@ Functions to convert metadata records to/from python objects
 -------------------------------------------------------------
 '''
 
+MetadataRecordKey = NamedTuple('MetadataRecordKey', [('meta_name', Union[str, int])])
+MetadataRecordKey.__doc__ = 'Represents a Metadata Sample Record Key'
+
+MetadataRecordVal = NamedTuple('MetadataRecordVal', [('meta_hash', str)])
+MetadataRecordVal.__doc__ = 'Represents a Metadata Sample Record Hash Value'
 
 # -------------------- db -> raw (python) -----------------------------
 
 
-def metadata_record_raw_key_from_db_key(db_key: bytes) -> Union[str, int]:
+def metadata_record_raw_key_from_db_key(db_key: bytes) -> MetadataRecordKey:
     '''Convert and split a lmdb record key & value into python objects
 
     Parameters
@@ -474,16 +589,16 @@ def metadata_record_raw_key_from_db_key(db_key: bytes) -> Union[str, int]:
 
     Returns
     -------
-    Union[str, int]
+    MetadataRecordKey
         the metadata name
     '''
     meta_name = db_key.decode().replace(c.K_STGMETA, '', 1)
     if meta_name.startswith(c.K_INT):
         meta_name = int(meta_name.lstrip(c.K_INT))
-    return meta_name
+    return MetadataRecordKey(meta_name)
 
 
-def metadata_record_raw_val_from_db_val(db_val: bytes) -> str:
+def metadata_record_raw_val_from_db_val(db_val: bytes) -> MetadataRecordVal:
     '''Convert and split a lmdb record value into python objects
 
     Parameters
@@ -493,11 +608,11 @@ def metadata_record_raw_val_from_db_val(db_val: bytes) -> str:
 
     Returns
     -------
-    str
-        string containing the metadata hash
+    MetadataRecordVal
+        containing the metadata hash
     '''
     meta_hash = db_val.decode()
-    return meta_hash
+    return MetadataRecordVal(meta_hash)
 
 
 # -------------------- raw (python) -> db -----------------------------
