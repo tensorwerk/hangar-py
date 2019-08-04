@@ -44,7 +44,8 @@ class ReaderCheckout(object):
         specific commit hash to checkout
     '''
 
-    def __init__(self, base_path: os.PathLike, labelenv: lmdb.Environment,
+    def __init__(self,
+                 base_path: os.PathLike, labelenv: lmdb.Environment,
                  dataenv: lmdb.Environment, hashenv: lmdb.Environment,
                  branchenv: lmdb.Environment, refenv: lmdb.Environment,
                  commit: str):
@@ -197,12 +198,12 @@ class ReaderCheckout(object):
 
         for attr in list(self._datasets.__dir__()):
             with suppress(AttributeError, TypeError):
-                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
+                # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                 delattr(self._datasets, f'_self_{attr}')
 
         for attr in list(self._metadata.__dir__()):
             with suppress(AttributeError, TypeError):
-                # adding `_self_` addresses `WeakrefProxy` wrapped by `ObjectProxy`
+                # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                 delattr(self._metadata, f'_self_{attr}')
 
         del self._datasets
@@ -678,13 +679,13 @@ class WriterCheckout(object):
 
             for attr in list(self._datasets.__dir__()):
                 with suppress(AttributeError, TypeError):
-                    # prepending `_self_` addresses `WeakrefProxy` in `ObjectPRoxy`
+                    # prepending `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                     delattr(self._datasets, f'_self_{attr}')
 
         if hasattr(self, '_metadata') and (getattr(self, '_datasets') is not None):
             for attr in list(self._metadata.__dir__()):
                 with suppress(AttributeError, TypeError):
-                    # prepending `_self_` addresses `WeakrefProxy` in `ObjectPRoxy`
+                    # prepending `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                     delattr(self._metadata, f'_self_{attr}')
 
         with suppress(AttributeError):
