@@ -2,13 +2,18 @@ import logging
 import os
 import random
 import re
+import time
 import string
 import weakref
+from io import StringIO
 from functools import partial
 from typing import Union, Any
 
 import blosc
 import wrapt
+
+from . import __version__
+from .constants import DIR_HANGAR
 
 logger = logging.getLogger(__name__)
 
@@ -344,3 +349,45 @@ def parse_bytes(s: str) -> int:
     n = float(s[:i + 1])
     mult = _byte_sizes[s[i + 1:]]
     return int(n * mult)
+
+
+def readme_contents(user_name: str, user_email: str) -> StringIO:
+    '''Create the Hangar README.txt contents used to fill out file on repo initialization
+
+    Parameters
+    ----------
+    user_name : str
+        name of the user initializing the repository on the machine.
+    user_email : str
+        email of the user initializing the repository on the machine.
+
+    Returns
+    -------
+    StringIO
+        Buffered string text ready to be sent to a file writer.
+    '''
+    buf = StringIO()
+    buf.write(f'This directory has been used to initialize a Hangar Repository\n')
+    buf.write(f'\n')
+    buf.write(f'This repository was initialized by:\n')
+    buf.write(f'    User Name:        {user_name}\n')
+    buf.write(f'    User Email:       {user_email}\n')
+    buf.write(f'    Creation Time:    {time.asctime(time.gmtime())} UTC\n')
+    buf.write(f'    Software Version: {__version__}\n')
+    buf.write(f'\n')
+    buf.write(f'NOTE: The repository may have been updated to work with newer Hangar versions\n')
+    buf.write(f'since initialization.\n')
+    buf.write(f'\n')
+    buf.write(f'Do not modify the contents of this `{DIR_HANGAR}` folder under any circumstances.\n')
+    buf.write(f'The contents are not meant to be understood by humans. Doing so will result\n')
+    buf.write(f'in data loss / corruption.\n')
+    buf.write(f'\n')
+    buf.write(f'The project homepage can be found at: https://github.com/tensorwerk/hangar-py/ \n')
+    buf.write(f'Documention is available at: https://hangar-py.readthedocs.io/en/latest/ \n')
+    buf.write(f'\n')
+    buf.write(f'NOTE: If this Repository has been initialized in a directory under traditional\n')
+    buf.write(f'version control systems, please add `{DIR_HANGAR}` as an ignored directory path.\n')
+    buf.write(f'Failure to do so will result in undesireable performance of version control\n')
+    buf.write(f'systems meant for text/code such as Git, Mercurial, Subversion, etc.\n')
+
+    return buf

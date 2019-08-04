@@ -31,7 +31,7 @@ Let’s initialize a new repository and see how branching works in Hangar
 
    >>> repo = Repository(path='/foo/bar/path')
    >>> repo.init(user_name='Rick Izzo', user_email='hangar.info@tensorwerk.com', remove_old=True)
-   Hangar Repo initialized at: /foo/bar/path/__hangar
+   Hangar Repo initialized at: /foo/bar/path/.hangar
 
 
 When a repository is first initialized, it has no history, no commits.

@@ -14,7 +14,7 @@ def test_starting_up_repo_warns_should_exist_no_args(managed_tmpdir):
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     assert repo.list_branches() == ['master']
     assert os.path.isdir(repo._repo_path)
-    assert repo._repo_path == os.path.join(managed_tmpdir, '__hangar')
+    assert repo._repo_path == os.path.join(managed_tmpdir, '.hangar')
     co = repo.checkout(write=True)
     assert co.diff.status() == 'CLEAN'
     co.close()
@@ -26,7 +26,7 @@ def test_starting_up_repo_warns_should_exist_manual_args(managed_tmpdir):
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     assert repo.list_branches() == ['master']
     assert os.path.isdir(repo._repo_path)
-    assert repo._repo_path == os.path.join(managed_tmpdir, '__hangar')
+    assert repo._repo_path == os.path.join(managed_tmpdir, '.hangar')
     co = repo.checkout(write=True)
     assert co.diff.status() == 'CLEAN'
     co.close()
@@ -41,7 +41,7 @@ def test_starting_up_repo_does_not_warn_not_exist_manual_args(managed_tmpdir):
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     assert repo.list_branches() == ['master']
     assert os.path.isdir(repo._repo_path)
-    assert repo._repo_path == os.path.join(managed_tmpdir, '__hangar')
+    assert repo._repo_path == os.path.join(managed_tmpdir, '.hangar')
     co = repo.checkout(write=True)
     assert co.diff.status() == 'CLEAN'
     co.close()

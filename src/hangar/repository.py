@@ -78,7 +78,7 @@ class Repository(object):
         '''
         self.__verify_repo_initialized()
         res = f'Hangar {self.__class__.__name__}\
-               \n    Repository Path  : {self._repo_path}\
+               \n    Repository Path  : {os.path.dirname(self._repo_path)}\
                \n    Writer-Lock Free : {heads.writer_lock_held(self._env.branchenv)}\n'
         p.text(res)
 
@@ -137,7 +137,7 @@ class Repository(object):
         Returns
         -------
         os.PathLike
-            path to the specified repository, not including `__hangar` directory
+            path to the specified repository, not including `.hangar` directory
         '''
         return os.path.dirname(self._repo_path)
 

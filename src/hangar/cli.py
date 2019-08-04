@@ -18,14 +18,19 @@ import time
 
 import click
 
+import hangar
 from hangar import Repository
 from hangar import serve
 from hangar.records.commiting import expand_short_commit_digest
 
 
-@click.group(no_args_is_help=True, add_help_option=True)
+@click.group(no_args_is_help=True, add_help_option=True, invoke_without_command=True)
+@click.option('--version', '-v', is_flag=True, default=False, required=False,
+              help='display the Hangar version currently installed')
 @click.pass_context
-def main(ctx):
+def main(ctx, version):
+    if version:
+        click.echo(hangar.__version__)
     pass
 
 

@@ -19,7 +19,8 @@ from hangar import Repository, cli
 help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '\n'\
            'Options:\n'\
-           '  --help  Show this message and exit.\n'\
+           '  -v, --version  display the Hangar version currently installed\n'\
+           '  --help         Show this message and exit.\n'\
            '\n'\
            'Commands:\n'\
            '  branch      operate on and list branch pointers.\n'\
@@ -42,6 +43,22 @@ def test_help():
     res = runner.invoke(cli.main, ['--help'])
     assert res.exit_code == 0
     assert res.stdout == help_res
+
+
+def test_version_long_option():
+    import hangar
+    runner = CliRunner()
+    res = runner.invoke(cli.main, ['--version'])
+    assert res.exit_code == 0
+    assert res.stdout == f'{hangar.__version__}\n'
+
+
+def test_version_short_option():
+    import hangar
+    runner = CliRunner()
+    res = runner.invoke(cli.main, ['-v'])
+    assert res.exit_code == 0
+    assert res.stdout == f'{hangar.__version__}\n'
 
 
 def test_init_repo():

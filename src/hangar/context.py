@@ -171,6 +171,7 @@ if they aren't right now, we get circular imports...
 '''
 
 from .records import commiting, heads
+from .utils import readme_contents
 
 
 class Environments(object):
@@ -265,8 +266,12 @@ class Environments(object):
         logger.info(f'Hangar Repo initialized at: {self.repo_path}')
 
         userConf = {'name': user_name, 'email': user_email}
-        with open(os.path.join(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
+        with open(pjoin(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
             yaml.safe_dump(userConf, f, default_flow_style=False)
+
+        readmeTxt = readme_contents(user_name, user_email)
+        with open(pjoin(self.repo_path, c.README_FILE_NAME), 'w') as f:
+            f.write(readmeTxt.getvalue())
 
         self._open_environments()
         heads.create_branch(self.branchenv, 'master', '')

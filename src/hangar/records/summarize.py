@@ -148,7 +148,7 @@ def summary(env, *, branch='', commit=''):
     buf.write(f'================== \n')
     buf.write(f'| Repository Info \n')
     buf.write(f'|----------------- \n')
-    buf.write(f'|  Directory: {env.repo_path} \n')
+    buf.write(f'|  Base Directory: {os.path.dirname(env.repo_path)} \n')
     buf.write(f'|  Disk Usage: {humanBytes} \n')
     buf.write(f' \n')
 

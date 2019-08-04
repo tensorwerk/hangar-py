@@ -293,11 +293,11 @@ class WriterCheckout(object):
         '''pretty repr for printing in jupyter notebooks
         '''
         self.__acquire_writer_lock()
-        res = f'\n Hangar {self.__class__.__name__}\
-                \n     Writer       : True\
-                \n     Base Branch  : {self._branch_name}\
-                \n     Num Datasets : {len(self._datasets)}\
-                \n     Num Metadata : {len(self._metadata)}\n'
+        res = f'Hangar {self.__class__.__name__}\
+                \n    Writer       : True\
+                \n    Base Branch  : {self._branch_name}\
+                \n    Num Datasets : {len(self._datasets)}\
+                \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
     def __repr__(self):
