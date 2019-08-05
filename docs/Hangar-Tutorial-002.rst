@@ -412,8 +412,8 @@ the ``testbranch`` branch)
 
    >>> co.metadata['hello'] = 'world'
 
-   >>> digest = co.commit('added hellow world metadata')
-   Commit operation requested with message: added hellow world metadata
+   >>> digest = co.commit('added hello world metadata')
+   Commit operation requested with message: added hello world metadata
    (348, 260, 348)
    removing all stage hash records
    Commit completed. Commit hash: ce8a9198d638b8fd89a175486d21d2bb2efabc91
@@ -429,7 +429,7 @@ our first commit anymore
 .. code:: python
 
    >>> repo.log()
-   * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hellow world metadata
+   * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hello world metadata
    * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_datacell` to new value
    * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy datacell
 
@@ -483,7 +483,7 @@ in both diverged branches, and unifies them in a single ``commit``
    >>> repo.log()
    *  dea1aa627933b3efffa03c743c201ee1b41142c8 (master) : merge of testbranch into master
    |\
-   | * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hellow world metadata
+   | * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hello world metadata
    | * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_datacell` to new value
    * | 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (new) : commit on `new` branch adding a sample to dummy_datacell
    |/
@@ -671,7 +671,7 @@ We can verify that history looks as we would expect via the log!
    |\
    * | 4f312b10775c2b0ac51b5f284d2f94e9a8548868 : commit which removes conflicting metadata key
    * | 5e76faba059c156bc9ed181446e104765cb471c3 : commit on new branch to hello metadata key so we can demonstrate a conflict
-   | * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hellow world metadata
+   | * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hello world metadata
    | * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_datacell` to new value
    * | 0cdd8c833f654d18ddc2b089fabee93c32c9c155 : commit on `new` branch adding a sample to dummy_datacell
    |/

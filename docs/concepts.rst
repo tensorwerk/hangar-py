@@ -91,7 +91,7 @@ post.
 History exists at the Repository level, Information exists at the Commit level.
 
 Abstraction 1: What is a Dataset?
-==================================
+=================================
 
 Let's get philosophical and talk about what a "Dataset" is. The word "Dataset"
 invokes some some meaning to humans; A dataset may have a canonical name (like
@@ -134,16 +134,15 @@ each samples
 *A single scan is a bunch of disparate information stuck together, many of
 those put together makes a Dataset, but looking down from the top, we identify
 pattern of common fields across all items. We call these groupings of similar
-typed information: **``Datacells``**.*
-
-
+typed information:* **Datacells**.
 
 Abstraction 2: What Makes up a Datacell?
 ========================================
 
 A ``Dataset`` is made of one or more ``Datacells`` (and optionally some
-``Metadata``), with each item placed in some ``Datacell`` belonging to some
-``Sample``. Remember, full record instance in a ``Dataset`` may consist of
+``Metadata``), with each item placed in some ``Datacell`` belonging to and
+making up an individual ``Sample``. It is important to remember that all data
+needed to fully describe a single ``sample`` in a ``Dataset`` may consist of
 information spread across any number of ``Datacells``. To define a ``Datacell``
 in Hangar, we need only provide:
 
@@ -154,45 +153,28 @@ in Hangar, we need only provide:
 The individual pieces of information (``Data``) which fully describe some
 phenomenon via an aggregate mapping access across any number of "Datacells" are
 both individually and collectively referred to as ``Samples`` in the Hangar
-vernacular.
+vernacular. According to the specification above, all samples contained in a
+``Datacell`` must be numeric arrays with each having:
 
-According to the specification above, all samples contained in a ``Datacell``
-must be numeric arrays with each having:
-
-1) Same data type (standard ``Numpy`` data types are supported).
+1) Same data type (standard ``numpy`` data types are supported).
 2) A shape with each dimension size <= the shape (``max shape``) set in the
-   datacell specification (more on this later).
+   ``datacell`` specification (more on this later).
 
-Additionally, samples in a datacell can either be named, or unnamed (depending
-on how you interpret what the information contained in the Datacell actually
-represents).
+Additionally, samples in a ``datacell`` can either be named, or unnamed
+(depending on how you interpret what the information contained in the
+``datacell`` actually represents).
+
+
 
 Effective use of Hangar relies on having an understanding of what exactly a
-``"Sample"`` is in a particular Datacell. The most effective way to find out is
-to ask: "What is the smallest piece of data which has a useful meaning to 'me'
-(or 'my' downstream processes". In the MNIST datacell, this would be a single
-digit image (a 28x28 array); for a medical datacell it might be an entire
-(512x320x320) MRI volume scan for a particular patient; while for the NASDAQ
-Stock Ticker it might be an hours worth of price data points (or less, or
-more!) The point is that when you think about what a sample is, it should
-typically be the smallest atomic unit of useful information.
-
-.. note::
-
-    The technical crowd among the readers should note:
-
-    * Hangar preserves all sample data bit-exactly.
-    * Dense arrays are fully supported, Sparse array support is currently
-      under development and will be released soon.
-    * Integrity checks are built in by default (explained in more detail in
-      :ref:`ref-hangar-under-the-hood`.) using cryptographically secure
-      algorithms.
-    * Hangar is very much a young project, until penetration tests and
-      security reviews are performed, we will refrain from stating that hangar
-      is fully "cryptographically secure". Security experts are welcome to
-      contact us privately at `hangar.info@tensorwerk.com
-      <hangar.info@tensorwerk.com>`__ to disclose any security issues.
-
+``"Sample"`` is in a particular ``Datacell``. The most effective way to find
+out is to ask: "What is the smallest piece of data which has a useful meaning
+to 'me' (or 'my' downstream processes". In the MNIST ``datacell``, this would
+be a single digit image (a 28x28 array); for a medical ``datacell`` it might be
+an entire (512x320x320) MRI volume scan for a particular patient; while for the
+NASDAQ Stock Ticker it might be an hours worth of price data points (or less,
+or more!) The point is that **when you think about what a ``sample`` is, it
+should typically be the smallest atomic unit of useful information.**
 
 Abstraction 3: What is Data?
 ============================
@@ -204,6 +186,44 @@ file type, it does not have a file-extension, it does not mean anything to
 Hangar itself - it is just numbers. This theory of "Data" is nearly as simple
 as it gets, and this simplicity is what enables us to be unconstrained as we
 build abstractions and utilities to operate on it.
+
+Summary
+=======
+
+.. code-block:: text
+
+   A Dataset is thought of as containing Samples, but is actually defined
+    by Datacells which store parts of fully defined Sample in structures
+       common across the full aggregation of Samples in the Dataset
+
+   _____________________________________
+         S1     |    S2    |     S3     |  <------------------------|
+   --------------------------------------                           |
+       image    |  image   |   image    |  <- Datacell 1  <--|      |
+     filename   | filename |  filename  |  <- Datacell 2  <--|-- Dataset
+       label    |  label   |   label    |  <- Datacell 3  <--|
+     annotation |    -     | annotation |  <- Datacell 4  <--|
+
+
+   If a sample does not have a piece of data, lack of info in the Datacell
+         makes no difference in any way to the larger picture.
+
+
+.. note::
+
+   The technical crowd among the readers should note:
+
+      * Hangar preserves all sample data bit-exactly.
+      * Dense arrays are fully supported, Sparse array support is currently
+        under development and will be released soon.
+      * Integrity checks are built in by default (explained in more detail in
+        :ref:`ref-hangar-under-the-hood`.) using cryptographically secure
+        algorithms.
+      * Hangar is very much a young project, until penetration tests and
+        security reviews are performed, we will refrain from stating that hangar
+        is fully "cryptographically secure". Security experts are welcome to
+        contact us privately at `hangar.info@tensorwerk.com
+        <hangar.info@tensorwerk.com>`__ to disclose any security issues.
 
 
 ******************************************
