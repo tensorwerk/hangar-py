@@ -1,13 +1,13 @@
 
-class GroupedDsets:
-    """
-    Groups all the hangar datasets and provide convenient functionalities to validate the
-    datasets for downstream usage in the dataloaders. It can choose a subset of samples
-    in the hangar datasets by checking the list of keys or an index range. :class:`GroupedDsets`
-    expect all the input hangar datasets to have same length and same keys. Although it checks
-    for the length of all the datasets, it doesn't do any explicit check for the sample names
-    and hence the dataloaders while fetching the data will throw `KeyError` in case of
-    non-similar keys.
+class GroupedDsets(object):
+    """Groups hangar datasets and validate suitability for usage in dataloaders.
+
+    It can choose a subset of samples in the hangar datasets by checking the
+    list of keys or an index range. :class:`GroupedDsets` expect all the input
+    hangar datasets to have same length and same keys. Although it checks for
+    the length of all the datasets, it doesn't do any explicit check for the
+    sample names and hence the dataloaders while fetching the data will throw
+    `KeyError` in case of non-similar keys.
     """
 
     def __init__(self, hangar_datasets, keys=None, index_range=None):
@@ -18,8 +18,9 @@ class GroupedDsets:
         except IndexError:
             raise
         except Exception:
-            raise TypeError("`hangar_datasets` has to be a valid hangar dataset or an"
-                            "iterable that can hold other objects, like a list / tuple etc.")
+            raise TypeError(
+                "`hangar_datasets` has to be a valid hangar dataset or an"
+                "iterable that can hold other objects, like a list / tuple etc.")
         dataset_names = []
         for dset in hangar_datasets:
             # TODO: probably don't have to check if the index doesn't exceed the minimum dimension

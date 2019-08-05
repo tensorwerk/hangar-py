@@ -103,9 +103,8 @@ class TestTfDataLoader(object):
             assert dset2.shape == tf.TensorShape((6, 5, 7))
 
     def test_variably_shaped(self, variable_shape_written_repo):
-        # Variably shaped test is required since the collation
-        # is dependant on the way we return the data from
-        # generator
+        # Variably shaped test is required since the collation is dependent on
+        # the way we return the data from generator
         repo = variable_shape_written_repo
         co = repo.checkout(write=True)
         dset = co.datasets['_dset']

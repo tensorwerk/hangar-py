@@ -21,13 +21,12 @@ def read(*names, **kwargs):
 
 
 extra_require = {
-        'dev': [
-            'grpcio_tools',
-            'mypy>=0.701',
-            'mypy-protobuf',
-        ],
-        'all': []
-    }
+    'dev': [
+        'grpcio_tools',
+        'mypy>=0.701',
+        'mypy-protobuf',
+    ]
+}
 
 for _, packages in extra_require.items():
     extra_require['all'].extend(packages)
