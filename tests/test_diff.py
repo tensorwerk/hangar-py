@@ -42,8 +42,8 @@ class TestReaderDiff(object):
 
         # mutating and removing data from testbranch
         testco = repo.checkout(write=True, branch='testbranch')
-        testco.cellstores['dummy']['1'] = dummyData
-        del testco.cellstores['dummy']['2']
+        testco.datacells['dummy']['1'] = dummyData
+        del testco.datacells['dummy']['2']
         testco.commit("mutation and removal")
         testco.close()
 
@@ -66,8 +66,8 @@ class TestReaderDiff(object):
 
         # mutating and removing data from testbranch
         testco = repo.checkout(write=True, branch='testbranch')
-        testco.cellstores['dummy']['1'] = dummyData
-        del testco.cellstores['dummy']['2']
+        testco.datacells['dummy']['1'] = dummyData
+        del testco.datacells['dummy']['2']
         testco.commit("mutation and removal")
         testco.close()
 
@@ -78,11 +78,11 @@ class TestReaderDiff(object):
 
         diffs = diffdata[0]
 
-        # testing cellstores and metadata that has no change
-        assert diffs['cellstores']['dev']['additions'] == {}
-        assert diffs['cellstores']['dev']['mutations'] == {}
-        assert diffs['cellstores']['dev']['removals'] == {}
-        assert 'dummy' in diffs['cellstores']['master']['unchanged'].keys()
+        # testing datacells and metadata that has no change
+        assert diffs['datacells']['dev']['additions'] == {}
+        assert diffs['datacells']['dev']['mutations'] == {}
+        assert diffs['datacells']['dev']['removals'] == {}
+        assert 'dummy' in diffs['datacells']['master']['unchanged'].keys()
         assert create_meta_nt('foo' ) in diffs['metadata']['dev']['additions'].keys()
         assert len(diffs['metadata']['master']['additions'].keys()) == 0
         assert create_meta_nt('hello') in diffs['metadata']['master']['unchanged'].keys()
@@ -109,14 +109,14 @@ class TestReaderDiff(object):
         # adding data in master
         co = repo.checkout(write=True)
         dummyData[:] = 123
-        co.cellstores['dummy']['55'] = dummyData
+        co.datacells['dummy']['55'] = dummyData
         co.commit('Adding data in master')
         co.close()
 
         # adding data in testbranch
         co = repo.checkout(write=True, branch='testbranch')
         dummyData[:] = 234
-        co.cellstores['dummy']['55'] = dummyData
+        co.datacells['dummy']['55'] = dummyData
         co.commit('adding data in testbranch')
         co.close()
 
@@ -133,14 +133,14 @@ class TestReaderDiff(object):
         dummyData[:] = 123
         repo = repo_1_br_no_conf
         co = repo.checkout(write=True)
-        del co.cellstores['dummy']['6']
-        co.cellstores['dummy']['7'] = dummyData
+        del co.datacells['dummy']['6']
+        co.datacells['dummy']['7'] = dummyData
         co.commit('removal & mutation in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.cellstores['dummy']['6'] = dummyData
-        del co.cellstores['dummy']['7']
+        co.datacells['dummy']['6'] = dummyData
+        del co.datacells['dummy']['7']
         co.commit('removal & mutation in dev')
         co.close()
 
@@ -158,13 +158,13 @@ class TestReaderDiff(object):
         dummyData[:] = 123
         repo = repo_1_br_no_conf
         co = repo.checkout(write=True)
-        co.cellstores['dummy']['7'] = dummyData
+        co.datacells['dummy']['7'] = dummyData
         co.commit('mutation in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         dummyData[:] = 234
-        co.cellstores['dummy']['7'] = dummyData
+        co.datacells['dummy']['7'] = dummyData
         co.commit('mutation in dev')
         co.close()
 
@@ -180,12 +180,12 @@ class TestReaderDiff(object):
 
         repo.create_branch('testbranch')
         co = repo.checkout(write=True)
-        co.cellstores.init_cellstore(name='testing_dset', shape=(5, 7), dtype=np.float64)
+        co.datacells.init_datacell(name='testing_dset', shape=(5, 7), dtype=np.float64)
         co.commit('dset init in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.cellstores.init_cellstore(name='testing_dset', shape=(7, 7), dtype=np.float64)
+        co.datacells.init_datacell(name='testing_dset', shape=(7, 7), dtype=np.float64)
         co.commit('dset init in dev')
         co.close()
 
@@ -199,23 +199,23 @@ class TestReaderDiff(object):
         # t21 and t22
         repo = written_repo
         co = repo.checkout(write=True)
-        co.cellstores.init_cellstore(name='testing_dset1', shape=(5, 7), dtype=np.float64)
-        co.cellstores.init_cellstore(name='testing_dset2', shape=(5, 7), dtype=np.float64)
+        co.datacells.init_datacell(name='testing_dset1', shape=(5, 7), dtype=np.float64)
+        co.datacells.init_datacell(name='testing_dset2', shape=(5, 7), dtype=np.float64)
         co.commit('added dsets')
         co.close()
         repo.create_branch('testbranch')
 
         co = repo.checkout(write=True)
-        del co.cellstores['testing_dset1']
-        del co.cellstores['testing_dset2']
-        co.cellstores.init_cellstore(name='testing_dset2', shape=(5, 7), dtype=np.float32)
+        del co.datacells['testing_dset1']
+        del co.datacells['testing_dset2']
+        co.datacells.init_datacell(name='testing_dset2', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        del co.cellstores['testing_dset1']
-        del co.cellstores['testing_dset2']
-        co.cellstores.init_cellstore(name='testing_dset1', shape=(5, 7), dtype=np.float32)
+        del co.datacells['testing_dset1']
+        del co.datacells['testing_dset2']
+        co.datacells.init_datacell(name='testing_dset1', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from dev')
         co.close()
 
@@ -231,20 +231,20 @@ class TestReaderDiff(object):
         # t3
         repo = written_repo
         co = repo.checkout(write=True)
-        co.cellstores.init_cellstore(name='testing_dset', shape=(5, 7), dtype=np.float64)
+        co.datacells.init_datacell(name='testing_dset', shape=(5, 7), dtype=np.float64)
         co.commit('added dset')
         co.close()
         repo.create_branch('testbranch')
 
         co = repo.checkout(write=True)
-        del co.cellstores['testing_dset']
-        co.cellstores.init_cellstore(name='testing_dset', shape=(7, 7), dtype=np.float64)
+        del co.datacells['testing_dset']
+        co.datacells.init_datacell(name='testing_dset', shape=(7, 7), dtype=np.float64)
         co.commit('mutation from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        del co.cellstores['testing_dset']
-        co.cellstores.init_cellstore(name='testing_dset', shape=(5, 7), dtype=np.float32)
+        del co.datacells['testing_dset']
+        co.datacells.init_datacell(name='testing_dset', shape=(5, 7), dtype=np.float32)
         co.commit('mutation from dev')
         co.close()
 
@@ -319,8 +319,8 @@ class TestReaderDiff(object):
         repo = written_repo
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='testbranch')
-        dset = co.cellstores['_dset']
-        dset2 = co.cellstores.init_cellstore('dset2', prototype=array5by7)
+        dset = co.datacells['_dset']
+        dset2 = co.datacells.init_datacell('dset2', prototype=array5by7)
         dset2[1] = array5by7
         with dset, co.metadata:
             dset[100] = array5by7
@@ -330,10 +330,10 @@ class TestReaderDiff(object):
             co.commit('another commit inside cm')
         co.close()
         co = repo.checkout(branch='testbranch')
-        assert np.allclose(co.cellstores['_dset'][101], array5by7)
+        assert np.allclose(co.datacells['_dset'][101], array5by7)
         diff = co.diff.branch('master')[0]
         assert create_meta_nt('crazykey') in diff['metadata']['master']['additions'].keys()
-        assert 'dset2' in diff['cellstores']['master']['additions'].keys()
+        assert 'dset2' in diff['datacells']['master']['additions'].keys()
         for record in diff['samples']['master']['_dset']['additions']:
             assert record.data_name in [100, 101]
         co.close()
@@ -360,7 +360,7 @@ class TestWriterDiff(object):
             co.diff.status()  # Read checkout doesn't have status()
 
         co = repo.checkout(write=True)
-        co.cellstores['_dset']['45'] = dummyData
+        co.datacells['_dset']['45'] = dummyData
         assert co.diff.status() == 'DIRTY'
         diffs = co.diff.staged()[0]
         for key in diffs['samples']['master']['_dset']['additions'].keys():
@@ -372,11 +372,11 @@ class TestWriterDiff(object):
     def test_status_and_staged_dset(self, written_repo):
         repo = written_repo
         co = repo.checkout(write=True)
-        co.cellstores.init_cellstore(name='sampledset', shape=(3, 5), dtype=np.float32)
+        co.datacells.init_datacell(name='sampledset', shape=(3, 5), dtype=np.float32)
         assert co.diff.status() == 'DIRTY'
         diff = co.diff.staged()[0]
-        assert 'sampledset' in diff['cellstores']['master']['additions'].keys()
-        assert '_dset' in diff['cellstores']['master']['unchanged'].keys()
+        assert 'sampledset' in diff['datacells']['master']['additions'].keys()
+        assert '_dset' in diff['datacells']['master']['unchanged'].keys()
         co.commit('init dset')
         assert co.diff.status() == 'CLEAN'
         co.close()

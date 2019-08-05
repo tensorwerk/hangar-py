@@ -10,7 +10,7 @@ from uuid import uuid4
 import lmdb
 
 from . import constants as c
-from .cellstore import Cellstores
+from .datacell import Datacells
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
@@ -84,7 +84,7 @@ class ReaderCheckout(object):
             repo_pth=self._repo_path,
             dataenv=self._dataenv,
             labelenv=self._labelenv)
-        self._cellstores = Cellstores._from_commit(
+        self._datacells = Datacells._from_commit(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             cmtrefenv=self._dataenv)
@@ -101,7 +101,7 @@ class ReaderCheckout(object):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : False\
                 \n    Commit Hash  : {self._commit_hash}\
-                \n    Num Cellstores : {len(self._cellstores)}\
+                \n    Num Datacells : {len(self._datacells)}\
                 \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
@@ -124,7 +124,7 @@ class ReaderCheckout(object):
             if the checkout was previously close
         '''
         p_hasattr = partial(hasattr, self)
-        if not all(map(p_hasattr, ['_metadata', '_cellstores', '_differ'])):
+        if not all(map(p_hasattr, ['_metadata', '_datacells', '_differ'])):
             e = PermissionError(
                 f'Unable to operate on past checkout objects which have been '
                 f'closed. No operation occurred. Please use a new checkout.')
@@ -132,23 +132,23 @@ class ReaderCheckout(object):
             raise e from None
 
     @property
-    def cellstores(self) -> Cellstores:
-        '''Provides access to cellstore interaction object.
+    def datacells(self) -> Datacells:
+        '''Provides access to datacell interaction object.
 
         .. seealso::
 
-            The class :class:`~.cellstore.Cellstores` contains all methods
+            The class :class:`~.datacell.Datacells` contains all methods
             accessible by this property accessor
 
         Returns
         -------
-        Cellstores
-            weakref proxy to the cellstores object which behaves exactly like a
-            cellstores accessor class but which can be invalidated when the writer
+        Datacells
+            weakref proxy to the datacells object which behaves exactly like a
+            datacells accessor class but which can be invalidated when the writer
             lock is released.
         '''
         self.__verify_checkout_alive()
-        wr = cm_weakref_obj_proxy(self._cellstores)
+        wr = cm_weakref_obj_proxy(self._datacells)
         return wr
 
     @property
@@ -213,24 +213,24 @@ class ReaderCheckout(object):
         '''
         self.__verify_checkout_alive()
         with suppress(AttributeError):
-            self._cellstores._close()
+            self._datacells._close()
 
-        for dsetn in (self._cellstores._cellstores.keys()):
-            for attr in list(self._cellstores._cellstores[dsetn].__dir__()):
+        for dsetn in (self._datacells._datacells.keys()):
+            for attr in list(self._datacells._datacells[dsetn].__dir__()):
                 with suppress(AttributeError, TypeError):
-                    delattr(self._cellstores._cellstores[dsetn], attr)
+                    delattr(self._datacells._datacells[dsetn], attr)
 
-        for attr in list(self._cellstores.__dir__()):
+        for attr in list(self._datacells.__dir__()):
             with suppress(AttributeError, TypeError):
                 # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
-                delattr(self._cellstores, f'_self_{attr}')
+                delattr(self._datacells, f'_self_{attr}')
 
         for attr in list(self._metadata.__dir__()):
             with suppress(AttributeError, TypeError):
                 # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                 delattr(self._metadata, f'_self_{attr}')
 
-        del self._cellstores
+        del self._datacells
         del self._metadata
         del self._differ
         del self._commit_hash
@@ -323,7 +323,7 @@ class WriterCheckout(object):
         self._repo_stage_path = pjoin(self._repo_path, c.DIR_DATA_STAGE)
         self._repo_store_path = pjoin(self._repo_path, c.DIR_DATA_STORE)
 
-        self._cellstores: Cellstores = None
+        self._datacells: Datacells = None
         self._differ: WriterUserDiff = None
         self._metadata: MetadataWriter = None
         self.__setup()
@@ -336,7 +336,7 @@ class WriterCheckout(object):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : True\
                 \n    Base Branch  : {self._branch_name}\
-                \n    Num Cellstores : {len(self._cellstores)}\
+                \n    Num Datacells : {len(self._datacells)}\
                 \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
@@ -353,23 +353,23 @@ class WriterCheckout(object):
         return res
 
     @property
-    def cellstores(self) -> Cellstores:
-        '''Provides access to cellstore interaction object.
+    def datacells(self) -> Datacells:
+        '''Provides access to datacell interaction object.
 
         .. seealso::
 
-            The class :class:`~.cellstore.Cellstores` contains all methods accessible
+            The class :class:`~.datacell.Datacells` contains all methods accessible
             by this property accessor
 
         Returns
         -------
-        Cellstores
-            weakref proxy to the cellstores object which behaves exactly like a
-            cellstores accessor class but which can be invalidated when the writer
+        Datacells
+            weakref proxy to the datacells object which behaves exactly like a
+            datacells accessor class but which can be invalidated when the writer
             lock is released.
         '''
         self.__acquire_writer_lock()
-        wr = cm_weakref_obj_proxy(self._cellstores)
+        wr = cm_weakref_obj_proxy(self._datacells)
         return wr
 
     @property
@@ -469,7 +469,7 @@ class WriterCheckout(object):
             repo_path=self._repo_path,
             writer_uuid=self._writer_lock)
 
-        for dsetHandle in self._cellstores.values():
+        for dsetHandle in self._datacells.values():
             with suppress(KeyError):
                 dsetHandle._close()
 
@@ -478,7 +478,7 @@ class WriterCheckout(object):
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._cellstores = Cellstores._from_staging_area(
+        self._datacells = Datacells._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -504,7 +504,7 @@ class WriterCheckout(object):
             self._writer_lock
         except AttributeError:
             with suppress(AttributeError):
-                del self._cellstores
+                del self._datacells
             with suppress(AttributeError):
                 del self._metadata
             with suppress(AttributeError):
@@ -518,7 +518,7 @@ class WriterCheckout(object):
             heads.acquire_writer_lock(self._branchenv, self._writer_lock)
         except PermissionError as e:
             with suppress(AttributeError):
-                del self._cellstores
+                del self._datacells
             with suppress(AttributeError):
                 del self._metadata
             with suppress(AttributeError):
@@ -573,7 +573,7 @@ class WriterCheckout(object):
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._cellstores = Cellstores._from_staging_area(
+        self._datacells = Datacells._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -608,23 +608,23 @@ class WriterCheckout(object):
         logger.info(f'Commit operation requested with message: {commit_message}')
 
         open_dsets = []
-        for cellstore in self._cellstores.values():
-            if cellstore._is_conman:
-                open_dsets.append(cellstore.name)
+        for datacell in self._datacells.values():
+            if datacell._is_conman:
+                open_dsets.append(datacell.name)
         open_meta = self._metadata._is_conman
 
         try:
             if open_meta:
                 self._metadata.__exit__()
             for dsetn in open_dsets:
-                self._cellstores[dsetn].__exit__()
+                self._datacells[dsetn].__exit__()
 
             if self._differ.status() == 'CLEAN':
                 e = RuntimeError('No changes made in staging area. Cannot commit.')
                 logger.error(e, exc_info=False)
                 raise e
 
-            self._cellstores._close()
+            self._datacells._close()
             commit_hash = commiting.commit_records(message=commit_message,
                                                    branchenv=self._branchenv,
                                                    stageenv=self._stageenv,
@@ -633,11 +633,11 @@ class WriterCheckout(object):
             # purge recs then reopen file handles so that we don't have to invalidate
             # previous weakproxy references like if we just called :meth:``__setup```
             hashs.clear_stage_hash_records(self._stagehashenv)
-            self._cellstores._open()
+            self._datacells._open()
 
         finally:
             for dsetn in open_dsets:
-                self._cellstores[dsetn].__enter__()
+                self._datacells[dsetn].__enter__()
             if open_meta:
                 self._metadata.__enter__()
 
@@ -648,7 +648,7 @@ class WriterCheckout(object):
         '''Perform a hard reset of the staging area to the last commit head.
 
         After this operation completes, the writer checkout will automatically
-        close in the typical fashion (any held references to :attr:``cellstore``
+        close in the typical fashion (any held references to :attr:``datacell``
         or :attr:``metadata`` objects will finalize and destruct as normal), In
         order to perform any further operation, a new checkout needs to be
         opened.
@@ -676,7 +676,7 @@ class WriterCheckout(object):
             logger.error(e, exc_info=False)
             raise e
 
-        self._cellstores._close()
+        self._datacells._close()
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
         hashs.delete_in_process_data(self._repo_path)
@@ -693,7 +693,7 @@ class WriterCheckout(object):
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._cellstores = Cellstores._from_staging_area(
+        self._datacells = Datacells._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -714,27 +714,27 @@ class WriterCheckout(object):
         '''
         self.__acquire_writer_lock()
 
-        if hasattr(self, '_cellstores') and (getattr(self, '_cellstores') is not None):
-            self._cellstores._close()
+        if hasattr(self, '_datacells') and (getattr(self, '_datacells') is not None):
+            self._datacells._close()
 
-            for dsetn in (self._cellstores._cellstores.keys()):
-                for attr in list(self._cellstores._cellstores[dsetn].__dir__()):
+            for dsetn in (self._datacells._datacells.keys()):
+                for attr in list(self._datacells._datacells[dsetn].__dir__()):
                     with suppress(AttributeError, TypeError):
-                        delattr(self._cellstores._cellstores[dsetn], attr)
+                        delattr(self._datacells._datacells[dsetn], attr)
 
-            for attr in list(self._cellstores.__dir__()):
+            for attr in list(self._datacells.__dir__()):
                 with suppress(AttributeError, TypeError):
                     # prepending `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
-                    delattr(self._cellstores, f'_self_{attr}')
+                    delattr(self._datacells, f'_self_{attr}')
 
-        if hasattr(self, '_metadata') and (getattr(self, '_cellstores') is not None):
+        if hasattr(self, '_metadata') and (getattr(self, '_datacells') is not None):
             for attr in list(self._metadata.__dir__()):
                 with suppress(AttributeError, TypeError):
                     # prepending `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                     delattr(self._metadata, f'_self_{attr}')
 
         with suppress(AttributeError):
-            del self._cellstores
+            del self._datacells
         with suppress(AttributeError):
             del self._metadata
         with suppress(AttributeError):

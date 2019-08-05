@@ -165,14 +165,14 @@ def summary(env, *, branch='', commit=''):
     buf.write(f'| DataSets \n')
     buf.write(f'|----------------- \n')
 
-    buf.write(f'|  Number of Named Cellstores: {len(res["cellstores"])} \n')
-    for dsetn in res['cellstores']:
+    buf.write(f'|  Number of Named Datacells: {len(res["datacells"])} \n')
+    for dsetn in res['datacells']:
         buf.write(f'|\n')
-        buf.write(f'|  * Cellstore Name: {dsetn} \n')
-        buf.write(f'|    Num Arrays: {len(res["cellstores"][dsetn]["data"])} \n')
+        buf.write(f'|  * Datacell Name: {dsetn} \n')
+        buf.write(f'|    Num Arrays: {len(res["datacells"][dsetn]["data"])} \n')
 
         buf.write(f'|    Details: \n')
-        for k, v in res["cellstores"][dsetn]["schema"]._asdict().items():
+        for k, v in res["datacells"][dsetn]["schema"]._asdict().items():
             buf.write(f'|    - {k}: {v} \n')
 
     buf.write(f' \n')

@@ -57,15 +57,15 @@ def test_initial_read_checkout(managed_tmpdir):
     repo._env._close_environments()
 
 
-def test_initial_cellstore(managed_tmpdir, randomsizedarray):
+def test_initial_datacell(managed_tmpdir, randomsizedarray):
     repo = Repository(path=managed_tmpdir, exists=False)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
 
     w_checkout = repo.checkout(write=True)
-    assert len(w_checkout.cellstores) == 0
+    assert len(w_checkout.datacells) == 0
     with pytest.raises(KeyError):
-        w_checkout.cellstores['dset']
-    dset = w_checkout.cellstores.init_cellstore('dset', prototype=randomsizedarray)
+        w_checkout.datacells['dset']
+    dset = w_checkout.datacells.init_datacell('dset', prototype=randomsizedarray)
     assert dset._dsetn == 'dset'
     w_checkout.close()
     repo._env._close_environments()

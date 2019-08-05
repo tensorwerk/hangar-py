@@ -1,9 +1,10 @@
+.. _ref-api:
+
 ==========
 Python API
 ==========
 
 This is the python API for the Hangar project.
-
 
 Repository
 ==========
@@ -22,18 +23,18 @@ Write Enabled Checkout
    :members:
    :exclude-members: __init__
 
-Cellstores
-----------
+Datacells
+---------
 
-.. autoclass:: hangar.cellstore.Cellstores()
+.. autoclass:: hangar.datacell.Datacells()
    :members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-Cellstore Data
---------------
+Datacell Data
+-------------
 
-.. autoclass:: hangar.cellstore.CellstoreDataWriter()
+.. autoclass:: hangar.datacell.DatacellDataWriter()
    :members:
    :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
@@ -63,18 +64,18 @@ Read Only Checkout
    :members:
    :exclude-members: __init__
 
-Cellstores
+Datacells
 ----------
 
-.. autoclass:: hangar.cellstore.Cellstores()
+.. autoclass:: hangar.datacell.Datacells()
    :members: keys, values, items, get, iswriteable
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-Cellstore Data
---------------
+Datacell Data
+-------------
 
-.. autoclass:: hangar.cellstore.CellstoreDataReader()
+.. autoclass:: hangar.datacell.DatacellDataReader()
    :members:
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__

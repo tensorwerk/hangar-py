@@ -21,10 +21,10 @@ def test_ff_merge_no_conf_correct_contents_for_name_or_hash_checkout(repo_1_br_n
     coByName = repo_1_br_no_conf.checkout(branch='master')
     coByHash = repo_1_br_no_conf.checkout(commit=cmt_hash)
 
-    assert len(coByHash.cellstores) == len(coByName.cellstores)
-    for dsetn in coByHash.cellstores.keys():
-        dset_byHash = coByHash.cellstores[dsetn]
-        dset_byName = coByName.cellstores[dsetn]
+    assert len(coByHash.datacells) == len(coByName.datacells)
+    for dsetn in coByHash.datacells.keys():
+        dset_byHash = coByHash.datacells[dsetn]
+        dset_byName = coByName.datacells[dsetn]
         assert len(dset_byHash) == len(dset_byHash)
         for k, v in dset_byHash.items():
             assert np.allclose(v, dset_byName[k])
@@ -72,20 +72,20 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     assert co.metadata['hello'] == 'world'
     assert co.metadata['foo'] == 'bar'
 
-    # cellstores
-    assert len(co.cellstores) == 1
-    assert 'dummy' in co.cellstores
-    # cellstore samples
-    dset = co.cellstores['dummy']
+    # datacells
+    assert len(co.datacells) == 1
+    assert 'dummy' in co.datacells
+    # datacell samples
+    dset = co.datacells['dummy']
     assert len(dset) == 50
 
-    # cellstore sample values
+    # datacell sample values
     checkarr = np.zeros_like(np.arange(50))
     for k, v in dset.items():
         checkarr[:] = int(k)
         assert np.allclose(v, checkarr)
 
-    # cellstore sample keys
+    # datacell sample keys
     dset_keys = list(dset.keys())
     for genKey in range(30):
         assert str(genKey) in dset_keys
@@ -188,7 +188,7 @@ class TestMetadataConflicts(object):
         co.close()
 
 
-class TestCellstoreSampleConflicts(object):
+class TestDatacellSampleConflicts(object):
 
     def test_conflict_additions_same_str_name_different_value(self, repo_2_br_no_conf):
         newdata = np.arange(50)
@@ -196,7 +196,7 @@ class TestCellstoreSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.cellstores['dummy']['15'] = newdata
+        co.datacells['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -209,7 +209,7 @@ class TestCellstoreSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.cellstores['dummy'][15] = newdata
+        co.datacells['dummy'][15] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -222,8 +222,8 @@ class TestCellstoreSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.cellstores['dummy'][15] = newdata
-        co.cellstores['dummy']['15'] = newdata
+        co.datacells['dummy'][15] = newdata
+        co.datacells['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -236,14 +236,14 @@ class TestCellstoreSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.cellstores['dummy']['15'] = newdata
-        co.cellstores['dummy'][15] = newdata
+        co.datacells['dummy']['15'] = newdata
+        co.datacells['dummy'][15] = newdata
         co.commit('commit on master with same value data')
         co.close()
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        dset = co.cellstores['dummy']
+        dset = co.datacells['dummy']
         assert np.allclose(dset['15'], newdata)
         assert np.allclose(dset[15], newdata)
         co.close()
@@ -252,13 +252,13 @@ class TestCellstoreSampleConflicts(object):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
         newdata = np.arange(50)
-        co.cellstores['dummy']['0'] = newdata
+        co.datacells['dummy']['0'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         newdata = newdata * 2
-        co.cellstores['dummy']['0'] = newdata
+        co.datacells['dummy']['0'] = newdata
         co.commit('commit on testbranch with conflicting data')
         co.close()
 
@@ -269,12 +269,12 @@ class TestCellstoreSampleConflicts(object):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
         newdata = np.arange(50)
-        co.cellstores['dummy']['0'] = newdata
+        co.datacells['dummy']['0'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.cellstores['dummy'].remove('0')
+        co.datacells['dummy'].remove('0')
         co.commit('commit on testbranch with removal')
         co.close()
 
@@ -284,19 +284,19 @@ class TestCellstoreSampleConflicts(object):
     def test_no_conflict_both_removal(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.cellstores['dummy'].remove('0')
-        del co.cellstores['dummy'][21]
+        co.datacells['dummy'].remove('0')
+        del co.datacells['dummy'][21]
         co.commit('commit on master with removal')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.cellstores['dummy'].remove('0')
-        del co.cellstores['dummy'][10]
+        co.datacells['dummy'].remove('0')
+        del co.datacells['dummy'][10]
         co.commit('commit on testbranch with removal')
         co.close()
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        dset = co.cellstores['dummy']
+        dset = co.datacells['dummy']
         assert '0' not in dset
         assert len(dset) == 47

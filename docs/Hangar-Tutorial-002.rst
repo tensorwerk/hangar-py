@@ -65,15 +65,15 @@ can make a commit. let’s do that now:
 
    >>> co = repo.checkout(write=True)
 
-As expected, there are no cellstores or metadata samples recorded in the checkout
+As expected, there are no datacells or metadata samples recorded in the checkout
 
 .. code:: python
 
    >>> print(f'number of metadata keys: {len(co.metadata)}')
    number of metadata keys: 0
 
-   >>> print(f'number of cellstores: {len(co.cellstores)}')
-   number of cellstores: 0
+   >>> print(f'number of datacells: {len(co.datacells)}')
+   number of datacells: 0
 
 
 Let’s add a dummy array just to put something in the repository history to
@@ -83,10 +83,10 @@ depend on having at least on historical record (commit) in the repo.
 .. code:: python
 
    >>> dummy = np.arange(10, dtype=np.uint16)
-   >>> dset = co.cellstores.init_cellstore(name='dummy_cellstore', prototype=dummy)
-   Cellstore Initialized: `dummy_cellstore`
+   >>> dset = co.datacells.init_datacell(name='dummy_datacell', prototype=dummy)
+   Datacell Initialized: `dummy_datacell`
    >>> dset['0'] = dummy
-   >>> initialCommitHash = co.commit('first commit with a single sample added to a dummy cellstore')
+   >>> initialCommitHash = co.commit('first commit with a single sample added to a dummy datacell')
    Commit completed. Commit hash: b21ebbeeece723bf7aa2157eb2e8742a043df7d0
    >>> co.close()
    writer checkout of master closed
@@ -97,7 +97,7 @@ labeled with the branch name ``"master"``
 .. code:: python
 
    >>> repo.log()
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) : first commit with a single sample added to a dummy cellstore
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) : first commit with a single sample added to a dummy datacell
 
 
 So now our repository contains: - A commit: a fully independent description of
@@ -178,7 +178,7 @@ our initial commit
    branch names: ['master', 'testbranch']
 
    >>> repo.log()
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) (testbranch) : first commit with a single sample added to a dummy cellstore
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) (testbranch) : first commit with a single sample added to a dummy datacell
 
 
 If instead, we do actually specify the base commit (with a different branch
@@ -192,28 +192,28 @@ name) we see we do actually get a third branch. pointing to the same commit as
    'new'
 
    >>> repo.log()
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) (new) (testbranch) : first commit with a single sample added to a dummy cellstore
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) (new) (testbranch) : first commit with a single sample added to a dummy datacell
 
 
 Making changes on a branch
 --------------------------
 
 Let’s make some changes on the ``"new"`` branch to see how things work. We can
-see that the data we added previously is still here (``dummy`` cellstore containing
+see that the data we added previously is still here (``dummy`` datacell containing
 one sample labeled ``0``)
 
 .. code:: python
 
    >>> co = repo.checkout(write=True, branch='new')
-   >>> co.cellstores
-    Hangar Cellstores
+   >>> co.datacells
+    Hangar Datacells
         Writeable: True
-        Cellstore Names:
-          - dummy_cellstore
+        Datacell Names:
+          - dummy_datacell
 
-   >>> co.cellstores['dummy_cellstore']
-    Hangar CellstoreDataWriter
-       Cellstore Name     : dummy_cellstore
+   >>> co.datacells['dummy_datacell']
+    Hangar DatacellDataWriter
+       Datacell Name     : dummy_datacell
        Schema UUID      : d82cddc07e0211e9a08a8c859047adef
        Schema Hash      : 43edf7aa314c
        Variable Shape   : False
@@ -223,24 +223,24 @@ one sample labeled ``0``)
        Access Mode      : a
        Num Samples      : 1
 
-   >>> co.cellstores['dummy_cellstore']['0']
+   >>> co.datacells['dummy_datacell']['0']
    array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=uint16)
 
-Let’s add another sample to the ``dummy_cellstore`` called ``1``
+Let’s add another sample to the ``dummy_datacell`` called ``1``
 
 .. code:: python
 
    >>> arr = np.arange(10, dtype=np.uint16)
    >>> # let's increment values so that `0` and `1` aren't set to the same thing
    >>> arr += 1
-   >>> co.cellstores['dummy_cellstore']['1'] = arr
+   >>> co.datacells['dummy_datacell']['1'] = arr
 
 We can see that in this checkout, there are indeed, two samples in the
-``dummy_cellstore``
+``dummy_datacell``
 
 .. code:: python
 
-   >>> len(co.cellstores['dummy_cellstore'])
+   >>> len(co.datacells['dummy_datacell'])
    2
 
 That’s all the changes we'll make for now, let’s commit this and be done with
@@ -248,7 +248,7 @@ that branch.
 
 .. code:: python
 
-   >>> co.commit('commit on `new` branch adding a sample to dummy_cellstore')
+   >>> co.commit('commit on `new` branch adding a sample to dummy_datacell')
    Commit completed. Commit hash: 0cdd8c833f654d18ddc2b089fabee93c32c9c155
    >>> co.close()
    writer checkout of new closed
@@ -262,8 +262,8 @@ ahead of ``master`` and ``testbranch``
 .. code:: python
 
    >>> repo.log()
-   * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (new) : commit on `new` branch adding a sample to dummy_cellstore
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) (testbranch) : first commit with a single sample added to a dummy cellstore
+   * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (new) : commit on `new` branch adding a sample to dummy_datacell
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (master) (testbranch) : first commit with a single sample added to a dummy datacell
 
 The meaning is exactally what one would intuit. we made some changes, they were
 reflected on the ``new`` branch, but the ``master`` and ``testbranch`` branches
@@ -328,17 +328,17 @@ Let’s check the log!
 .. code:: python
 
    >>> repo.log()
-   * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (master) (new) : commit on `new` branch adding a sample to dummy_cellstore
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (testbranch) : first commit with a single sample added to a dummy cellstore
+   * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (master) (new) : commit on `new` branch adding a sample to dummy_datacell
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 (testbranch) : first commit with a single sample added to a dummy datacell
 
    >>> co.branch_name
    master
    >>> co.commit_hash
    0cdd8c833f654d18ddc2b089fabee93c32c9c155
 
-   >>> co.cellstores['dummy_cellstore']
-    Hangar CellstoreDataWriter
-       Cellstore Name     : dummy_cellstore
+   >>> co.datacells['dummy_datacell']
+    Hangar DatacellDataWriter
+       Datacell Name     : dummy_datacell
        Schema UUID      : d82cddc07e0211e9a08a8c859047adef
        Schema Hash      : 43edf7aa314c
        Variable Shape   : False
@@ -363,15 +363,15 @@ we can see what happens when changes don’t follow a linear history.
 .. code:: python
 
    >>> co = repo.checkout(write=True, branch='testbranch')
-   >>> co.cellstores
-    Hangar Cellstores
+   >>> co.datacells
+    Hangar Datacells
         Writeable: True
-        Cellstore Names:
-          - dummy_cellstore
+        Datacell Names:
+          - dummy_datacell
 
-   >>> co.cellstores['dummy_cellstore']
-    Hangar CellstoreDataWriter
-       Cellstore Name     : dummy_cellstore
+   >>> co.datacells['dummy_datacell']
+    Hangar DatacellDataWriter
+       Datacell Name     : dummy_datacell
        Schema UUID      : d82cddc07e0211e9a08a8c859047adef
        Schema Hash      : 43edf7aa314c
        Variable Shape   : False
@@ -381,11 +381,11 @@ we can see what happens when changes don’t follow a linear history.
        Access Mode      : a
        Num Samples      : 1
 
-We will start by mutating sample ``0`` in ``dummy_cellstore`` to a different value
+We will start by mutating sample ``0`` in ``dummy_datacell`` to a different value
 
 .. code:: python
 
-   >>> dummy_dset = co.cellstores['dummy_cellstore']
+   >>> dummy_dset = co.datacells['dummy_datacell']
    >>> old_arr = dummy_dset['0']
    >>> new_arr = old_arr + 50
    >>> new_arr
@@ -398,8 +398,8 @@ the ``testbranch`` branch)
 
 .. code:: python
 
-   >>> digest = co.commit('mutated sample `0` of `dummy_cellstore` to new value')
-   Commit operation requested with message: mutated sample `0` of `dummy_cellstore` to new value
+   >>> digest = co.commit('mutated sample `0` of `dummy_datacell` to new value')
+   Commit operation requested with message: mutated sample `0` of `dummy_datacell` to new value
    (288, 222, 288)
    removing all stage hash records
    Commit completed. Commit hash: 4fdb96afed4ec62e9fc80328abccae6bf6774fea
@@ -407,8 +407,8 @@ the ``testbranch`` branch)
    4fdb96afed4ec62e9fc80328abccae6bf6774fea
 
    >>> repo.log()
-   * 4fdb96afed4ec62e9fc80328abccae6bf6774fea (testbranch) : mutated sample `0` of `dummy_cellstore` to new value
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy cellstore
+   * 4fdb96afed4ec62e9fc80328abccae6bf6774fea (testbranch) : mutated sample `0` of `dummy_datacell` to new value
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy datacell
 
    >>> co.metadata['hello'] = 'world'
 
@@ -430,8 +430,8 @@ our first commit anymore
 
    >>> repo.log()
    * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hellow world metadata
-   * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_cellstore` to new value
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy cellstore
+   * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_datacell` to new value
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy datacell
 
 We can check the history of the ``"master"`` branch by specifying it as
 an argument to the ``log()`` method
@@ -439,8 +439,8 @@ an argument to the ``log()`` method
 .. code:: python
 
    >>> repo.log('master')
-   * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (master) (new) : commit on `new` branch adding a sample to dummy_cellstore
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy cellstore
+   * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (master) (new) : commit on `new` branch adding a sample to dummy_datacell
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy datacell
 
 
 Merging (Part 2) Three Way Merge
@@ -484,16 +484,16 @@ in both diverged branches, and unifies them in a single ``commit``
    *  dea1aa627933b3efffa03c743c201ee1b41142c8 (master) : merge of testbranch into master
    |\
    | * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hellow world metadata
-   | * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_cellstore` to new value
-   * | 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (new) : commit on `new` branch adding a sample to dummy_cellstore
+   | * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_datacell` to new value
+   * | 0cdd8c833f654d18ddc2b089fabee93c32c9c155 (new) : commit on `new` branch adding a sample to dummy_datacell
    |/
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy cellstore
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy datacell
 
 
 Manually inspecting the merge results
 -------------------------------------
 
-``dummy_cellstore`` should contain two arrays, key ``1`` was set in the previous
+``dummy_datacell`` should contain two arrays, key ``1`` was set in the previous
 commit originally made in ``"new"`` and merged into ``"master"``. Key ``0`` was
 mutated in ``"testbranch"`` and unchanged in ``"master"``, so the update from
 ``"testbranch"`` is kept.
@@ -503,15 +503,15 @@ There should be one metadata sample with they key ``"hello"`` and the value
 
 .. code:: python
 
-   >>> co.cellstores
-    Hangar Cellstores
+   >>> co.datacells
+    Hangar Datacells
         Writeable: True
-        Cellstore Names:
-          - dummy_cellstore
+        Datacell Names:
+          - dummy_datacell
 
-   >>> co.cellstores['dummy_cellstore']
-    Hangar CellstoreDataWriter
-       Cellstore Name     : dummy_cellstore
+   >>> co.datacells['dummy_datacell']
+    Hangar DatacellDataWriter
+       Datacell Name     : dummy_datacell
        Schema UUID      : d82cddc07e0211e9a08a8c859047adef
        Schema Hash      : 43edf7aa314c
        Variable Shape   : False
@@ -521,9 +521,9 @@ There should be one metadata sample with they key ``"hello"`` and the value
        Access Mode      : a
        Num Samples      : 2
 
-   >>> co.cellstores['dummy_cellstore']['0']
+   >>> co.datacells['dummy_datacell']['0']
    array([50, 51, 52, 53, 54, 55, 56, 57, 58, 59], dtype=uint16)
-   >>> co.cellstores['dummy_cellstore']['1']
+   >>> co.datacells['dummy_datacell']['1']
    array([ 1,  2,  3,  4,  5,  6,  7,  8,  9, 10], dtype=uint16)
 
    >>> co.metadata
@@ -553,18 +553,18 @@ provide a list of conflicts which it identifies. In general these fall into 4
 categories:
 
 1. **Additions** in both branches which created new keys (samples /
-   cellstores / metadata) with non-compatible values. For samples &
-   metadata, the hash of the data is compared, for cellstores, the schema
+   datacells / metadata) with non-compatible values. For samples &
+   metadata, the hash of the data is compared, for datacells, the schema
    specification is checked for compatibility in a method custom to the
    internal workings of Hangar.
 2. **Removal** in ``Master Commit/Branch`` **& Mutation** in ``Dev Commit /
-   Branch``. Applies for samples, cellstores, and metadata
+   Branch``. Applies for samples, datacells, and metadata
    identically.
 3. **Mutation** in ``Dev Commit/Branch`` **& Removal** in ``Master Commit /
-   Branch``. Applies for samples, cellstores, and metadata
+   Branch``. Applies for samples, datacells, and metadata
    identically.
 4. **Mutations** on keys both branches to non-compatible values. For
-   samples & metadata, the hash of the data is compared, for cellstores, the
+   samples & metadata, the hash of the data is compared, for datacells, the
    schema specification is checked for compatibility in a method custom to the
    internal workings of Hangar.
 
@@ -594,8 +594,8 @@ necessary changes in each branch before reattempting a merge operation.
 
    >>> repo.log()
    * 5e76faba059c156bc9ed181446e104765cb471c3 (new) : commit on new branch to hello metadata key so we can demonstrate a conflict
-   * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 : commit on `new` branch adding a sample to dummy_cellstore
-   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy cellstore
+   * 0cdd8c833f654d18ddc2b089fabee93c32c9c155 : commit on `new` branch adding a sample to dummy_datacell
+   * b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy datacell
 
 
 **When we attempt the merge, an exception is thrown telling us there is a conflict**
@@ -608,7 +608,7 @@ necessary changes in each branch before reattempting a merge operation.
    ValueError: HANGAR VALUE ERROR:: Merge ABORTED with conflict:
    {'dset': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False),
     'meta': ConflictRecords(t1=('hello',), t21=(), t22=(), t3=(), conflict=True),
-    'sample': {'dummy_cellstore': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False)},
+    'sample': {'dummy_datacell': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False)},
     'conflict_found': True}
 
 Checking for Conflicts
@@ -622,7 +622,7 @@ Alternatively, use the diff methods on a checkout to test for conflicts before a
    >>> print(conflicts_found)
    {'dset': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False),
     'meta': ConflictRecords(t1=('hello',), t21=(), t22=(), t3=(), conflict=True),
-    'sample': {'dummy_cellstore': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False)},
+    'sample': {'dummy_datacell': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False)},
     'conflict_found': True}
 
    >>> conflicts_found['meta']
@@ -672,7 +672,7 @@ We can verify that history looks as we would expect via the log!
    * | 4f312b10775c2b0ac51b5f284d2f94e9a8548868 : commit which removes conflicting metadata key
    * | 5e76faba059c156bc9ed181446e104765cb471c3 : commit on new branch to hello metadata key so we can demonstrate a conflict
    | * ce8a9198d638b8fd89a175486d21d2bb2efabc91 (testbranch) : added hellow world metadata
-   | * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_cellstore` to new value
-   * | 0cdd8c833f654d18ddc2b089fabee93c32c9c155 : commit on `new` branch adding a sample to dummy_cellstore
+   | * 4fdb96afed4ec62e9fc80328abccae6bf6774fea : mutated sample `0` of `dummy_datacell` to new value
+   * | 0cdd8c833f654d18ddc2b089fabee93c32c9c155 : commit on `new` branch adding a sample to dummy_datacell
    |/
-   *  b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy cellstore
+   *  b21ebbeeece723bf7aa2157eb2e8742a043df7d0 : first commit with a single sample added to a dummy datacell

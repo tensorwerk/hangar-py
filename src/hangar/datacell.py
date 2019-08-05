@@ -19,10 +19,10 @@ from .utils import cm_weakref_obj_proxy, is_suitable_user_key
 logger = logging.getLogger(__name__)
 
 
-class CellstoreDataReader(object):
-    '''Class implementing get access to data in a cellstore.
+class DatacellDataReader(object):
+    '''Class implementing get access to data in a datacell.
 
-    The methods implemented here are common to the :class:`CellstoreDataWriter`
+    The methods implemented here are common to the :class:`DatacellDataWriter`
     accessor class as well as to this ``"read-only"`` method. Though minimal,
     the behavior of read and write checkouts is slightly unique, with the main
     difference being that ``"read-only"`` checkouts implement both thread and
@@ -55,19 +55,19 @@ class CellstoreDataReader(object):
         repo_pth : os.PathLike
             path to the repository on disk.
         dset_name : str
-            name of the cellstore
+            name of the datacell
         schema_hashes : list of str
-            list of all schemas referenced in the cellstore
+            list of all schemas referenced in the datacell
         samplesAreNamed : bool
             do samples have names or not.
         isVar : bool
-            is the cellstore schema variable shape or not
+            is the datacell schema variable shape or not
         varMaxShape : list or tuple of int
-            schema size (max) of the cellstore data
+            schema size (max) of the datacell data
         varDtypeNum : int
-            datatype numeric code of the cellstore data
+            datatype numeric code of the datacell data
         dataenv : lmdb.Environment
-            environment of the cellstore references to read
+            environment of the datacell references to read
         hashenv : lmdb.Environment
             environment of the repository hash records
         mode : str, optional
@@ -105,7 +105,7 @@ class CellstoreDataReader(object):
         _TxnRegister = TxnRegister()
         hashTxn = _TxnRegister.begin_reader_txn(hashenv)
         try:
-            dsetNamesSpec = RecordQuery(dataenv).cellstore_data_records(self._dsetn)
+            dsetNamesSpec = RecordQuery(dataenv).datacell_data_records(self._dsetn)
             for dsetNames, dataSpec in dsetNamesSpec:
                 hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
                 hash_ref = hashTxn.get(hashKey)
@@ -113,7 +113,7 @@ class CellstoreDataReader(object):
                 self._sspecs[dsetNames.data_name] = be_loc
                 if (be_loc.backend == '50') and (not self._contains_partial_remote_data):
                     warnings.warn(
-                        f'Cellstore: {self._dsetn} contains `reference-only` samples, with '
+                        f'Datacell: {self._dsetn} contains `reference-only` samples, with '
                         f'actual data residing on a remote server. A `fetch-data` '
                         f'operation is required to access these samples.', UserWarning)
                     self._contains_partial_remote_data = True
@@ -136,7 +136,7 @@ class CellstoreDataReader(object):
         Parameters
         ----------
         key : string
-            sample key to retrieve from the cellstore
+            sample key to retrieve from the datacell
 
         Returns
         -------
@@ -149,22 +149,22 @@ class CellstoreDataReader(object):
         return self.keys()
 
     def __len__(self):
-        '''Check how many samples are present in a given cellstore
+        '''Check how many samples are present in a given datacell
 
         Returns
         -------
         int
-            number of samples the cellstore contains
+            number of samples the datacell contains
         '''
         return len(self._sspecs)
 
     def __contains__(self, key):
-        '''Determine if a key is a valid sample name in the cellstore
+        '''Determine if a key is a valid sample name in the datacell
 
         Parameters
         ----------
         key : string
-            name to check if it is a sample in the cellstore
+            name to check if it is a sample in the datacell
 
         Returns
         -------
@@ -176,7 +176,7 @@ class CellstoreDataReader(object):
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__} \
-                \n    Cellstore Name             : {self._dsetn}\
+                \n    Datacell Name             : {self._dsetn}\
                 \n    Schema Hash              : {self._default_schema_hash}\
                 \n    Variable Shape           : {bool(int(self._schema_variable))}\
                 \n    (max) Shape              : {self._schema_max_shape}\
@@ -208,25 +208,25 @@ class CellstoreDataReader(object):
 
     @property
     def name(self):
-        '''Name of the cellstore. Read-Only attribute.
+        '''Name of the datacell. Read-Only attribute.
         '''
         return self._dsetn
 
     @property
     def dtype(self):
-        '''Datatype of the cellstore schema. Read-only attribute.
+        '''Datatype of the datacell schema. Read-only attribute.
         '''
         return np.typeDict[self._schema_dtype_num]
 
     @property
     def shape(self):
-        '''Shape (or `max_shape`) of the cellstore sample tensors. Read-only attribute.
+        '''Shape (or `max_shape`) of the datacell sample tensors. Read-only attribute.
         '''
         return self._schema_max_shape
 
     @property
     def variable_shape(self):
-        '''Bool indicating if cellstore schema is variable sized. Read-only attribute.
+        '''Bool indicating if datacell schema is variable sized. Read-only attribute.
         '''
         return self._schema_variable
 
@@ -238,7 +238,7 @@ class CellstoreDataReader(object):
 
     @property
     def iswriteable(self):
-        '''Bool indicating if this cellstore object is write-enabled. Read-only attribute.
+        '''Bool indicating if this datacell object is write-enabled. Read-only attribute.
         '''
         return False if self._mode == 'r' else True
 
@@ -255,7 +255,7 @@ class CellstoreDataReader(object):
         Returns
         -------
         List[str]
-            list of sample keys in the cellstore.
+            list of sample keys in the datacell.
         '''
         remote_keys = []
         if self.contains_remote_references is True:
@@ -265,10 +265,10 @@ class CellstoreDataReader(object):
         return remote_keys
 
     def keys(self) -> Iterator[Union[str, int]]:
-        '''generator which yields the names of every sample in the cellstore
+        '''generator which yields the names of every sample in the datacell
 
         For write enabled checkouts, is technically possible to iterate over the
-        cellstore object while adding/deleting data, in order to avoid internal
+        datacell object while adding/deleting data, in order to avoid internal
         python runtime errors (``dictionary changed size during iteration`` we
         have to make a copy of they key list before beginning the loop.) While
         not necessary for read checkouts, we perform the same operation for both
@@ -277,16 +277,16 @@ class CellstoreDataReader(object):
         Yields
         ------
         Iterator[Union[str, int]]
-            keys of one sample at a time inside the cellstore
+            keys of one sample at a time inside the datacell
         '''
         for name in tuple(self._sspecs.keys()):
             yield name
 
     def values(self) -> Iterator[np.ndarray]:
-        '''generator which yields the tensor data for every sample in the cellstore
+        '''generator which yields the tensor data for every sample in the datacell
 
         For write enabled checkouts, is technically possible to iterate over the
-        cellstore object while adding/deleting data, in order to avoid internal
+        datacell object while adding/deleting data, in order to avoid internal
         python runtime errors (``dictionary changed size during iteration`` we
         have to make a copy of they key list before beginning the loop.) While
         not necessary for read checkouts, we perform the same operation for both
@@ -295,16 +295,16 @@ class CellstoreDataReader(object):
         Yields
         ------
         Iterator[np.ndarray]
-            values of one sample at a time inside the cellstore
+            values of one sample at a time inside the datacell
         '''
         for name in tuple(self._sspecs.keys()):
             yield self.get(name)
 
     def items(self) -> Iterator[Tuple[Union[str, int], np.ndarray]]:
-        '''generator yielding two-tuple of (name, tensor), for every sample in the cellstore.
+        '''generator yielding two-tuple of (name, tensor), for every sample in the datacell.
 
         For write enabled checkouts, is technically possible to iterate over the
-        cellstore object while adding/deleting data, in order to avoid internal
+        datacell object while adding/deleting data, in order to avoid internal
         python runtime errors (``dictionary changed size during iteration`` we
         have to make a copy of they key list before beginning the loop.) While
         not necessary for read checkouts, we perform the same operation for both
@@ -313,13 +313,13 @@ class CellstoreDataReader(object):
         Yields
         ------
         Iterator[Tuple[Union[str, int], np.ndarray]]
-            sample name and stored value for every sample inside the cellstore
+            sample name and stored value for every sample inside the datacell
         '''
         for name in tuple(self._sspecs.keys()):
             yield (name, self.get(name))
 
     def get(self, name: str) -> np.ndarray:
-        '''Retrieve a sample in the cellstore with a specific name.
+        '''Retrieve a sample in the datacell with a specific name.
 
         The method is thread/process safe IF used in a read only checkout. Use
         this if the calling application wants to manually manage multiprocess
@@ -343,12 +343,12 @@ class CellstoreDataReader(object):
         Returns
         -------
         np.array
-            Tensor data stored in the cellstore archived with provided name(s).
+            Tensor data stored in the datacell archived with provided name(s).
 
         Raises
         ------
         KeyError
-            if the cellstore does not contain data with the provided name
+            if the datacell does not contain data with the provided name
         '''
         try:
             spec = self._sspecs[name]
@@ -384,7 +384,7 @@ class CellstoreDataReader(object):
         Returns
         -------
         list(np.ndarray)
-            Tensor data stored in the cellstore archived with provided name(s).
+            Tensor data stored in the datacell archived with provided name(s).
 
             If a single sample name is passed in as the, the corresponding
             np.array data will be returned.
@@ -397,7 +397,7 @@ class CellstoreDataReader(object):
         Raises
         ------
         KeyError
-            if the cellstore does not contain data with the provided name
+            if the datacell does not contain data with the provided name
         '''
         n_jobs = n_cpus if isinstance(n_cpus, int) else int(cpu_count() / 2)
         with get_context(start_method).Pool(n_jobs) as p:
@@ -405,16 +405,16 @@ class CellstoreDataReader(object):
         return data
 
 
-class CellstoreDataWriter(CellstoreDataReader):
-    '''Class implementing methods to write data to a cellstore.
+class DatacellDataWriter(DatacellDataReader):
+    '''Class implementing methods to write data to a datacell.
 
     Writer specific methods are contained here, and while read functionality is
-    shared with the methods common to :class:`CellstoreDataReader`. Write-enabled
+    shared with the methods common to :class:`DatacellDataReader`. Write-enabled
     checkouts are not thread/process safe for either ``writes`` OR ``reads``,
     a restriction we impose for ``write-enabled`` checkouts in order to ensure
     data integrity above all else.
 
-    .. seealso:: :class:`CellstoreDataReader`
+    .. seealso:: :class:`DatacellDataReader`
 
     '''
 
@@ -424,9 +424,9 @@ class CellstoreDataWriter(CellstoreDataReader):
                  *args, **kwargs):
         '''Developer documentation for init method.
 
-        Extends the functionality of the CellstoreDataReader class. The __init__
+        Extends the functionality of the DatacellDataReader class. The __init__
         method requires quite a number of ``**kwargs`` to be passed along to the
-        :class:`CellstoreDataReader` class.
+        :class:`DatacellDataReader` class.
 
         Parameters
         ----------
@@ -435,7 +435,7 @@ class CellstoreDataWriter(CellstoreDataReader):
             default_schema_backend : str
                 backend code to act as default where new data samples are added.
             **kwargs:
-                See args of :class:`CellstoreDataReader`
+                See args of :class:`DatacellDataReader`
         '''
 
         super().__init__(*args, **kwargs)
@@ -467,14 +467,14 @@ class CellstoreDataWriter(CellstoreDataReader):
             self._fs[k].__exit__(*exc)
 
     def __setitem__(self, key: Union[str, int], value: np.ndarray) -> Union[str, int]:
-        '''Store a piece of data in a cellstore. Convenience method to :meth:`add`.
+        '''Store a piece of data in a datacell. Convenience method to :meth:`add`.
 
         .. seealso:: :meth:`add`
 
         Parameters
         ----------
         key : Union[str, int]
-            name of the sample to add to the cellstore
+            name of the sample to add to the datacell
         value : np.array
             tensor data to add as the sample
 
@@ -487,25 +487,25 @@ class CellstoreDataWriter(CellstoreDataReader):
         return key
 
     def __delitem__(self, key: Union[str, int]) -> Union[str, int]:
-        '''Remove a sample from the cellstore. Convenience method to :meth:`remove`.
+        '''Remove a sample from the datacell. Convenience method to :meth:`remove`.
 
         .. seealso:: :meth:`remove`
 
         Parameters
         ----------
         key : Union[str, int]
-            Name of the sample to remove from the cellstore
+            Name of the sample to remove from the datacell
 
         Returns
         -------
         Union[str, int]
-            Name of the sample removed from the cellstore (assuming operation successful)
+            Name of the sample removed from the datacell (assuming operation successful)
         '''
         return self.remove(key)
 
     @property
     def _backend(self) -> str:
-        '''The default backend for the cellstore which can be written to
+        '''The default backend for the datacell which can be written to
 
         Returns
         -------
@@ -516,14 +516,14 @@ class CellstoreDataWriter(CellstoreDataReader):
 
     def add(self, data: np.ndarray, name: Union[str, int] = None,
             **kwargs) -> Union[str, int]:
-        '''Store a piece of data in a cellstore
+        '''Store a piece of data in a datacell
 
         Parameters
         ----------
         data : np.ndarray
-            data to store as a sample in the cellstore.
+            data to store as a sample in the datacell.
         name : Union[str, int], optional
-            name to assign to the same (assuming the cellstore accepts named
+            name to assign to the same (assuming the datacell accepts named
             samples), If str, can only contain alpha-numeric ascii characters
             (in addition to '-', '.', '_'). Integer key must be >= 0. by default
             None
@@ -536,25 +536,25 @@ class CellstoreDataWriter(CellstoreDataReader):
         Raises
         ------
         ValueError
-            If no `name` arg was provided for cellstore requiring named samples.
+            If no `name` arg was provided for datacell requiring named samples.
         ValueError
-            If input data tensor rank exceeds specified rank of cellstore samples.
+            If input data tensor rank exceeds specified rank of datacell samples.
         ValueError
-            For variable shape cellstores, if a dimension size of the input data
-            tensor exceeds specified max dimension size of the cellstore samples.
+            For variable shape datacells, if a dimension size of the input data
+            tensor exceeds specified max dimension size of the datacell samples.
         ValueError
-            For fixed shape cellstores, if input data dimensions do not exactly match
-            specified cellstore dimensions.
+            For fixed shape datacells, if input data dimensions do not exactly match
+            specified datacell dimensions.
         ValueError
             If type of `data` argument is not an instance of np.ndarray.
         ValueError
             If `data` is not "C" contiguous array layout.
         ValueError
             If the datatype of the input data does not match the specified data type of
-            the cellstore
+            the datacell
         LookupError
             If a data sample with the same name and hash value already exists in the
-            cellstore.
+            datacell.
         '''
 
         # ------------------------ argument type checking ---------------------
@@ -610,7 +610,7 @@ class CellstoreDataWriter(CellstoreDataReader):
                 existingDataRec = parsing.data_record_raw_val_from_db_val(existingDataRecVal)
                 if full_hash == existingDataRec.data_hash:
                     raise LookupError(
-                        f'Cellstore: {self._dsetn} already contains identical object named:'
+                        f'Datacell: {self._dsetn} already contains identical object named:'
                         f'{name} with same hash value: {full_hash}')
 
             # write new data if data hash does not exist
@@ -628,10 +628,10 @@ class CellstoreDataWriter(CellstoreDataReader):
             self._dataTxn.put(dataRecKey, dataRecVal)
 
             if existingDataRecVal is False:
-                dsetCountKey = parsing.cellstore_record_count_db_key_from_raw_key(self._dsetn)
+                dsetCountKey = parsing.datacell_record_count_db_key_from_raw_key(self._dsetn)
                 dsetCountVal = self._dataTxn.get(dsetCountKey, default='0'.encode())
-                newDsetCount = parsing.cellstore_record_count_raw_val_from_db_val(dsetCountVal) + 1
-                newDsetCountVal = parsing.cellstore_record_count_db_val_from_raw_val(newDsetCount)
+                newDsetCount = parsing.datacell_record_count_raw_val_from_db_val(dsetCountVal) + 1
+                newDsetCountVal = parsing.datacell_record_count_db_val_from_raw_val(newDsetCount)
                 self._dataTxn.put(dsetCountKey, newDsetCountVal)
 
         except LookupError as e:
@@ -645,7 +645,7 @@ class CellstoreDataWriter(CellstoreDataReader):
         return name
 
     def remove(self, name: Union[str, int]) -> Union[str, int]:
-        '''Remove a sample with the provided name from the cellstore.
+        '''Remove a sample with the provided name from the datacell.
 
         .. Note::
 
@@ -678,7 +678,7 @@ class CellstoreDataWriter(CellstoreDataReader):
         Raises
         ------
         KeyError
-            If a sample with the provided name does not exist in the cellstore.
+            If a sample with the provided name does not exist in the datacell.
         '''
         if not self._is_conman:
             self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
@@ -690,28 +690,28 @@ class CellstoreDataWriter(CellstoreDataReader):
                 raise KeyError(f'No sample: {name} type: {type(name)} exists in: {self._dsetn}')
             del self._sspecs[name]
 
-            dsetDataCountKey = parsing.cellstore_record_count_db_key_from_raw_key(self._dsetn)
+            dsetDataCountKey = parsing.datacell_record_count_db_key_from_raw_key(self._dsetn)
             dsetDataCountVal = self._dataTxn.get(dsetDataCountKey)
-            newDsetDataCount = parsing.cellstore_record_count_raw_val_from_db_val(dsetDataCountVal) - 1
+            newDsetDataCount = parsing.datacell_record_count_raw_val_from_db_val(dsetDataCountVal) - 1
 
-            # if this is the last data piece existing in a cellstore, remove the cellstore
+            # if this is the last data piece existing in a datacell, remove the datacell
             if newDsetDataCount == 0:
-                dsetSchemaKey = parsing.cellstore_record_schema_db_key_from_raw_key(self._dsetn)
+                dsetSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(self._dsetn)
                 self._dataTxn.delete(dsetDataCountKey)
                 self._dataTxn.delete(dsetSchemaKey)
-                totalNumDsetsKey = parsing.cellstore_total_count_db_key()
+                totalNumDsetsKey = parsing.datacell_total_count_db_key()
                 totalNumDsetsVal = self._dataTxn.get(totalNumDsetsKey)
-                newTotalNumDsets = parsing.cellstore_total_count_raw_val_from_db_val(totalNumDsetsVal) - 1
-                # if no more cellstores exist, delete the indexing key
+                newTotalNumDsets = parsing.datacell_total_count_raw_val_from_db_val(totalNumDsetsVal) - 1
+                # if no more datacells exist, delete the indexing key
                 if newTotalNumDsets == 0:
                     self._dataTxn.delete(totalNumDsetsKey)
                 # otherwise just decrement the count of dsets
                 else:
-                    newTotalNumDsetsVal = parsing.cellstore_total_count_db_val_from_raw_val(newTotalNumDsets)
+                    newTotalNumDsetsVal = parsing.datacell_total_count_db_val_from_raw_val(newTotalNumDsets)
                     self._dataTxn.put(newTotalNumDsetsVal)
-            # otherwise just decrement the cellstore record count
+            # otherwise just decrement the datacell record count
             else:
-                newDsetDataCountVal = parsing.cellstore_record_count_db_val_from_raw_val(newDsetDataCount)
+                newDsetDataCountVal = parsing.datacell_record_count_db_val_from_raw_val(newDsetDataCount)
                 self._dataTxn.put(dsetDataCountKey, newDsetDataCountVal)
 
         except KeyError as e:
@@ -726,16 +726,16 @@ class CellstoreDataWriter(CellstoreDataReader):
 
 
 '''
-Constructor and Interaction Class for Cellstores
+Constructor and Interaction Class for Datacells
 --------------------------------------------------
 '''
 
 
-class Cellstores(object):
-    '''Common access patterns and initialization/removal of cellstores in a checkout.
+class Datacells(object):
+    '''Common access patterns and initialization/removal of datacells in a checkout.
 
     This object is the entry point to all tensor data stored in their individual
-    cellstores. Each cellstore contains a common schema which dictates the general
+    datacells. Each datacell contains a common schema which dictates the general
     shape, dtype, and access patters which the backends optimize access for. The
     methods contained within allow us to create, remove, query, and access these
     collections of common tensors.
@@ -744,7 +744,7 @@ class Cellstores(object):
     def __init__(self,
                  mode: str,
                  repo_pth: os.PathLike,
-                 cellstores: Mapping[str, Union[CellstoreDataReader, CellstoreDataWriter]],
+                 datacells: Mapping[str, Union[DatacellDataReader, DatacellDataWriter]],
                  hashenv: Optional[lmdb.Environment] = None,
                  dataenv: Optional[lmdb.Environment] = None,
                  stagehashenv: Optional[lmdb.Environment] = None):
@@ -763,8 +763,8 @@ class Cellstores(object):
             one of 'r' or 'a' to indicate read or write mode
         repo_pth : os.PathLike
             path to the repository on disk
-        cellstores : Mapping[str, Union[CellstoreDataReader, CellstoreDataWriter]]
-            dictionary of CellstoreData objects
+        datacells : Mapping[str, Union[DatacellDataReader, DatacellDataWriter]]
+            dictionary of DatacellData objects
         hashenv : Optional[lmdb.Environment]
             environment handle for hash records
         dataenv : Optional[lmdb.Environment]
@@ -776,7 +776,7 @@ class Cellstores(object):
         '''
         self._mode = mode
         self._repo_pth = repo_pth
-        self._cellstores = cellstores
+        self._datacells = datacells
         self._is_conman = False
         self._contains_partial_remote_data: bool = False
 
@@ -793,18 +793,18 @@ class Cellstores(object):
         self._from_commit = None  # should never be able to access
         self._from_staging_area = None  # should never be able to access
         if self._mode == 'r':
-            self.init_cellstore = None
+            self.init_datacell = None
             self.remove_dset = None
             self.multi_add = None
             self.__delitem__ = None
             self.__setitem__ = None
 
     def _open(self):
-        for v in self._cellstores.values():
+        for v in self._datacells.values():
             v._open()
 
     def _close(self):
-        for v in self._cellstores.values():
+        for v in self._datacells.values():
             v._close()
 
 # ------------- Methods Available To Both Read & Write Checkouts ------------------
@@ -812,21 +812,21 @@ class Cellstores(object):
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
-                \n    Cellstore Names / Partial Remote References:\
+                \n    Datacell Names / Partial Remote References:\
                 \n      - ' + '\n      - '.join(
             f'{dsetn} / {dset.contains_remote_references}'
-            for dsetn, dset in self._cellstores.items())
+            for dsetn, dset in self._datacells.items())
         p.text(res)
 
     def __repr__(self):
         res = f'{self.__class__}('\
               f'repo_pth={self._repo_pth}, '\
-              f'cellstores={self._cellstores}, '\
+              f'datacells={self._datacells}, '\
               f'mode={self._mode})'
         return res
 
     def _ipython_key_completions_(self):
-        '''Let ipython know that any key based access can use the cellstore keys
+        '''Let ipython know that any key based access can use the datacell keys
 
         Since we don't want to inherit from dict, nor mess with `__dir__` for the
         sanity of developers, this is the best way to ensure users can autocomplete
@@ -835,31 +835,31 @@ class Cellstores(object):
         Returns
         -------
         list
-            list of strings, each being one of the cellstore keys for access.
+            list of strings, each being one of the datacell keys for access.
         '''
         return self.keys()
 
     def __getitem__(self, key):
-        '''Dict style access to return the cellstore object with specified key/name.
+        '''Dict style access to return the datacell object with specified key/name.
 
         Parameters
         ----------
         key : string
-            name of the cellstore object to get.
+            name of the datacell object to get.
 
         Returns
         -------
-        :class:`CellstoreDataReader` or :class:`CellstoreDataWriter`
+        :class:`DatacellDataReader` or :class:`DatacellDataWriter`
             The object which is returned depends on the mode of checkout specified.
-            If the cellstore was checked out with write-enabled, return writer object,
+            If the datacell was checked out with write-enabled, return writer object,
             otherwise return read only object.
         '''
         return self.get(key)
 
     def __setitem__(self, key, value):
-        '''Specifically prevent use dict style setting for cellstore objects.
+        '''Specifically prevent use dict style setting for datacell objects.
 
-        Cellstores must be created using the factory function :py:meth:`init_cellstore`.
+        Datacells must be created using the factory function :py:meth:`init_datacell`.
 
         Raises
         ------
@@ -867,148 +867,148 @@ class Cellstores(object):
             This operation is not allowed under any circumstance
 
         '''
-        msg = f'HANGAR NOT ALLOWED:: To add a cellstore use `init_cellstore` method.'
+        msg = f'HANGAR NOT ALLOWED:: To add a datacell use `init_datacell` method.'
         raise PermissionError(msg)
 
     def __contains__(self, key: str) -> bool:
-        '''Determine if a cellstore with a particular name is stored in the checkout
+        '''Determine if a datacell with a particular name is stored in the checkout
 
         Parameters
         ----------
         key : str
-            name of the cellstore to check for
+            name of the datacell to check for
 
         Returns
         -------
         bool
-            True if a cellstore with the provided name exists in the checkout,
+            True if a datacell with the provided name exists in the checkout,
             otherwise False.
         '''
-        return True if key in self._cellstores else False
+        return True if key in self._datacells else False
 
     def __len__(self):
-        return len(self._cellstores)
+        return len(self._datacells)
 
     def __iter__(self):
-        return iter(self._cellstores)
+        return iter(self._datacells)
 
     @property
     def iswriteable(self):
-        '''Bool indicating if this cellstore object is write-enabled. Read-only attribute.
+        '''Bool indicating if this datacell object is write-enabled. Read-only attribute.
         '''
         return False if self._mode == 'r' else True
 
     @property
     def contains_remote_references(self) -> Mapping[str, bool]:
-        '''Dict of bool indicating data reference locality in each cellstore.
+        '''Dict of bool indicating data reference locality in each datacell.
 
         Returns
         -------
         Mapping[str, bool]
-            For each cellstore name key, boolean value where False indicates all
-            samples in cellstore exist locally, True if some reference remote
+            For each datacell name key, boolean value where False indicates all
+            samples in datacell exist locally, True if some reference remote
             sources.
         '''
         res: Mapping[str, bool] = {}
-        for dsetn, dset in self._cellstores.items():
+        for dsetn, dset in self._datacells.items():
             res[dsetn] = dset.contains_remote_references
         return res
 
     @property
     def remote_sample_keys(self) -> Mapping[str, Iterable[Union[int, str]]]:
-        '''Determine cellstores samples names which reference remote sources.
+        '''Determine datacells samples names which reference remote sources.
 
         Returns
         -------
         Mapping[str, Iterable[Union[int, str]]]
-            dict where keys are cellstore names and values are iterables of
-            samples in the cellstore containing remote references
+            dict where keys are datacell names and values are iterables of
+            samples in the datacell containing remote references
         '''
         res: Mapping[str, Iterable[Union[int, str]]] = {}
-        for dsetn, dset in self._cellstores.items():
+        for dsetn, dset in self._datacells.items():
             res[dsetn] = dset.remote_reference_sample_keys
         return res
 
     def keys(self) -> List[str]:
-        '''list all cellstore keys (names) in the checkout
+        '''list all datacell keys (names) in the checkout
 
         Returns
         -------
         List[str]
-            list of cellstore names
+            list of datacell names
         '''
-        return list(self._cellstores.keys())
+        return list(self._datacells.keys())
 
-    def values(self) -> Iterable[Union[CellstoreDataReader, CellstoreDataWriter]]:
-        '''yield all cellstore object instances in the checkout.
+    def values(self) -> Iterable[Union[DatacellDataReader, DatacellDataWriter]]:
+        '''yield all datacell object instances in the checkout.
 
         Yields
         -------
-        Iterable[Union[CellstoreDataReader, CellstoreDataWriter]]
-            Generator of CellstoreData accessor objects (set to read or write mode
+        Iterable[Union[DatacellDataReader, DatacellDataWriter]]
+            Generator of DatacellData accessor objects (set to read or write mode
             as appropriate)
         '''
-        for dsetObj in self._cellstores.values():
+        for dsetObj in self._datacells.values():
             wr = cm_weakref_obj_proxy(dsetObj)
             yield wr
 
-    def items(self) -> Iterable[Tuple[str, Union[CellstoreDataReader, CellstoreDataWriter]]]:
-        '''generator providing access to cellstore_name, :class:`Cellstores`
+    def items(self) -> Iterable[Tuple[str, Union[DatacellDataReader, DatacellDataWriter]]]:
+        '''generator providing access to datacell_name, :class:`Datacells`
 
         Yields
         ------
-        Iterable[Tuple[str, Union[CellstoreDataReader, CellstoreDataWriter]]]
-            returns two tuple of all all cellstore names/object pairs in the checkout.
+        Iterable[Tuple[str, Union[DatacellDataReader, DatacellDataWriter]]]
+            returns two tuple of all all datacell names/object pairs in the checkout.
         '''
-        for dsetN, dsetObj in self._cellstores.items():
+        for dsetN, dsetObj in self._datacells.items():
             wr = cm_weakref_obj_proxy(dsetObj)
             yield (dsetN, wr)
 
-    def get(self, name: str) -> Union[CellstoreDataReader, CellstoreDataWriter]:
-        '''Returns a cellstore access object.
+    def get(self, name: str) -> Union[DatacellDataReader, DatacellDataWriter]:
+        '''Returns a datacell access object.
 
         This can be used in lieu of the dictionary style access.
 
         Parameters
         ----------
         name : str
-            name of the cellstore to return
+            name of the datacell to return
 
         Returns
         -------
-        Union[CellstoreDataReader, CellstoreDataWriter]
-            CellstoreData accessor (set to read or write mode as appropriate) which
+        Union[DatacellDataReader, DatacellDataWriter]
+            DatacellData accessor (set to read or write mode as appropriate) which
             governs interaction with the data
 
         Raises
         ------
         KeyError
-            If no cellstore with the given name exists in the checkout
+            If no datacell with the given name exists in the checkout
         '''
         try:
-            wr = cm_weakref_obj_proxy(self._cellstores[name])
+            wr = cm_weakref_obj_proxy(self._datacells[name])
             return wr
         except KeyError:
-            e = KeyError(f'No cellstore exists with name: {name}')
+            e = KeyError(f'No datacell exists with name: {name}')
             logger.error(e, exc_info=False)
             raise e
 
 # ------------------------ Writer-Enabled Methods Only ------------------------------
 
     def __delitem__(self, key: str) -> str:
-        '''remove a cellstore and all data records if write-enabled process.
+        '''remove a datacell and all data records if write-enabled process.
 
         Parameters
         ----------
         key : str
-            Name of the cellstore to remove from the repository. This will remove
+            Name of the datacell to remove from the repository. This will remove
             all records from the staging area (though the actual data and all
             records are still accessible) if they were previously committed
 
         Returns
         -------
         str
-            If successful, the name of the removed cellstore.
+            If successful, the name of the removed datacell.
 
         Raises
         ------
@@ -1019,64 +1019,64 @@ class Cellstores(object):
 
     def __enter__(self):
         self._is_conman = True
-        for dskey in list(self._cellstores):
-            self._cellstores[dskey].__enter__()
+        for dskey in list(self._datacells):
+            self._datacells[dskey].__enter__()
         return self
 
     def __exit__(self, *exc):
         self._is_conman = False
-        for dskey in list(self._cellstores):
-            self._cellstores[dskey].__exit__(*exc)
+        for dskey in list(self._datacells):
+            self._datacells[dskey].__exit__(*exc)
 
     def multi_add(self, mapping: dict) -> str:
-        '''Add related samples to un-named cellstores with the same generated key.
+        '''Add related samples to un-named datacells with the same generated key.
 
-        If you have multiple cellstores in a checkout whose samples are related to
+        If you have multiple datacells in a checkout whose samples are related to
         each other in some manner, there are two ways of associating samples
         together:
 
-        1) using named cellstores and setting each tensor in each cellstore to the
-           same sample "name" using un-named cellstores.
-        2) using this "add" method. which accepts a dictionary of "cellstore
+        1) using named datacells and setting each tensor in each datacell to the
+           same sample "name" using un-named datacells.
+        2) using this "add" method. which accepts a dictionary of "datacell
            names" as keys, and "tensors" (ie. individual samples) as values.
 
         When method (2) - this method - is used, the internally generated sample
-        ids will be set to the same value for the samples in each cellstore. That
-        way a user can iterate over the cellstore key's in one sample, and use
+        ids will be set to the same value for the samples in each datacell. That
+        way a user can iterate over the datacell key's in one sample, and use
         those same keys to get the other related tensor samples in another
-        cellstore.
+        datacell.
 
         Parameters
         ----------
         mapping: dict
-            Dict mapping (any number of) cellstore names to tensor data (samples)
-            which to add. The cellstores must exist, and must be set to accept
+            Dict mapping (any number of) datacell names to tensor data (samples)
+            which to add. The datacells must exist, and must be set to accept
             samples which are not named by the user
 
         Returns
         -------
         str
             generated id (key) which each sample is stored under in their
-            corresponding cellstore. This is the same for all samples specified in
+            corresponding datacell. This is the same for all samples specified in
             the input dictionary.
 
 
         Raises
         ------
         KeyError
-            If no cellstore with the given name exists in the checkout
+            If no datacell with the given name exists in the checkout
         '''
         try:
             tmpconman = not self._is_conman
             if tmpconman:
                 self.__enter__()
 
-            if not all([k in self._cellstores for k in mapping.keys()]):
+            if not all([k in self._datacells for k in mapping.keys()]):
                 raise KeyError(
-                    f'some key(s): {mapping.keys()} not in dset(s): {self._cellstores.keys()}')
+                    f'some key(s): {mapping.keys()} not in dset(s): {self._datacells.keys()}')
             data_name = parsing.generate_sample_name()
             for k, v in mapping.items():
-                self._cellstores[k].add(v, bulkn=data_name)
+                self._datacells[k].add(v, bulkn=data_name)
 
         except KeyError as e:
             logger.error(e, exc_info=False)
@@ -1088,7 +1088,7 @@ class Cellstores(object):
 
         return data_name
 
-    def init_cellstore(self,
+    def init_datacell(self,
                        name: str,
                        shape: Union[int, Tuple[int]] = None,
                        dtype: np.dtype = None,
@@ -1097,51 +1097,51 @@ class Cellstores(object):
                        variable_shape: bool = False,
                        *,
                        backend: str = None):
-        '''Initializes a cellstore in the repository.
+        '''Initializes a datacell in the repository.
 
-        Cellstores are groups of related data pieces (samples). All samples within
-        a cellstore have the same data type, and number of dimensions. The size of
+        Datacells are groups of related data pieces (samples). All samples within
+        a datacell have the same data type, and number of dimensions. The size of
         each dimension can be either fixed (the default behavior) or variable
         per sample.
 
-        For fixed dimension sizes, all samples written to the cellstore must have
-        the same size that was initially specified upon cellstore initialization.
-        Variable size cellstores on the other hand, can write samples with
+        For fixed dimension sizes, all samples written to the datacell must have
+        the same size that was initially specified upon datacell initialization.
+        Variable size datacells on the other hand, can write samples with
         dimensions of any size less than a maximum which is required to be set
-        upon cellstore creation.
+        upon datacell creation.
 
         Parameters
         ----------
         name : str
-            The name assigned to this cellstore.
+            The name assigned to this datacell.
         shape : Union[int, Tuple[int]]
-            The shape of the data samples which will be written in this cellstore.
+            The shape of the data samples which will be written in this datacell.
             This argument and the `dtype` argument are required if a `prototype`
             is not provided, defaults to None.
         dtype : np.dtype
-            The datatype of this cellstore. This argument and the `shape` argument
+            The datatype of this datacell. This argument and the `shape` argument
             are required if a `prototype` is not provided., defaults to None.
         prototype : np.ndarray
             A sample array of correct datatype and shape which will be used to
-            initialize the cellstore storage mechanisms. If this is provided, the
+            initialize the datacell storage mechanisms. If this is provided, the
             `shape` and `dtype` arguments must not be set, defaults to None.
         named_samples : bool, optional
-            If the samples in the cellstore have names associated with them. If set,
+            If the samples in the datacell have names associated with them. If set,
             all samples must be provided names, if not, no name will be assigned.
             defaults to True, which means all samples should have names.
         variable_shape : bool, optional
-            If this is a variable sized cellstore. If true, a the maximum shape is
+            If this is a variable sized datacell. If true, a the maximum shape is
             set from the provided `shape` or `prototype` argument. Any sample
-            added to the cellstore can then have dimension sizes <= to this
+            added to the datacell can then have dimension sizes <= to this
             initial specification (so long as they have the same rank as what
             was specified) defaults to False.
         backend : DEVELOPER USE ONLY. str, optional, kwarg only
-            Backend which should be used to write the cellstore files on disk.
+            Backend which should be used to write the datacell files on disk.
 
         Returns
         -------
-        :class:`CellstoreDataWriter`
-            instance object of the initialized cellstore.
+        :class:`DatacellDataWriter`
+            instance object of the initialized datacell.
 
         Raises
         ------
@@ -1153,7 +1153,7 @@ class Cellstores(object):
         ValueError
             If `prototype` argument is not a C contiguous ndarray.
         LookupError
-            If a cellstore already exists with the provided name.
+            If a datacell already exists with the provided name.
         ValueError
             If rank of maximum tensor shape > 31.
         ValueError
@@ -1168,10 +1168,10 @@ class Cellstores(object):
 
             if not is_suitable_user_key(name):
                 raise ValueError(
-                    f'Cellstore name provided: `{name}` is invalid. Can only contain '
+                    f'Datacell name provided: `{name}` is invalid. Can only contain '
                     f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
-            if name in self._cellstores:
-                raise LookupError(f'KEY EXISTS: cellstore already exists with name: {name}.')
+            if name in self._datacells:
+                raise LookupError(f'KEY EXISTS: datacell already exists with name: {name}.')
 
             if prototype is not None:
                 if not isinstance(prototype, np.ndarray):
@@ -1207,10 +1207,10 @@ class Cellstores(object):
             (*prototype.shape, prototype.size, prototype.dtype.num), dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
 
-        dsetCountKey = parsing.cellstore_record_count_db_key_from_raw_key(name)
-        dsetCountVal = parsing.cellstore_record_count_db_val_from_raw_val(0)
-        dsetSchemaKey = parsing.cellstore_record_schema_db_key_from_raw_key(name)
-        dsetSchemaVal = parsing.cellstore_record_schema_db_val_from_raw_val(
+        dsetCountKey = parsing.datacell_record_count_db_key_from_raw_key(name)
+        dsetCountVal = parsing.datacell_record_count_db_val_from_raw_val(0)
+        dsetSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(name)
+        dsetSchemaVal = parsing.datacell_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
             schema_is_var=variable_shape,
             schema_max_shape=prototype.shape,
@@ -1222,10 +1222,10 @@ class Cellstores(object):
 
         dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
         hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
-        numDsetsCountKey = parsing.cellstore_total_count_db_key()
+        numDsetsCountKey = parsing.datacell_total_count_db_key()
         numDsetsCountVal = dataTxn.get(numDsetsCountKey, default=('0'.encode()))
-        numDsets_count = parsing.cellstore_total_count_raw_val_from_db_val(numDsetsCountVal)
-        numDsetsCountVal = parsing.cellstore_record_count_db_val_from_raw_val(numDsets_count + 1)
+        numDsets_count = parsing.datacell_total_count_raw_val_from_db_val(numDsetsCountVal)
+        numDsetsCountVal = parsing.datacell_record_count_db_val_from_raw_val(numDsets_count + 1)
         hashSchemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
         hashSchemaVal = dsetSchemaVal
 
@@ -1236,7 +1236,7 @@ class Cellstores(object):
         TxnRegister().commit_writer_txn(self._dataenv)
         TxnRegister().commit_writer_txn(self._hashenv)
 
-        self._cellstores[name] = CellstoreDataWriter(
+        self._datacells[name] = DatacellDataWriter(
             stagehashenv=self._stagehashenv,
             repo_pth=self._repo_pth,
             dset_name=name,
@@ -1253,36 +1253,36 @@ class Cellstores(object):
         return self.get(name)
 
     def remove_dset(self, dset_name: str) -> str:
-        '''remove the cellstore and all data contained within it from the repository.
+        '''remove the datacell and all data contained within it from the repository.
 
         Parameters
         ----------
         dset_name : str
-            name of the cellstore to remove
+            name of the datacell to remove
 
         Returns
         -------
         str
-            name of the removed cellstore
+            name of the removed datacell
 
         Raises
         ------
         KeyError
-            If a cellstore does not exist with the provided name
+            If a datacell does not exist with the provided name
         '''
         datatxn = TxnRegister().begin_writer_txn(self._dataenv)
         try:
-            if dset_name not in self._cellstores:
+            if dset_name not in self._datacells:
                 e = KeyError(f'HANGAR KEY ERROR:: Cannot remove: {dset_name}. Key does not exist.')
                 logger.error(e, exc_info=False)
                 raise e
-            self._cellstores[dset_name]._close()
-            self._cellstores.__delitem__(dset_name)
+            self._datacells[dset_name]._close()
+            self._datacells.__delitem__(dset_name)
 
-            dsetCountKey = parsing.cellstore_record_count_db_key_from_raw_key(dset_name)
-            numDsetsKey = parsing.cellstore_total_count_db_key()
+            dsetCountKey = parsing.datacell_record_count_db_key_from_raw_key(dset_name)
+            numDsetsKey = parsing.datacell_total_count_db_key()
             arraysInDset = datatxn.get(dsetCountKey)
-            recordsToDelete = parsing.cellstore_total_count_raw_val_from_db_val(arraysInDset)
+            recordsToDelete = parsing.datacell_total_count_raw_val_from_db_val(arraysInDset)
             recordsToDelete = recordsToDelete + 1  # depends on num subkeys per array recy
             with datatxn.cursor() as cursor:
                 cursor.set_key(dsetCountKey)
@@ -1290,14 +1290,14 @@ class Cellstores(object):
                     cursor.delete()
             cursor.close()
 
-            dsetSchemaKey = parsing.cellstore_record_schema_db_key_from_raw_key(dset_name)
+            dsetSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(dset_name)
             datatxn.delete(dsetSchemaKey)
             numDsetsVal = datatxn.get(numDsetsKey)
-            numDsets = parsing.cellstore_total_count_raw_val_from_db_val(numDsetsVal) - 1
+            numDsets = parsing.datacell_total_count_raw_val_from_db_val(numDsetsVal) - 1
             if numDsets == 0:
                 datatxn.delete(numDsetsKey)
             else:
-                numDsetsVal = parsing.cellstore_total_count_db_val_from_raw_val(numDsets)
+                numDsetsVal = parsing.datacell_total_count_db_val_from_raw_val(numDsets)
                 datatxn.put(numDsetsKey, numDsetsVal)
         finally:
             TxnRegister().commit_writer_txn(self._dataenv)
@@ -1308,7 +1308,7 @@ class Cellstores(object):
 
     @classmethod
     def _from_staging_area(cls, repo_pth, hashenv, stageenv, stagehashenv):
-        '''Class method factory to checkout :class:`Cellstores` in write-enabled mode
+        '''Class method factory to checkout :class:`Datacells` in write-enabled mode
 
         This is not a user facing operation, and should never be manually called
         in normal operation. Once you get here, we currently assume that
@@ -1328,17 +1328,17 @@ class Cellstores(object):
 
         Returns
         -------
-        :class:`Cellstores`
+        :class:`Datacells`
             Interface class with write-enabled attributes activated and any
-            cellstores existing initialized in write mode via
-            :class:`.cellstore.CellstoreDataWriter`.
+            datacells existing initialized in write mode via
+            :class:`.datacell.DatacellDataWriter`.
         '''
 
-        cellstores = {}
+        datacells = {}
         query = RecordQuery(stageenv)
         stagedSchemaSpecs = query.schema_specs()
         for dsetName, schemaSpec in stagedSchemaSpecs.items():
-            cellstores[dsetName] = CellstoreDataWriter(
+            datacells[dsetName] = DatacellDataWriter(
                 stagehashenv=stagehashenv,
                 repo_pth=repo_pth,
                 dset_name=dsetName,
@@ -1352,16 +1352,16 @@ class Cellstores(object):
                 mode='a',
                 default_schema_backend=schemaSpec.schema_default_backend)
 
-        return cls('a', repo_pth, cellstores, hashenv, stageenv, stagehashenv)
+        return cls('a', repo_pth, datacells, hashenv, stageenv, stagehashenv)
 
     @classmethod
     def _from_commit(cls, repo_pth, hashenv, cmtrefenv):
-        '''Class method factory to checkout :class:`.cellstore.Cellstores` in read-only mode
+        '''Class method factory to checkout :class:`.datacell.Datacells` in read-only mode
 
         This is not a user facing operation, and should never be manually called
         in normal operation. For read mode, no locks need to be verified, but
         construction should occur through the interface to the
-        :class:`Cellstores` class.
+        :class:`Datacells` class.
 
         Parameters
         ----------
@@ -1374,15 +1374,15 @@ class Cellstores(object):
 
         Returns
         -------
-        :class:`Cellstores`
+        :class:`Datacells`
             Interface class with all write-enabled attributes deactivated
-            cellstores initialized in read mode via :class:`.cellstore.CellstoreDataReader`.
+            datacells initialized in read mode via :class:`.datacell.DatacellDataReader`.
         '''
-        cellstores = {}
+        datacells = {}
         query = RecordQuery(cmtrefenv)
         cmtSchemaSpecs = query.schema_specs()
         for dsetName, schemaSpec in cmtSchemaSpecs.items():
-            cellstores[dsetName] = CellstoreDataReader(
+            datacells[dsetName] = DatacellDataReader(
                 repo_pth=repo_pth,
                 dset_name=dsetName,
                 default_schema_hash=schemaSpec.schema_hash,
@@ -1394,4 +1394,4 @@ class Cellstores(object):
                 hashenv=hashenv,
                 mode='r')
 
-        return cls('r', repo_pth, cellstores, None, None, None)
+        return cls('r', repo_pth, datacells, None, None, None)

@@ -41,7 +41,7 @@ disk.
 
   The atomicity of interactions is completely hidden from a normal user; they
   shouldn't have to care about this or even know this exists. However, this
-  is also why using the context-manager style cellstore interaction scheme can
+  is also why using the context-manager style datacell interaction scheme can
   result in ~2x times speedup on writes/reads. We can just pass on most of the
   work to the python ``contextlib`` package instead of having to begin and
   commit/abort (depending on interaction mode) transactions with every call to
@@ -69,7 +69,7 @@ key/value pair of (`hash`, `backend_specification`).
 .. note::
 
   The record backend stores hash information in a separate location from the
-  commit references (which associate a `(cellstorename, sample name/id)` to a
+  commit references (which associate a `(datacellname, sample name/id)` to a
   `sample_hash`). This let's us separate the historical repository
   information from a particular computer's location of a data piece. All we need in
   the public history is to know that some data with a particular hash is
@@ -78,11 +78,11 @@ key/value pair of (`hash`, `backend_specification`).
 
 On the other hand, if a data sample is added to a repository which already has a
 record of some hash, we don't even involve the storage backend. All we need to
-do is just record that a new sample in a cellstore was added with that hash. It
+do is just record that a new sample in a datacell was added with that hash. It
 makes no sense to write the same data twice.
 
 This method can actually result in massive space savings for some common use
-cases. For the MNIST cellstore, the training label data is typically a 1D-array
+cases. For the MNIST datacell, the training label data is typically a 1D-array
 of size 50,000. Because there are only 10 labels, we only need to store 10 ints
 on disk, and just keep references to the rest.
 

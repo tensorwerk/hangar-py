@@ -287,7 +287,7 @@ class NUMPY_10_FileHandles(object):
         os.rmdir(process_dir)
 
     def _create_schema(self, *, remote_operation: bool = False):
-        '''stores the shape and dtype as the schema of a cellstore.
+        '''stores the shape and dtype as the schema of a datacell.
 
         Parameters
         ----------

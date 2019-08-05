@@ -163,7 +163,7 @@ def get_commit_ancestors(refenv, commit_hash):
 
 
 def get_commit_ancestors_graph(refenv, starting_commit):
-    '''returns a DAG of all commits which start at some hash as they point to the repo root.
+    '''returns a DAG of all commits starting at some hash pointing to the repo root.
 
     Parameters
     ----------
