@@ -22,12 +22,12 @@ def test_ff_merge_no_conf_correct_contents_for_name_or_hash_checkout(repo_1_br_n
     coByHash = repo_1_br_no_conf.checkout(commit=cmt_hash)
 
     assert len(coByHash.datacells) == len(coByName.datacells)
-    for dsetn in coByHash.datacells.keys():
-        dset_byHash = coByHash.datacells[dsetn]
-        dset_byName = coByName.datacells[dsetn]
-        assert len(dset_byHash) == len(dset_byHash)
-        for k, v in dset_byHash.items():
-            assert np.allclose(v, dset_byName[k])
+    for dcelln in coByHash.datacells.keys():
+        dcell_byHash = coByHash.datacells[dcelln]
+        dcell_byName = coByName.datacells[dcelln]
+        assert len(dcell_byHash) == len(dcell_byHash)
+        for k, v in dcell_byHash.items():
+            assert np.allclose(v, dcell_byName[k])
 
     assert len(coByHash.metadata) == len(coByName.metadata)
     for metaKey in coByHash.metadata.keys():
@@ -76,21 +76,21 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     assert len(co.datacells) == 1
     assert 'dummy' in co.datacells
     # datacell samples
-    dset = co.datacells['dummy']
-    assert len(dset) == 50
+    dcell = co.datacells['dummy']
+    assert len(dcell) == 50
 
     # datacell sample values
     checkarr = np.zeros_like(np.arange(50))
-    for k, v in dset.items():
+    for k, v in dcell.items():
         checkarr[:] = int(k)
         assert np.allclose(v, checkarr)
 
     # datacell sample keys
-    dset_keys = list(dset.keys())
+    dcell_keys = list(dcell.keys())
     for genKey in range(30):
-        assert str(genKey) in dset_keys
-        dset_keys.remove(str(genKey))
-    assert len(dset_keys) == 20
+        assert str(genKey) in dcell_keys
+        dcell_keys.remove(str(genKey))
+    assert len(dcell_keys) == 20
     co.close()
 
 
@@ -243,9 +243,9 @@ class TestDatacellSampleConflicts(object):
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        dset = co.datacells['dummy']
-        assert np.allclose(dset['15'], newdata)
-        assert np.allclose(dset[15], newdata)
+        dcell = co.datacells['dummy']
+        assert np.allclose(dcell['15'], newdata)
+        assert np.allclose(dcell[15], newdata)
         co.close()
 
     def test_conflict_mutations_same_name_different_value(self, repo_2_br_no_conf):
@@ -297,6 +297,6 @@ class TestDatacellSampleConflicts(object):
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        dset = co.datacells['dummy']
-        assert '0' not in dset
-        assert len(dset) == 47
+        dcell = co.datacells['dummy']
+        assert '0' not in dcell
+        assert len(dcell) == 47

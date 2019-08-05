@@ -113,12 +113,12 @@ class RecordQuery(object):
             dict of db_key/db_values for each record traversed
         '''
         data_records = {}
-        startDsetRecCountRngK = parsing.datacell_record_count_db_key_from_raw_key(datacell_name)
+        startDcellRecCountRngK = parsing.datacell_record_count_db_key_from_raw_key(datacell_name)
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
-                dataRecordsExist = cursor.set_range(startDsetRecCountRngK)
-                dataRecKeySubString = f'{startDsetRecCountRngK.decode()}{c.SEP_KEY}'.encode()
+                dataRecordsExist = cursor.set_range(startDcellRecCountRngK)
+                dataRecKeySubString = f'{startDcellRecCountRngK.decode()}{c.SEP_KEY}'.encode()
                 cursor.next()
                 while dataRecordsExist:
                     dataRecKey, dataRecVal = cursor.item()
@@ -250,8 +250,8 @@ class RecordQuery(object):
             raw schema spec for the datacell requested
         '''
         recs = self._traverse_datacell_schema_records()
-        dsetSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(datacell_name)
-        schemaRecVal = recs[dsetSchemaKey]
+        dcellSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(datacell_name)
+        schemaRecVal = recs[dcellSchemaKey]
         schemaRec = parsing.datacell_record_schema_raw_val_from_db_val(schemaRecVal)
         return schemaRec
 
@@ -292,16 +292,16 @@ class RecordQuery(object):
         Returns
         -------
         Dict[str, str]
-            mapping of sample hash to dset_schema_hash
+            mapping of sample hash to dcell_schema_hash
         '''
-        dsetns = self.datacell_names()
+        dcellns = self.datacell_names()
         odict = {}
-        for dsetn in dsetns:
-            dset_hash_vals = self.datacell_data_hashes(dsetn)
-            dset_schema_spec = self.datacell_schema_spec(dsetn)
-            dset_schema_hash = dset_schema_spec.schema_hash
-            for dset_hash_val in dset_hash_vals:
-                odict[dset_hash_val.data_hash] = dset_schema_hash
+        for dcelln in dcellns:
+            dcell_hash_vals = self.datacell_data_hashes(dcelln)
+            dcell_schema_spec = self.datacell_schema_spec(dcelln)
+            dcell_schema_hash = dcell_schema_spec.schema_hash
+            for dcell_hash_val in dcell_hash_vals:
+                odict[dcell_hash_val.data_hash] = dcell_schema_hash
 
         return odict
 
@@ -374,17 +374,17 @@ class RecordQuery(object):
             dict with primary keys: 'datacells', 'metadata'; with datacells nesting
             'schema' and 'data' keys/values inside
         '''
-        dset_names = self.datacell_names()
+        dcell_names = self.datacell_names()
         schema_records = self.schema_specs()
-        dsetRecs = {}
-        for dsetName in dset_names:
-            dsetRecs[dsetName] = {
-                'schema': schema_records[dsetName],
-                'data': dict(self.datacell_data_records(dsetName)),
+        dcellRecs = {}
+        for dcellName in dcell_names:
+            dcellRecs[dcellName] = {
+                'schema': schema_records[dcellName],
+                'data': dict(self.datacell_data_records(dcellName)),
             }
 
         res = {
-            'datacells': dsetRecs,
+            'datacells': dcellRecs,
             'metadata': dict(self.metadata_records()),
         }
         return res

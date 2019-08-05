@@ -33,7 +33,7 @@ class DatacellDataReader(object):
 
     def __init__(self,
                  repo_pth: os.PathLike,
-                 dset_name: str,
+                 dcell_name: str,
                  default_schema_hash: str,
                  samplesAreNamed: bool,
                  isVar: bool,
@@ -54,7 +54,7 @@ class DatacellDataReader(object):
         ----------
         repo_pth : os.PathLike
             path to the repository on disk.
-        dset_name : str
+        dcell_name : str
             name of the datacell
         schema_hashes : list of str
             list of all schemas referenced in the datacell
@@ -76,7 +76,7 @@ class DatacellDataReader(object):
         '''
         self._mode = mode
         self._path = repo_pth
-        self._dsetn = dset_name
+        self._dcelln = dcell_name
         self._schema_variable = isVar
         self._schema_dtype_num = varDtypeNum
         self._samples_are_named = samplesAreNamed
@@ -105,15 +105,15 @@ class DatacellDataReader(object):
         _TxnRegister = TxnRegister()
         hashTxn = _TxnRegister.begin_reader_txn(hashenv)
         try:
-            dsetNamesSpec = RecordQuery(dataenv).datacell_data_records(self._dsetn)
-            for dsetNames, dataSpec in dsetNamesSpec:
+            dcellNamesSpec = RecordQuery(dataenv).datacell_data_records(self._dcelln)
+            for dcellNames, dataSpec in dcellNamesSpec:
                 hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
                 hash_ref = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hash_ref)
-                self._sspecs[dsetNames.data_name] = be_loc
+                self._sspecs[dcellNames.data_name] = be_loc
                 if (be_loc.backend == '50') and (not self._contains_partial_remote_data):
                     warnings.warn(
-                        f'Datacell: {self._dsetn} contains `reference-only` samples, with '
+                        f'Datacell: {self._dcelln} contains `reference-only` samples, with '
                         f'actual data residing on a remote server. A `fetch-data` '
                         f'operation is required to access these samples.', UserWarning)
                     self._contains_partial_remote_data = True
@@ -176,7 +176,7 @@ class DatacellDataReader(object):
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__} \
-                \n    Datacell Name             : {self._dsetn}\
+                \n    Datacell Name             : {self._dcelln}\
                 \n    Schema Hash              : {self._default_schema_hash}\
                 \n    Variable Shape           : {bool(int(self._schema_variable))}\
                 \n    (max) Shape              : {self._schema_max_shape}\
@@ -190,7 +190,7 @@ class DatacellDataReader(object):
     def __repr__(self):
         res = f'{self.__class__}('\
               f'repo_pth={self._path}, '\
-              f'dset_name={self._dsetn}, '\
+              f'dcell_name={self._dcelln}, '\
               f'default_schema_hash={self._default_schema_hash}, '\
               f'isVar={self._schema_variable}, '\
               f'varMaxShape={self._schema_max_shape}, '\
@@ -210,7 +210,7 @@ class DatacellDataReader(object):
     def name(self):
         '''Name of the datacell. Read-Only attribute.
         '''
-        return self._dsetn
+        return self._dcelln
 
     @property
     def dtype(self):
@@ -355,7 +355,7 @@ class DatacellDataReader(object):
             data = self._fs[spec.backend].read_data(spec)
             return data
         except KeyError:
-            raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dset: {self._dsetn}')
+            raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dcell: {self._dcelln}')
 
     def get_batch(self, names: list,
                   *, n_cpus: int = None, start_method: str = 'spawn') -> list:
@@ -571,23 +571,23 @@ class DatacellDataWriter(DatacellDataReader):
                 raise ValueError(f'`data` argument type: {type(data)} != `np.ndarray`')
             elif data.dtype.num != self._schema_dtype_num:
                 raise ValueError(
-                    f'dtype: {data.dtype} != dset: {np.typeDict[self._schema_dtype_num]}.')
+                    f'dtype: {data.dtype} != dcell: {np.typeDict[self._schema_dtype_num]}.')
             elif not data.flags.c_contiguous:
                 raise ValueError(f'`data` must be "C" contiguous array.')
 
             if self._schema_variable is True:
                 if data.ndim != len(self._schema_max_shape):
                     raise ValueError(
-                        f'`data` rank: {data.ndim} != dset rank: {len(self._schema_max_shape)}')
+                        f'`data` rank: {data.ndim} != dcell rank: {len(self._schema_max_shape)}')
                 for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
                     if dDimSize > schDimSize:
                         raise ValueError(
                             f'dimensions of `data`: {data.shape} exceed variable max '
-                            f'dims of dset: {self._dsetn} specified max dimensions: '
+                            f'dims of dcell: {self._dcelln} specified max dimensions: '
                             f'{self._schema_max_shape}: SIZE: {dDimSize} > {schDimSize}')
             elif data.shape != self._schema_max_shape:
                 raise ValueError(
-                    f'`data` shape: {data.shape} != fixed dset shape: {self._schema_max_shape}')
+                    f'`data` shape: {data.shape} != fixed dcell shape: {self._schema_max_shape}')
 
         except ValueError as e:
             logger.error(e, exc_info=False)
@@ -604,13 +604,13 @@ class DatacellDataWriter(DatacellDataReader):
             hashKey = parsing.hash_data_db_key_from_raw_key(full_hash)
 
             # check if data record already exists
-            dataRecKey = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
+            dataRecKey = parsing.data_record_db_key_from_raw_key(self._dcelln, name)
             existingDataRecVal = self._dataTxn.get(dataRecKey, default=False)
             if existingDataRecVal:
                 existingDataRec = parsing.data_record_raw_val_from_db_val(existingDataRecVal)
                 if full_hash == existingDataRec.data_hash:
                     raise LookupError(
-                        f'Datacell: {self._dsetn} already contains identical object named:'
+                        f'Datacell: {self._dcelln} already contains identical object named:'
                         f'{name} with same hash value: {full_hash}')
 
             # write new data if data hash does not exist
@@ -628,11 +628,11 @@ class DatacellDataWriter(DatacellDataReader):
             self._dataTxn.put(dataRecKey, dataRecVal)
 
             if existingDataRecVal is False:
-                dsetCountKey = parsing.datacell_record_count_db_key_from_raw_key(self._dsetn)
-                dsetCountVal = self._dataTxn.get(dsetCountKey, default='0'.encode())
-                newDsetCount = parsing.datacell_record_count_raw_val_from_db_val(dsetCountVal) + 1
-                newDsetCountVal = parsing.datacell_record_count_db_val_from_raw_val(newDsetCount)
-                self._dataTxn.put(dsetCountKey, newDsetCountVal)
+                dcellCountKey = parsing.datacell_record_count_db_key_from_raw_key(self._dcelln)
+                dcellCountVal = self._dataTxn.get(dcellCountKey, default='0'.encode())
+                newDcellCount = parsing.datacell_record_count_raw_val_from_db_val(dcellCountVal) + 1
+                newDcellCountVal = parsing.datacell_record_count_db_val_from_raw_val(newDcellCount)
+                self._dataTxn.put(dcellCountKey, newDcellCountVal)
 
         except LookupError as e:
             logger.error(e, exc_info=False)
@@ -683,36 +683,36 @@ class DatacellDataWriter(DatacellDataReader):
         if not self._is_conman:
             self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
 
-        dataKey = parsing.data_record_db_key_from_raw_key(self._dsetn, name)
+        dataKey = parsing.data_record_db_key_from_raw_key(self._dcelln, name)
         try:
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
-                raise KeyError(f'No sample: {name} type: {type(name)} exists in: {self._dsetn}')
+                raise KeyError(f'No sample: {name} type: {type(name)} exists in: {self._dcelln}')
             del self._sspecs[name]
 
-            dsetDataCountKey = parsing.datacell_record_count_db_key_from_raw_key(self._dsetn)
-            dsetDataCountVal = self._dataTxn.get(dsetDataCountKey)
-            newDsetDataCount = parsing.datacell_record_count_raw_val_from_db_val(dsetDataCountVal) - 1
+            dcellDataCountKey = parsing.datacell_record_count_db_key_from_raw_key(self._dcelln)
+            dcellDataCountVal = self._dataTxn.get(dcellDataCountKey)
+            newDcellDataCount = parsing.datacell_record_count_raw_val_from_db_val(dcellDataCountVal) - 1
 
             # if this is the last data piece existing in a datacell, remove the datacell
-            if newDsetDataCount == 0:
-                dsetSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(self._dsetn)
-                self._dataTxn.delete(dsetDataCountKey)
-                self._dataTxn.delete(dsetSchemaKey)
-                totalNumDsetsKey = parsing.datacell_total_count_db_key()
-                totalNumDsetsVal = self._dataTxn.get(totalNumDsetsKey)
-                newTotalNumDsets = parsing.datacell_total_count_raw_val_from_db_val(totalNumDsetsVal) - 1
+            if newDcellDataCount == 0:
+                dcellSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(self._dcelln)
+                self._dataTxn.delete(dcellDataCountKey)
+                self._dataTxn.delete(dcellSchemaKey)
+                totalNumDcellsKey = parsing.datacell_total_count_db_key()
+                totalNumDcellsVal = self._dataTxn.get(totalNumDcellsKey)
+                newTotalNumDcells = parsing.datacell_total_count_raw_val_from_db_val(totalNumDcellsVal) - 1
                 # if no more datacells exist, delete the indexing key
-                if newTotalNumDsets == 0:
-                    self._dataTxn.delete(totalNumDsetsKey)
-                # otherwise just decrement the count of dsets
+                if newTotalNumDcells == 0:
+                    self._dataTxn.delete(totalNumDcellsKey)
+                # otherwise just decrement the count of dcells
                 else:
-                    newTotalNumDsetsVal = parsing.datacell_total_count_db_val_from_raw_val(newTotalNumDsets)
-                    self._dataTxn.put(newTotalNumDsetsVal)
+                    newTotalNumDcellsVal = parsing.datacell_total_count_db_val_from_raw_val(newTotalNumDcells)
+                    self._dataTxn.put(newTotalNumDcellsVal)
             # otherwise just decrement the datacell record count
             else:
-                newDsetDataCountVal = parsing.datacell_record_count_db_val_from_raw_val(newDsetDataCount)
-                self._dataTxn.put(dsetDataCountKey, newDsetDataCountVal)
+                newDcellDataCountVal = parsing.datacell_record_count_db_val_from_raw_val(newDcellDataCount)
+                self._dataTxn.put(dcellDataCountKey, newDcellDataCountVal)
 
         except KeyError as e:
             logger.error(e, exc_info=False)
@@ -794,7 +794,7 @@ class Datacells(object):
         self._from_staging_area = None  # should never be able to access
         if self._mode == 'r':
             self.init_datacell = None
-            self.remove_dset = None
+            self.remove_dcell = None
             self.multi_add = None
             self.__delitem__ = None
             self.__setitem__ = None
@@ -814,8 +814,8 @@ class Datacells(object):
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Datacell Names / Partial Remote References:\
                 \n      - ' + '\n      - '.join(
-            f'{dsetn} / {dset.contains_remote_references}'
-            for dsetn, dset in self._datacells.items())
+            f'{dcelln} / {dcell.contains_remote_references}'
+            for dcelln, dcell in self._datacells.items())
         p.text(res)
 
     def __repr__(self):
@@ -910,8 +910,8 @@ class Datacells(object):
             sources.
         '''
         res: Mapping[str, bool] = {}
-        for dsetn, dset in self._datacells.items():
-            res[dsetn] = dset.contains_remote_references
+        for dcelln, dcell in self._datacells.items():
+            res[dcelln] = dcell.contains_remote_references
         return res
 
     @property
@@ -925,8 +925,8 @@ class Datacells(object):
             samples in the datacell containing remote references
         '''
         res: Mapping[str, Iterable[Union[int, str]]] = {}
-        for dsetn, dset in self._datacells.items():
-            res[dsetn] = dset.remote_reference_sample_keys
+        for dcelln, dcell in self._datacells.items():
+            res[dcelln] = dcell.remote_reference_sample_keys
         return res
 
     def keys(self) -> List[str]:
@@ -948,8 +948,8 @@ class Datacells(object):
             Generator of DatacellData accessor objects (set to read or write mode
             as appropriate)
         '''
-        for dsetObj in self._datacells.values():
-            wr = cm_weakref_obj_proxy(dsetObj)
+        for dcellObj in self._datacells.values():
+            wr = cm_weakref_obj_proxy(dcellObj)
             yield wr
 
     def items(self) -> Iterable[Tuple[str, Union[DatacellDataReader, DatacellDataWriter]]]:
@@ -960,9 +960,9 @@ class Datacells(object):
         Iterable[Tuple[str, Union[DatacellDataReader, DatacellDataWriter]]]
             returns two tuple of all all datacell names/object pairs in the checkout.
         '''
-        for dsetN, dsetObj in self._datacells.items():
-            wr = cm_weakref_obj_proxy(dsetObj)
-            yield (dsetN, wr)
+        for dcellN, dcellObj in self._datacells.items():
+            wr = cm_weakref_obj_proxy(dcellObj)
+            yield (dcellN, wr)
 
     def get(self, name: str) -> Union[DatacellDataReader, DatacellDataWriter]:
         '''Returns a datacell access object.
@@ -1015,7 +1015,7 @@ class Datacells(object):
         PermissionError
             If this is a read-only checkout, no operation is permitted.
         '''
-        return self.remove_dset(key)
+        return self.remove_dcell(key)
 
     def __enter__(self):
         self._is_conman = True
@@ -1073,7 +1073,7 @@ class Datacells(object):
 
             if not all([k in self._datacells for k in mapping.keys()]):
                 raise KeyError(
-                    f'some key(s): {mapping.keys()} not in dset(s): {self._datacells.keys()}')
+                    f'some key(s): {mapping.keys()} not in dcell(s): {self._datacells.keys()}')
             data_name = parsing.generate_sample_name()
             for k, v in mapping.items():
                 self._datacells[k].add(v, bulkn=data_name)
@@ -1207,10 +1207,10 @@ class Datacells(object):
             (*prototype.shape, prototype.size, prototype.dtype.num), dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
 
-        dsetCountKey = parsing.datacell_record_count_db_key_from_raw_key(name)
-        dsetCountVal = parsing.datacell_record_count_db_val_from_raw_val(0)
-        dsetSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(name)
-        dsetSchemaVal = parsing.datacell_record_schema_db_val_from_raw_val(
+        dcellCountKey = parsing.datacell_record_count_db_key_from_raw_key(name)
+        dcellCountVal = parsing.datacell_record_count_db_val_from_raw_val(0)
+        dcellSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(name)
+        dcellSchemaVal = parsing.datacell_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
             schema_is_var=variable_shape,
             schema_max_shape=prototype.shape,
@@ -1222,16 +1222,16 @@ class Datacells(object):
 
         dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
         hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
-        numDsetsCountKey = parsing.datacell_total_count_db_key()
-        numDsetsCountVal = dataTxn.get(numDsetsCountKey, default=('0'.encode()))
-        numDsets_count = parsing.datacell_total_count_raw_val_from_db_val(numDsetsCountVal)
-        numDsetsCountVal = parsing.datacell_record_count_db_val_from_raw_val(numDsets_count + 1)
+        numDcellsCountKey = parsing.datacell_total_count_db_key()
+        numDcellsCountVal = dataTxn.get(numDcellsCountKey, default=('0'.encode()))
+        numDcells_count = parsing.datacell_total_count_raw_val_from_db_val(numDcellsCountVal)
+        numDcellsCountVal = parsing.datacell_record_count_db_val_from_raw_val(numDcells_count + 1)
         hashSchemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
-        hashSchemaVal = dsetSchemaVal
+        hashSchemaVal = dcellSchemaVal
 
-        dataTxn.put(dsetCountKey, dsetCountVal)
-        dataTxn.put(numDsetsCountKey, numDsetsCountVal)
-        dataTxn.put(dsetSchemaKey, dsetSchemaVal)
+        dataTxn.put(dcellCountKey, dcellCountVal)
+        dataTxn.put(numDcellsCountKey, numDcellsCountVal)
+        dataTxn.put(dcellSchemaKey, dcellSchemaVal)
         hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
         TxnRegister().commit_writer_txn(self._dataenv)
         TxnRegister().commit_writer_txn(self._hashenv)
@@ -1239,7 +1239,7 @@ class Datacells(object):
         self._datacells[name] = DatacellDataWriter(
             stagehashenv=self._stagehashenv,
             repo_pth=self._repo_pth,
-            dset_name=name,
+            dcell_name=name,
             default_schema_hash=schema_hash,
             samplesAreNamed=named_samples,
             isVar=variable_shape,
@@ -1252,12 +1252,12 @@ class Datacells(object):
 
         return self.get(name)
 
-    def remove_dset(self, dset_name: str) -> str:
+    def remove_dcell(self, dcell_name: str) -> str:
         '''remove the datacell and all data contained within it from the repository.
 
         Parameters
         ----------
-        dset_name : str
+        dcell_name : str
             name of the datacell to remove
 
         Returns
@@ -1272,37 +1272,37 @@ class Datacells(object):
         '''
         datatxn = TxnRegister().begin_writer_txn(self._dataenv)
         try:
-            if dset_name not in self._datacells:
-                e = KeyError(f'HANGAR KEY ERROR:: Cannot remove: {dset_name}. Key does not exist.')
+            if dcell_name not in self._datacells:
+                e = KeyError(f'HANGAR KEY ERROR:: Cannot remove: {dcell_name}. Key does not exist.')
                 logger.error(e, exc_info=False)
                 raise e
-            self._datacells[dset_name]._close()
-            self._datacells.__delitem__(dset_name)
+            self._datacells[dcell_name]._close()
+            self._datacells.__delitem__(dcell_name)
 
-            dsetCountKey = parsing.datacell_record_count_db_key_from_raw_key(dset_name)
-            numDsetsKey = parsing.datacell_total_count_db_key()
-            arraysInDset = datatxn.get(dsetCountKey)
-            recordsToDelete = parsing.datacell_total_count_raw_val_from_db_val(arraysInDset)
+            dcellCountKey = parsing.datacell_record_count_db_key_from_raw_key(dcell_name)
+            numDcellsKey = parsing.datacell_total_count_db_key()
+            arraysInDcell = datatxn.get(dcellCountKey)
+            recordsToDelete = parsing.datacell_total_count_raw_val_from_db_val(arraysInDcell)
             recordsToDelete = recordsToDelete + 1  # depends on num subkeys per array recy
             with datatxn.cursor() as cursor:
-                cursor.set_key(dsetCountKey)
+                cursor.set_key(dcellCountKey)
                 for i in range(recordsToDelete):
                     cursor.delete()
             cursor.close()
 
-            dsetSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(dset_name)
-            datatxn.delete(dsetSchemaKey)
-            numDsetsVal = datatxn.get(numDsetsKey)
-            numDsets = parsing.datacell_total_count_raw_val_from_db_val(numDsetsVal) - 1
-            if numDsets == 0:
-                datatxn.delete(numDsetsKey)
+            dcellSchemaKey = parsing.datacell_record_schema_db_key_from_raw_key(dcell_name)
+            datatxn.delete(dcellSchemaKey)
+            numDcellsVal = datatxn.get(numDcellsKey)
+            numDcells = parsing.datacell_total_count_raw_val_from_db_val(numDcellsVal) - 1
+            if numDcells == 0:
+                datatxn.delete(numDcellsKey)
             else:
-                numDsetsVal = parsing.datacell_total_count_db_val_from_raw_val(numDsets)
-                datatxn.put(numDsetsKey, numDsetsVal)
+                numDcellsVal = parsing.datacell_total_count_db_val_from_raw_val(numDcells)
+                datatxn.put(numDcellsKey, numDcellsVal)
         finally:
             TxnRegister().commit_writer_txn(self._dataenv)
 
-        return dset_name
+        return dcell_name
 
 # ------------------------ Class Factory Functions ------------------------------
 
@@ -1337,11 +1337,11 @@ class Datacells(object):
         datacells = {}
         query = RecordQuery(stageenv)
         stagedSchemaSpecs = query.schema_specs()
-        for dsetName, schemaSpec in stagedSchemaSpecs.items():
-            datacells[dsetName] = DatacellDataWriter(
+        for dcellName, schemaSpec in stagedSchemaSpecs.items():
+            datacells[dcellName] = DatacellDataWriter(
                 stagehashenv=stagehashenv,
                 repo_pth=repo_pth,
-                dset_name=dsetName,
+                dcell_name=dcellName,
                 default_schema_hash=schemaSpec.schema_hash,
                 samplesAreNamed=schemaSpec.schema_is_named,
                 isVar=schemaSpec.schema_is_var,
@@ -1381,10 +1381,10 @@ class Datacells(object):
         datacells = {}
         query = RecordQuery(cmtrefenv)
         cmtSchemaSpecs = query.schema_specs()
-        for dsetName, schemaSpec in cmtSchemaSpecs.items():
-            datacells[dsetName] = DatacellDataReader(
+        for dcellName, schemaSpec in cmtSchemaSpecs.items():
+            datacells[dcellName] = DatacellDataReader(
                 repo_pth=repo_pth,
-                dset_name=dsetName,
+                dcell_name=dcellName,
                 default_schema_hash=schemaSpec.schema_hash,
                 samplesAreNamed=schemaSpec.schema_is_named,
                 isVar=schemaSpec.schema_is_var,

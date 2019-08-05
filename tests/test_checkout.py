@@ -13,16 +13,16 @@ class TestCheckout(object):
 
     def test_two_read_checkouts(self, repo, array5by7):
         w_checkout = repo.checkout(write=True)
-        datacell_name = 'dset'
+        datacell_name = 'dcell'
         r_ds = w_checkout.datacells.init_datacell(name=datacell_name, prototype=array5by7)
         r_ds['1'] = array5by7
         w_checkout.metadata.add('init', 'array5by7 added')
         w_checkout.commit('init')
         r1_checkout = repo.checkout()
         r2_checkout = repo.checkout()
-        assert np.allclose(r1_checkout.datacells['dset']['1'], array5by7)
+        assert np.allclose(r1_checkout.datacells['dcell']['1'], array5by7)
         assert np.allclose(
-            r1_checkout.datacells['dset']['1'], r2_checkout.datacells['dset']['1'])
+            r1_checkout.datacells['dcell']['1'], r2_checkout.datacells['dcell']['1'])
         assert r1_checkout.metadata.get('init') == 'array5by7 added'
         assert r2_checkout.metadata.get('init') == 'array5by7 added'
         r1_checkout.close()
@@ -32,26 +32,26 @@ class TestCheckout(object):
     def test_write_with_read_checkout(self, written_repo, array5by7):
         co = written_repo.checkout()
         with pytest.raises(TypeError):
-            co.datacells.init_datacell(name='dset', shape=(5, 7), dtype=np.float64)
+            co.datacells.init_datacell(name='dcell', shape=(5, 7), dtype=np.float64)
         with pytest.raises(AttributeError):
             co.metadata.add('a', 'b')
         co.close()
 
-    def test_writer_dset_obj_not_accessible_after_close(self, written_two_cmt_repo):
+    def test_writer_dcell_obj_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=True)
-        dsets = co.datacells
-        dset = co.datacells['_dset']
+        dcells = co.datacells
+        dcell = co.datacells['_dcell']
         co.close()
 
         with pytest.raises(ReferenceError):
-            dsets.__dict__
+            dcells.__dict__
         with pytest.raises(ReferenceError):
-            shouldFail = dsets['_dset']
+            shouldFail = dcells['_dcell']
         with pytest.raises(ReferenceError):
-            dset.__dict__
+            dcell.__dict__
 
-    def test_writer_dset_obj_datacell_iter_values_not_accessible_after_close(self, written_two_cmt_repo):
+    def test_writer_dcell_obj_datacell_iter_values_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=True)
         oldObjs = []
@@ -63,7 +63,7 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 oldObj.__dict__
 
-    def test_writer_dset_obj_datacell_iter_items_not_accessible_after_close(self, written_two_cmt_repo):
+    def test_writer_dcell_obj_datacell_iter_items_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=True)
         oldObjs = {}
@@ -76,39 +76,39 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 obj.__dict__
 
-    def test_writer_dset_obj_not_accessible_after_commit_and_close(self, written_repo, array5by7):
+    def test_writer_dcell_obj_not_accessible_after_commit_and_close(self, written_repo, array5by7):
         repo = written_repo
         co = repo.checkout(write=True)
-        dsets = co.datacells
-        dset = co.datacells['_dset']
-        dset['1'] = array5by7
+        dcells = co.datacells
+        dcell = co.datacells['_dcell']
+        dcell['1'] = array5by7
         co.commit('hey there')
         co.close()
 
         with pytest.raises(ReferenceError):
-            dsets.__dict__
+            dcells.__dict__
         with pytest.raises(ReferenceError):
-            shouldFail = dsets['_dset']
+            shouldFail = dcells['_dcell']
         with pytest.raises(ReferenceError):
-            dset.__dict__
+            dcell.__dict__
         with pytest.raises(ReferenceError):
-            shouldFail = dset['1']
+            shouldFail = dcell['1']
 
-    def test_reader_dset_obj_not_accessible_after_close(self, written_two_cmt_repo):
+    def test_reader_dcell_obj_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=False)
-        dsets = co.datacells
-        dset = co.datacells['_dset']
+        dcells = co.datacells
+        dcell = co.datacells['_dcell']
         co.close()
 
         with pytest.raises(ReferenceError):
-            dsets.__dict__
+            dcells.__dict__
         with pytest.raises(ReferenceError):
-            shouldFail = dsets['_dset']
+            shouldFail = dcells['_dcell']
         with pytest.raises(ReferenceError):
-            dset.__dict__
+            dcell.__dict__
 
-    def test_reader_dset_obj_datacell_iter_values_not_accessible_after_close(self, written_two_cmt_repo):
+    def test_reader_dcell_obj_datacell_iter_values_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=False)
         oldObjs = []
@@ -120,7 +120,7 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 oldObj.__dict__
 
-    def test_reader_dset_obj_datacell_iter_items_not_accessible_after_close(self, written_two_cmt_repo):
+    def test_reader_dcell_obj_datacell_iter_items_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=False)
         oldObjs = {}
@@ -136,9 +136,9 @@ class TestCheckout(object):
     def test_reader_datacell_context_manager_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=False)
-        dset = co.datacells['_dset']
+        dcell = co.datacells['_dcell']
         klist = []
-        with dset as ds:
+        with dcell as ds:
             for k in ds.keys():
                 klist.append(k)
                 a = ds
@@ -149,13 +149,13 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             ds.__dict__
         with pytest.raises(ReferenceError):
-            dset[klist[0]]
+            dcell[klist[0]]
 
     def test_writer_datacell_context_manager_not_accessible_after_close(self, written_two_cmt_repo):
         repo = written_two_cmt_repo
         co = repo.checkout(write=True)
-        dset = co.datacells['_dset']
-        with dset as ds:
+        dcell = co.datacells['_dcell']
+        with dcell as ds:
             # for k in ds.keys():
             #     klist.append(k)
             a = ds
@@ -167,7 +167,7 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             ds.__dict__
         with pytest.raises(ReferenceError):
-            dset['1232']
+            dcell['1232']
 
     def test_writer_metadata_obj_not_accessible_after_close(self, written_repo):
         repo = written_repo
@@ -208,30 +208,30 @@ class TestCheckout(object):
         with pytest.raises(PermissionError):
             shouldFail = r_co.datacells
 
-        dset = w_co.datacells['_dset']
-        dset['1'] = array5by7
-        assert np.allclose(w_co.datacells['_dset']['1'], array5by7)
+        dcell = w_co.datacells['_dcell']
+        dcell['1'] = array5by7
+        assert np.allclose(w_co.datacells['_dcell']['1'], array5by7)
         w_co.commit('hello commit')
         w_co.close()
 
         with pytest.raises(ReferenceError):
-            dset.__dict__
+            dcell.__dict__
 
     def test_close_write_does_not_invalidate_read_checkout(self, written_repo, array5by7):
         repo = written_repo
         r_co = repo.checkout(write=False)
         w_co = repo.checkout(write=True)
 
-        dset = w_co.datacells['_dset']
-        dset['1'] = array5by7
-        assert np.allclose(w_co.datacells['_dset']['1'], array5by7)
+        dcell = w_co.datacells['_dcell']
+        dcell['1'] = array5by7
+        assert np.allclose(w_co.datacells['_dcell']['1'], array5by7)
         w_co.commit('hello commit')
         w_co.close()
 
         with pytest.raises(ReferenceError):
-            dset.__dict__
+            dcell.__dict__
 
-        assert '_dset' in r_co.datacells
+        assert '_dcell' in r_co.datacells
         assert len(r_co.metadata) == 0
 
         r_co.close()
@@ -240,41 +240,41 @@ class TestCheckout(object):
 
     def test_operate_on_datacell_after_closing_old_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
-        dset = co.datacells.init_datacell('dset', prototype=array5by7)
+        dcell = co.datacells.init_datacell('dcell', prototype=array5by7)
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout(write=True)
         with pytest.raises(ReferenceError):
-            dset.add(array5by7, '1')
+            dcell.add(array5by7, '1')
             co.commit('this is a commit message')
         co.close()
         with pytest.raises(ReferenceError):
-            dset['1']
+            dcell['1']
 
     def test_operate_on_closed_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
-        co.datacells.init_datacell('dset', prototype=array5by7)
+        co.datacells.init_datacell('dcell', prototype=array5by7)
         co.commit('this is a commit message')
         co.close()
         with pytest.raises(PermissionError):
-            co.datacells['dset']['1'] = array5by7
+            co.datacells['dcell']['1'] = array5by7
         with pytest.raises(PermissionError):
             co.metadata.add('a', 'b')
 
-    @pytest.mark.parametrize("dset_backend", ['00', '10'])
-    def test_operate_on_datacell_samples_after_commiting_but_not_closing_checkout(self, dset_backend, repo, array5by7):
+    @pytest.mark.parametrize("dcell_backend", ['00', '10'])
+    def test_operate_on_datacell_samples_after_commiting_but_not_closing_checkout(self, dcell_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        dset = co.datacells.init_datacell('dset', prototype=array5by7, backend=dset_backend)
-        dset.add(array5by7, '1')
+        dcell = co.datacells.init_datacell('dcell', prototype=array5by7, backend=dcell_backend)
+        dcell.add(array5by7, '1')
         co.commit('hi')
 
-        dset.add(array5by7, '2')  # this raises ReferenceError since the reference to dset is gone
+        dcell.add(array5by7, '2')  # this raises ReferenceError since the reference to dcell is gone
         co.commit('hello 2')
-        assert np.allclose(dset['2'], array5by7)
+        assert np.allclose(dcell['2'], array5by7)
         co.close()
 
         with pytest.raises(ReferenceError):
-            dset.name
+            dcell.name
 
     def test_operate_on_metadata_after_commiting_but_not_closing_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
@@ -293,27 +293,27 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             md['hello']
 
-    @pytest.mark.parametrize("dset1_backend", ['00', '10'])
-    @pytest.mark.parametrize("dset2_backend", ['00', '10'])
-    def test_operate_on_datacells_after_commiting_but_not_closing_checkout(self, dset1_backend, dset2_backend, repo, array5by7):
+    @pytest.mark.parametrize("dcell1_backend", ['00', '10'])
+    @pytest.mark.parametrize("dcell2_backend", ['00', '10'])
+    def test_operate_on_datacells_after_commiting_but_not_closing_checkout(self, dcell1_backend, dcell2_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        dsets = co.datacells
-        dset = co.datacells.init_datacell('dset', prototype=array5by7, backend=dset1_backend)
-        dset.add(array5by7, '1')
+        dcells = co.datacells
+        dcell = co.datacells.init_datacell('dcell', prototype=array5by7, backend=dcell1_backend)
+        dcell.add(array5by7, '1')
         co.commit('hi')
 
-        dset2 = co.datacells.init_datacell('arange', prototype=np.arange(50), backend=dset2_backend)
-        dset2['0'] = np.arange(50)
+        dcell2 = co.datacells.init_datacell('arange', prototype=np.arange(50), backend=dcell2_backend)
+        dcell2['0'] = np.arange(50)
         co.commit('hello 2')
-        assert np.allclose(dset2['0'], np.arange(50))
+        assert np.allclose(dcell2['0'], np.arange(50))
         co.close()
 
         with pytest.raises(PermissionError):
             co.datacells
         with pytest.raises(ReferenceError):
-            dsets.iswriteable
+            dcells.iswriteable
         with pytest.raises(ReferenceError):
-            dset2.name
+            dcell2.name
 
     def test_with_wrong_argument_value(self, repo):
         # It is intuitive to a user to pass branchname as positional
@@ -328,18 +328,18 @@ class TestCheckout(object):
         # unregister close operation as conftest will close env before this is called.
         atexit.unregister(co.close)
 
-    @pytest.mark.parametrize("dset1_backend", ['00', '10'])
-    @pytest.mark.parametrize("dset2_backend", ['00', '10'])
-    def test_reset_staging_area_clears_datacells(self, dset1_backend, dset2_backend, repo, array5by7):
+    @pytest.mark.parametrize("dcell1_backend", ['00', '10'])
+    @pytest.mark.parametrize("dcell2_backend", ['00', '10'])
+    def test_reset_staging_area_clears_datacells(self, dcell1_backend, dcell2_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        dset = co.datacells.init_datacell('dset', prototype=array5by7, backend=dset1_backend)
-        dset.add(array5by7, '1')
+        dcell = co.datacells.init_datacell('dcell', prototype=array5by7, backend=dcell1_backend)
+        dcell.add(array5by7, '1')
         co.commit('hi')
 
-        dset2 = co.datacells.init_datacell('arange', prototype=np.arange(50), backend=dset2_backend)
-        dset2['0'] = np.arange(50)
+        dcell2 = co.datacells.init_datacell('arange', prototype=np.arange(50), backend=dcell2_backend)
+        dcell2['0'] = np.arange(50)
         # verifications before reset
-        assert np.allclose(dset2['0'], np.arange(50))
+        assert np.allclose(dcell2['0'], np.arange(50))
         assert len(co.datacells) == 2
         assert co.datacells['arange'].iswriteable
 
@@ -347,7 +347,7 @@ class TestCheckout(object):
         # behavior expected after reset
         assert len(co.datacells) == 1
         with pytest.raises(ReferenceError):
-            dset2['0']
+            dcell2['0']
         with pytest.raises(KeyError):
             co.datacells['arange']
         co.close()
@@ -397,20 +397,20 @@ class TestBranching(object):
         assert type(branch) is str
         co = written_repo.checkout(write=True, branch=branch)
         assert co._branch_name == branch
-        co.datacells['_dset']['1'] = array5by7
+        co.datacells['_dcell']['1'] = array5by7
         co.metadata.add('a', 'b')
         co.commit('this is a commit message')
         co.close()
         written_repo.merge('test merge', 'master', branch)
         co = written_repo.checkout()
-        assert (co.datacells['_dset']['1'] == array5by7).all()
+        assert (co.datacells['_dcell']['1'] == array5by7).all()
         assert co.metadata.get('a') == 'b'
         co.close()
 
     def test_merge_without_closing_previous_checkout(self, written_repo, array5by7):
         branch = written_repo.create_branch('testbranch')
         co = written_repo.checkout(write=True, branch=branch)
-        co.datacells['_dset']['1'] = array5by7
+        co.datacells['_dcell']['1'] = array5by7
         co.commit('this is a commit message')
         with pytest.raises(PermissionError):
             written_repo.merge('test merge', 'master', branch)
@@ -430,17 +430,17 @@ class TestBranching(object):
         with pytest.raises(NotImplementedError):
             written_repo.remove_branch('testbranch')
 
-    def test_merge_multiple_checkouts_same_dset(self, written_repo, array5by7):
+    def test_merge_multiple_checkouts_same_dcell(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
         co = written_repo.checkout(write=True, branch=branch1)
-        co.datacells['_dset']['1'] = array5by7
+        co.datacells['_dcell']['1'] = array5by7
         co.metadata.add('a1', 'b1')
         co.commit('this is a commit message')
         co.close()
 
         branch2 = written_repo.create_branch('testbranch2')
         co = written_repo.checkout(write=True, branch=branch2)
-        co.datacells['_dset']['2'] = array5by7
+        co.datacells['_dcell']['2'] = array5by7
         co.metadata.add('a2', 'b2')
         co.commit('this is a commit message')
         co.close()
@@ -450,21 +450,21 @@ class TestBranching(object):
 
         co = written_repo.checkout(branch='master')
         assert len(co.datacells) == 1
-        assert len(co.datacells['_dset']) == 2
+        assert len(co.datacells['_dcell']) == 2
         assert list(co.metadata.keys()) == ['a1', 'a2']
         co.close()
 
-    def test_merge_multiple_checkouts_multiple_dset(self, written_repo, array5by7):
+    def test_merge_multiple_checkouts_multiple_dcell(self, written_repo, array5by7):
         branch1 = written_repo.create_branch('testbranch1')
         co = written_repo.checkout(write=True, branch=branch1)
-        co.datacells['_dset']['1'] = array5by7
+        co.datacells['_dcell']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
 
         branch2 = written_repo.create_branch('testbranch2')
         co = written_repo.checkout(write=True, branch=branch2)
-        second_dset = co.datacells.init_datacell(name='second_dset', prototype=array5by7)
-        second_dset['1'] = array5by7
+        second_dcell = co.datacells.init_datacell(name='second_dcell', prototype=array5by7)
+        second_dcell['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
 
@@ -473,8 +473,8 @@ class TestBranching(object):
 
         co = written_repo.checkout(branch='master')
         assert len(co.datacells) == 2
-        assert len(co.datacells['_dset']) == 1
-        assert len(co.datacells['second_dset']) == 1
+        assert len(co.datacells['_dcell']) == 1
+        assert len(co.datacells['second_dcell']) == 1
         co.close()
 
     def test_merge_diverged_conflict(self, written_repo, array5by7):
@@ -482,14 +482,14 @@ class TestBranching(object):
         branch2 = written_repo.create_branch('testbranch2')
 
         co = written_repo.checkout(write=True, branch=branch1)
-        co.datacells['_dset']['1'] = array5by7
+        co.datacells['_dcell']['1'] = array5by7
         co.metadata.add('a', 'b')
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout(write=True, branch=branch2)
         newarray = np.zeros_like(array5by7)
-        co.datacells['_dset']['1'] = newarray
+        co.datacells['_dcell']['1'] = newarray
         co.metadata.add('a', 'c')
         co.commit('this is a commit message')
         co.close()
@@ -507,8 +507,8 @@ class TestBranching(object):
         co1.close()
 
         co2 = written_repo.checkout(write=True, branch=branch2)
-        co2.datacells.init_datacell('dset2', prototype=array5by7)
-        co2.datacells['dset2']['2'] = array5by7
+        co2.datacells.init_datacell('dcell2', prototype=array5by7)
+        co2.datacells['dcell2']['2'] = array5by7
         co2.commit('this is a merge message')
         co2.close()
         h2 = written_repo.log(branch=branch2, return_contents=True)
@@ -527,8 +527,8 @@ class TestBranching(object):
         branch2 = written_repo.create_branch('testbranch2')
         co1 = written_repo.checkout(write=True, branch=branch1)
         initial_cmt = co1.commit_hash
-        co1.datacells.init_datacell('dset2', prototype=array5by7)
-        co1.datacells['dset2']['2'] = array5by7
+        co1.datacells.init_datacell('dcell2', prototype=array5by7)
+        co1.datacells['dcell2']['2'] = array5by7
         co1.close()
 
         with pytest.raises(ValueError):
@@ -568,7 +568,7 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(written_tw
     with co.metadata as m:
         m['aa'] = 'bb'
         cmt1 = co.commit('here is the first commit')
-        with co.datacells['_dset'] as d:
+        with co.datacells['_dcell'] as d:
             d['2422'] = d['0'] + 213
             cmt2 = co.commit('here is the second commit')
 
@@ -589,9 +589,9 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(written_tw
     co = repo.checkout(commit=cmt2)
     assert 'aa' in co.metadata
     assert co.metadata['aa'] == 'bb'
-    assert '2422' in co.datacells['_dset']
-    assert np.allclose(co.datacells['_dset']['2422'],
-                       co.datacells['_dset']['0'] + 213)
+    assert '2422' in co.datacells['_dcell']
+    assert np.allclose(co.datacells['_dcell']['2422'],
+                       co.datacells['_dcell']['0'] + 213)
     co.close()
 
 
@@ -601,7 +601,7 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(written_tw
     co = repo.checkout(write=False)
     with co.metadata as m:
         k = list(m.keys())
-        with co.datacells['_dset'] as d:
+        with co.datacells['_dcell'] as d:
             ds = d['2']
 
     assert m.iswriteable is False
@@ -609,7 +609,7 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(written_tw
     assert k == list(m.keys())
     assert k == list(co.metadata.keys())
     assert np.allclose(ds, d.get('2'))
-    assert np.allclose(ds, co.datacells['_dset'].get('2'))
+    assert np.allclose(ds, co.datacells['_dcell'].get('2'))
 
     assert co.close() is None
 
@@ -622,7 +622,7 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(written_tw
     with pytest.raises(AttributeError):
         co._metadata
     with pytest.raises(PermissionError):
-        str(co.datacells.get('_dset'))
+        str(co.datacells.get('_dcell'))
     with pytest.raises(PermissionError):
         repr(co.metadata)
     with pytest.raises(PermissionError):

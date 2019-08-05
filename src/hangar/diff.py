@@ -406,7 +406,7 @@ def _meta_mutation_finder(a_unchanged_kv: MetaRecordKV,
 
 
 DatacellSchemaRecord = NamedTuple('DatacellSchemaRecord', [
-    ('dset_name', str),
+    ('dcell_name', str),
     ('schema_hash', str),
     ('schema_dtype', int),
     ('schema_is_var', bool),
@@ -416,7 +416,7 @@ DatacellSchemaRecord = NamedTuple('DatacellSchemaRecord', [
 DatacellSchemaKV = Dict[str, RawDatacellSchemaVal]
 
 
-def _isolate_dset_schemas(datacell_specs: Dict[str, dict]) -> DatacellSchemaKV:
+def _isolate_dcell_schemas(datacell_specs: Dict[str, dict]) -> DatacellSchemaKV:
     '''Isolate only the schema specification from a full datacell records dict.
 
     Parameters
@@ -453,7 +453,7 @@ def _schema_dict_to_nt(record_dict: Dict[str, DatacellSchemaRecord]) -> Set[Data
     records = set()
     for k, v in record_dict.items():
         rec = DatacellSchemaRecord(
-            dset_name=k,
+            dcell_name=k,
             schema_hash=v.schema_hash,
             schema_dtype=v.schema_dtype,
             schema_is_var=v.schema_is_var,
@@ -486,14 +486,14 @@ def _schema_mutation_finder(sch_nt_func, a_unchanged_kv: dict,
     '''
     arecords = sch_nt_func(a_unchanged_kv)
     drecords = sch_nt_func(d_unchanged_kv)
-    mutations = set([m.dset_name for m in arecords.difference(drecords)])
+    mutations = set([m.dcell_name for m in arecords.difference(drecords)])
     return mutations
 
 # ---------------------- Sample Differ ----------------------------------------
 
 
 SamplesDataRecord = NamedTuple('SamplesDataRecord', [
-    ('dset_name', str),
+    ('dcell_name', str),
     ('data_name', Union[str, int]),
     ('data_hash', str),
 ])
@@ -508,14 +508,14 @@ def _samples_mutation_finder(a_unchanged_kv: SamplesDataKV,
     Parameters
     ----------
     a_unchanged_kv : SamplesDataKV
-        of dset & sample names / hash values for ancestor commit
+        of dcell & sample names / hash values for ancestor commit
     d_unchanged_kv : SamplesDataKV
-        of dset & sample names / hash values for dev commit
+        of dcell & sample names / hash values for dev commit
 
     Returns
     -------
     Set[RawDataRecordKey]
-        of named tuples each specifying dset & sample name for mutated sample
+        of named tuples each specifying dcell & sample name for mutated sample
         records
     '''
 
@@ -523,7 +523,7 @@ def _samples_mutation_finder(a_unchanged_kv: SamplesDataKV,
         records = set()
         for k, v in record_dict.items():
             rec = SamplesDataRecord(
-                dset_name=k.dset_name, data_name=k.data_name, data_hash=v.data_hash)
+                dcell_name=k.dcell_name, data_name=k.data_name, data_hash=v.data_hash)
             records.add(rec)
         return records
 
@@ -531,7 +531,7 @@ def _samples_mutation_finder(a_unchanged_kv: SamplesDataKV,
     arecords = samp_nt_func(a_unchanged_kv)
     drecords = samp_nt_func(d_unchanged_kv)
     for m in arecords.difference(drecords):
-        rec = RawDataRecordKey(dset_name=m.dset_name, data_name=m.data_name)
+        rec = RawDataRecordKey(dcell_name=m.dcell_name, data_name=m.data_name)
         mutations.add(rec)
     return mutations
 
@@ -562,8 +562,8 @@ class ThreeWayCommitDiffer(object):
         self.mcont = master_contents    # master contents
         self.dcont = dev_contents       # dev contents
 
-        self.am_dsetD: DifferBase   # ancestor -> master dset diff
-        self.ad_dsetD: DifferBase   # ancestor -> dev dset diff
+        self.am_dcellD: DifferBase   # ancestor -> master dcell diff
+        self.ad_dcellD: DifferBase   # ancestor -> dev dcell diff
         self.am_metaD: DifferBase  # ancestor -> master metadata diff
         self.ad_metaD: DifferBase  # ancestor -> dev metadata diff
 
@@ -635,15 +635,15 @@ class ThreeWayCommitDiffer(object):
     def _datacell_diff(self):
 
         mutFunc = partial(_schema_mutation_finder, sch_nt_func=_schema_dict_to_nt)
-        self.am_dsetD = DifferBase(mut_func=mutFunc)
-        self.am_dsetD.a_data = _isolate_dset_schemas(self.acont['datacells'])
-        self.am_dsetD.d_data = _isolate_dset_schemas(self.mcont['datacells'])
-        self.am_dsetD.compute()
+        self.am_dcellD = DifferBase(mut_func=mutFunc)
+        self.am_dcellD.a_data = _isolate_dcell_schemas(self.acont['datacells'])
+        self.am_dcellD.d_data = _isolate_dcell_schemas(self.mcont['datacells'])
+        self.am_dcellD.compute()
 
-        self.ad_dsetD = DifferBase(mut_func=mutFunc)
-        self.ad_dsetD.a_data = _isolate_dset_schemas(self.acont['datacells'])
-        self.ad_dsetD.d_data = _isolate_dset_schemas(self.dcont['datacells'])
-        self.ad_dsetD.compute()
+        self.ad_dcellD = DifferBase(mut_func=mutFunc)
+        self.ad_dcellD.a_data = _isolate_dcell_schemas(self.acont['datacells'])
+        self.ad_dcellD.d_data = _isolate_dcell_schemas(self.dcont['datacells'])
+        self.ad_dcellD.compute()
 
     def datacell_conflicts(self) -> ConflictRecords:
         '''
@@ -657,25 +657,25 @@ class ThreeWayCommitDiffer(object):
         tempt3: List[ConflictKeys] = []
 
         # addition conflicts
-        addition_keys = self.am_dsetD.additions.intersection(self.ad_dsetD.additions)
-        for dsetn in addition_keys:
-            m_srec = _schema_dict_to_nt({dsetn: self.am_dsetD.d_data[dsetn]})
-            d_srec = _schema_dict_to_nt({dsetn: self.ad_dsetD.d_data[dsetn]})
+        addition_keys = self.am_dcellD.additions.intersection(self.ad_dcellD.additions)
+        for dcelln in addition_keys:
+            m_srec = _schema_dict_to_nt({dcelln: self.am_dcellD.d_data[dcelln]})
+            d_srec = _schema_dict_to_nt({dcelln: self.ad_dcellD.d_data[dcelln]})
             if m_srec != d_srec:
-                tempt1.append(dsetn)
+                tempt1.append(dcelln)
         out['t1'] = tempt1
 
         # removal conflicts
-        out['t21'] = self.am_dsetD.removals.intersection(self.ad_dsetD.mutations)
-        out['t22'] = self.ad_dsetD.removals.intersection(self.am_dsetD.mutations)
+        out['t21'] = self.am_dcellD.removals.intersection(self.ad_dcellD.mutations)
+        out['t22'] = self.ad_dcellD.removals.intersection(self.am_dcellD.mutations)
 
         # mutation conflicts
-        mutation_keys = self.am_dsetD.mutations.intersection(self.ad_dsetD.mutations)
-        for dsetn in mutation_keys:
-            m_srec = _schema_dict_to_nt({dsetn: self.am_dsetD.d_data[dsetn]})
-            d_srec = _schema_dict_to_nt({dsetn: self.ad_dsetD.d_data[dsetn]})
+        mutation_keys = self.am_dcellD.mutations.intersection(self.ad_dcellD.mutations)
+        for dcelln in mutation_keys:
+            m_srec = _schema_dict_to_nt({dcelln: self.am_dcellD.d_data[dcelln]})
+            d_srec = _schema_dict_to_nt({dcelln: self.ad_dcellD.d_data[dcelln]})
             if m_srec != d_srec:
-                tempt3.append(dsetn)
+                tempt3.append(dcelln)
         out['t3'] = tempt3
 
         for k in list(out.keys()):
@@ -686,8 +686,8 @@ class ThreeWayCommitDiffer(object):
 
     def datacell_changes(self):
         out = {
-            'master': self.am_dsetD.kv_diff_out(),
-            'dev': self.ad_dsetD.kv_diff_out(),
+            'master': self.am_dcellD.kv_diff_out(),
+            'dev': self.ad_dcellD.kv_diff_out(),
         }
         return out
 
@@ -697,43 +697,43 @@ class ThreeWayCommitDiffer(object):
 
         # ---------------- ancestor -> master changes -------------------------
 
-        m_dsets = self.am_dsetD.unchanged.union(
-            self.am_dsetD.additions).union(self.am_dsetD.mutations)
-        for dset_name in m_dsets:
-            if dset_name in self.acont['datacells']:
-                a_dset_data = self.acont['datacells'][dset_name]['data']
+        m_dcells = self.am_dcellD.unchanged.union(
+            self.am_dcellD.additions).union(self.am_dcellD.mutations)
+        for dcell_name in m_dcells:
+            if dcell_name in self.acont['datacells']:
+                a_dcell_data = self.acont['datacells'][dcell_name]['data']
             else:
-                a_dset_data = {}
-            self.am_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.am_sampD[dset_name].a_data = a_dset_data
-            self.am_sampD[dset_name].d_data = self.mcont['datacells'][dset_name]['data']
-            self.am_sampD[dset_name].compute()
+                a_dcell_data = {}
+            self.am_sampD[dcell_name] = DifferBase(mut_func=_samples_mutation_finder)
+            self.am_sampD[dcell_name].a_data = a_dcell_data
+            self.am_sampD[dcell_name].d_data = self.mcont['datacells'][dcell_name]['data']
+            self.am_sampD[dcell_name].compute()
 
-        for dset_name in self.am_dsetD.removals:
-            self.am_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.am_sampD[dset_name].a_data = self.acont['datacells'][dset_name]['data']
-            self.am_sampD[dset_name].d_data = {}
-            self.am_sampD[dset_name].compute()
+        for dcell_name in self.am_dcellD.removals:
+            self.am_sampD[dcell_name] = DifferBase(mut_func=_samples_mutation_finder)
+            self.am_sampD[dcell_name].a_data = self.acont['datacells'][dcell_name]['data']
+            self.am_sampD[dcell_name].d_data = {}
+            self.am_sampD[dcell_name].compute()
 
         # ---------------- ancestor -> dev changes ----------------------------
 
-        d_dsets = self.ad_dsetD.unchanged.union(
-            self.ad_dsetD.additions).union(self.ad_dsetD.mutations)
-        for dset_name in d_dsets:
-            if dset_name in self.acont['datacells']:
-                a_dset_data = self.acont['datacells'][dset_name]['data']
+        d_dcells = self.ad_dcellD.unchanged.union(
+            self.ad_dcellD.additions).union(self.ad_dcellD.mutations)
+        for dcell_name in d_dcells:
+            if dcell_name in self.acont['datacells']:
+                a_dcell_data = self.acont['datacells'][dcell_name]['data']
             else:
-                a_dset_data = {}
-            self.ad_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.ad_sampD[dset_name].a_data = a_dset_data
-            self.ad_sampD[dset_name].d_data = self.dcont['datacells'][dset_name]['data']
-            self.ad_sampD[dset_name].compute()
+                a_dcell_data = {}
+            self.ad_sampD[dcell_name] = DifferBase(mut_func=_samples_mutation_finder)
+            self.ad_sampD[dcell_name].a_data = a_dcell_data
+            self.ad_sampD[dcell_name].d_data = self.dcont['datacells'][dcell_name]['data']
+            self.ad_sampD[dcell_name].compute()
 
-        for dset_name in self.ad_dsetD.removals:
-            self.ad_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.ad_sampD[dset_name].a_data = self.acont['datacells'][dset_name]['data']
-            self.ad_sampD[dset_name].d_data = {}
-            self.ad_sampD[dset_name].compute()
+        for dcell_name in self.ad_dcellD.removals:
+            self.ad_sampD[dcell_name] = DifferBase(mut_func=_samples_mutation_finder)
+            self.ad_sampD[dcell_name].a_data = self.acont['datacells'][dcell_name]['data']
+            self.ad_sampD[dcell_name].d_data = {}
+            self.ad_sampD[dcell_name].compute()
 
     def sample_conflicts(self) -> ConflictRecords:
         '''
@@ -743,15 +743,15 @@ class ThreeWayCommitDiffer(object):
         t3: mutated in master & dev to different values
         '''
         out = {}
-        all_dset_names = set(self.ad_sampD.keys()).union(set(self.am_sampD.keys()))
-        for dsetn in all_dset_names:
+        all_dcell_names = set(self.ad_sampD.keys()).union(set(self.am_sampD.keys()))
+        for dcelln in all_dcell_names:
             # When datacell IN `dev` OR `master` AND NOT IN ancestor OR `other`.
             try:
-                mdiff = self.am_sampD[dsetn]
+                mdiff = self.am_sampD[dcelln]
             except KeyError:
                 mdiff = DifferBase(mut_func=_samples_mutation_finder)
             try:
-                ddiff = self.ad_sampD[dsetn]
+                ddiff = self.ad_sampD[dcelln]
             except KeyError:
                 ddiff = DifferBase(mut_func=_samples_mutation_finder)
 
@@ -782,14 +782,14 @@ class ThreeWayCommitDiffer(object):
             for k in list(tempOut.keys()):
                 tempOut[k] = tuple(tempOut[k])
             tempOut['conflict'] = any([bool(len(x)) for x in tempOut.values()])
-            out[dsetn] = ConflictRecords(**tempOut)
+            out[dcelln] = ConflictRecords(**tempOut)
 
         return out
 
     def sample_changes(self):
         out = {
-            'master': {dsetn: self.am_sampD[dsetn].kv_diff_out() for dsetn in self.am_sampD},
-            'dev': {dsetn: self.ad_sampD[dsetn].kv_diff_out() for dsetn in self.ad_sampD},
+            'master': {dcelln: self.am_sampD[dcelln].kv_diff_out() for dcelln in self.am_sampD},
+            'dev': {dcelln: self.ad_sampD[dcelln].kv_diff_out() for dcelln in self.ad_sampD},
         }
         return out
 
@@ -798,21 +798,21 @@ class ThreeWayCommitDiffer(object):
     def all_changes(self, include_master: bool = True, include_dev: bool = True) -> dict:
 
         meta = self.meta_changes()
-        dsets = self.datacell_changes()
+        dcells = self.datacell_changes()
         samples = self.sample_changes()
 
         if not include_master:
             meta.__delitem__('master')
-            dsets.__delitem__('master')
+            dcells.__delitem__('master')
             samples.__delitem__('master')
         elif not include_dev:
             meta.__delitem__('dev')
-            dsets.__delitem__('dev')
+            dcells.__delitem__('dev')
             samples.__delitem__('dev')
 
         res = {
             'metadata': meta,
-            'datacells': dsets,
+            'datacells': dcells,
             'samples': samples,
         }
         return res
@@ -828,19 +828,19 @@ class ThreeWayCommitDiffer(object):
         Returns
         -------
         dict
-            containing conflict info in `dset`, `meta`, `sample` and `conflict_found`
+            containing conflict info in `dcell`, `meta`, `sample` and `conflict_found`
             boolean field.
         '''
-        dset_confs = self.datacell_conflicts()
+        dcell_confs = self.datacell_conflicts()
         meta_confs = self.meta_conflicts()
         sample_confs = self.sample_conflicts()
 
         conflictFound = any(
-            [dset_confs.conflict, meta_confs.conflict,
+            [dcell_confs.conflict, meta_confs.conflict,
              *[confval.conflict for confval in sample_confs.values()]])
 
         confs = {
-            'dset': dset_confs,
+            'dcell': dcell_confs,
             'meta': meta_confs,
             'sample': sample_confs,
             'conflict_found': conflictFound,

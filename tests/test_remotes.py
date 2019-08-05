@@ -73,12 +73,12 @@ def test_push_and_clone_master_linear_history_multiple_commits(
 
     cmtList = []
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='_dset', shape=(5, 7), dtype=np.float32)
+    co.datacells.init_datacell(name='_dcell', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         sampList = []
-        with co.datacells['_dset'] as d:
+        with co.datacells['_dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nSamples):
@@ -103,17 +103,17 @@ def test_push_and_clone_master_linear_history_multiple_commits(
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
         assert len(nco.datacells) == 1
-        assert '_dset' in nco.datacells
-        assert len(nco.datacells['_dset']) == len(sampList)
+        assert '_dcell' in nco.datacells
+        assert len(nco.datacells['_dcell']) == len(sampList)
 
-        assert nco.datacells['_dset'].contains_remote_references is True
-        remoteKeys = nco.datacells['_dset'].remote_reference_sample_keys
+        assert nco.datacells['_dcell'].contains_remote_references is True
+        remoteKeys = nco.datacells['_dcell'].remote_reference_sample_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.datacells['_dset']
+            assert sIdx in nco.datacells['_dcell']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.datacells['_dset'][sIdx]
+                shouldNotExist = nco.datacells['_dcell'][sIdx]
         nco.close()
     cloneMasterHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name='master')
     assert cloneMasterHist == masterHist
@@ -130,12 +130,12 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
 
     masterCmtList, devCmtList = [], []
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='_dset', shape=(5, 7), dtype=np.float32)
+    co.datacells.init_datacell(name='_dcell', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.datacells['_dset'] as d:
+        with co.datacells['_dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nMasterSamples):
@@ -154,7 +154,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
     for cIdx in range(nDevCommits):
         co = repo.checkout(write=True, branch=branch)
         devSampList = []
-        with co.datacells['_dset'] as d:
+        with co.datacells['_dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nDevSamples):
@@ -180,12 +180,12 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='_dset', shape=(5, 7), dtype=np.float32)
+    co.datacells.init_datacell(name='_dcell', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.datacells['_dset'] as d:
+        with co.datacells['_dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nMasterSamples):
@@ -207,7 +207,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     for cIdx in range(nDevCommits):
         co = repo.checkout(write=True, branch=branch)
         devSampList = []
-        with co.datacells['_dset'] as d:
+        with co.datacells['_dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nDevSamples):
@@ -232,17 +232,17 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
         assert len(nco.datacells) == 1
-        assert '_dset' in nco.datacells
-        assert len(nco.datacells['_dset']) == nMasterSamples
+        assert '_dcell' in nco.datacells
+        assert len(nco.datacells['_dcell']) == nMasterSamples
 
-        assert nco.datacells['_dset'].contains_remote_references is True
-        remoteKeys = nco.datacells['_dset'].remote_reference_sample_keys
+        assert nco.datacells['_dcell'].contains_remote_references is True
+        remoteKeys = nco.datacells['_dcell'].remote_reference_sample_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.datacells['_dset']
+            assert sIdx in nco.datacells['_dcell']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.datacells['_dset'][sIdx]
+                shouldNotExist = nco.datacells['_dcell'][sIdx]
         nco.close()
     cloneMasterHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name='master')
     assert cloneMasterHist == masterHist
@@ -256,18 +256,18 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
         assert len(nco.datacells) == 1
-        assert '_dset' in nco.datacells
-        assert len(nco.datacells['_dset']) == nDevSamples
+        assert '_dcell' in nco.datacells
+        assert len(nco.datacells['_dcell']) == nDevSamples
 
-        assert nco.datacells['_dset'].contains_remote_references is True
-        remoteKeys = nco.datacells['_dset'].remote_reference_sample_keys
+        assert nco.datacells['_dcell'].contains_remote_references is True
+        remoteKeys = nco.datacells['_dcell'].remote_reference_sample_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.datacells['_dset']
+            assert sIdx in nco.datacells['_dcell']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.datacells['_dset'][sIdx]
-            # assert np.allclose(nco.datacells['_dset'][str(sIdx)], samp)
+                shouldNotExist = nco.datacells['_dcell'][sIdx]
+            # assert np.allclose(nco.datacells['_dcell'][str(sIdx)], samp)
         nco.close()
     cloneBranchHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name=f'origin/{branch}')
     assert cloneBranchHist == branchHist
@@ -277,59 +277,59 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
 @pytest.mark.filterwarnings('ignore::UserWarning')
 @pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[4, 10]])
 @pytest.mark.parametrize('nDevCommits,nDevSamples', [[3, 24]])
-@pytest.mark.parametrize('fetchBranch,fetchCommit,fetchDsetns,fetchNbytes,fetchAll_history', [
+@pytest.mark.parametrize('fetchBranch,fetchCommit,fetchDcellns,fetchNbytes,fetchAll_history', [
     ['master',      None,  None,        None,  False],
     ['testbranch',  None,  None,        None,  False],
     [None,          'ma',  None,        None,  False],
     [None,          'br',  None,        None,  False],
-    ['master',      None,  ('_dset',),  None,  False],
+    ['master',      None,  ('_dcell',),  None,  False],
     ['testbranch',  None,  ('_two',),   None,  False],
-    [None,          'ma',  ('_dset',),  None,  False],
+    [None,          'ma',  ('_dcell',),  None,  False],
     [None,          'br',  ('_two',),   None,  False],
     ['master',      None,  None,        None,  False],
     ['testbranch',  None,  None,        None,  False],
     [None,          'ma',  None,        None,  False],
     [None,          'br',  None,        None,  False],
-    ['master',      None,  ('_dset',),  None,  False],
+    ['master',      None,  ('_dcell',),  None,  False],
     ['testbranch',  None,  ('_two',),   None,  False],
-    [None,          'ma',  ('_dset',),  None,  False],
+    [None,          'ma',  ('_dcell',),  None,  False],
     [None,          'br',  ('_two',),   None,  False],
     ['master',      None,  None,        None,  True],
     ['testbranch',  None,  None,        None,  True],
     [None,          'ma',  None,        None,  True],
     [None,          'br',  None,        None,  True],
-    ['master',      None,  ('_dset',),  None,  True],
+    ['master',      None,  ('_dcell',),  None,  True],
     ['testbranch',  None,  ('_two',),   None,  True],
-    [None,          'ma',  ('_dset',),  None,  True],
+    [None,          'ma',  ('_dcell',),  None,  True],
     [None,          'br',  ('_two',),   None,  True],
     ['master',      None,  None,        1000,  False],
     ['testbranch',  None,  None,        1000,  False],
     [None,          'ma',  None,        1000,  False],
     [None,          'br',  None,        1000,  False],
-    ['master',      None,  ('_dset',),  1000,  False],
+    ['master',      None,  ('_dcell',),  1000,  False],
     ['testbranch',  None,  ('_two',),   1000,  False],
-    [None,          'ma',  ('_dset',),  1000,  False],
+    [None,          'ma',  ('_dcell',),  1000,  False],
     [None,          'br',  ('_two',),   1000,  False],
     [None,          'br',  ('_two',),   1000,  True],  # will raise error
 ])
 def test_server_push_two_branch_then_clone_fetch_data_options(
         server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
         nMasterSamples, nDevCommits, nDevSamples, fetchBranch, fetchCommit,
-        fetchDsetns, fetchNbytes, fetchAll_history):
+        fetchDcellns, fetchNbytes, fetchAll_history):
     from hangar import Repository
     from hangar.records.summarize import list_history
 
     # Push master branch test
     masterCmts = {}
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='_dset', shape=(5, 7), dtype=np.float32)
+    co.datacells.init_datacell(name='_dcell', shape=(5, 7), dtype=np.float32)
     co.datacells.init_datacell(name='_two', shape=(20), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList1 = []
         masterSampList2 = []
-        with co.datacells['_dset'] as d, co.datacells['_two'] as dd:
+        with co.datacells['_dcell'] as d, co.datacells['_two'] as dd:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
                 dd.remove(prevKey)
@@ -357,7 +357,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         co = repo.checkout(write=True, branch=branch)
         devSampList1 = []
         devSampList2 = []
-        with co.datacells['_dset'] as d, co.datacells['_two'] as dd:
+        with co.datacells['_dcell'] as d, co.datacells['_two'] as dd:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
                 dd.remove(prevKey)
@@ -391,7 +391,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     # ------------------ format arguments dependingon options -----------------
 
     kwargs = {
-        'datacell_names': fetchDsetns,
+        'datacell_names': fetchDcellns,
         'max_num_bytes': fetchNbytes,
         'retrieve_all_history': fetchAll_history,
     }
@@ -429,13 +429,13 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         co = newRepo.checkout(commit=fCmt)
         assert co.commit_hash == fCmt
 
-        # when we are checking one dset only
-        if isinstance(fetchDsetns, tuple):
-            d = co.datacells[fetchDsetns[0]]
+        # when we are checking one dcell only
+        if isinstance(fetchDcellns, tuple):
+            d = co.datacells[fetchDcellns[0]]
             # ensure we didn't fetch the other data simultaneously
 
             ds1SampList, ds2SampList = devCmts[fCmt]
-            if fetchDsetns[0] == '_dset':
+            if fetchDcellns[0] == '_dcell':
                 compare = ds1SampList
             else:
                 compare = ds2SampList
@@ -453,9 +453,9 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                         pass
                     assert totalSeen <= fetchNbytes
 
-        # compare both dsets at the same time
+        # compare both dcells at the same time
         else:
-            d = co.datacells['_dset']
+            d = co.datacells['_dcell']
             dd = co.datacells['_two']
             ds1List, ds2List = devCmts[fCmt]
             totalSeen = 0
@@ -566,12 +566,12 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='dset', shape=(50, 20), dtype=np.float32)
+    co.datacells.init_datacell(name='dcell', shape=(50, 20), dtype=np.float32)
     for cIdx in range(4):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.datacells['dset'] as d:
+        with co.datacells['dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(70):
@@ -596,10 +596,10 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
         newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datacells) == 1
-        assert 'dset' in nco.datacells
-        assert len(nco.datacells['dset']) == 70
+        assert 'dcell' in nco.datacells
+        assert len(nco.datacells['dcell']) == 70
         for sIdx, samp in enumerate(sampList):
-            assert np.allclose(nco.datacells['dset'][str(sIdx)], samp)
+            assert np.allclose(nco.datacells['dcell'][str(sIdx)], samp)
         nco.close()
     newRepo._env._close_environments()
 
@@ -610,12 +610,12 @@ def test_push_restricted_with_right_username_password(server_instance_push_restr
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='dset', shape=(50, 20), dtype=np.float32)
+    co.datacells.init_datacell(name='dcell', shape=(50, 20), dtype=np.float32)
     for cIdx in range(1):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.datacells['dset'] as d:
+        with co.datacells['dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(70):
@@ -643,10 +643,10 @@ def test_push_restricted_with_right_username_password(server_instance_push_restr
         newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
         assert len(nco.datacells) == 1
-        assert 'dset' in nco.datacells
-        assert len(nco.datacells['dset']) == 70
+        assert 'dcell' in nco.datacells
+        assert len(nco.datacells['dcell']) == 70
         for sIdx, samp in enumerate(sampList):
-            assert np.allclose(nco.datacells['dset'][str(sIdx)], samp)
+            assert np.allclose(nco.datacells['dcell'][str(sIdx)], samp)
         nco.close()
     newRepo._env._close_environments()
 
@@ -656,12 +656,12 @@ def test_push_restricted_wrong_user_and_password(server_instance_push_restricted
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='dset', shape=(50, 20), dtype=np.float32)
+    co.datacells.init_datacell(name='dcell', shape=(50, 20), dtype=np.float32)
     for cIdx in range(1):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.datacells['dset'] as d:
+        with co.datacells['dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(70):

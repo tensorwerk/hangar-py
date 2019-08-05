@@ -215,10 +215,10 @@ class ReaderCheckout(object):
         with suppress(AttributeError):
             self._datacells._close()
 
-        for dsetn in (self._datacells._datacells.keys()):
-            for attr in list(self._datacells._datacells[dsetn].__dir__()):
+        for dcelln in (self._datacells._datacells.keys()):
+            for attr in list(self._datacells._datacells[dcelln].__dir__()):
                 with suppress(AttributeError, TypeError):
-                    delattr(self._datacells._datacells[dsetn], attr)
+                    delattr(self._datacells._datacells[dcelln], attr)
 
         for attr in list(self._datacells.__dir__()):
             with suppress(AttributeError, TypeError):
@@ -469,9 +469,9 @@ class WriterCheckout(object):
             repo_path=self._repo_path,
             writer_uuid=self._writer_lock)
 
-        for dsetHandle in self._datacells.values():
+        for dcellHandle in self._datacells.values():
             with suppress(KeyError):
-                dsetHandle._close()
+                dcellHandle._close()
 
         self._metadata = MetadataWriter(
             mode='a',
@@ -607,17 +607,17 @@ class WriterCheckout(object):
         self.__acquire_writer_lock()
         logger.info(f'Commit operation requested with message: {commit_message}')
 
-        open_dsets = []
+        open_dcells = []
         for datacell in self._datacells.values():
             if datacell._is_conman:
-                open_dsets.append(datacell.name)
+                open_dcells.append(datacell.name)
         open_meta = self._metadata._is_conman
 
         try:
             if open_meta:
                 self._metadata.__exit__()
-            for dsetn in open_dsets:
-                self._datacells[dsetn].__exit__()
+            for dcelln in open_dcells:
+                self._datacells[dcelln].__exit__()
 
             if self._differ.status() == 'CLEAN':
                 e = RuntimeError('No changes made in staging area. Cannot commit.')
@@ -636,8 +636,8 @@ class WriterCheckout(object):
             self._datacells._open()
 
         finally:
-            for dsetn in open_dsets:
-                self._datacells[dsetn].__enter__()
+            for dcelln in open_dcells:
+                self._datacells[dcelln].__enter__()
             if open_meta:
                 self._metadata.__enter__()
 
@@ -717,10 +717,10 @@ class WriterCheckout(object):
         if hasattr(self, '_datacells') and (getattr(self, '_datacells') is not None):
             self._datacells._close()
 
-            for dsetn in (self._datacells._datacells.keys()):
-                for attr in list(self._datacells._datacells[dsetn].__dir__()):
+            for dcelln in (self._datacells._datacells.keys()):
+                for attr in list(self._datacells._datacells[dcelln].__dir__()):
                     with suppress(AttributeError, TypeError):
-                        delattr(self._datacells._datacells[dsetn], attr)
+                        delattr(self._datacells._datacells[dcelln], attr)
 
             for attr in list(self._datacells.__dir__()):
                 with suppress(AttributeError, TypeError):

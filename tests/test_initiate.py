@@ -64,9 +64,9 @@ def test_initial_datacell(managed_tmpdir, randomsizedarray):
     w_checkout = repo.checkout(write=True)
     assert len(w_checkout.datacells) == 0
     with pytest.raises(KeyError):
-        w_checkout.datacells['dset']
-    dset = w_checkout.datacells.init_datacell('dset', prototype=randomsizedarray)
-    assert dset._dsetn == 'dset'
+        w_checkout.datacells['dcell']
+    dcell = w_checkout.datacells.init_datacell('dcell', prototype=randomsizedarray)
+    assert dcell._dcelln == 'dcell'
     w_checkout.close()
     repo._env._close_environments()
 

@@ -91,14 +91,14 @@ def fetch_records(ctx, remote, branch):
 @main.command(name='fetch-data')
 @click.argument('remote', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, required=True)
-@click.option('--dset', '-d', multiple=True, required=False, default=None,
-              help='specify any number of dset keys to fetch data for.')
+@click.option('--dcell', '-d', multiple=True, required=False, default=None,
+              help='specify any number of dcell keys to fetch data for.')
 @click.option('--nbytes', '-n', default=None, required=False,
               help='total amount of data to retrieve in MB/GB.')
 @click.option('--all-history', '-a', 'all_', is_flag=True, default=False, required=False,
               help='Retrieve data referenced in every parent commit accessible to the STARTPOINT')
 @click.pass_context
-def fetch_data(ctx, remote, startpoint, dset, nbytes, all_):
+def fetch_data(ctx, remote, startpoint, dcell, nbytes, all_):
     '''Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
@@ -120,19 +120,19 @@ def fetch_data(ctx, remote, startpoint, dset, nbytes, all_):
         commit = expand_short_commit_digest(repo._env.refenv, startpoint)
         click.echo(f'Fetching data for STARTPOINT HEAD: {commit}')
 
-    click.echo(f'dset argument: {dset}')
+    click.echo(f'dcell argument: {dcell}')
     try:
         max_nbytes = parse_bytes(nbytes)
         click.echo(f'nbytes argument: {max_nbytes}')
     except AttributeError:
         max_nbytes = None
 
-    if len(dset) == 0:
-        dset = None
+    if len(dcell) == 0:
+        dcell = None
 
     commits = repo.remote.fetch_data(remote=remote,
                                      commit=commit,
-                                     datacell_names=dset,
+                                     datacell_names=dcell,
                                      max_num_bytes=max_nbytes,
                                      retrieve_all_history=all_)
     click.echo(f'completed data for commits: {commits}')

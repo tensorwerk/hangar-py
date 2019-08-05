@@ -83,9 +83,9 @@ depend on having at least on historical record (commit) in the repo.
 .. code:: python
 
    >>> dummy = np.arange(10, dtype=np.uint16)
-   >>> dset = co.datacells.init_datacell(name='dummy_datacell', prototype=dummy)
+   >>> dcell = co.datacells.init_datacell(name='dummy_datacell', prototype=dummy)
    Datacell Initialized: `dummy_datacell`
-   >>> dset['0'] = dummy
+   >>> dcell['0'] = dummy
    >>> initialCommitHash = co.commit('first commit with a single sample added to a dummy datacell')
    Commit completed. Commit hash: b21ebbeeece723bf7aa2157eb2e8742a043df7d0
    >>> co.close()
@@ -385,13 +385,13 @@ We will start by mutating sample ``0`` in ``dummy_datacell`` to a different valu
 
 .. code:: python
 
-   >>> dummy_dset = co.datacells['dummy_datacell']
-   >>> old_arr = dummy_dset['0']
+   >>> dummy_dcell = co.datacells['dummy_datacell']
+   >>> old_arr = dummy_dcell['0']
    >>> new_arr = old_arr + 50
    >>> new_arr
    array([50, 51, 52, 53, 54, 55, 56, 57, 58, 59], dtype=uint16)
 
-   >>> dummy_dset['0'] = new_arr
+   >>> dummy_dcell['0'] = new_arr
 
 let’s make a commit here, then add some metadata and make a new commit (all on
 the ``testbranch`` branch)
@@ -606,7 +606,7 @@ necessary changes in each branch before reattempting a merge operation.
    Selected 3-Way Merge Strategy
    --------------------------------------------------------------------------------------------
    ValueError: HANGAR VALUE ERROR:: Merge ABORTED with conflict:
-   {'dset': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False),
+   {'dcell': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False),
     'meta': ConflictRecords(t1=('hello',), t21=(), t22=(), t3=(), conflict=True),
     'sample': {'dummy_datacell': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False)},
     'conflict_found': True}
@@ -620,7 +620,7 @@ Alternatively, use the diff methods on a checkout to test for conflicts before a
 
    >>> merge_results, conflicts_found = co.diff.branch('testbranch')
    >>> print(conflicts_found)
-   {'dset': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False),
+   {'dcell': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False),
     'meta': ConflictRecords(t1=('hello',), t21=(), t22=(), t3=(), conflict=True),
     'sample': {'dummy_datacell': ConflictRecords(t1=(), t21=(), t22=(), t3=(), conflict=False)},
     'conflict_found': True}

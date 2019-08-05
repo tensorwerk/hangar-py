@@ -132,11 +132,11 @@ def test_push_fetch_records(server_instance, backend):
     ['origin', 'master'],
     ['origin', 'testbranch', '--all-history'],
     ['origin', 'master', '--all-history'],
-    ['origin', 'testbranch', '--dset', 'data'],
-    ['origin', 'master', '--dset', 'data'],
-    ['origin', 'testbranch', '--dset', 'data', '--all-history'],
-    ['origin', 'master', '--dset', 'data', '--all-history'],
-    ['origin', 'testbranch', '--dset', 'data', '--all-history'],
+    ['origin', 'testbranch', '--dcell', 'data'],
+    ['origin', 'master', '--dcell', 'data'],
+    ['origin', 'testbranch', '--dcell', 'data', '--all-history'],
+    ['origin', 'master', '--dcell', 'data', '--all-history'],
+    ['origin', 'testbranch', '--dcell', 'data', '--all-history'],
     ['origin', 'master', '--nbytes', '3Kb'],
 ])
 def test_fetch_records_and_data(server_instance, backend, options):

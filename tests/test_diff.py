@@ -174,84 +174,84 @@ class TestReaderDiff(object):
         assert conflicts['sample']['dummy'].t3[0].data_name == '7'
         co.close()
 
-    def test_dset_addition_conflict(self, written_repo):
+    def test_dcell_addition_conflict(self, written_repo):
         # t1
         repo = written_repo
 
         repo.create_branch('testbranch')
         co = repo.checkout(write=True)
-        co.datacells.init_datacell(name='testing_dset', shape=(5, 7), dtype=np.float64)
-        co.commit('dset init in master')
+        co.datacells.init_datacell(name='testing_dcell', shape=(5, 7), dtype=np.float64)
+        co.commit('dcell init in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.datacells.init_datacell(name='testing_dset', shape=(7, 7), dtype=np.float64)
-        co.commit('dset init in dev')
+        co.datacells.init_datacell(name='testing_dcell', shape=(7, 7), dtype=np.float64)
+        co.commit('dcell init in dev')
         co.close()
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['dset'].t1) == 1
-        assert conflicts['dset'].t1[0] == 'testing_dset'
+        assert len(conflicts['dcell'].t1) == 1
+        assert conflicts['dcell'].t1[0] == 'testing_dcell'
         co.close()
 
-    def test_dset_removal_conflict(self, written_repo):
+    def test_dcell_removal_conflict(self, written_repo):
         # t21 and t22
         repo = written_repo
         co = repo.checkout(write=True)
-        co.datacells.init_datacell(name='testing_dset1', shape=(5, 7), dtype=np.float64)
-        co.datacells.init_datacell(name='testing_dset2', shape=(5, 7), dtype=np.float64)
-        co.commit('added dsets')
+        co.datacells.init_datacell(name='testing_dcell1', shape=(5, 7), dtype=np.float64)
+        co.datacells.init_datacell(name='testing_dcell2', shape=(5, 7), dtype=np.float64)
+        co.commit('added dcells')
         co.close()
         repo.create_branch('testbranch')
 
         co = repo.checkout(write=True)
-        del co.datacells['testing_dset1']
-        del co.datacells['testing_dset2']
-        co.datacells.init_datacell(name='testing_dset2', shape=(5, 7), dtype=np.float32)
+        del co.datacells['testing_dcell1']
+        del co.datacells['testing_dcell2']
+        co.datacells.init_datacell(name='testing_dcell2', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        del co.datacells['testing_dset1']
-        del co.datacells['testing_dset2']
-        co.datacells.init_datacell(name='testing_dset1', shape=(5, 7), dtype=np.float32)
+        del co.datacells['testing_dcell1']
+        del co.datacells['testing_dcell2']
+        co.datacells.init_datacell(name='testing_dcell1', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from dev')
         co.close()
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['dset'].t21) == 1
-        assert len(conflicts['dset'].t22) == 1
-        assert conflicts['dset'].t21[0] == 'testing_dset1'
-        assert conflicts['dset'].t22[0] == 'testing_dset2'
+        assert len(conflicts['dcell'].t21) == 1
+        assert len(conflicts['dcell'].t22) == 1
+        assert conflicts['dcell'].t21[0] == 'testing_dcell1'
+        assert conflicts['dcell'].t22[0] == 'testing_dcell2'
         co.close()
 
-    def test_dset_mutation_conflict(self, written_repo):
+    def test_dcell_mutation_conflict(self, written_repo):
         # t3
         repo = written_repo
         co = repo.checkout(write=True)
-        co.datacells.init_datacell(name='testing_dset', shape=(5, 7), dtype=np.float64)
-        co.commit('added dset')
+        co.datacells.init_datacell(name='testing_dcell', shape=(5, 7), dtype=np.float64)
+        co.commit('added dcell')
         co.close()
         repo.create_branch('testbranch')
 
         co = repo.checkout(write=True)
-        del co.datacells['testing_dset']
-        co.datacells.init_datacell(name='testing_dset', shape=(7, 7), dtype=np.float64)
+        del co.datacells['testing_dcell']
+        co.datacells.init_datacell(name='testing_dcell', shape=(7, 7), dtype=np.float64)
         co.commit('mutation from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        del co.datacells['testing_dset']
-        co.datacells.init_datacell(name='testing_dset', shape=(5, 7), dtype=np.float32)
+        del co.datacells['testing_dcell']
+        co.datacells.init_datacell(name='testing_dcell', shape=(5, 7), dtype=np.float32)
         co.commit('mutation from dev')
         co.close()
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['dset'].t3) == 1
-        assert conflicts['dset'].t3[0] == 'testing_dset'
+        assert len(conflicts['dcell'].t3) == 1
+        assert conflicts['dcell'].t3[0] == 'testing_dcell'
         co.close()
 
     def test_meta_addition_conflict(self, repo_1_br_no_conf):
@@ -319,22 +319,22 @@ class TestReaderDiff(object):
         repo = written_repo
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='testbranch')
-        dset = co.datacells['_dset']
-        dset2 = co.datacells.init_datacell('dset2', prototype=array5by7)
-        dset2[1] = array5by7
-        with dset, co.metadata:
-            dset[100] = array5by7
+        dcell = co.datacells['_dcell']
+        dcell2 = co.datacells.init_datacell('dcell2', prototype=array5by7)
+        dcell2[1] = array5by7
+        with dcell, co.metadata:
+            dcell[100] = array5by7
             co.metadata['crazykey'] = 'crazyvalue'
             co.commit('inside cm')
-            dset[101] = array5by7
+            dcell[101] = array5by7
             co.commit('another commit inside cm')
         co.close()
         co = repo.checkout(branch='testbranch')
-        assert np.allclose(co.datacells['_dset'][101], array5by7)
+        assert np.allclose(co.datacells['_dcell'][101], array5by7)
         diff = co.diff.branch('master')[0]
         assert create_meta_nt('crazykey') in diff['metadata']['master']['additions'].keys()
-        assert 'dset2' in diff['datacells']['master']['additions'].keys()
-        for record in diff['samples']['master']['_dset']['additions']:
+        assert 'dcell2' in diff['datacells']['master']['additions'].keys()
+        for record in diff['samples']['master']['_dcell']['additions']:
             assert record.data_name in [100, 101]
         co.close()
 
@@ -360,23 +360,23 @@ class TestWriterDiff(object):
             co.diff.status()  # Read checkout doesn't have status()
 
         co = repo.checkout(write=True)
-        co.datacells['_dset']['45'] = dummyData
+        co.datacells['_dcell']['45'] = dummyData
         assert co.diff.status() == 'DIRTY'
         diffs = co.diff.staged()[0]
-        for key in diffs['samples']['master']['_dset']['additions'].keys():
+        for key in diffs['samples']['master']['_dcell']['additions'].keys():
             assert key.data_name == '45'
         co.commit('adding')
         assert co.diff.status() == 'CLEAN'
         co.close()
 
-    def test_status_and_staged_dset(self, written_repo):
+    def test_status_and_staged_dcell(self, written_repo):
         repo = written_repo
         co = repo.checkout(write=True)
-        co.datacells.init_datacell(name='sampledset', shape=(3, 5), dtype=np.float32)
+        co.datacells.init_datacell(name='sampledcell', shape=(3, 5), dtype=np.float32)
         assert co.diff.status() == 'DIRTY'
         diff = co.diff.staged()[0]
-        assert 'sampledset' in diff['datacells']['master']['additions'].keys()
-        assert '_dset' in diff['datacells']['master']['unchanged'].keys()
-        co.commit('init dset')
+        assert 'sampledcell' in diff['datacells']['master']['additions'].keys()
+        assert '_dcell' in diff['datacells']['master']['unchanged'].keys()
+        co.commit('init dcell')
         assert co.diff.status() == 'CLEAN'
         co.close()

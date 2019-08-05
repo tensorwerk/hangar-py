@@ -11,18 +11,18 @@ import numpy as np
 def test_heuristics_select_backend(repo, prototype, expected_backend):
 
     wco = repo.checkout(write=True)
-    dset = wco.datacells.init_datacell('dset', prototype=prototype)
-    assert dset._backend == expected_backend
-    dset['0'] = prototype
+    dcell = wco.datacells.init_datacell('dcell', prototype=prototype)
+    assert dcell._backend == expected_backend
+    dcell['0'] = prototype
     wco.commit('first commit')
-    assert dset._backend == expected_backend
-    assert np.allclose(prototype, dset['0'])
+    assert dcell._backend == expected_backend
+    assert np.allclose(prototype, dcell['0'])
     wco.close()
 
     nwco = repo.checkout(write=True)
-    ndset = nwco.datacells['dset']
-    assert ndset._backend == expected_backend
-    assert np.allclose(prototype, ndset['0'])
+    ndcell = nwco.datacells['dcell']
+    assert ndcell._backend == expected_backend
+    assert np.allclose(prototype, ndcell['0'])
     nwco.close()
 
 
@@ -37,18 +37,18 @@ def test_heuristics_select_backend(repo, prototype, expected_backend):
 def test_manual_override_heuristics_select_backend(repo, prototype, backend):
 
     wco = repo.checkout(write=True)
-    dset = wco.datacells.init_datacell('dset', prototype=prototype, backend=backend)
-    assert dset._backend == backend
-    dset['0'] = prototype
+    dcell = wco.datacells.init_datacell('dcell', prototype=prototype, backend=backend)
+    assert dcell._backend == backend
+    dcell['0'] = prototype
     wco.commit('first commit')
-    assert dset._backend == backend
-    assert np.allclose(prototype, dset['0'])
+    assert dcell._backend == backend
+    assert np.allclose(prototype, dcell['0'])
     wco.close()
 
     nwco = repo.checkout(write=True)
-    ndset = nwco.datacells['dset']
-    assert ndset._backend == backend
-    assert np.allclose(prototype, ndset['0'])
+    ndcell = nwco.datacells['dcell']
+    assert ndcell._backend == backend
+    assert np.allclose(prototype, ndcell['0'])
     nwco.close()
 
 
@@ -56,5 +56,5 @@ def test_manual_override_heuristics_invalid_value_raises_error(repo):
 
     wco = repo.checkout(write=True)
     with pytest.raises(ValueError):
-        dset = wco.datacells.init_datacell('dset', prototype=np.arange(10), backend='ERROR')
+        dcell = wco.datacells.init_datacell('dcell', prototype=np.arange(10), backend='ERROR')
     wco.close()

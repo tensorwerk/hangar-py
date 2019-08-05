@@ -166,9 +166,9 @@ unpacked on checkout!).
 
 ::
 
-    Num dsets                      'a.'               -> '2'
+    Num dcells                      'a.'               -> '2'
     ---------------------------------------------------------------------------
-    Name of dset -> num samples || 'a.train_images'   -> '10'
+    Name of dcell -> num samples || 'a.train_images'   -> '10'
     Name of data -> hash        || 'a.train_images.0' -> BAR_HASH_1'
     Name of data -> hash        || 'a.train_images.1' -> BAR_HASH_2'
     Name of data -> hash        || 'a.train_images.2' -> BAR_HASH_3'
@@ -180,7 +180,7 @@ unpacked on checkout!).
     Name of data -> hash        || 'a.train_images.8' -> BAR_HASH_9'
     Name of data -> hash        || 'a.train_images.9' -> BAR_HASH_0'
     ---------------------------------------------------------------------------
-    Name of dset -> num samples || 'a.train_labels'   -> '10'
+    Name of dcell -> num samples || 'a.train_labels'   -> '10'
     Name of data -> hash        || 'a.train_labels.0' -> BAR_HASH_11'
     Name of data -> hash        || 'a.train_labels.1' -> BAR_HASH_12'
     Name of data -> hash        || 'a.train_labels.2' -> BAR_HASH_13'

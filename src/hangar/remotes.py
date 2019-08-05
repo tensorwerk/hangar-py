@@ -348,8 +348,8 @@ class Remotes(object):
                     commiting.unpack_commit_ref(self._env.refenv, tmpDB, commit)
                     # datacell_names option
                     if datacell_names is not None:
-                        for dsetn in datacell_names:
-                            cmtData_hashs = queries.RecordQuery(tmpDB).datacell_data_hashes(dsetn)
+                        for dcelln in datacell_names:
+                            cmtData_hashs = queries.RecordQuery(tmpDB).datacell_data_hashes(dcelln)
                             allHashs.update(cmtData_hashs)
                     else:
                         cmtData_hashs = queries.RecordQuery(tmpDB).data_hashes()

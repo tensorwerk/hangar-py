@@ -40,7 +40,7 @@ def repo(managed_tmpdir) -> Repository:
 @pytest.fixture()
 def written_repo(repo):
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='_dset', shape=(5, 7), dtype=np.float64)
+    co.datacells.init_datacell(name='_dcell', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -49,7 +49,7 @@ def written_repo(repo):
 @pytest.fixture()
 def variable_shape_written_repo(repo):
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='_dset', shape=(10, 10), dtype=np.float64, variable_shape=True)
+    co.datacells.init_datacell(name='_dcell', shape=(10, 10), dtype=np.float64, variable_shape=True)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -77,12 +77,12 @@ def randomsizedarray():
 @pytest.fixture()
 def written_two_cmt_repo(repo, array5by7):
     co = repo.checkout(write=True)
-    co.datacells.init_datacell(name='_dset', shape=(5, 7), dtype=np.float32)
+    co.datacells.init_datacell(name='_dcell', shape=(5, 7), dtype=np.float32)
     for cIdx in range(2):
         if cIdx != 0:
             co = repo.checkout(write=True)
 
-        with co.datacells['_dset'] as d:
+        with co.datacells['_dcell'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range((cIdx + 1) * 5):

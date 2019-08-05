@@ -267,7 +267,7 @@ The following records can be parsed:
 
 
 RawDataRecordKey = NamedTuple('RawDataRecordKey', [
-    ('dset_name', str),
+    ('dcell_name', str),
     ('data_name', Union[str, int])])
 RawDataRecordKey.__doc__ = 'Represents a Data Sample Record Key'
 
@@ -305,13 +305,13 @@ def data_record_raw_key_from_db_key(db_key: bytes) -> RawDataRecordKey:
     Returns
     -------
     RawDataRecordKey
-        Tuple containing the record dset_name, data_name
+        Tuple containing the record dcell_name, data_name
     '''
     key = db_key.decode()
-    dset_name, data_name = key.replace(c.K_STGARR, '', 1).split(c.SEP_KEY)
+    dcell_name, data_name = key.replace(c.K_STGARR, '', 1).split(c.SEP_KEY)
     if data_name.startswith(c.K_INT):
         data_name = int(data_name.lstrip(c.K_INT))
-    return RawDataRecordKey(dset_name, data_name)
+    return RawDataRecordKey(dcell_name, data_name)
 
 
 def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
@@ -334,12 +334,12 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
 # -------------------- raw (python) -> db -----------------------------
 
 
-def data_record_db_key_from_raw_key(dset_name: str, data_name: Union[str, int]) -> bytes:
+def data_record_db_key_from_raw_key(dcell_name: str, data_name: Union[str, int]) -> bytes:
     '''converts a python record spec into the appropriate lmdb key
 
     Parameters
     ----------
-    dset_name : string
+    dcell_name : string
         name of the datacell for the record
     data_name : Union[string, int]
         name of the data sample for the record
@@ -350,9 +350,9 @@ def data_record_db_key_from_raw_key(dset_name: str, data_name: Union[str, int]) 
         Byte encoded db record key
     '''
     if isinstance(data_name, int):
-        record_key = f'{c.K_STGARR}{dset_name}{c.SEP_KEY}{c.K_INT}{data_name}'.encode()
+        record_key = f'{c.K_STGARR}{dcell_name}{c.SEP_KEY}{c.K_INT}{data_name}'.encode()
     else:
-        record_key = f'{c.K_STGARR}{dset_name}{c.SEP_KEY}{data_name}'.encode()
+        record_key = f'{c.K_STGARR}{dcell_name}{c.SEP_KEY}{data_name}'.encode()
     return record_key
 
 
@@ -378,25 +378,25 @@ Functions to convert datacell count records to/from python objects.
 ------------------------------------------------------------------
 '''
 
-# ------------------ raw count -> db dset record count  --------------------
+# ------------------ raw count -> db dcell record count  --------------------
 
 
-def datacell_record_count_db_key_from_raw_key(dset_name):
-    db_record_count_key = f'{c.K_STGARR}{dset_name}'.encode()
+def datacell_record_count_db_key_from_raw_key(dcell_name):
+    db_record_count_key = f'{c.K_STGARR}{dcell_name}'.encode()
     return db_record_count_key
 
 
-def datacell_record_count_db_val_from_raw_val(dset_record_count):
-    db_record_count_val = f'{dset_record_count}'.encode()
+def datacell_record_count_db_val_from_raw_val(dcell_record_count):
+    db_record_count_val = f'{dcell_record_count}'.encode()
     return db_record_count_val
 
 
-# ------------------ db dset record count -> raw count --------------------
+# ------------------ db dcell record count -> raw count --------------------
 
 
 def datacell_record_count_raw_key_from_db_key(db_key):
-    dset_name = db_key.decode().replace(c.K_STGARR, '', 1)
-    return dset_name
+    dcell_name = db_key.decode().replace(c.K_STGARR, '', 1)
+    return dcell_name
 
 
 def datacell_record_count_raw_val_from_db_val(db_val):
@@ -412,12 +412,12 @@ Functions to convert datacell schema records to/from python objects.
 # ----------------- raw schema -> db schema -----------------------------
 
 
-def datacell_record_schema_db_key_from_raw_key(dset_name):
+def datacell_record_schema_db_key_from_raw_key(dcell_name):
     '''Get the db schema key for a named datacell
 
     Parameters
     ----------
-    dset_name : string
+    dcell_name : string
         the name of the datacell whose schema is found.
 
     Returns
@@ -425,7 +425,7 @@ def datacell_record_schema_db_key_from_raw_key(dset_name):
     bytestring
         the db_key which can be used to query the schema
     '''
-    db_schema_key = f'{c.K_SCHEMA}{dset_name}'.encode()
+    db_schema_key = f'{c.K_SCHEMA}{dcell_name}'.encode()
     return db_schema_key
 
 
@@ -475,8 +475,8 @@ def datacell_record_schema_db_val_from_raw_val(schema_hash,
 # -------------- db schema -> raw schema -------------------------------
 
 def datacell_record_schema_raw_key_from_db_key(db_key: bytes) -> str:
-    dset_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
-    return dset_name
+    dcell_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
+    return dcell_name
 
 
 def datacell_record_schema_raw_val_from_db_val(db_val: bytes) -> RawDatacellSchemaVal:
@@ -487,7 +487,7 @@ def datacell_record_schema_raw_val_from_db_val(db_val: bytes) -> RawDatacellSche
 
 
 '''
-Functions to convert total dset count records to/from python objects
+Functions to convert total dcell count records to/from python objects
 ---------------------------------------------------------------------
 '''
 
@@ -499,8 +499,8 @@ def datacell_total_count_db_key() -> bytes:
     return db_key
 
 
-def datacell_total_count_db_val_from_raw_val(number_of_dsets: int) -> bytes:
-    db_val = f'{number_of_dsets}'.encode()
+def datacell_total_count_db_val_from_raw_val(number_of_dcells: int) -> bytes:
+    db_val = f'{number_of_dcells}'.encode()
     return db_val
 
 
@@ -517,7 +517,7 @@ Functions to convert metadata count records to/from python objects.
 -------------------------------------------------------------------
 '''
 
-# ------------------ raw count -> db dset record count  --------------------
+# ------------------ raw count -> db dcell record count  --------------------
 
 
 def metadata_count_db_key() -> bytes:
@@ -554,7 +554,7 @@ def metadata_count_db_val_from_raw_val(metadata_record_count: int) -> bytes:
     return db_val
 
 
-# ------------------ db dset record count -> raw count ------------------------
+# ------------------ db dcell record count -> raw count ------------------------
 #
 # Note: there is no need for a `metadata_count_raw_key_from_db_key()` function as
 # the key is fixed and cannot be modified by callers.

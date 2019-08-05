@@ -353,29 +353,29 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
 
     # merging: datacell schemas
     m_schema_dict = {}
-    for dsetn in m_cont['datacells']:
-        m_schema_dict[dsetn] = m_cont['datacells'][dsetn]['schema']
+    for dcelln in m_cont['datacells']:
+        m_schema_dict[dcelln] = m_cont['datacells'][dcelln]['schema']
     o_schema_dict = _merge_changes(cmtDiffer.datacell_changes(), m_schema_dict)
 
     # merging: datacell samples
     o_data_dict = {}
     sample_changes = cmtDiffer.sample_changes()
-    for dsetn in o_schema_dict:
-        if dsetn not in m_cont['datacells']:
-            o_data_dict[dsetn] = d_cont['datacells'][dsetn]['data']
+    for dcelln in o_schema_dict:
+        if dcelln not in m_cont['datacells']:
+            o_data_dict[dcelln] = d_cont['datacells'][dcelln]['data']
             continue
         else:
-            m_dsetn_data_dict = m_cont['datacells'][dsetn]['data']
+            m_dcelln_data_dict = m_cont['datacells'][dcelln]['data']
 
-        if dsetn not in d_cont['datacells']:
-            o_data_dict[dsetn] = m_cont['datacells'][dsetn]['data']
+        if dcelln not in d_cont['datacells']:
+            o_data_dict[dcelln] = m_cont['datacells'][dcelln]['data']
             continue
 
-        dset_sample_changes = {
-            'master': sample_changes['master'][dsetn],
-            'dev': sample_changes['dev'][dsetn],
+        dcell_sample_changes = {
+            'master': sample_changes['master'][dcelln],
+            'dev': sample_changes['dev'][dcelln],
         }
-        o_data_dict[dsetn] = _merge_changes(dset_sample_changes, m_dsetn_data_dict)
+        o_data_dict[dcelln] = _merge_changes(dcell_sample_changes, m_dcelln_data_dict)
 
     # merging: metadata
     o_meta_dict = _merge_changes(cmtDiffer.meta_changes(), m_cont['metadata'])
@@ -384,10 +384,10 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     outDict = {}
     outDict['metadata'] = o_meta_dict
     outDict['datacells'] = {}
-    for dsetn, dsetSchema in o_schema_dict.items():
-        outDict['datacells'][dsetn] = {
-            'schema': dsetSchema,
-            'data': o_data_dict[dsetn]
+    for dcelln, dcellSchema in o_schema_dict.items():
+        outDict['datacells'][dcelln] = {
+            'schema': dcellSchema,
+            'data': o_data_dict[dcelln]
         }
     return outDict
 
@@ -414,14 +414,14 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
         that an lmdb `putmulti` operation can be performed with `append=True`.
     '''
     entries = []
-    numDsetsKey = parsing.datacell_total_count_db_key()
-    numDsetsVal = parsing.datacell_total_count_db_val_from_raw_val(
-        number_of_dsets=len(patchedRecs['datacells'].keys()))
-    entries.append((numDsetsKey, numDsetsVal))
+    numDcellsKey = parsing.datacell_total_count_db_key()
+    numDcellsVal = parsing.datacell_total_count_db_val_from_raw_val(
+        number_of_dcells=len(patchedRecs['datacells'].keys()))
+    entries.append((numDcellsKey, numDcellsVal))
 
-    for dsetn in patchedRecs['datacells'].keys():
-        schemaSpec = patchedRecs['datacells'][dsetn]['schema']
-        schemaKey = parsing.datacell_record_schema_db_key_from_raw_key(dsetn)
+    for dcelln in patchedRecs['datacells'].keys():
+        schemaSpec = patchedRecs['datacells'][dcelln]['schema']
+        schemaKey = parsing.datacell_record_schema_db_key_from_raw_key(dcelln)
         schemaVal = parsing.datacell_record_schema_db_val_from_raw_val(
             schema_hash=schemaSpec.schema_hash,
             schema_is_var=schemaSpec.schema_is_var,
@@ -431,15 +431,15 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
             schema_default_backend=schemaSpec.schema_default_backend)
         entries.append((schemaKey, schemaVal))
 
-        dataRecs = patchedRecs['datacells'][dsetn]['data']
+        dataRecs = patchedRecs['datacells'][dcelln]['data']
         numDataRecs = len(dataRecs.keys())
-        numDataKey = parsing.datacell_record_count_db_key_from_raw_key(dsetn)
+        numDataKey = parsing.datacell_record_count_db_key_from_raw_key(dcelln)
         numDataVal = parsing.datacell_record_count_db_val_from_raw_val(numDataRecs)
         entries.append((numDataKey, numDataVal))
 
         for dataRawK, dataRawV in dataRecs.items():
             dataRecKey = parsing.data_record_db_key_from_raw_key(
-                dset_name=dataRawK.dset_name,
+                dcell_name=dataRawK.dcell_name,
                 data_name=dataRawK.data_name)
             dataRecVal = parsing.data_record_db_val_from_raw_val(
                 data_hash=dataRawV.data_hash)
