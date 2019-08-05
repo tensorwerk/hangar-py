@@ -166,6 +166,18 @@ class Repository(object):
         res = vcompat.get_repository_software_version_str(self._env.branchenv)
         return res
 
+    @property
+    def initialized(self) -> bool:
+        """
+        Check if the repository has been initialized or not
+
+        Returns
+        -------
+        bool
+            True if repository has been initialized.
+        """
+        return self._env.repo_is_initialized
+
     def checkout(self,
                  write: bool = False,
                  *,
