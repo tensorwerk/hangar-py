@@ -25,7 +25,8 @@ extra_require = {
         'grpcio_tools',
         'mypy>=0.701',
         'mypy-protobuf',
-    ]
+    ],
+    'all': [],
 }
 
 for _, packages in extra_require.items():

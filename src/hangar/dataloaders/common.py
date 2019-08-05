@@ -1,3 +1,10 @@
+import warnings
+from typing import Iterable, Optional, Union
+
+import numpy as np
+
+DatasetsRef = Union['DatasetDataReader', Iterable['DatasetDataReader']]
+
 
 class GroupedDsets(object):
     """Groups hangar datasets and validate suitability for usage in dataloaders.
@@ -10,27 +17,34 @@ class GroupedDsets(object):
     `KeyError` in case of non-similar keys.
     """
 
-    def __init__(self, hangar_datasets, keys=None, index_range=None):
+    def __init__(self,
+                 hangar_datasets: DatasetsRef,
+                 keys: Optional[Iterable[Union[int, str]]] = None,
+                 index_range: Optional[slice] = None):
+
         if not isinstance(hangar_datasets, (list, tuple)):
             hangar_datasets = (hangar_datasets,)
-        try:
-            dataset_len = len(hangar_datasets[0])
-        except IndexError:
-            raise
-        except Exception:
-            raise TypeError(
-                "`hangar_datasets` has to be a valid hangar dataset or an"
-                "iterable that can hold other objects, like a list / tuple etc.")
-        dataset_names = []
-        for dset in hangar_datasets:
-            # TODO: probably don't have to check if the index doesn't exceed the minimum dimension
-            if not (hasattr(dset, 'get') and hasattr(dset, 'name')):
-                raise TypeError("`hangar_dataset` contains invalid hangar dataset(s)")
-            if len(dset) != dataset_len:
-                raise RuntimeError("Got datasets with different lengths")
-            dataset_names.append(dset.name)
+
+        dset_keys, dset_lens = {}, []
+        for dataset in hangar_datasets:
+            kset = set(dataset.keys())
+            dset_keys[dataset.name] = kset
+            dset_lens.append(len(kset))
+
+        if not np.allclose(dset_lens):
+            warnings.warn('Datasets do not contain equal num samples', UserWarning)
+
+        if (keys is not None) and (not isinstance(keys, (list, tuple, set))):
+            keys = (keys,)
+        userKeysSet = set(keys)
+        commonDsetKeys = set.union(dset_keys.values())
+        keysNotInCommon = userKeysSet.difference(commonDsetKeys)
+        if len(keysNotInCommon) > 0:
+            raise ValueError(
+                f'Requested keys: {keysNotInCommon} do not exist in all datasets.')
+
         self.dataset_array = hangar_datasets
-        self.dataset_names = dataset_names
+        self.dataset_names = list(dset_keys.keys())
         self._allowed_samples = None
         self.sample_subset(keys, index_range)
 
@@ -56,6 +70,7 @@ class GroupedDsets(object):
         return self._allowed_samples
 
     def get_types(self, converter=None):
+        '''add docstring'''
         types = []
         for dset in self.dataset_array:
             if converter:
@@ -65,6 +80,7 @@ class GroupedDsets(object):
         return tuple(types)
 
     def get_shapes(self, converter=None):
+        '''add docstring'''
         if self.dataset_array[0].variable_shape:
             return None
         shapes = []

@@ -1,13 +1,17 @@
 import pytest
 import numpy as np
-import torch
-import tensorflow as tf
-from torch.utils.data import DataLoader
 from hangar.dataloaders import make_torch_dataset, make_tf_dataset
 
-tf.compat.v1.enable_eager_execution()
 
+try:
+    import torch
+    from torch.utils.data import DataLoader
+except (ImportError, ModuleNotFoundError):
+    skipTorch = True
+else:
+    skipTorch = False
 
+@pytest.mark.skipif(skipTorch is True, reason='pytorch is not installed in the test environment.')
 class TestTorchDataLoader(object):
 
     def test_multiple_dataset_loader(self, repo_with_20_samples):
@@ -87,6 +91,14 @@ class TestTorchDataLoader(object):
         co.close()
 
 
+try:
+    import tensorflow as tf
+    tf.compat.v1.enable_eager_execution()
+except (ImportError, ModuleNotFoundError):
+    skipTF = True
+else:
+    skipTF = False
+@pytest.mark.skipif(skipTF is True, reason='tensorflow is not installed in the test environment.')
 class TestTfDataLoader(object):
 
     def test_dataset_loader(self, repo_with_20_samples):
