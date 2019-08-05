@@ -10,7 +10,7 @@ from ..utils import format_bytes, file_size, folder_size
 
 
 def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
-    '''Traverse commit history to specifying ancestor DAG and all ancestor specs.
+    """Traverse commit history to specifying ancestor DAG and all ancestor specs.
 
     Parameters
     ----------
@@ -34,7 +34,7 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
         dict containing information about the repo history. specifies fields for
         `head`, `ancestors` (DAG of commit), and `specs` of each commit, also `order`
         encountered.
-    '''
+    """
 
     if commit_hash is not None:
         head_commit = commit_hash
@@ -65,7 +65,7 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
 
 
 def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no cover
-    '''Print the details of an lmdb environment to stdout
+    """Print the details of an lmdb environment to stdout
 
     Parameters
     ----------
@@ -78,7 +78,7 @@ def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no co
     -------
     StringIO
         buffer containing detail data.
-    '''
+    """
     buf = StringIO()
     buf.write('\n======================\n')
     buf.write(f'{os.path.basename(env.path())}')
@@ -110,7 +110,7 @@ def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no co
 
 
 def summary(env, *, branch='', commit=''):
-    '''Summary of data set stored in repository.
+    """Summary of data set stored in repository.
 
     Parameters
     ----------
@@ -125,7 +125,7 @@ def summary(env, *, branch='', commit=''):
     -------
     dict:
         the contents of the commit ref at the queried commit.
-    '''
+    """
     if commit != '':
         cmt = commit
     elif branch != '':
@@ -165,14 +165,14 @@ def summary(env, *, branch='', commit=''):
     buf.write(f'| DataSets \n')
     buf.write(f'|----------------- \n')
 
-    buf.write(f'|  Number of Named Datasets: {len(res["datasets"])} \n')
-    for dsetn in res['datasets']:
+    buf.write(f'|  Number of Named Arraysets: {len(res["arraysets"])} \n')
+    for asetn in res['arraysets']:
         buf.write(f'|\n')
-        buf.write(f'|  * Dataset Name: {dsetn} \n')
-        buf.write(f'|    Num Arrays: {len(res["datasets"][dsetn]["data"])} \n')
+        buf.write(f'|  * Arrayset Name: {asetn} \n')
+        buf.write(f'|    Num Arrays: {len(res["arraysets"][asetn]["data"])} \n')
 
         buf.write(f'|    Details: \n')
-        for k, v in res["datasets"][dsetn]["schema"]._asdict().items():
+        for k, v in res["arraysets"][asetn]["schema"]._asdict().items():
             buf.write(f'|    - {k}: {v} \n')
 
     buf.write(f' \n')

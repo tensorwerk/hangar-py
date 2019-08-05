@@ -1,4 +1,4 @@
-'''Local HDF5 Backend Implementation, Identifier: ``HDF5_00``
+"""Local HDF5 Backend Implementation, Identifier: ``HDF5_00``
 
 Backend Identifiers
 ===================
@@ -43,16 +43,13 @@ Fields Recorded for Each Array
 Separators used
 ---------------
 
-*  ``SEP_KEY``
-*  ``SEP_HSH``
-*  ``SEP_LST``
-*  ``SEP_SLC``
+*  ``SEP_KEY: ":"``
+*  ``SEP_HSH: "$"``
+*  ``SEP_LST: " "``
+*  ``SEP_SLC: "*"``
 
 Examples
 --------
-
-Note: all examples use ``SEP_KEY: ":"``, ``SEP_HSH: "$"``, ``SEP_LST: " "``,
-``SEP_SLC: "*"``
 
 1)  Adding the first piece of data to a file:
 
@@ -92,7 +89,7 @@ Technical Notes
    via custom python ``pickle`` serialization/reduction logic which is
    implemented by the high level ``pickle`` reduction ``__set_state__()``,
    ``__get_state__()`` class methods.
-'''
+"""
 import math
 import os
 import re
@@ -159,7 +156,7 @@ HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec',
 
 
 def hdf5_00_encode(uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) -> bytes:
-    '''converts the hdf5 data has spec to an appropriate db value
+    """converts the hdf5 data has spec to an appropriate db value
 
     Parameters
     ----------
@@ -178,7 +175,7 @@ def hdf5_00_encode(uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) 
     -------
     bytes
         hash data db value recording all input specifications.
-    '''
+    """
     out_str = f'{_FmtCode}{c.SEP_KEY}{uid}'\
               f'{c.SEP_HSH}'\
               f'{dataset}{c.SEP_LST}{dataset_idx}'\
@@ -188,7 +185,7 @@ def hdf5_00_encode(uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) 
 
 
 def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
-    '''converts an hdf5 data hash db val into an hdf5 data python spec.
+    """converts an hdf5 data hash db val into an hdf5 data python spec.
 
     Parameters
     ----------
@@ -200,7 +197,7 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
     HDF5_00_DataHashSpec
         hdf5 data hash specification containing `backend`, `schema`,
         `instance`, `dataset`, `dataset_idx`, `shape`
-    '''
+    """
     db_str = db_val.decode()
     _, uid, dataset_vs, shape_vs = _SplitDecoderRE.split(db_str)
     dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
@@ -223,12 +220,12 @@ HDF5_00_MapTypes = MutableMapping[str, Union[h5py.File, Callable[[], h5py.File]]
 
 
 class HDF5_00_FileHandles(object):
-    '''Manage HDF5 file handles.
+    """Manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
-    "writeable" state. This is an issue where multiple datasets may need to
-    write to the same dataset schema.
-    '''
+    "writeable" state. This is an issue where multiple arraysets may need to
+    write to the same arrayset schema.
+    """
 
     def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
         self.path: os.PathLike = repo_path
@@ -266,8 +263,8 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid].flush()
 
     def __getstate__(self) -> dict:
-        '''ensure multiprocess operations can pickle relevant data.
-        '''
+        """ensure multiprocess operations can pickle relevant data.
+        """
         self.close()
         time.sleep(0.1)  # buffer time
         state = self.__dict__.copy()
@@ -277,8 +274,8 @@ class HDF5_00_FileHandles(object):
         return state
 
     def __setstate__(self, state: dict) -> None:
-        '''ensure multiprocess operations can pickle relevant data.
-        '''
+        """ensure multiprocess operations can pickle relevant data.
+        """
         self.__dict__.update(state)
         self.rFp = {}
         self.wFp = {}
@@ -286,7 +283,7 @@ class HDF5_00_FileHandles(object):
         self.open(self.mode)
 
     def open(self, mode: str, *, remote_operation: bool = False):
-        '''Open an hdf5 file handle in the Handler Singleton
+        """Open an hdf5 file handle in the Handler Singleton
 
         Parameters
         ----------
@@ -298,7 +295,7 @@ class HDF5_00_FileHandles(object):
             which exist in the remote data dir. (default is false, which means that
             write operations use the stage data dir and read operations use data store
             dir)
-        '''
+        """
         self.mode = mode
         if self.mode == 'a':
             process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
@@ -319,7 +316,7 @@ class HDF5_00_FileHandles(object):
                 self.rFp[uid] = partial(h5py.File, file_pth, 'r', swmr=True, libver='latest')
 
     def close(self):
-        '''Close a file handle after writes have been completed
+        """Close a file handle after writes have been completed
 
         behavior changes depending on write-enable or read-only file
 
@@ -327,7 +324,7 @@ class HDF5_00_FileHandles(object):
         -------
         bool
             True if success, otherwise False.
-        '''
+        """
         if self.mode == 'a':
             if self.w_uid in self.wFp:
                 self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
@@ -354,7 +351,7 @@ class HDF5_00_FileHandles(object):
 
     @staticmethod
     def delete_in_process_data(repo_path: os.PathLike, *, remote_operation=False) -> None:
-        '''Removes some set of files entirely from the stage/remote directory.
+        """Removes some set of files entirely from the stage/remote directory.
 
         DANGER ZONE. This should essentially only be used to perform hard resets
         of the repository state.
@@ -366,7 +363,7 @@ class HDF5_00_FileHandles(object):
         remote_operation : optional, kwarg only, bool
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
-        '''
+        """
         data_dir = pjoin(repo_path, c.DIR_DATA, _FmtCode)
         PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
         process_dir = pjoin(repo_path, PDIR, _FmtCode)
@@ -383,7 +380,7 @@ class HDF5_00_FileHandles(object):
 
     @staticmethod
     def _dataset_opts(complib: str, complevel: int, shuffle: Union[bool, str], fletcher32: bool) -> dict:
-        '''specify compression options for the hdf5 dataset.
+        """specify compression options for the hdf5 dataset.
 
         .. seealso:: :function:`_blosc_opts`
 
@@ -408,7 +405,7 @@ class HDF5_00_FileHandles(object):
         fletcher32 : bool
             enable fletcher32 checksum validation of data integrity, (defaults to
             True, which is enabled)
-        '''
+        """
         if complib.startswith('blosc'):
             shuffle = 2 if shuffle == 'bit' else 1 if shuffle else 0
             compressors = ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib', 'zstd']
@@ -431,7 +428,7 @@ class HDF5_00_FileHandles(object):
 
     @staticmethod
     def _chunk_opts(sample_array: np.ndarray, max_chunk_nbytes: int) -> Tuple[list, int]:
-        '''Determine the chunk shape so each array chunk fits into configured nbytes.
+        """Determine the chunk shape so each array chunk fits into configured nbytes.
 
         Currently the chunk nbytes are not user configurable. Instead the constant
         `HDF5_MAX_CHUNK_NBYTES` is sued to determine when to split.
@@ -451,7 +448,7 @@ class HDF5_00_FileHandles(object):
             to split `sample_array` into nbytes
         int
             nbytes which the chunk will fit in. Will be <= `HDF5_MAX_CHUNK_NBYTES`
-        '''
+        """
         chunk_nbytes = sample_array.nbytes
         chunk_shape = list(sample_array.shape)
         shape_rank = len(chunk_shape)
@@ -471,7 +468,7 @@ class HDF5_00_FileHandles(object):
         return (chunk_shape, chunk_nbytes)
 
     def _create_schema(self, *, remote_operation: bool = False):
-        '''stores the shape and dtype as the schema of a dataset.
+        """stores the shape and dtype as the schema of a arrayset.
 
         Parameters
         ----------
@@ -503,7 +500,7 @@ class HDF5_00_FileHandles(object):
 
             http://docs.h5py.org/en/stable/high/file.html#chunk-cache
 
-        '''
+        """
 
         # -------------------- Chunk & RDCC Vals ------------------------------
 
@@ -583,7 +580,7 @@ class HDF5_00_FileHandles(object):
             assert self.wFp[self.w_uid].swmr_mode is True
 
     def read_data(self, hashVal: HDF5_00_DataHashSpec) -> np.ndarray:
-        '''Read data from an hdf5 file handle at the specified locations
+        """Read data from an hdf5 file handle at the specified locations
 
         Parameters
         ----------
@@ -594,7 +591,7 @@ class HDF5_00_FileHandles(object):
         -------
         np.array
             requested data.
-        '''
+        """
         dsetIdx = int(hashVal.dataset_idx)
         dsetCol = f'/{hashVal.dataset}'
 
@@ -633,7 +630,7 @@ class HDF5_00_FileHandles(object):
         return destArr
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
-        '''verifies correctness of array data and performs write operation.
+        """verifies correctness of array data and performs write operation.
 
         Parameters
         ----------
@@ -650,7 +647,7 @@ class HDF5_00_FileHandles(object):
         bytes
             string identifying the collection dataset and collection dim-0 index
             which the array can be accessed at.
-        '''
+        """
         if self.w_uid in self.wFp:
             self.hIdx += 1
             if self.hIdx >= self.hMaxSize:

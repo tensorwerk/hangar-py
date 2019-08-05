@@ -103,7 +103,5 @@ parser.add_argument('build',
                     help='Build ID in AppVeyor. Eg: master-123')
 
 if __name__ == "__main__":
-    # import logging
-    # logging.basicConfig(level="DEBUG")
     args = parser.parse_args()
     download_latest_artifacts(args.id, args.build)

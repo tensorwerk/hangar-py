@@ -1,4 +1,4 @@
-'''Remote server location unknown backend, Identifier: ``REMOTE_50``
+"""Remote server location unknown backend, Identifier: ``REMOTE_50``
 
 Backend Identifiers
 ===================
@@ -30,12 +30,10 @@ Fields Recorded for Each Array
 Separators used
 ---------------
 
-* ``SEP_KEY``
+* ``SEP_KEY: ":"``
 
 Examples
 --------
-
-Note: all examples use ``SEP_KEY: ":"``
 
 1)  Adding the first piece of data to a file:
 
@@ -55,7 +53,7 @@ Technical Notes
 *  The schema_hash field is required in order to allow effective placement of
    actual retrieved data into suitable sized collections on a ``fetch-data()``
    operation
-'''
+"""
 import os
 import re
 from typing import NamedTuple, Match
@@ -76,18 +74,18 @@ REMOTE_50_DataHashSpec = NamedTuple('REMOTE_50_DataHashSpec',
 
 
 def remote_50_encode(schema_hash: str = '') -> bytes:
-    '''returns an db value saying that this hash exists somewhere on a remote
+    """returns an db value saying that this hash exists somewhere on a remote
 
     Returns
     -------
     bytes
         hash data db value
-    '''
+    """
     return f'{_FmtCode}{c.SEP_KEY}{schema_hash}'.encode()
 
 
 def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
-    '''converts a numpy data hash db val into a numpy data python spec
+    """converts a numpy data hash db val into a numpy data python spec
 
     Parameters
     ----------
@@ -98,7 +96,7 @@ def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
     -------
     REMOTE_50_DataHashSpec
         hash specification containing an identifies: `backend`, `schema_hash`
-    '''
+    """
     db_str = db_val.decode()
     _, schema_hash = _SplitDecoderRE.split(db_str)
     raw_val = REMOTE_50_DataHashSpec(backend=_FmtCode, schema_hash=schema_hash)
@@ -129,8 +127,8 @@ class REMOTE_50_Handler(object):
 
     @staticmethod
     def delete_in_process_data(*args, **kwargs) -> None:
-        '''mockup of clearing staged directory for upstream calls.
-        '''
+        """mockup of clearing staged directory for upstream calls.
+        """
         return
 
     def read_data(self, hashVal: REMOTE_50_DataHashSpec) -> None:
@@ -139,7 +137,7 @@ class REMOTE_50_Handler(object):
             f'Perform a `data-fetch` operation to retrieve it from the remote server.')
 
     def write_data(self, schema_hash: str, *args, **kwargs) -> bytes:
-        '''Provide a formatted byte representation for storage as a remote reference
+        """Provide a formatted byte representation for storage as a remote reference
 
         Parameters
         ----------
@@ -150,5 +148,5 @@ class REMOTE_50_Handler(object):
         -------
         bytes
             formated raw values encoding lookup information
-        '''
+        """
         return remote_50_encode(schema_hash=schema_hash)

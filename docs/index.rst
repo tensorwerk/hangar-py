@@ -12,6 +12,7 @@
    design
    api
    cli
+   faq
    backends
    contributing
    codeofconduct

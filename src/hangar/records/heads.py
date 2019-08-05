@@ -7,18 +7,18 @@ from . import parsing
 from ..context import TxnRegister
 
 
-'''
+"""
 Write operation enabled lock methods
 ------------------------------------
 
 Any operation which wants to interact with the main storage services in a
 write-enabled way must aquire a lock to perform the operation. See docstrings
 below for more info
-'''
+"""
 
 
 def writer_lock_held(branchenv):
-    '''Check to see if the writer lock is free before attempting to aquire it.
+    """Check to see if the writer lock is free before attempting to aquire it.
 
     Parameters
     ----------
@@ -29,7 +29,7 @@ def writer_lock_held(branchenv):
     -------
     bool
         True if the lock is available to take, False if it is currently held.
-    '''
+    """
     writerLockKey = parsing.repo_writer_lock_db_key()
     writerLockSentinalVal = parsing.repo_writer_lock_sentinal_db_val()
     branchtxn = TxnRegister().begin_reader_txn(branchenv)
@@ -48,7 +48,7 @@ def writer_lock_held(branchenv):
 
 
 def acquire_writer_lock(branchenv, writer_uuid):
-    '''Attempt to acquire the writer lock for a write-enabled checkout object.
+    """Attempt to acquire the writer lock for a write-enabled checkout object.
 
     If the writer_uuid matches the recorded value, or the lock is available (or
     uninitialized entirely in the case of a brand-new repository), the lock will
@@ -75,7 +75,7 @@ def acquire_writer_lock(branchenv, writer_uuid):
     PermissionError
         If the lock can not be acquired
 
-    '''
+    """
     writerLockKey = parsing.repo_writer_lock_db_key()
     writerLockSentinalVal = parsing.repo_writer_lock_sentinal_db_val()
     requestWriterLockVal = parsing.repo_writer_lock_db_val_from_raw_val(writer_uuid)
@@ -106,7 +106,7 @@ def acquire_writer_lock(branchenv, writer_uuid):
 
 
 def release_writer_lock(branchenv, writer_uuid):
-    '''Internal method to release a writer lock held by a specified uuid.
+    """Internal method to release a writer lock held by a specified uuid.
 
     This method also accept the force-release sentinal by a caller in the
     writer_uuid field. If the writer_uuid does not match the lock value (and the
@@ -129,7 +129,7 @@ def release_writer_lock(branchenv, writer_uuid):
     ------
     RuntimeError
         if the request uuid does not match the lock value.
-    '''
+    """
     writerLockKey = parsing.repo_writer_lock_db_key()
     forceReleaseSentinal = parsing.repo_writer_lock_force_release_sentinal()
     lockSentinalVal = parsing.repo_writer_lock_sentinal_db_val()
@@ -159,19 +159,19 @@ def release_writer_lock(branchenv, writer_uuid):
     return success
 
 
-'''
+"""
 Methods to interact with the branch head records
 ------------------------------------------------
 
 .. todo::
    Need a delete branch operation.
-'''
+"""
 
 # ---------------- branch creation and deletion operations ------------------------------
 
 
 def create_branch(branchenv, name, base_commit):
-    '''Internal operations used to create a branch.
+    """Internal operations used to create a branch.
 
     Parameters
     ----------
@@ -195,7 +195,7 @@ def create_branch(branchenv, name, base_commit):
     RuntimeError
         If the repository does not have atleast one commit on the `default`
         (ie. `master`) branch.
-    '''
+    """
     if base_commit is None:
         headBranch = get_staging_branch_head(branchenv)
         base_commit = get_branch_head_commit(branchenv, headBranch)
@@ -224,7 +224,7 @@ def create_branch(branchenv, name, base_commit):
 
 
 def get_staging_branch_head(branchenv):
-    '''Get the name of the current staging area HEAD branch
+    """Get the name of the current staging area HEAD branch
 
     Parameters
     ----------
@@ -235,7 +235,7 @@ def get_staging_branch_head(branchenv):
     -------
     str
         name of the staging HEAD branch
-    '''
+    """
     headKey = parsing.repo_head_db_key()
     txn = TxnRegister().begin_reader_txn(branchenv)
     try:
@@ -247,7 +247,7 @@ def get_staging_branch_head(branchenv):
 
 
 def set_staging_branch_head(branchenv, branch_name):
-    '''Set the writer HEAD to a branch name. Does not modify staging area contents.
+    """Set the writer HEAD to a branch name. Does not modify staging area contents.
 
     A writer-checkout must specify a branch name to use as it's ancestor. We do
     not allow a writer (or staging area) to exist in a "Detached HEAD" state. In
@@ -270,7 +270,7 @@ def set_staging_branch_head(branchenv, branch_name):
     ------
     ValueError
         If the specified branch name does not exist.
-    '''
+    """
     headKey = parsing.repo_head_db_key()
     requestedHeadVal = parsing.repo_head_db_val_from_raw_val(branch_name)
     requestedBranchKey = parsing.repo_branch_head_db_key_from_raw_key(branch_name)
@@ -295,7 +295,7 @@ def set_staging_branch_head(branchenv, branch_name):
 
 
 def get_branch_head_commit(branchenv, branch_name):
-    '''Find the commit hash which corresponds to the HEAD of a particular branch.
+    """Find the commit hash which corresponds to the HEAD of a particular branch.
 
     Parameters
     ----------
@@ -313,7 +313,7 @@ def get_branch_head_commit(branchenv, branch_name):
     ------
     ValueError
         if `branch_name` does not exist in the repository
-    '''
+    """
     requestedBranchKey = parsing.repo_branch_head_db_key_from_raw_key(branch_name)
     branchtxn = TxnRegister().begin_reader_txn(branchenv)
     try:
@@ -329,7 +329,7 @@ def get_branch_head_commit(branchenv, branch_name):
 
 
 def set_branch_head_commit(branchenv, branch_name, commit_hash):
-    '''Update an existing branch HEAD to point to a new commit hash.
+    """Update an existing branch HEAD to point to a new commit hash.
 
     Does not update stage or refenv contents. If the current HEAD of the branch
     == the new commit hash, no operation will occur and an exception will be
@@ -353,7 +353,7 @@ def set_branch_head_commit(branchenv, branch_name, commit_hash):
     ------
     ValueError
         If the current HEAD is the same as the new commit hash.
-    '''
+    """
     currentHeadCommit = get_branch_head_commit(branchenv=branchenv, branch_name=branch_name)
     if currentHeadCommit == commit_hash:
         err = f'Current branch: {branch_name} HEAD: {currentHeadCommit} is same as the '\
@@ -372,7 +372,7 @@ def set_branch_head_commit(branchenv, branch_name, commit_hash):
 
 
 def get_branch_names(branchenv):
-    '''get a list of all branches in the repository.
+    """get a list of all branches in the repository.
 
     Parameters
     ----------
@@ -383,7 +383,7 @@ def get_branch_names(branchenv):
     -------
     list of str
         list of branch names active in the repository.
-    '''
+    """
     branchStartKey = parsing.c.K_BRANCH.encode()  # TODO: This is odd, why??
     branchNames = []
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
@@ -407,7 +407,7 @@ def get_branch_names(branchenv):
 
 
 def commit_hash_to_branch_name_map(branchenv: lmdb.Environment) -> dict:
-    '''Determine branch names which map to commit hashs
+    """Determine branch names which map to commit hashs
 
     Parameters
     ----------
@@ -419,7 +419,7 @@ def commit_hash_to_branch_name_map(branchenv: lmdb.Environment) -> dict:
     dict
         keys are commit hash strings, values are list of branch names (strings)
         whose HEAD are at the key commit
-    '''
+    """
     outMap = defaultdict(list)
     branchNames = get_branch_names(branchenv=branchenv)
     for branchName in branchNames:
@@ -433,7 +433,7 @@ def commit_hash_to_branch_name_map(branchenv: lmdb.Environment) -> dict:
 
 
 def add_remote(branchenv: lmdb.Environment, name: str, address: str) -> bool:
-    '''add a remote server reference to the repository.
+    """add a remote server reference to the repository.
 
     This method does not check that the remote is actually accessible, rather it
     just records the reference. If a remote with the same name already exists,
@@ -452,7 +452,7 @@ def add_remote(branchenv: lmdb.Environment, name: str, address: str) -> bool:
     -------
     bool
         True if the new reference was saved, False if not.
-    '''
+    """
     dbKey = parsing.remote_db_key_from_raw_key(name)
     dbVal = parsing.remote_db_val_from_raw_val(address)
 
@@ -466,7 +466,7 @@ def add_remote(branchenv: lmdb.Environment, name: str, address: str) -> bool:
 
 
 def get_remote_address(branchenv: lmdb.Environment, name: str) -> str:
-    '''Retieve the IO:PORT of the remote server for a given name
+    """Retieve the IO:PORT of the remote server for a given name
 
     Parameters
     ----------
@@ -484,7 +484,7 @@ def get_remote_address(branchenv: lmdb.Environment, name: str) -> str:
     -------
     str
         IP:PORT of the recorded remote server.
-    '''
+    """
     dbKey = parsing.remote_db_key_from_raw_key(name)
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
@@ -501,7 +501,7 @@ def get_remote_address(branchenv: lmdb.Environment, name: str) -> str:
 
 
 def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
-    '''remove a remote reference with the provided name.
+    """remove a remote reference with the provided name.
 
     Parameters
     ----------
@@ -519,7 +519,7 @@ def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
     -------
     str
         IP:PORT of the remote with provided name (which was removed)
-    '''
+    """
     dbKey = parsing.remote_db_key_from_raw_key(name)
     branchTxn = TxnRegister().begin_writer_txn(branchenv)
     try:
@@ -536,7 +536,7 @@ def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
 
 
 def get_remote_names(branchenv):
-    '''get a list of all remotes in the repository.
+    """get a list of all remotes in the repository.
 
     Parameters
     ----------
@@ -547,7 +547,7 @@ def get_remote_names(branchenv):
     -------
     list of str
         list of remote names active in the repository.
-    '''
+    """
     remoteStartKey = parsing.c.K_REMOTES.encode()  # TODO: This is odd, why??
     remoteNames = []
     branchTxn = TxnRegister().begin_reader_txn(branchenv)

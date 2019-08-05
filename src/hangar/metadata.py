@@ -1,7 +1,6 @@
 import os
 import hashlib
 from typing import Optional, Union, Iterator, Tuple, Dict
-import logging
 
 import lmdb
 
@@ -10,34 +9,32 @@ from .records import parsing
 from .records.queries import RecordQuery
 from .utils import is_suitable_user_key, is_ascii
 
-logger = logging.getLogger(__name__)
-
 
 class MetadataReader(object):
-    '''Class implementing get access to the metadata in a repository.
+    """Class implementing get access to the metadata in a repository.
 
-    Unlike the :class:`~.dataset.DatasetDataReader` and
-    :class:`~.dataset.DatasetDataWriter`, the equivalent Metadata classes
-    do not need a factory function or class to coordinate access through the
+    Unlike the :class:`~.arrayset.ArraysetDataReader` and
+    :class:`~.arrayset.ArraysetDataWriter`, the equivalent Metadata classes do
+    not need a factory function or class to coordinate access through the
     checkout. This is primarily because the metadata is only stored at a single
-    level, and because the long term storage is must simpler than for array data
-    (just write to a lmdb database).
+    level, and because the long term storage is must simpler than for array
+    data (just write to a lmdb database).
 
     .. note::
 
-       It is important to realize that this is not intended to serve as a general
-       store large amounts of textual data, and has no optimization to support such
-       use cases at this time. This should only serve to attach helpful labels, or
-       other quick information primarily intended for human book-keeping, to the
-       main tensor data!
+        It is important to realize that this is not intended to serve as a general
+        store large amounts of textual data, and has no optimization to support
+        such use cases at this time. This should only serve to attach helpful
+        labels, or other quick information primarily intended for human
+        book-keeping, to the main tensor data!
 
     .. note::
 
-       Write-enabled metadata objects are not thread or process safe. Read-only
-       checkouts can use multithreading safety to retrieve data via the
-       standard :py:meth:`.MetadataReader.get` calls
+        Write-enabled metadata objects are not thread or process safe. Read-only
+        checkouts can use multithreading safety to retrieve data via the standard
+        :py:meth:`.MetadataReader.get` calls
 
-    '''
+    """
 
     def __init__(self,
                  mode: str,
@@ -45,7 +42,7 @@ class MetadataReader(object):
                  dataenv: lmdb.Environment,
                  labelenv: lmdb.Environment,
                  *args, **kwargs):
-        '''Developer documentation for init method.
+        """Developer documentation for init method.
 
         Parameters
         ----------
@@ -55,12 +52,12 @@ class MetadataReader(object):
             path to the repository on disk.
         dataenv : lmdb.Environment
             the lmdb environment in which the data records are stored. this is
-            the same as the dataset data record environments.
+            the same as the arrayset data record environments.
         labelenv : lmdb.Environment
             the lmdb environment in which the label hash key / values are stored
             permanently. When opened in by this reader instance, no write access
             is allowed.
-        '''
+        """
         self._mode = mode
         self._path = repo_pth
         self._is_conman: bool = False
@@ -85,34 +82,34 @@ class MetadataReader(object):
         self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
 
     def __len__(self) -> int:
-        '''Determine how many metadata key/value pairs are in the checkout
+        """Determine how many metadata key/value pairs are in the checkout
 
         Returns
         -------
         int
             number of metadata key/value pairs.
-        '''
+        """
         return len(self._mspecs)
 
     def __getitem__(self, key: Union[str, int]) -> str:
-        '''Retrieve a metadata sample with a key. Convenience method for dict style access.
+        """Retrieve a metadata sample with a key. Convenience method for dict style access.
 
         .. seealso:: :meth:`get`
 
         Parameters
         ----------
         key : Union[str, int]
-            metadata key to retrieve from the dataset
+            metadata key to retrieve from the checkout
 
         Returns
         -------
         string
             value of the metadata key/value pair stored in the checkout.
-        '''
+        """
         return self.get(key)
 
     def __contains__(self, key: Union[str, int]) -> bool:
-        '''Determine if a key with the provided name is in the metadata
+        """Determine if a key with the provided name is in the metadata
 
         Parameters
         ----------
@@ -123,7 +120,7 @@ class MetadataReader(object):
         -------
         bool
             True if key exists, False otherwise
-        '''
+        """
         if key in self._mspecs:
             return True
         else:
@@ -146,17 +143,17 @@ class MetadataReader(object):
 
     @property
     def iswriteable(self) -> bool:
-        '''Read-only attribute indicating if this metadata object is write-enabled.
+        """Read-only attribute indicating if this metadata object is write-enabled.
 
         Returns
         -------
         bool
             True if write-enabled checkout, Otherwise False.
-        '''
+        """
         return False if self._mode == 'r' else True
 
     def keys(self) -> Iterator[Union[str, int]]:
-        '''generator which yields the names of every metadata piece in the checkout.
+        """generator which yields the names of every metadata piece in the checkout.
 
         For write enabled checkouts, is technically possible to iterate over the
         metadata object while adding/deleting data, in order to avoid internal
@@ -169,12 +166,12 @@ class MetadataReader(object):
         ------
         Iterator[Union[str, int]]
             keys of one metadata sample at a time
-        '''
+        """
         for name in tuple(self._mspecs.keys()):
             yield name
 
     def values(self) -> Iterator[str]:
-        '''generator yielding all metadata values in the checkout
+        """generator yielding all metadata values in the checkout
 
         For write enabled checkouts, is technically possible to iterate over the
         metadata object while adding/deleting data, in order to avoid internal
@@ -187,12 +184,12 @@ class MetadataReader(object):
         ------
         Iterator[str]
             values of one metadata piece at a time
-        '''
+        """
         for name in tuple(self._mspecs.keys()):
             yield self.get(name)
 
     def items(self) -> Iterator[Tuple[Union[str, int], str]]:
-        '''generator yielding key/value for all metadata recorded in checkout.
+        """generator yielding key/value for all metadata recorded in checkout.
 
         For write enabled checkouts, is technically possible to iterate over the
         metadata object while adding/deleting data, in order to avoid internal
@@ -205,12 +202,12 @@ class MetadataReader(object):
         ------
         Iterator[Tuple[Union[str, int], np.ndarray]]
             metadata key and stored value for every piece in the checkout.
-        '''
+        """
         for name in tuple(self._mspecs.keys()):
             yield (name, self.get(name))
 
     def get(self, key: Union[str, int]) -> str:
-        '''retrieve a piece of metadata from the checkout.
+        """retrieve a piece of metadata from the checkout.
 
         Parameters
         ----------
@@ -229,7 +226,7 @@ class MetadataReader(object):
             alpha-numeric characters.
         KeyError
             If no metadata exists in the checkout with the provided key.
-        '''
+        """
         try:
             tmpconman = not self._is_conman
             if tmpconman:
@@ -238,8 +235,7 @@ class MetadataReader(object):
             metaVal = self._labelTxn.get(self._mspecs[key])
             meta_val = parsing.hash_meta_raw_val_from_db_val(metaVal)
         except KeyError:
-            msg = f'The checkout does not contain metadata with key: {key}'
-            raise KeyError(msg)
+            raise KeyError(f'The checkout does not contain metadata with key: {key}')
         finally:
             if tmpconman:
                 self.__exit__()
@@ -248,9 +244,9 @@ class MetadataReader(object):
 
 
 class MetadataWriter(MetadataReader):
-    '''Class implementing write access to repository metadata.
+    """Class implementing write access to repository metadata.
 
-    Similar to the :class:`~.dataset.DatasetDataWriter`, this class
+    Similar to the :class:`~.arrayset.ArraysetDataWriter`, this class
     inherits the functionality of the :class:`~.metadata.MetadataReader` for reading. The
     only difference is that the reader will be initialized with data records
     pointing to the staging area, and not a commit which is checked out.
@@ -264,10 +260,10 @@ class MetadataWriter(MetadataReader):
     .. seealso::
 
         :class:`.MetadataReader` for the intended use of this functionality.
-    '''
+    """
 
     def __init__(self, *args, **kwargs):
-        '''Developer documentation of init method
+        """Developer documentation of init method
 
         Parameters
         ----------
@@ -275,7 +271,7 @@ class MetadataWriter(MetadataReader):
             Arguments passed to :class:`MetadataReader`
         **kwargs
             KeyWord arguments passed to :class:`MetadataReader`
-        '''
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -294,7 +290,7 @@ class MetadataWriter(MetadataReader):
         self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
 
     def __setitem__(self, key: Union[str, int], value: str) -> Union[str, int]:
-        '''Store a key/value pair as metadata. Convenience method to :meth:`add`.
+        """Store a key/value pair as metadata. Convenience method to :meth:`add`.
 
         .. seealso:: :meth:`add`
 
@@ -309,11 +305,11 @@ class MetadataWriter(MetadataReader):
         -------
         Union[str, int]
             key of the stored metadata sample (assuming operation was successful)
-        '''
+        """
         return self.add(key, value)
 
     def __delitem__(self, key: Union[str, int]) -> Union[str, int]:
-        '''Remove a key/value pair from metadata. Convenience method to :meth:`remove`.
+        """Remove a key/value pair from metadata. Convenience method to :meth:`remove`.
 
         .. seealso:: :meth:`remove` for the function this calls into.
 
@@ -325,12 +321,12 @@ class MetadataWriter(MetadataReader):
         Returns
         -------
         Union[str, int]
-            Metadata key removed from the dataset (assuming operation successful)
-        '''
+            Metadata key removed from the checkout (assuming operation successful)
+        """
         return self.remove(key)
 
     def add(self, key: Union[str, int], value: str) -> Union[str, int]:
-        '''Add a piece of metadata to the staging area of the next commit.
+        """Add a piece of metadata to the staging area of the next commit.
 
         Parameters
         ----------
@@ -352,9 +348,7 @@ class MetadataWriter(MetadataReader):
             If the `key` contains any whitespace or non alpha-numeric characters.
         ValueError
             If the `value` contains any non ascii characters.
-        LookupError
-            If an identical key/value pair exists in the checkout
-        '''
+        """
         try:
             if not is_suitable_user_key(key):
                 raise ValueError(
@@ -364,7 +358,6 @@ class MetadataWriter(MetadataReader):
                 raise ValueError(
                     f'Metadata Value: `{value}` not allowed. Must be ascii-only string')
         except ValueError as e:
-            logger.error(e, exc_info=False)
             raise e from None
 
         try:
@@ -377,14 +370,13 @@ class MetadataWriter(MetadataReader):
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             metaRecVal = parsing.metadata_record_db_val_from_raw_val(val_hash)
 
-            # check if meta record already exists
+            # check if meta record already exists with same key
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
                 existingMetaRec = parsing.metadata_record_raw_val_from_db_val(existingMetaRecVal)
+                # check if meta record already exists with same key/val
                 if val_hash == existingMetaRec.meta_hash:
-                    raise LookupError(
-                        f'HANGAR KEY EXISTS ERROR:: metadata already contains key: `{key}` '
-                        f'with value: `{value}` & hash: {val_hash}')
+                    return key
 
             # write new data if label hash does not exist
             existingHashVal = self._labelTxn.get(hashKey, default=False)
@@ -402,10 +394,6 @@ class MetadataWriter(MetadataReader):
             self._dataTxn.put(metaRecKey, metaRecVal)
             self._mspecs[key] = hashKey
 
-        except LookupError as e:
-            logger.error(e, exc_info=False)
-            raise e
-
         finally:
             if tmpconman:
                 self.__exit__()
@@ -413,7 +401,7 @@ class MetadataWriter(MetadataReader):
         return key
 
     def remove(self, key: Union[str, int]) -> Union[str, int]:
-        '''Remove a piece of metadata from the staging area of the next commit.
+        """Remove a piece of metadata from the staging area of the next commit.
 
         Parameters
         ----------
@@ -433,7 +421,7 @@ class MetadataWriter(MetadataReader):
             ascii-alphanumeric characters.
         KeyError
             If the checkout does not contain metadata with the provided key.
-        '''
+        """
         try:
             tmpconman = not self._is_conman
             if tmpconman:
@@ -462,7 +450,6 @@ class MetadataWriter(MetadataReader):
                 self._dataTxn.put(metaRecCountKey, newMetaRecCountVal)
 
         except (KeyError, ValueError) as e:
-            logger.error(e, exc_info=False)
             raise e from None
 
         finally:

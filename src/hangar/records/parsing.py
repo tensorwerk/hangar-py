@@ -26,13 +26,13 @@ def generate_sample_name() -> str:
     return name
 
 
-'''
+"""
 Parsing functions used to deal with repository state The parsers defined in this
 section handle repo/branch records.
 
 Methods working with repository version specifiers
 --------------------------------------------------
-'''
+"""
 
 VersionSpec = NamedTuple('VersionSpec', [
     ('major', int),
@@ -42,7 +42,7 @@ VersionSpec = NamedTuple('VersionSpec', [
 
 
 def repo_version_raw_spec_from_raw_string(v_str: str) -> VersionSpec:
-    '''Convert from user facing string representation to VersionSpec NamedTuple
+    """Convert from user facing string representation to VersionSpec NamedTuple
 
     Parameters
     ----------
@@ -54,14 +54,14 @@ def repo_version_raw_spec_from_raw_string(v_str: str) -> VersionSpec:
     -------
     VersionSpec
         NamedTuple containing int fileds of `major`, `minor`, `micro` version.
-    '''
+    """
     smajor, sminor, smicro = v_str.split('.')
     res = VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro))
     return res
 
 
 def repo_version_raw_string_from_raw_spec(v_spec: VersionSpec) -> str:
-    '''Convert from VersionSpec NamedTuple to user facing string representation.
+    """Convert from VersionSpec NamedTuple to user facing string representation.
 
     version string always seperated by `.`
 
@@ -75,7 +75,7 @@ def repo_version_raw_string_from_raw_spec(v_spec: VersionSpec) -> str:
     -------
     str
         concatenated string with '.' between each major, minor, micro
-    '''
+    """
     res = f'{v_spec.major}.{v_spec.minor}.{v_spec.micro}'
     return res
 
@@ -84,13 +84,13 @@ def repo_version_raw_string_from_raw_spec(v_spec: VersionSpec) -> str:
 
 
 def repo_version_db_key() -> bytes:
-    '''The db formated key which version information can be accessed at
+    """The db formated key which version information can be accessed at
 
     Returns
     -------
     bytes
         db formatted key to use to get/set the repository software version.
-    '''
+    """
     db_key = c.K_VERSION.encode()
     return db_key
 
@@ -99,7 +99,7 @@ def repo_version_db_key() -> bytes:
 
 
 def repo_version_db_val_from_raw_val(v_spec: VersionSpec) -> bytes:
-    '''determine repository version db specifier from version spec.
+    """determine repository version db specifier from version spec.
 
     Parameters
     ----------
@@ -111,7 +111,7 @@ def repo_version_db_val_from_raw_val(v_spec: VersionSpec) -> bytes:
     -------
     bytes
         db formatted specification of version
-    '''
+    """
     db_val = f'{v_spec.major}{c.SEP_KEY}{v_spec.minor}{c.SEP_KEY}{v_spec.micro}'
     return db_val.encode()
 
@@ -120,7 +120,7 @@ def repo_version_db_val_from_raw_val(v_spec: VersionSpec) -> bytes:
 
 
 def repo_version_raw_val_from_db_val(db_val: bytes) -> VersionSpec:
-    '''determine software version of hangar repository is writter for.
+    """determine software version of hangar repository is writter for.
 
     Parameters
     ----------
@@ -131,29 +131,29 @@ def repo_version_raw_val_from_db_val(db_val: bytes) -> VersionSpec:
     -------
     VersionSpec
         NamedTuple containing major, minor, micro fields as ints.
-    '''
+    """
     db_str = db_val.decode()
     smajor, sminor, smicro = db_str.split(c.SEP_KEY)
     res = VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro))
     return res
 
 
-'''
+"""
 Methods working with writer HEAD branch name
 --------------------------------------------
-'''
+"""
 
 # --------------------- db HEAD key is fixed ------------------------
 
 
 def repo_head_db_key() -> bytes:
-    '''db_key of the head staging branch name.
+    """db_key of the head staging branch name.
 
     Returns
     -------
     bytestring
         lmdb key to query while looking up the head staging branch name
-    '''
+    """
     db_key = c.K_HEAD.encode()
     return db_key
 
@@ -173,10 +173,10 @@ def repo_head_raw_val_from_db_val(db_val: str) -> bytes:
     return raw_val
 
 
-'''
+"""
 Methods working with branch names / head commit values
 ------------------------------------------------------
-'''
+"""
 
 # ---------------------- raw -> db --------------------------------
 
@@ -208,10 +208,10 @@ def repo_branch_head_raw_val_from_db_val(db_val: bytes) -> str:
     return commit_hash
 
 
-'''
+"""
 Methods working with writer lock key/values
 -------------------------------------------
-'''
+"""
 
 # ------------------- db key for lock is fixed -------------------
 
@@ -246,7 +246,7 @@ def repo_writer_lock_raw_val_from_db_val(db_val: str) -> bytes:
     return lock_uuid
 
 
-'''
+"""
 Parsing functions used to deal with unpacked records.
 ----------------------------------------------------
 
@@ -257,17 +257,17 @@ being the checkout objects ability to perform write operations.
 
 The following records can be parsed:
     * data records
-    * dataset count records
-    * dataset schema records
+    * arrayset count records
+    * arrayset schema records
     * metadata records
     * metadata count records
-'''
+"""
 
 # ------------------- named tuple classes used ----------------------
 
 
 RawDataRecordKey = NamedTuple('RawDataRecordKey', [
-    ('dset_name', str),
+    ('aset_name', str),
     ('data_name', Union[str, int])])
 RawDataRecordKey.__doc__ = 'Represents a Data Sample Record Key'
 
@@ -277,25 +277,25 @@ RawDataRecordVal = NamedTuple('RawDataRecordVal', [
 RawDataRecordVal.__doc__ = 'Represents a Data Sample Record Hash Value'
 
 
-RawDatasetSchemaVal = NamedTuple('RawDatasetSchemaVal', [
+RawArraysetSchemaVal = NamedTuple('RawArraysetSchemaVal', [
     ('schema_hash', str),
     ('schema_dtype', int),
     ('schema_is_var', bool),
     ('schema_max_shape', tuple),
     ('schema_is_named', bool),
     ('schema_default_backend', str)])
-RawDatasetSchemaVal.__doc__ = 'Information Specifying a Dataset Schema'
+RawArraysetSchemaVal.__doc__ = 'Information Specifying a Arrayset Schema'
 
-'''
+"""
 Parsing functions to convert lmdb data record keys/vals to/from python vars
 ----------------------------------------------------------------------------
-'''
+"""
 
 # -------------------- db -> raw (python) -----------------------------
 
 
 def data_record_raw_key_from_db_key(db_key: bytes) -> RawDataRecordKey:
-    '''Convert and split a lmdb record key & value into python objects
+    """Convert and split a lmdb record key & value into python objects
 
     Parameters
     ----------
@@ -305,17 +305,17 @@ def data_record_raw_key_from_db_key(db_key: bytes) -> RawDataRecordKey:
     Returns
     -------
     RawDataRecordKey
-        Tuple containing the record dset_name, data_name
-    '''
+        Tuple containing the record aset_name, data_name
+    """
     key = db_key.decode()
-    dset_name, data_name = key.replace(c.K_STGARR, '', 1).split(c.SEP_KEY)
+    aset_name, data_name = key.replace(c.K_STGARR, '', 1).split(c.SEP_KEY)
     if data_name.startswith(c.K_INT):
         data_name = int(data_name.lstrip(c.K_INT))
-    return RawDataRecordKey(dset_name, data_name)
+    return RawDataRecordKey(aset_name, data_name)
 
 
 def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
-    '''Convert and split a lmdb record value into python objects
+    """Convert and split a lmdb record value into python objects
 
     Parameters
     ----------
@@ -326,7 +326,7 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
     -------
     RawDataRecordVal
         Tuple containing the record data_hash
-    '''
+    """
     data_hash = db_val.decode()
     return RawDataRecordVal(data_hash)
 
@@ -334,13 +334,13 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
 # -------------------- raw (python) -> db -----------------------------
 
 
-def data_record_db_key_from_raw_key(dset_name: str, data_name: Union[str, int]) -> bytes:
-    '''converts a python record spec into the appropriate lmdb key
+def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int]) -> bytes:
+    """converts a python record spec into the appropriate lmdb key
 
     Parameters
     ----------
-    dset_name : string
-        name of the dataset for the record
+    aset_name : string
+        name of the arrayset for the record
     data_name : Union[string, int]
         name of the data sample for the record
 
@@ -348,16 +348,16 @@ def data_record_db_key_from_raw_key(dset_name: str, data_name: Union[str, int]) 
     -------
     bytes
         Byte encoded db record key
-    '''
+    """
     if isinstance(data_name, int):
-        record_key = f'{c.K_STGARR}{dset_name}{c.SEP_KEY}{c.K_INT}{data_name}'.encode()
+        record_key = f'{c.K_STGARR}{aset_name}{c.SEP_KEY}{c.K_INT}{data_name}'.encode()
     else:
-        record_key = f'{c.K_STGARR}{dset_name}{c.SEP_KEY}{data_name}'.encode()
+        record_key = f'{c.K_STGARR}{aset_name}{c.SEP_KEY}{data_name}'.encode()
     return record_key
 
 
 def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
-    '''convert a python record spec into the appropriate lmdb value
+    """convert a python record spec into the appropriate lmdb value
 
     Parameters
     ----------
@@ -368,90 +368,90 @@ def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
     -------
     bytestring
         Byte encoded db record val.
-    '''
+    """
     record_val = f'{data_hash}'.encode()
     return record_val
 
 
-'''
-Functions to convert dataset count records to/from python objects.
+"""
+Functions to convert arrayset count records to/from python objects.
 ------------------------------------------------------------------
-'''
+"""
 
-# ------------------ raw count -> db dset record count  --------------------
+# ------------------ raw count -> db aset record count  --------------------
 
 
-def dataset_record_count_db_key_from_raw_key(dset_name):
-    db_record_count_key = f'{c.K_STGARR}{dset_name}'.encode()
+def arrayset_record_count_db_key_from_raw_key(aset_name):
+    db_record_count_key = f'{c.K_STGARR}{aset_name}'.encode()
     return db_record_count_key
 
 
-def dataset_record_count_db_val_from_raw_val(dset_record_count):
-    db_record_count_val = f'{dset_record_count}'.encode()
+def arrayset_record_count_db_val_from_raw_val(aset_record_count):
+    db_record_count_val = f'{aset_record_count}'.encode()
     return db_record_count_val
 
 
-# ------------------ db dset record count -> raw count --------------------
+# ------------------ db aset record count -> raw count --------------------
 
 
-def dataset_record_count_raw_key_from_db_key(db_key):
-    dset_name = db_key.decode().replace(c.K_STGARR, '', 1)
-    return dset_name
+def arrayset_record_count_raw_key_from_db_key(db_key):
+    aset_name = db_key.decode().replace(c.K_STGARR, '', 1)
+    return aset_name
 
 
-def dataset_record_count_raw_val_from_db_val(db_val):
+def arrayset_record_count_raw_val_from_db_val(db_val):
     record_count = int(db_val.decode())
     return record_count
 
 
-'''
-Functions to convert dataset schema records to/from python objects.
+"""
+Functions to convert arrayset schema records to/from python objects.
 --------------------------------------------------------------------
-'''
+"""
 
 # ----------------- raw schema -> db schema -----------------------------
 
 
-def dataset_record_schema_db_key_from_raw_key(dset_name):
-    '''Get the db schema key for a named dataset
+def arrayset_record_schema_db_key_from_raw_key(aset_name):
+    """Get the db schema key for a named arrayset
 
     Parameters
     ----------
-    dset_name : string
-        the name of the dataset whose schema is found.
+    aset_name : string
+        the name of the arrayset whose schema is found.
 
     Returns
     -------
     bytestring
         the db_key which can be used to query the schema
-    '''
-    db_schema_key = f'{c.K_SCHEMA}{dset_name}'.encode()
+    """
+    db_schema_key = f'{c.K_SCHEMA}{aset_name}'.encode()
     return db_schema_key
 
 
-def dataset_record_schema_db_val_from_raw_val(schema_hash,
-                                              schema_is_var, schema_max_shape,
-                                              schema_dtype, schema_is_named,
-                                              schema_default_backend):
-    '''Format the db_value which includes all details of the dataset schema.
+def arrayset_record_schema_db_val_from_raw_val(schema_hash,
+                                               schema_is_var, schema_max_shape,
+                                               schema_dtype, schema_is_named,
+                                               schema_default_backend):
+    """Format the db_value which includes all details of the arrayset schema.
 
     Parameters
     ----------
     schema_hash : string
         The hash of the schema calculated at initialization.
     schema_is_var : bool
-        Are samples in the dataset variable shape or not?
+        Are samples in the arrayset variable shape or not?
     schema_max_shape : tuple of ints (size along each dimension)
-        The maximum shape of the data pieces. For fixed shape datasets, all
+        The maximum shape of the data pieces. For fixed shape arraysets, all
         input tensors must have the same dimension size and rank as this
-        specification. For variable-shape datasets, tensor rank must match, but
+        specification. For variable-shape arraysets, tensor rank must match, but
         the size of each dimension may be less than or equal to the
         corresponding dimension here.
     schema_dtype : int
-        The datatype numeric code (`np.dtype.num`) of the dataset. All input
+        The datatype numeric code (`np.dtype.num`) of the arrayset. All input
         tensors must exactally match this datatype.
     schema_is_named : bool
-        Are samples in the datasets identifiable with names, or not.
+        Are samples in the arraysets identifiable with names, or not.
     schema_default_backend : str
         backend specification for the schema default backend.
 
@@ -459,7 +459,7 @@ def dataset_record_schema_db_val_from_raw_val(schema_hash,
     -------
     bytestring
         Bytes encoded representation of the schema.
-    '''
+    """
     schema_val = {
         'schema_hash': schema_hash,
         'schema_dtype': schema_dtype,
@@ -474,54 +474,54 @@ def dataset_record_schema_db_val_from_raw_val(schema_hash,
 
 # -------------- db schema -> raw schema -------------------------------
 
-def dataset_record_schema_raw_key_from_db_key(db_key: bytes) -> str:
-    dset_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
-    return dset_name
+def arrayset_record_schema_raw_key_from_db_key(db_key: bytes) -> str:
+    aset_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
+    return aset_name
 
 
-def dataset_record_schema_raw_val_from_db_val(db_val: bytes) -> RawDatasetSchemaVal:
+def arrayset_record_schema_raw_val_from_db_val(db_val: bytes) -> RawArraysetSchemaVal:
     schema_spec = json.loads(db_val)
     schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
-    raw_val = RawDatasetSchemaVal(**schema_spec)
+    raw_val = RawArraysetSchemaVal(**schema_spec)
     return raw_val
 
 
-'''
-Functions to convert total daset count records to/from python objects
+"""
+Functions to convert total aset count records to/from python objects
 ---------------------------------------------------------------------
-'''
+"""
 
 # ------------------------ raw -> db ------------------------------------------
 
 
-def dataset_total_count_db_key() -> bytes:
+def arrayset_total_count_db_key() -> bytes:
     db_key = c.K_STGARR.encode()
     return db_key
 
 
-def dataset_total_count_db_val_from_raw_val(number_of_dsets: int) -> bytes:
-    db_val = f'{number_of_dsets}'.encode()
+def arrayset_total_count_db_val_from_raw_val(number_of_asets: int) -> bytes:
+    db_val = f'{number_of_asets}'.encode()
     return db_val
 
 
 # --------------------------- db -> raw ---------------------------------------
 
 
-def dataset_total_count_raw_val_from_db_val(db_val: bytes) -> int:
+def arrayset_total_count_raw_val_from_db_val(db_val: bytes) -> int:
     raw_val = int(db_val.decode())
     return raw_val
 
 
-'''
+"""
 Functions to convert metadata count records to/from python objects.
 -------------------------------------------------------------------
-'''
+"""
 
-# ------------------ raw count -> db dset record count  --------------------
+# ------------------ raw count -> db aset record count  --------------------
 
 
 def metadata_count_db_key() -> bytes:
-    '''return the metadata db count key
+    """return the metadata db count key
 
     this is fixed at the current implementation, no arguments needed
 
@@ -532,13 +532,13 @@ def metadata_count_db_key() -> bytes:
     -------
     bytes
         db key to access the metadata count at
-    '''
+    """
     db_key = c.K_STGMETA.encode()
     return db_key
 
 
 def metadata_count_db_val_from_raw_val(metadata_record_count: int) -> bytes:
-    '''return the metadata db count value from a raw value
+    """return the metadata db count value from a raw value
 
     Parameters
     ----------
@@ -549,12 +549,12 @@ def metadata_count_db_val_from_raw_val(metadata_record_count: int) -> bytes:
     -------
     bytes
         db val of the new metadata count
-    '''
+    """
     db_val = str(metadata_record_count).encode()
     return db_val
 
 
-# ------------------ db dset record count -> raw count ------------------------
+# ------------------ db aset record count -> raw count ------------------------
 #
 # Note: there is no need for a `metadata_count_raw_key_from_db_key()` function as
 # the key is fixed and cannot be modified by callers.
@@ -565,10 +565,10 @@ def metadata_count_raw_val_from_db_val(db_val):
     return record_count
 
 
-'''
+"""
 Functions to convert metadata records to/from python objects
 -------------------------------------------------------------
-'''
+"""
 
 MetadataRecordKey = NamedTuple('MetadataRecordKey', [('meta_name', Union[str, int])])
 MetadataRecordKey.__doc__ = 'Represents a Metadata Sample Record Key'
@@ -580,7 +580,7 @@ MetadataRecordVal.__doc__ = 'Represents a Metadata Sample Record Hash Value'
 
 
 def metadata_record_raw_key_from_db_key(db_key: bytes) -> MetadataRecordKey:
-    '''Convert and split a lmdb record key & value into python objects
+    """Convert and split a lmdb record key & value into python objects
 
     Parameters
     ----------
@@ -591,7 +591,7 @@ def metadata_record_raw_key_from_db_key(db_key: bytes) -> MetadataRecordKey:
     -------
     MetadataRecordKey
         the metadata name
-    '''
+    """
     meta_name = db_key.decode().replace(c.K_STGMETA, '', 1)
     if meta_name.startswith(c.K_INT):
         meta_name = int(meta_name.lstrip(c.K_INT))
@@ -599,7 +599,7 @@ def metadata_record_raw_key_from_db_key(db_key: bytes) -> MetadataRecordKey:
 
 
 def metadata_record_raw_val_from_db_val(db_val: bytes) -> MetadataRecordVal:
-    '''Convert and split a lmdb record value into python objects
+    """Convert and split a lmdb record value into python objects
 
     Parameters
     ----------
@@ -610,7 +610,7 @@ def metadata_record_raw_val_from_db_val(db_val: bytes) -> MetadataRecordVal:
     -------
     MetadataRecordVal
         containing the metadata hash
-    '''
+    """
     meta_hash = db_val.decode()
     return MetadataRecordVal(meta_hash)
 
@@ -619,7 +619,7 @@ def metadata_record_raw_val_from_db_val(db_val: bytes) -> MetadataRecordVal:
 
 
 def metadata_record_db_key_from_raw_key(meta_name: Union[str, int]) -> bytes:
-    '''converts a python metadata name into the appropriate lmdb key
+    """converts a python metadata name into the appropriate lmdb key
 
     Parameters
     ----------
@@ -630,7 +630,7 @@ def metadata_record_db_key_from_raw_key(meta_name: Union[str, int]) -> bytes:
     -------
     bytes
         Byte encoded db record key
-    '''
+    """
     if isinstance(meta_name, int):
         record_key = f'{c.K_STGMETA}{c.K_INT}{meta_name}'.encode()
     else:
@@ -639,7 +639,7 @@ def metadata_record_db_key_from_raw_key(meta_name: Union[str, int]) -> bytes:
 
 
 def metadata_record_db_val_from_raw_val(meta_hash: str) -> bytes:
-    '''convert a python metadata hash into the appropriate lmdb value
+    """convert a python metadata hash into the appropriate lmdb value
 
     Parameters
     ----------
@@ -650,12 +650,12 @@ def metadata_record_db_val_from_raw_val(meta_hash: str) -> bytes:
     -------
     bytes
         Byte encoded db record val.
-    '''
+    """
     record_val = meta_hash.encode()
     return record_val
 
 
-'''
+"""
 Hash Parsing Methods
 --------------------
 
@@ -672,12 +672,12 @@ the following:
 
 These assumptions will change soon, and it is recomended to start here when
 begining development on any of the above features.
-'''
+"""
 
-'''
+"""
 Data Hash parsing functions used to convert db key/val to raw pyhon obj
 -----------------------------------------------------------------------
-'''
+"""
 
 # -------------------- raw (python) -> db ----------------------------------------
 
@@ -710,10 +710,10 @@ def hash_data_raw_key_from_db_key(db_key: bytes) -> str:
     return data_hash
 
 
-'''
+"""
 Metadata/Label Hash parsing functions used to convert db key/val to raw pyhon obj
 ---------------------------------------------------------------------------------
-'''
+"""
 
 # -------------------- raw (python) -> db ----------------------------------------
 
@@ -741,12 +741,12 @@ def hash_meta_raw_val_from_db_val(db_val: bytes) -> str:
     return meta_val
 
 
-'''
+"""
 Commit Parsing Methods
 -----------------------
 
 The parsers defined in this section handle commit (ref) records
-'''
+"""
 
 CommitAncestorSpec = NamedTuple('CommitAncestorSpec', [
     ('is_merge_commit', bool),
@@ -762,10 +762,10 @@ CommitSpec = NamedTuple('CommitSpec', [
 ])
 
 
-'''
+"""
 Commit Parent (ancestor) Lookup methods
 ---------------------------------------
-'''
+"""
 
 # ------------------------- raw -> db -----------------------------------------
 
@@ -795,7 +795,7 @@ def commit_parent_raw_key_from_db_key(db_key: bytes) -> str:
 
 
 def commit_parent_raw_val_from_db_val(db_val: bytes) -> CommitAncestorSpec:
-    '''Parse the value of a commit's parent value to find it's ancestors
+    """Parse the value of a commit's parent value to find it's ancestors
 
     Parameters
     ----------
@@ -807,7 +807,7 @@ def commit_parent_raw_val_from_db_val(db_val: bytes) -> CommitAncestorSpec:
     namedtuple
         Namedtuple containing fields for `is_merge_commit`, `master_ancestor`, and
         `dev_ancestor`
-    '''
+    """
     commit_str = db_val.decode()
     commit_ancestors = commit_str.split(c.SEP_CMT)
     if len(commit_ancestors) == 1:
@@ -822,10 +822,10 @@ def commit_parent_raw_val_from_db_val(db_val: bytes) -> CommitAncestorSpec:
     return CommitAncestorSpec(is_merge_commit, master_ancestor, dev_ancestor)
 
 
-'''
+"""
 Commit reference key and values.
 --------------------------------
-'''
+"""
 
 
 def commit_ref_db_key_from_raw_key(commit_hash: str) -> bytes:
@@ -834,7 +834,7 @@ def commit_ref_db_key_from_raw_key(commit_hash: str) -> bytes:
 
 
 def commit_ref_db_val_from_raw_val(commit_db_kbs: Iterable[Tuple[bytes, bytes]]) -> bytes:
-    '''serialize and compress a list of db_key/db_value pairs for commit storage
+    """serialize and compress a list of db_key/db_value pairs for commit storage
 
     Parameters
     ----------
@@ -845,14 +845,14 @@ def commit_ref_db_val_from_raw_val(commit_db_kbs: Iterable[Tuple[bytes, bytes]])
     -------
     bytes
         Serialized and compressed representation of the object.
-    '''
+    """
     pck = msgpack.packb(commit_db_kbs, use_bin_type=True)
     raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.BITSHUFFLE, cname='lz4')
     return raw
 
 
 def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> Tuple[Tuple[bytes, bytes]]:
-    '''Load and decompress a commit ref db_val into python object memory.
+    """Load and decompress a commit ref db_val into python object memory.
 
     Parameters
     ----------
@@ -864,16 +864,16 @@ def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> Tuple[Tuple[bytes, b
     Tuple[Tuple[bytes, bytes]]
         Iterable of binary encoded key/value pairs making up the repo state at
         the time of that commit. key/value pairs are already in sorted order.
-    '''
+    """
     uncompressed_db_list = blosc.decompress(commit_db_val)
     bytes_db_key_val_list = msgpack.unpackb(uncompressed_db_list, use_list=False)
     return bytes_db_key_val_list
 
 
-'''
+"""
 Commit spec reference keys and values
 -------------------------------------
-'''
+"""
 
 
 def commit_spec_db_key_from_raw_key(commit_hash: str) -> bytes:
@@ -884,7 +884,7 @@ def commit_spec_db_key_from_raw_key(commit_hash: str) -> bytes:
 def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
                                     commit_user: str,
                                     commit_email: str) -> bytes:
-    '''Serialize a commit specification from user values to a db store value
+    """Serialize a commit specification from user values to a db store value
 
     Parameters
     ----------
@@ -901,7 +901,7 @@ def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
     -------
     bytes
         binary encoded serialization of the commit spec.
-    '''
+    """
     spec_dict = {
         'commit_time': commit_time,
         'commit_message': commit_message,
@@ -927,7 +927,7 @@ def commit_spec_raw_val_from_db_val(db_val: bytes) -> CommitSpec:
 # -------------------- Remote Work --------------------------------------------
 
 def remote_db_key_from_raw_key(remote_name: str) -> bytes:
-    '''Get the remote db key val for a remote name
+    """Get the remote db key val for a remote name
 
     Parameters
     ----------
@@ -938,14 +938,14 @@ def remote_db_key_from_raw_key(remote_name: str) -> bytes:
     -------
     bytes
         db key allowing access to address value at the name of the remote
-    '''
+    """
     raw_key = f'{c.K_REMOTES}{remote_name}'
     db_key = raw_key.encode()
     return db_key
 
 
 def remote_raw_key_from_db_key(db_key: bytes) -> str:
-    '''Get the remote name from a remote db key
+    """Get the remote name from a remote db key
 
     Parameters
     ----------
@@ -956,14 +956,14 @@ def remote_raw_key_from_db_key(db_key: bytes) -> str:
     -------
     str
         name of the remote
-    '''
+    """
     raw_key = db_key.decode()
     remote_name = raw_key[len(c.K_REMOTES):]
     return remote_name
 
 
 def remote_db_val_from_raw_val(grpc_address: str) -> bytes:
-    '''Format a remote db value from it's grpc address string
+    """Format a remote db value from it's grpc address string
 
     Parameters
     ----------
@@ -974,13 +974,13 @@ def remote_db_val_from_raw_val(grpc_address: str) -> bytes:
     -------
     bytes
         formated representation of the grpc address suitable for storage in lmdb.
-    '''
+    """
     db_val = grpc_address.encode()
     return db_val
 
 
 def remote_raw_val_from_db_val(db_val: bytes) -> str:
-    '''Retrieve the address where a grpc server is running from a remote db value
+    """Retrieve the address where a grpc server is running from a remote db value
 
 
     Parameters
@@ -992,6 +992,6 @@ def remote_raw_val_from_db_val(db_val: bytes) -> str:
     -------
     str
         IP:PORT where the grpc server can be accessed.
-    '''
+    """
     raw_val = db_val.decode()
     return raw_val

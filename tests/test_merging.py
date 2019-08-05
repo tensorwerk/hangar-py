@@ -21,13 +21,13 @@ def test_ff_merge_no_conf_correct_contents_for_name_or_hash_checkout(repo_1_br_n
     coByName = repo_1_br_no_conf.checkout(branch='master')
     coByHash = repo_1_br_no_conf.checkout(commit=cmt_hash)
 
-    assert len(coByHash.datasets) == len(coByName.datasets)
-    for dsetn in coByHash.datasets.keys():
-        dset_byHash = coByHash.datasets[dsetn]
-        dset_byName = coByName.datasets[dsetn]
-        assert len(dset_byHash) == len(dset_byHash)
-        for k, v in dset_byHash.items():
-            assert np.allclose(v, dset_byName[k])
+    assert len(coByHash.arraysets) == len(coByName.arraysets)
+    for asetn in coByHash.arraysets.keys():
+        aset_byHash = coByHash.arraysets[asetn]
+        aset_byName = coByName.arraysets[asetn]
+        assert len(aset_byHash) == len(aset_byHash)
+        for k, v in aset_byHash.items():
+            assert np.allclose(v, aset_byName[k])
 
     assert len(coByHash.metadata) == len(coByName.metadata)
     for metaKey in coByHash.metadata.keys():
@@ -72,25 +72,25 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     assert co.metadata['hello'] == 'world'
     assert co.metadata['foo'] == 'bar'
 
-    # datasets
-    assert len(co.datasets) == 1
-    assert 'dummy' in co.datasets
-    # dataset samples
-    dset = co.datasets['dummy']
-    assert len(dset) == 50
+    # arraysets
+    assert len(co.arraysets) == 1
+    assert 'dummy' in co.arraysets
+    # arrayset samples
+    aset = co.arraysets['dummy']
+    assert len(aset) == 50
 
-    # dataset sample values
+    # arrayset sample values
     checkarr = np.zeros_like(np.arange(50))
-    for k, v in dset.items():
+    for k, v in aset.items():
         checkarr[:] = int(k)
         assert np.allclose(v, checkarr)
 
-    # dataset sample keys
-    dset_keys = list(dset.keys())
+    # arrayset sample keys
+    aset_keys = list(aset.keys())
     for genKey in range(30):
-        assert str(genKey) in dset_keys
-        dset_keys.remove(str(genKey))
-    assert len(dset_keys) == 20
+        assert str(genKey) in aset_keys
+        aset_keys.remove(str(genKey))
+    assert len(aset_keys) == 20
     co.close()
 
 
@@ -188,7 +188,7 @@ class TestMetadataConflicts(object):
         co.close()
 
 
-class TestDatasetSampleConflicts(object):
+class TestArraysetSampleConflicts(object):
 
     def test_conflict_additions_same_str_name_different_value(self, repo_2_br_no_conf):
         newdata = np.arange(50)
@@ -196,7 +196,7 @@ class TestDatasetSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy']['15'] = newdata
+        co.arraysets['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -209,7 +209,7 @@ class TestDatasetSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy'][15] = newdata
+        co.arraysets['dummy'][15] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -222,8 +222,8 @@ class TestDatasetSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy'][15] = newdata
-        co.datasets['dummy']['15'] = newdata
+        co.arraysets['dummy'][15] = newdata
+        co.arraysets['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -236,29 +236,29 @@ class TestDatasetSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy']['15'] = newdata
-        co.datasets['dummy'][15] = newdata
+        co.arraysets['dummy']['15'] = newdata
+        co.arraysets['dummy'][15] = newdata
         co.commit('commit on master with same value data')
         co.close()
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        dset = co.datasets['dummy']
-        assert np.allclose(dset['15'], newdata)
-        assert np.allclose(dset[15], newdata)
+        aset = co.arraysets['dummy']
+        assert np.allclose(aset['15'], newdata)
+        assert np.allclose(aset[15], newdata)
         co.close()
 
     def test_conflict_mutations_same_name_different_value(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
         newdata = np.arange(50)
-        co.datasets['dummy']['0'] = newdata
+        co.arraysets['dummy']['0'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         newdata = newdata * 2
-        co.datasets['dummy']['0'] = newdata
+        co.arraysets['dummy']['0'] = newdata
         co.commit('commit on testbranch with conflicting data')
         co.close()
 
@@ -269,12 +269,12 @@ class TestDatasetSampleConflicts(object):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
         newdata = np.arange(50)
-        co.datasets['dummy']['0'] = newdata
+        co.arraysets['dummy']['0'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.datasets['dummy'].remove('0')
+        co.arraysets['dummy'].remove('0')
         co.commit('commit on testbranch with removal')
         co.close()
 
@@ -284,19 +284,19 @@ class TestDatasetSampleConflicts(object):
     def test_no_conflict_both_removal(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy'].remove('0')
-        del co.datasets['dummy'][21]
+        co.arraysets['dummy'].remove('0')
+        del co.arraysets['dummy'][21]
         co.commit('commit on master with removal')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.datasets['dummy'].remove('0')
-        del co.datasets['dummy'][10]
+        co.arraysets['dummy'].remove('0')
+        del co.arraysets['dummy'][10]
         co.commit('commit on testbranch with removal')
         co.close()
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        dset = co.datasets['dummy']
-        assert '0' not in dset
-        assert len(dset) == 47
+        aset = co.arraysets['dummy']
+        assert '0' not in aset
+        assert len(aset) == 47

@@ -10,7 +10,7 @@ set_blosc_nthreads()
 
 
 def chunk_bytes(bytesData):
-    '''Slice a bytestring into subelements and store the data in a list
+    """Slice a bytestring into subelements and store the data in a list
 
     Arguments
     ---------
@@ -21,7 +21,7 @@ def chunk_bytes(bytesData):
     ------
     bytes
         data split into 32kb chunk sizes.
-    '''
+    """
     chunkSize = 32_000
     numIters = math.ceil(len(bytesData) / chunkSize)
     currentStart = 0
@@ -41,7 +41,7 @@ def chunk_bytes(bytesData):
 
 def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
                                 refVal: bytes) -> hangar_service_pb2.PushCommitRequest:
-    '''Generator splitting commit specs into chunks sent from client to server
+    """Generator splitting commit specs into chunks sent from client to server
 
     Parameters
     ----------
@@ -58,7 +58,7 @@ def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
     ------
     hangar_service_pb2.PushCommitRequest
         Chunked generator of the PushCommitRequest protobuf.
-    '''
+    """
     commit_proto = hangar_service_pb2.CommitRecord()
     commit_proto.parent = parentVal
     commit_proto.spec = specVal

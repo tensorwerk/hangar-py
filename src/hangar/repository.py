@@ -1,5 +1,4 @@
 import os
-import logging
 import weakref
 import warnings
 from typing import Union, Optional, List
@@ -13,11 +12,9 @@ from .records import heads, parsing, summarize, vcompat
 from .checkout import ReaderCheckout, WriterCheckout
 from .utils import is_valid_directory_path, is_suitable_user_key
 
-logger = logging.getLogger(__name__)
-
 
 class Repository(object):
-    '''Launching point for all user operations in a Hangar repository.
+    """Launching point for all user operations in a Hangar repository.
 
     All interaction, including the ability to initialize a repo, checkout a
     commit (for either reading or writing), create a branch, merge branches, or
@@ -41,15 +38,14 @@ class Repository(object):
 
         In both cases, the path must exist and the user must have sufficient OS
         permissions to write to that location. Default = True
-    '''
+    """
 
     def __init__(self, path: os.PathLike, exists: bool = True):
 
         try:
             usr_path = is_valid_directory_path(path)
         except (TypeError, NotADirectoryError, PermissionError) as e:
-            logger.error(e, exc_info=False)
-            raise
+            raise e from None
 
         repo_pth = os.path.join(usr_path, c.DIR_HANGAR)
         if exists is False:
@@ -64,7 +60,7 @@ class Repository(object):
         self._remote: Remotes = Remotes(self._env)
 
     def _repr_pretty_(self, p, cycle):
-        '''provide a pretty-printed repr for ipython based user interaction.
+        """provide a pretty-printed repr for ipython based user interaction.
 
         Parameters
         ----------
@@ -75,7 +71,7 @@ class Repository(object):
             concern here since we just output the text and return, no looping
             required.
 
-        '''
+        """
         self.__verify_repo_initialized()
         res = f'Hangar {self.__class__.__name__}\
                \n    Repository Path  : {self.path}\
@@ -83,7 +79,7 @@ class Repository(object):
         p.text(res)
 
     def __repr__(self):
-        '''Override the default repr to show useful information to developers.
+        """Override the default repr to show useful information to developers.
 
         Note: the pprint repr (ipython enabled) is separately defined in
         :py:meth:`_repr_pretty_`. We specialize because we assume that anyone
@@ -96,19 +92,19 @@ class Repository(object):
         -------
         string
             formatted representation of the object
-        '''
+        """
         res = f'{self.__class__}(path={self._repo_path})'
         return res
 
     def __verify_repo_initialized(self):
-        '''Internal method to verify repo initialized before operations occur
+        """Internal method to verify repo initialized before operations occur
 
         Raises
         ------
         RuntimeError
             If the repository db environments have not been initialized at the
             specified repo path.
-        '''
+        """
         if not self._env.repo_is_initialized:
             msg = f'Repository at path: {self._repo_path} has not been initialized. '\
                   f'Please run the `init_repo()` function'
@@ -116,7 +112,7 @@ class Repository(object):
 
     @property
     def remote(self) -> Remotes:
-        '''Accessor to the methods controlling remote interactions.
+        """Accessor to the methods controlling remote interactions.
 
         .. seealso::
 
@@ -126,43 +122,43 @@ class Repository(object):
         -------
         Remotes
             Accessor object methods for controlling remote interactions.
-        '''
+        """
         proxy = weakref.proxy(self._remote)
         return proxy
 
     @property
     def path(self) -> os.PathLike:
-        '''Return the path to the repository on disk, read-only attribute
+        """Return the path to the repository on disk, read-only attribute
 
         Returns
         -------
         os.PathLike
             path to the specified repository, not including `.hangar` directory
-        '''
+        """
         self.__verify_repo_initialized()
         return os.path.dirname(self._repo_path)
 
     @property
     def writer_lock_held(self) -> bool:
-        '''Check if the writer lock is currently marked as held. Read-only attribute.
+        """Check if the writer lock is currently marked as held. Read-only attribute.
 
         Returns
         -------
         bool
             True is writer-lock is held, False if writer-lock is free.
-        '''
+        """
         self.__verify_repo_initialized()
         return not heads.writer_lock_held(self._env.branchenv)
 
     @property
     def version(self) -> str:
-        '''Find the version of Hangar software the repository is written with
+        """Find the version of Hangar software the repository is written with
 
         Returns
         -------
         str
             semantic version of major, minor, micro version of repo software version.
-        '''
+        """
         self.__verify_repo_initialized()
         res = vcompat.get_repository_software_version_str(self._env.branchenv)
         return res
@@ -172,7 +168,7 @@ class Repository(object):
                  *,
                  branch: str = 'master',
                  commit: str = '') -> Union[ReaderCheckout, WriterCheckout]:
-        '''Checkout the repo at some point in time in either `read` or `write` mode.
+        """Checkout the repo at some point in time in either `read` or `write` mode.
 
         Only one writer instance can exist at a time. Write enabled checkout
         must must create a staging area from the ``HEAD`` commit of a branch. On
@@ -203,7 +199,7 @@ class Repository(object):
         Union[ReaderCheckout, WriterCheckout]
             Checkout object which can be used to interact with the repository
             data
-        '''
+        """
         self.__verify_repo_initialized()
         try:
             if write is True:
@@ -232,12 +228,11 @@ class Repository(object):
             else:
                 raise ValueError("Argument `write` only takes True or False as value")
         except (RuntimeError, ValueError) as e:
-            logger.error(e, exc_info=False, extra=self._env.__dict__)
             raise e from None
 
     def clone(self, user_name: str, user_email: str, remote_address: str,
               *, remove_old: bool = False) -> str:
-        '''Download a remote repository to the local disk.
+        """Download a remote repository to the local disk.
 
         The clone method implemented here is very similar to a `git clone`
         operation. This method will pull all commit records, history, and data
@@ -269,7 +264,7 @@ class Repository(object):
         -------
         str
             Name of the master branch for the newly cloned repository.
-        '''
+        """
         self.init(user_name=user_name, user_email=user_email, remove_old=remove_old)
         self._remote.add(name='origin', address=remote_address)
         branch = self._remote.fetch(remote='origin', branch='master')
@@ -287,7 +282,7 @@ class Repository(object):
              user_email: str,
              *,
              remove_old: bool = False) -> os.PathLike:
-        '''Initialize a Hangar repository at the specified directory path.
+        """Initialize a Hangar repository at the specified directory path.
 
         This function must be called before a checkout can be performed.
 
@@ -306,7 +301,7 @@ class Repository(object):
         os.PathLike
             the full directory path where the Hangar repository was
             initialized on disk.
-        '''
+        """
         pth = self._env._init_repo(
             user_name=user_name, user_email=user_email, remove_old=remove_old)
         return pth
@@ -318,7 +313,7 @@ class Repository(object):
             return_contents: bool = False,
             show_time: bool = False,
             show_user: bool = False) -> Optional[dict]:
-        '''Displays a pretty printed commit log graph to the terminal.
+        """Displays a pretty printed commit log graph to the terminal.
 
         .. note::
 
@@ -346,7 +341,7 @@ class Repository(object):
         -------
         Optional[dict]
             Dict containing the commit ancestor graph, and all specifications.
-        '''
+        """
         self.__verify_repo_initialized()
         res = summarize.list_history(
             refenv=self._env.refenv,
@@ -369,7 +364,7 @@ class Repository(object):
 
     def summary(self, *, branch: str = '', commit: str = '',
                 return_contents: bool = False) -> Optional[dict]:
-        '''Print a summary of the repository contents to the terminal
+        """Print a summary of the repository contents to the terminal
 
         .. note::
 
@@ -391,7 +386,7 @@ class Repository(object):
         -------
         Optional[dict]
             contents of the entire repository (if `return_contents=True`)
-        '''
+        """
         self.__verify_repo_initialized()
         ppbuf, res = summarize.summary(self._env, branch=branch, commit=commit)
         if return_contents is True:
@@ -400,8 +395,8 @@ class Repository(object):
             print(ppbuf.getvalue())
 
     def _details(self) -> None:  # pragma: noqa
-        '''DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
-        '''
+        """DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
+        """
         print(summarize.details(self._env.branchenv).getvalue())
         print(summarize.details(self._env.refenv).getvalue())
         print(summarize.details(self._env.hashenv).getvalue())
@@ -413,13 +408,13 @@ class Repository(object):
         return
 
     def _ecosystem_details(self) -> dict:
-        '''DEVELOPER USER ONLY: log and return package versions on the system.
-        '''
+        """DEVELOPER USER ONLY: log and return package versions on the system.
+        """
         eco = ecosystem.get_versions()
         return eco
 
     def merge(self, message: str, master_branch: str, dev_branch: str) -> str:
-        '''Perform a merge of the changes made on two branches.
+        """Perform a merge of the changes made on two branches.
 
         Parameters
         ----------
@@ -434,7 +429,7 @@ class Repository(object):
         -------
         str
             Hash of the commit which is written if possible.
-        '''
+        """
         self.__verify_repo_initialized()
         commit_hash = merger.select_merge_algorithm(
             message=message,
@@ -449,7 +444,7 @@ class Repository(object):
         return commit_hash
 
     def create_branch(self, name: str, base_commit: str = None) -> str:
-        '''create a branch with the provided name from a certain commit.
+        """create a branch with the provided name from a certain commit.
 
         If no base commit hash is specified, the current writer branch ``HEAD``
         commit is used as the base_commit hash for the branch. Note that
@@ -471,14 +466,13 @@ class Repository(object):
         -------
         str
             name of the branch which was created
-        '''
+        """
         self.__verify_repo_initialized()
         if not is_suitable_user_key(name):
-            msg = f'Branch name provided: `{name}` invalid. Must only contain '\
-                  f'alpha-numeric or "." "_" "-" ascii characters.'
-            e = ValueError(msg)
-            logger.error(e, exc_info=False)
-            raise e
+            e = ValueError(
+                f'Branch name provided: `{name}` invalid. Must only contain '
+                f'alpha-numeric or "." "_" "-" ascii characters.')
+            raise e from None
         didCreateBranch = heads.create_branch(
             branchenv=self._env.branchenv,
             name=name,
@@ -486,25 +480,25 @@ class Repository(object):
         return didCreateBranch
 
     def remove_branch(self, name):
-        '''Not Implemented
-        '''
+        """Not Implemented
+        """
         self.__verify_repo_initialized()
         raise NotImplementedError()
 
     def list_branches(self) -> List[str]:
-        '''list all branch names created in the repository.
+        """list all branch names created in the repository.
 
         Returns
         -------
         list of str
             the branch names recorded in the repository
-        '''
+        """
         self.__verify_repo_initialized()
         branches = heads.get_branch_names(self._env.branchenv)
         return branches
 
     def force_release_writer_lock(self) -> bool:
-        '''Force release the lock left behind by an unclosed writer-checkout
+        """Force release the lock left behind by an unclosed writer-checkout
 
         .. warning::
 
@@ -526,7 +520,7 @@ class Repository(object):
         -------
         bool
             if the operation was successful.
-        '''
+        """
         self.__verify_repo_initialized()
         forceReleaseSentinal = parsing.repo_writer_lock_force_release_sentinal()
         success = heads.release_writer_lock(self._env.branchenv, forceReleaseSentinal)

@@ -67,14 +67,14 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # -------------------- Client Config --------------------------------------
 
     def PING(self, request, context):
-        '''Test function. PING -> PONG!
-        '''
+        """Test function. PING -> PONG!
+        """
         reply = hangar_service_pb2.PingReply(result='PONG')
         return reply
 
     def GetClientConfig(self, request, context):
-        '''Return parameters to the client to set up channel options as desired by the server.
-        '''
+        """Return parameters to the client to set up channel options as desired by the server.
+        """
         push_max_nbytes = str(config.get('client.grpc.push_max_nbytes'))
         enable_compression = config.get('client.grpc.enable_compression')
         enable_compression = str(1) if enable_compression is True else str(0)
@@ -90,8 +90,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # -------------------- Branch Record --------------------------------------
 
     def FetchBranchRecord(self, request, context):
-        '''Return the current HEAD commit of a particular branch
-        '''
+        """Return the current HEAD commit of a particular branch
+        """
         branch_name = request.rec.name
         try:
             head = heads.get_branch_head_commit(self.env.branchenv, branch_name)
@@ -107,8 +107,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushBranchRecord(self, request, context):
-        '''Update the HEAD commit of a branch, creating the record if not previously existing.
-        '''
+        """Update the HEAD commit of a branch, creating the record if not previously existing.
+        """
         branch_name = request.rec.name
         commit = request.rec.commit
         branch_names = heads.get_branch_names(self.env.branchenv)
@@ -132,8 +132,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # -------------------------- Commit Record --------------------------------
 
     def FetchCommit(self, request, context):
-        '''Return raw data representing contents, spec, and parents of a commit hash.
-        '''
+        """Return raw data representing contents, spec, and parents of a commit hash.
+        """
         commit = request.commit
         commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit)
         commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit)
@@ -168,10 +168,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 yield reply
 
     def PushCommit(self, request_iterator, context):
-        '''Record the contents of a new commit sent to the server.
+        """Record the contents of a new commit sent to the server.
 
         Will not overwrite data if a commit hash is already recorded on the server.
-        '''
+        """
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -198,8 +198,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # --------------------- Schema Record -------------------------------------
 
     def FetchSchema(self, request, context):
-        '''Return the raw byte specification of a particular schema with requested hash.
-        '''
+        """Return the raw byte specification of a particular schema with requested hash.
+        """
         schema_hash = request.rec.digest
         schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
         hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
@@ -223,10 +223,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushSchema(self, request, context):
-        '''Add a new schema byte specification record.
+        """Add a new schema byte specification record.
 
         Will not overwrite a schema hash which already exists on the server.
-        '''
+        """
         schema_hash = request.rec.digest
         schema_val = request.rec.blob
 
@@ -246,11 +246,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # ---------------------------- Data ---------------------------------------
 
     def FetchData(self, request_iterator, context):
-        '''Return a packed byte representation of samples corresponding to a digest.
+        """Return a packed byte representation of samples corresponding to a digest.
 
         Please see comments below which explain why not all requests are
         guarrenteed to fully complete in one operation.
-        '''
+        """
 
         for idx, request in enumerate(request_iterator):
             if idx == 0:
@@ -346,13 +346,13 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             self.txnregister.abort_reader_txn(self.env.hashenv)
 
     def PushData(self, request_iterator, context):
-        '''Receive compressed streams of binary data from the client.
+        """Receive compressed streams of binary data from the client.
 
         In order to prevent errors or malicious behavior, the cryptographic hash
         of every tensor is calculated and compared to what the client "said" it
         is. If an error is detected, no sample in the entire stream will be
         saved to disk.
-        '''
+        """
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 uncomp_nbytes = request.uncomp_nbytes
@@ -396,8 +396,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # ----------------------------- Label Data --------------------------------
 
     def FetchLabel(self, request, context):
-        '''Retrieve the metadata value corresponding to some particular hash digests
-        '''
+        """Retrieve the metadata value corresponding to some particular hash digests
+        """
         digest = request.rec.digest
         digest_type = request.rec.type
         rec = hangar_service_pb2.HashRecord(digest=digest, type=digest_type)
@@ -423,11 +423,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushLabel(self, request, context):
-        '''Add a metadata key/value pair to the server with a particular digest.
+        """Add a metadata key/value pair to the server with a particular digest.
 
         Like data tensors, the cryptographic hash of each value is verified
         before the data is actually placed on the server file system.
-        '''
+        """
         req_digest = request.rec.digest
 
         uncompBlob = blosc.decompress(request.blob)
@@ -454,8 +454,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     # ------------------------ Fetch Find Missing -----------------------------------
 
     def FetchFindMissingCommits(self, request, context):
-        '''Determine commit digests existing on the server which are not present on the client.
-        '''
+        """Determine commit digests existing on the server which are not present on the client.
+        """
         c_branch_name = request.branch.name
         c_ordered_commits = request.commits
 
@@ -488,8 +488,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushFindMissingCommits(self, request, context):
-        '''Determine commit digests existing on the client which are not present on the server.
-        '''
+        """Determine commit digests existing on the client which are not present on the server.
+        """
         c_branch_name = request.branch.name
         c_head_commit = request.branch.commit
         c_ordered_commits = request.commits
@@ -511,8 +511,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def FetchFindMissingHashRecords(self, request_iterator, context):
-        '''Determine data tensor hash records existing on the server and not on the client.
-        '''
+        """Determine data tensor hash records existing on the server and not on the client.
+        """
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -540,8 +540,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         yield from cIter
 
     def PushFindMissingHashRecords(self, request_iterator, context):
-        '''Determine data tensor hash records existing on the client and not on the server.
-        '''
+        """Determine data tensor hash records existing on the client and not on the server.
+        """
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -560,8 +560,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         yield from cIter
 
     def FetchFindMissingLabels(self, request_iterator, context):
-        '''Determine metadata hash digest records existing on the server and not on the client.
-        '''
+        """Determine metadata hash digest records existing on the server and not on the client.
+      """''
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -586,8 +586,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         yield from cIter
 
     def PushFindMissingLabels(self, request_iterator, context):
-        '''Determine metadata hash digest records existing on the client and not on the server.
-        '''
+        """Determine metadata hash digest records existing on the client and not on the server.
+        """
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 commit = request.commit
@@ -608,8 +608,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         yield from cIter
 
     def FetchFindMissingSchemas(self, request, context):
-        '''Determine schema hash digest records existing on the server and not on the client.
-        '''
+        """Determine schema hash digest records existing on the server and not on the client.
+        """
         commit = request.commit
         c_schemas = set(request.schema_digests)
 
@@ -627,8 +627,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
     def PushFindMissingSchemas(self, request, context):
-        '''Determine schema hash digest records existing on the client and not on the server.
-        '''
+        """Determine schema hash digest records existing on the client and not on the server.
+        """
         commit = request.commit
         c_schemas = set(request.schema_digests)
         s_schemas = set(hashs.HashQuery(self.env.hashenv).list_all_schema_keys_raw())
@@ -647,11 +647,11 @@ def serve(hangar_path: os.PathLike,
           restrict_push: bool = None,
           username: str = None,
           password: str = None) -> tuple:
-    '''Start serving the GRPC server. Should only be called once.
+    """Start serving the GRPC server. Should only be called once.
 
     Raises:
         e: critical error from one of the workers.
-    '''
+    """
 
     # ------------------- Configure Server ------------------------------------
 

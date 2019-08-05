@@ -9,18 +9,17 @@ from .. import constants as c
 from ..context import TxnRegister
 
 
-
-'''
+"""
 Repository version finding methods
 ----------------------------------
 
 methods to set and get repostory sotware versions
-'''
+"""
 
 
 def set_repository_software_version(branchenv: lmdb.Environment, ver_str: str,
                                     *, overwrite: bool = False) -> bool:
-    '''Write the repository software version to a particular value
+    """Write the repository software version to a particular value
 
     Parameters
     ----------
@@ -37,7 +36,7 @@ def set_repository_software_version(branchenv: lmdb.Environment, ver_str: str,
     -------
     bool
         True if successful, False otherwise
-    '''
+    """
     versionKey = parsing.repo_version_db_key()
     ver_spec = parsing.repo_version_raw_spec_from_raw_string(v_str=ver_str)
     versionVal = parsing.repo_version_db_val_from_raw_val(v_spec=ver_spec)
@@ -50,7 +49,7 @@ def set_repository_software_version(branchenv: lmdb.Environment, ver_str: str,
 
 
 def get_repository_software_version_spec(branchenv: lmdb.Environment) -> VersionSpec:
-    '''Get the repository version specification tuple.
+    """Get the repository version specification tuple.
 
     Parameters
     ----------
@@ -66,7 +65,7 @@ def get_repository_software_version_spec(branchenv: lmdb.Environment) -> Version
     ------
     KeyError
         If no version key is set for the repository
-    '''
+    """
     versionKey = parsing.repo_version_db_key()
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
@@ -82,7 +81,7 @@ def get_repository_software_version_spec(branchenv: lmdb.Environment) -> Version
 
 
 def get_repository_software_version_str(branchenv: lmdb.Environment) -> str:
-    '''Get the repository version string representation.
+    """Get the repository version string representation.
 
     Parameters
     ----------
@@ -98,7 +97,7 @@ def get_repository_software_version_str(branchenv: lmdb.Environment) -> str:
     ------
     KeyError
         If no version key is set for the repository
-    '''
+    """
     versionKey = parsing.repo_version_db_key()
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
@@ -114,14 +113,14 @@ def get_repository_software_version_str(branchenv: lmdb.Environment) -> str:
         return ver_Str
 
 
-'''
+"""
 Initial checking of repository versions
 ---------------------------------------
-'''
+"""
 
 
 def startup_check_repo_version(repo_path: os.PathLike) -> VersionSpec:
-    '''Determine repo version without having to have Environments ctx opened.
+    """Determine repo version without having to have Environments ctx opened.
 
     Parameters
     ----------
@@ -139,7 +138,7 @@ def startup_check_repo_version(repo_path: os.PathLike) -> VersionSpec:
     RuntimeError
         If for whatever reason, the branch file does not exist on disk.
         Execution should not reach this point.
-    '''
+    """
     brch_fp = pjoin(repo_path, c.LMDB_BRANCH_NAME)
     if not os.path.isfile(brch_fp):
         msg = f'Hangar Internal Error, startup_check_repo_version did not find '\
@@ -153,17 +152,17 @@ def startup_check_repo_version(repo_path: os.PathLike) -> VersionSpec:
     return spec
 
 
-'''
+"""
 Version compatibility checking
 ------------------------------
 
 Right now this is a dummy method, which just returns true, but it is important to
 have as we move to compatible changes in the future.
-'''
+"""
 
 
 def is_repo_software_version_compatible(repo_v: VersionSpec, curr_v: VersionSpec) -> bool:
-    '''Determine if the repo on disk and the current Hangar versions iscompatible.
+    """Determine if the repo on disk and the current Hangar versions iscompatible.
 
     Parameters
     ----------
@@ -176,5 +175,5 @@ def is_repo_software_version_compatible(repo_v: VersionSpec, curr_v: VersionSpec
     -------
     bool
         True if compatible, False if not.
-    '''
+    """
     return True

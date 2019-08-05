@@ -4,7 +4,7 @@
 Installation
 ============
 
-For general usage it is recomended that you use a pre-built version of Hangar,
+For general usage it is recommended that you use a pre-built version of Hangar,
 either from a Python Distribution, or a pre-built wheel from PyPi.
 
 

@@ -25,7 +25,7 @@ RemoteInfo = NamedTuple('RemoteInfo', [('name', str), ('address', str)])
 
 class Remotes(object):
 
-    '''Class which governs access to remote interactor objects.
+    """Class which governs access to remote interactor objects.
 
     .. note::
 
@@ -35,7 +35,7 @@ class Remotes(object):
        written to disk, the API is likely to change. Please follow our
        process at: https://www.github.com/tensorwerk/hangar-py
 
-    '''
+    """
 
     def __init__(self, env: Environments):
 
@@ -44,21 +44,21 @@ class Remotes(object):
         self._client: Optional[HangarClient] = None
 
     def __verify_repo_initialized(self):
-        '''Internal method to verify repo initialized before operations occur
+        """Internal method to verify repo initialized before operations occur
 
         Raises
         ------
         RuntimeError
             If the repository db environments have not been initialized at the
             specified repo path.
-        '''
+        """
         if not self._env.repo_is_initialized:
             msg = f'HANGAR RUNTIME ERROR:: Repository at path: {self._repo_path} has not '\
                   f'been initialized. Please run the `init_repo()` function'
             raise RuntimeError(msg)
 
     def add(self, name: str, address: str) -> RemoteInfo:
-        '''Add a remote to the repository accessible by `name` at `address`.
+        """Add a remote to the repository accessible by `name` at `address`.
 
         Parameters
         ----------
@@ -80,7 +80,7 @@ class Remotes(object):
             If a remote with the provided name is already listed on this client,
             No-Op. In order to update a remote server address, it must be
             removed and then re-added with the desired address.
-        '''
+        """
         self.__verify_repo_initialized()
         succ = heads.add_remote(self._env.branchenv, name=name, address=address)
         if succ is False:
@@ -88,7 +88,7 @@ class Remotes(object):
         return RemoteInfo(name=name, address=address)
 
     def remove(self, name: str) -> RemoteInfo:
-        '''Remove a remote repository from the branch records
+        """Remove a remote repository from the branch records
 
         Parameters
         ----------
@@ -104,7 +104,7 @@ class Remotes(object):
         -------
         str
             The channel address which was removed at the given remote name
-        '''
+        """
         self.__verify_repo_initialized()
         try:
             address = heads.remove_remote(branchenv=self._env.branchenv, name=name)
@@ -113,14 +113,14 @@ class Remotes(object):
         return RemoteInfo(name=name, address=address)
 
     def list_all(self) -> List[RemoteInfo]:
-        '''List all remote names and addresses recorded in the client's repository.
+        """List all remote names and addresses recorded in the client's repository.
 
         Returns
         -------
         List[RemoteInfo]
             list of namedtuple specifying (``name``, ``address``) for each
             remote server recorded in the client repo.
-        '''
+        """
         self.__verify_repo_initialized()
         res = []
         names = heads.get_remote_names(self._env.branchenv)
@@ -130,7 +130,7 @@ class Remotes(object):
         return res
 
     def ping(self, name: str) -> float:
-        '''Ping remote server and check the round trip time.
+        """Ping remote server and check the round trip time.
 
         Parameters
         ----------
@@ -149,7 +149,7 @@ class Remotes(object):
             If no remote with the provided name is recorded.
         ConnectionError
             If the remote server could not be reached.
-        '''
+        """
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=name)
         self._client = HangarClient(envs=self._env, address=address)
@@ -161,7 +161,7 @@ class Remotes(object):
         return elapsed
 
     def fetch(self, remote: str, branch: str) -> str:
-        '''Retrieve new commits made on a remote repository branch.
+        """Retrieve new commits made on a remote repository branch.
 
         This is semantically identical to a `git fetch` command. Any new commits
         along the branch will be retrieved, but placed on an isolated branch to
@@ -179,7 +179,7 @@ class Remotes(object):
         -------
         str
             Name of the branch which stores the retrieved commits.
-        '''
+        """
         self.__verify_repo_initialized()
         address = heads.get_remote_address(self._env.branchenv, name=remote)
         self._client = HangarClient(envs=self._env, address=address)
@@ -269,10 +269,10 @@ class Remotes(object):
                    branch: str = None,
                    commit: str = None,
                    *,
-                   dataset_names: Optional[Sequence[str]] = None,
+                   arrayset_names: Optional[Sequence[str]] = None,
                    max_num_bytes: int = None,
                    retrieve_all_history: bool = False) -> List[str]:
-        '''Retrieve the data for some commit which exists in a `partial` state.
+        """Retrieve the data for some commit which exists in a `partial` state.
 
         Parameters
         ----------
@@ -301,7 +301,7 @@ class Remotes(object):
                 if specified commit does not exist in the repository.
             ValueError
                 if branch name does not exist in the repository.
-        '''
+        """
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
         self._client = HangarClient(envs=self._env, address=address)
@@ -346,10 +346,10 @@ class Remotes(object):
                             while notEmpty:
                                 notEmpty = curs.delete()
                     commiting.unpack_commit_ref(self._env.refenv, tmpDB, commit)
-                    # dataset_names option
-                    if dataset_names is not None:
-                        for dsetn in dataset_names:
-                            cmtData_hashs = queries.RecordQuery(tmpDB).dataset_data_hashes(dsetn)
+                    # arrayset_names option
+                    if arrayset_names is not None:
+                        for asetn in arrayset_names:
+                            cmtData_hashs = queries.RecordQuery(tmpDB).arrayset_data_hashes(asetn)
                             allHashs.update(cmtData_hashs)
                     else:
                         cmtData_hashs = queries.RecordQuery(tmpDB).data_hashes()
@@ -396,7 +396,7 @@ class Remotes(object):
 
     def push(self, remote: str, branch: str,
              *, username: str = '', password: str = '') -> bool:
-        '''push changes made on a local repository to a remote repository.
+        """push changes made on a local repository to a remote repository.
 
         This method is semantically identical to a ``git push`` operation.
         Any local updates will be sent to the remote repository.
@@ -426,7 +426,7 @@ class Remotes(object):
         -------
         str
             Name of the branch which was pushed
-        '''
+        """
         self.__verify_repo_initialized()
         try:
             address = heads.get_remote_address(self._env.branchenv, name=remote)

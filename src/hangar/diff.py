@@ -1,13 +1,13 @@
 from functools import partial
-from typing import (Callable, Dict, Iterable, List, MutableMapping, NamedTuple,
-                    Optional, Sequence, Set, Tuple, Union)
+from typing import (
+    Callable, Iterable, List, MutableMapping, NamedTuple, Set, Union)
 
 import lmdb
 
 from .records import commiting, heads
 from .records.parsing import (MetadataRecordKey, MetadataRecordVal,
                               RawDataRecordKey, RawDataRecordVal,
-                              RawDatasetSchemaVal)
+                              RawArraysetSchemaVal)
 from .records.queries import RecordQuery
 
 HistoryDiffStruct = NamedTuple('HistoryDiffStruct', [('masterHEAD', str),
@@ -24,7 +24,7 @@ class BaseUserDiff(object):
         self._refenv: lmdb.Environment = refenv
 
     def _determine_ancestors(self, mHEAD: str, dHEAD: str) -> HistoryDiffStruct:
-        '''Search the commit history to determine the closest common ancestor.
+        """Search the commit history to determine the closest common ancestor.
 
         The closest common ancestor is important because it serves as the "merge
         base" in a 3-way merge strategy. This is a very naive implementation, but it
@@ -42,7 +42,7 @@ class BaseUserDiff(object):
         HistoryDiffStruct
             indicating the masterHEAD, devHEAD, ancestorHEAD, and canFF which
             tells if this is a fast-forward-able commit.
-        '''
+        """
 
         mAncestors = commiting.get_commit_ancestors_graph(self._refenv, mHEAD)
         dAncestors = commiting.get_commit_ancestors_graph(self._refenv, dHEAD)
@@ -81,7 +81,7 @@ class ReaderUserDiff(BaseUserDiff):
         self._commit_hash = commit_hash
 
     def commit(self, dev_commit_hash: str) -> tuple:
-        '''Compute changes and conflicts for diff between HEAD and a commit hash.
+        """Compute changes and conflicts for diff between HEAD and a commit hash.
 
         Parameters
         ----------
@@ -97,7 +97,7 @@ class ReaderUserDiff(BaseUserDiff):
         ------
         ValueError
             if the specified `dev_commit_hash` is not a valid commit reference.
-        '''
+        """
         if not commiting.check_commit_hash_in_history(self._refenv, dev_commit_hash):
             msg = f'HANGAR VALUE ERROR: dev_commit_hash: {dev_commit_hash} does not exist'
             raise ValueError(msg)
@@ -112,7 +112,7 @@ class ReaderUserDiff(BaseUserDiff):
             return self._diff_three_way_cmts(a_cont, m_cont, d_cont)
 
     def branch(self, dev_branch_name: str) -> tuple:
-        '''Compute changes and conflicts for diff between HEAD and a branch name.
+        """Compute changes and conflicts for diff between HEAD and a branch name.
 
         Parameters
         ----------
@@ -128,7 +128,7 @@ class ReaderUserDiff(BaseUserDiff):
         ------
         ValueError
             If the specified `dev_branch_name` does not exist.
-        '''
+        """
         branchNames = heads.get_branch_names(self._branchenv)
         if dev_branch_name in branchNames:
             dHEAD = heads.get_branch_head_commit(self._branchenv, dev_branch_name)
@@ -155,17 +155,17 @@ class WriterUserDiff(BaseUserDiff):
         self._branch_name: str = branch_name
 
     def status(self) -> str:
-        '''Determine if changes have been made in the staging area
+        """Determine if changes have been made in the staging area
 
         If the contents of the staging area and it's parent commit are the same,
-        the status is said to be "CLEAN". If even one dataset or metadata record
+        the status is said to be "CLEAN". If even one arrayset or metadata record
         has changed however, the status is "DIRTY".
 
         Returns
         -------
         str
             "CLEAN" if no changes have been made, otherwise "DIRTY"
-        '''
+        """
         head_commit = heads.get_branch_head_commit(self._branchenv, self._branch_name)
         if head_commit == '':
             base_refs = ()
@@ -177,7 +177,7 @@ class WriterUserDiff(BaseUserDiff):
         return status
 
     def commit(self, dev_commit_hash: str) -> tuple:
-        '''Compute changes and conflicts for diff between HEAD and a commit hash.
+        """Compute changes and conflicts for diff between HEAD and a commit hash.
 
         Parameters
         ----------
@@ -193,7 +193,7 @@ class WriterUserDiff(BaseUserDiff):
         ------
         ValueError
             if the specified `dev_commit_hash` is not a valid commit reference.
-        '''
+        """
         if not commiting.check_commit_hash_in_history(self._refenv, dev_commit_hash):
             msg = f'HANGAR VALUE ERROR: dev_commit_hash: {dev_commit_hash} does not exist'
             raise ValueError(msg)
@@ -209,7 +209,7 @@ class WriterUserDiff(BaseUserDiff):
             return self._diff_three_way_cmts(a_cont, stage_cont, d_cont)
 
     def branch(self, dev_branch_name: str) -> tuple:
-        '''Compute changes and conflicts for diff between HEAD and a branch name.
+        """Compute changes and conflicts for diff between HEAD and a branch name.
 
         Parameters
         ----------
@@ -225,7 +225,7 @@ class WriterUserDiff(BaseUserDiff):
         ------
         ValueError
             If the specified `dev_branch_name` does not exist.
-        '''
+        """
         branchNames = heads.get_branch_names(self._branchenv)
         if dev_branch_name in branchNames:
             dHEAD = heads.get_branch_head_commit(self._branchenv, dev_branch_name)
@@ -244,14 +244,14 @@ class WriterUserDiff(BaseUserDiff):
             return self._diff_three_way_cmts(a_cont, stage_cont, d_cont)
 
     def staged(self):
-        '''Return the diff of the staging area contents to the staging base HEAD
+        """Return the diff of the staging area contents to the staging base HEAD
 
         Returns
         -------
         dict
-            contains all `addition`, `mutation`, `removals` and `unchanged` datasets
+            contains all `addition`, `mutation`, `removals` and `unchanged` arraysets
             schema, samples, and metadata references in the current staging area.
-        '''
+        """
         commit_hash = heads.get_branch_head_commit(self._branchenv, self._branch_name)
         base_cont = commiting.get_commit_ref_contents(self._refenv, commit_hash)
         stage_cont = RecordQuery(self._stageenv).all_records()
@@ -266,13 +266,13 @@ class WriterUserDiff(BaseUserDiff):
 
 
 class DifferBase(object):
-    '''Low level class implementing methods common to all record differ objects
+    """Low level class implementing methods common to all record differ objects
 
     Parameters
     ----------
     mut_func : func
         creates a NT descriptor to enable set operations on k/v record pairs.
-    '''
+    """
 
     def __init__(self, mut_func: Callable[[dict, dict], set]):
 
@@ -290,45 +290,45 @@ class DifferBase(object):
 
     @property
     def a_data(self):
-        '''getter for the ancestor data dict
-        '''
+        """getter for the ancestor data dict
+        """
         return self._a_data
 
     @a_data.setter
     def a_data(self, value):
-        '''setter for the ancestor data dict
-        '''
+        """setter for the ancestor data dict
+        """
         self._a_data = value
         self._a_data_keys = set(value.keys())
 
     @property
     def a_data_keys(self):
-        '''Getter for the ancestor data keys, set when a_data is set
-        '''
+        """Getter for the ancestor data keys, set when a_data is set
+        """
         return self._a_data_keys
 
     @property
     def d_data(self):
-        '''getter for the dev data dict
-        '''
+        """getter for the dev data dict
+        """
         return self._d_data
 
     @d_data.setter
     def d_data(self, value):
-        '''setter for the dev data dict
-        '''
+        """setter for the dev data dict
+        """
         self._d_data = value
         self._d_data_keys = set(value.keys())
 
     @property
     def d_data_keys(self):
-        '''Getter for the dev data keys, set when d_data is set
-        '''
+        """Getter for the dev data keys, set when d_data is set
+        """
         return self._d_data_keys
 
     def compute(self):
-        '''perform the computation
-        '''
+        """perform the computation
+        """
         self.additions = self.d_data_keys.difference(self.a_data_keys)
         self.removals = self.a_data_keys.difference(self.d_data_keys)
 
@@ -344,14 +344,14 @@ class DifferBase(object):
         self.unchanged = potential_unchanged.difference(self.mutations)
 
     def kv_diff_out(self):
-        '''summary of the changes between ancestor and dev data
+        """summary of the changes between ancestor and dev data
 
         Returns
         -------
         dict
             dict listing all changes via the form: `additions`, `removals`,
             `mutations`, `unchanged`.
-        '''
+        """
         out = {
             'additions': {k: self.d_data[k] for k in self.additions},
             'removals': {k: self.a_data[k] for k in self.removals},
@@ -368,13 +368,13 @@ MetaRecord = NamedTuple('MetaRecord', [
     ('meta_key', Union[str, int]),
     ('meta_hash', str)
 ])
-MetaRecordKV = Dict[MetadataRecordKey, MetadataRecordVal]
+MetaRecordKV = MutableMapping[MetadataRecordKey, MetadataRecordVal]
 
 
 def _meta_mutation_finder(a_unchanged_kv: MetaRecordKV,
                           d_unchanged_kv: MetaRecordKV
                           ) -> Set[MetadataRecordKey]:
-    '''Determine mutated metadata records between an ancestor and dev commit
+    """Determine mutated metadata records between an ancestor and dev commit
 
     Parameters
     ----------
@@ -390,7 +390,7 @@ def _meta_mutation_finder(a_unchanged_kv: MetaRecordKV,
     Set[MetadataRecordKey]
         metadata names (keys in the input dicts) which changed hash value from
         ancestor to dev.
-    '''
+    """
     def meta_nt_func(record_dict: MetaRecordKV) -> Set[MetaRecord]:
         records = set()
         for k, v in record_dict.items():
@@ -402,58 +402,58 @@ def _meta_mutation_finder(a_unchanged_kv: MetaRecordKV,
     mutations = set([MetadataRecordKey(m.meta_key) for m in arecs.difference(drecs)])
     return mutations
 
-# -------------------- Dataset Schemas Differ ---------------------------------
+# -------------------- Arrayset Schemas Differ ---------------------------------
 
 
-DatasetSchemaRecord = NamedTuple('DatasetSchemaRecord', [
-    ('dset_name', str),
+ArraysetSchemaRecord = NamedTuple('ArraysetSchemaRecord', [
+    ('aset_name', str),
     ('schema_hash', str),
     ('schema_dtype', int),
     ('schema_is_var', bool),
     ('schema_max_shape', tuple),
     ('schema_is_named', bool),
 ])
-DatasetSchemaKV = Dict[str, RawDatasetSchemaVal]
+ArraysetSchemaKV = MutableMapping[str, RawArraysetSchemaVal]
 
 
-def _isolate_dset_schemas(dataset_specs: Dict[str, dict]) -> DatasetSchemaKV:
-    '''Isolate only the schema specification from a full dataset records dict.
+def _isolate_aset_schemas(arrayset_specs: MutableMapping[str, dict]) -> ArraysetSchemaKV:
+    """Isolate only the schema specification from a full arrayset records dict.
 
     Parameters
     ----------
-    dataset_specs :  Dict[str, dict]
-        dict containing both dataset names and keys of `schema` and `data`
-        record specification for any number of datasets
+    arrayset_specs : MutableMapping[str, dict]
+        dict containing both arrayset names and keys of `schema` and `data`
+        record specification for any number of arraysets
 
     Returns
     -------
-    DatasetSchemaKV
-        containing keys for dataset names and values of the schema specification
-    '''
+    ArraysetSchemaKV
+        containing keys for arrayset names and values of the schema specification
+    """
     schemas_dict = {}
-    for k, v in dataset_specs.items():
+    for k, v in arrayset_specs.items():
         schemas_dict[k] = v['schema']
     return schemas_dict
 
 
-def _schema_dict_to_nt(record_dict: Dict[str, DatasetSchemaRecord]) -> Set[DatasetSchemaRecord]:
-    '''Convert schema records specification dict into set of named tuples
+def _schema_dict_to_nt(record_dict: MutableMapping[str, ArraysetSchemaRecord]) -> Set[ArraysetSchemaRecord]:
+    """Convert schema records specification dict into set of named tuples
 
     Parameters
     ----------
     record_dict : dict
-        dict containing keys for dataset names and values as nested dicts of the
+        dict containing keys for arrayset names and values as nested dicts of the
         schema specification
 
     Returns
     -------
-    Set[DatasetSchemaRecord]
-        of nametuples each recording a dataset schema specification
-    '''
+    Set[ArraysetSchemaRecord]
+        of nametuples each recording a arrayset schema specification
+    """
     records = set()
     for k, v in record_dict.items():
-        rec = DatasetSchemaRecord(
-            dset_name=k,
+        rec = ArraysetSchemaRecord(
+            aset_name=k,
             schema_hash=v.schema_hash,
             schema_dtype=v.schema_dtype,
             schema_is_var=v.schema_is_var,
@@ -465,7 +465,7 @@ def _schema_dict_to_nt(record_dict: Dict[str, DatasetSchemaRecord]) -> Set[Datas
 
 def _schema_mutation_finder(sch_nt_func, a_unchanged_kv: dict,
                             d_unchanged_kv: dict) -> Set[str]:
-    '''Determine mutated dataset schemas between an ancestor and dev commit
+    """Determine mutated arrayset schemas between an ancestor and dev commit
 
     Parameters
     ----------
@@ -473,57 +473,57 @@ def _schema_mutation_finder(sch_nt_func, a_unchanged_kv: dict,
         function to be used to convert the schema specification dict into set of
         named tuples
     a_unchanged_kv : dict
-        containing dataset names as keys and nested dictionary (specifying
+        containing arrayset names as keys and nested dictionary (specifying
         schema parameters) as the value for the ancestor commit
     d_unchanged_kv : dict
-        containing dataset names as keys and nested dictionary (specifying
+        containing arrayset names as keys and nested dictionary (specifying
         schema parameters) as the value for the dev commit
 
     Returns
     -------
     Set[str]
-        of mutated dataset names whose schemas mutated
-    '''
+        of mutated arrayset names whose schemas mutated
+    """
     arecords = sch_nt_func(a_unchanged_kv)
     drecords = sch_nt_func(d_unchanged_kv)
-    mutations = set([m.dset_name for m in arecords.difference(drecords)])
+    mutations = set([m.aset_name for m in arecords.difference(drecords)])
     return mutations
 
 # ---------------------- Sample Differ ----------------------------------------
 
 
 SamplesDataRecord = NamedTuple('SamplesDataRecord', [
-    ('dset_name', str),
+    ('aset_name', str),
     ('data_name', Union[str, int]),
     ('data_hash', str),
 ])
-SamplesDataKV = Dict[RawDataRecordKey, RawDataRecordVal]
+SamplesDataKV = MutableMapping[RawDataRecordKey, RawDataRecordVal]
 
 
 def _samples_mutation_finder(a_unchanged_kv: SamplesDataKV,
                              d_unchanged_kv: SamplesDataKV
                              ) -> Set[RawDataRecordKey]:
-    '''Determine mutated sample records between an ancestor and dev commit
+    """Determine mutated sample records between an ancestor and dev commit
 
     Parameters
     ----------
     a_unchanged_kv : SamplesDataKV
-        of dset & sample names / hash values for ancestor commit
+        of aset & sample names / hash values for ancestor commit
     d_unchanged_kv : SamplesDataKV
-        of dset & sample names / hash values for dev commit
+        of aset & sample names / hash values for dev commit
 
     Returns
     -------
     Set[RawDataRecordKey]
-        of named tuples each specifying dset & sample name for mutated sample
+        of named tuples each specifying aset & sample name for mutated sample
         records
-    '''
+    """
 
     def samp_nt_func(record_dict: SamplesDataKV) -> Set[SamplesDataRecord]:
         records = set()
         for k, v in record_dict.items():
             rec = SamplesDataRecord(
-                dset_name=k.dset_name, data_name=k.data_name, data_hash=v.data_hash)
+                aset_name=k.aset_name, data_name=k.data_name, data_hash=v.data_hash)
             records.add(rec)
         return records
 
@@ -531,7 +531,7 @@ def _samples_mutation_finder(a_unchanged_kv: SamplesDataKV,
     arecords = samp_nt_func(a_unchanged_kv)
     drecords = samp_nt_func(d_unchanged_kv)
     for m in arecords.difference(drecords):
-        rec = RawDataRecordKey(dset_name=m.dset_name, data_name=m.data_name)
+        rec = RawDataRecordKey(aset_name=m.aset_name, data_name=m.data_name)
         mutations.add(rec)
     return mutations
 
@@ -562,8 +562,8 @@ class ThreeWayCommitDiffer(object):
         self.mcont = master_contents    # master contents
         self.dcont = dev_contents       # dev contents
 
-        self.am_dsetD: DifferBase   # ancestor -> master dset diff
-        self.ad_dsetD: DifferBase   # ancestor -> dev dset diff
+        self.am_asetD: DifferBase  # ancestor -> master aset diff
+        self.ad_asetD: DifferBase  # ancestor -> dev aset diff
         self.am_metaD: DifferBase  # ancestor -> master metadata diff
         self.ad_metaD: DifferBase  # ancestor -> dev metadata diff
 
@@ -571,7 +571,7 @@ class ThreeWayCommitDiffer(object):
         self.ad_sampD: MutableMapping[str, DifferBase] = {}
 
         self._meta_diff()
-        self._dataset_diff()
+        self._arrayset_diff()
         self._sample_diff()
 
     # -------------------- Metadata Diff / Conflicts --------------------------
@@ -589,12 +589,12 @@ class ThreeWayCommitDiffer(object):
         self.ad_metaD.compute()
 
     def meta_conflicts(self) -> ConflictRecords:
-        '''
+        """
         t1: added in master & dev with different values
         t21: removed in master, mutated in dev
         t22: removed in dev, mutated in master
         t3: mutated in master & dev to different values
-        '''
+        """
         out: MutableMapping[str, Union[bool, Iterable[ConflictKeys]]] = {}
         tempt1: List[ConflictKeys] = []
         tempt3: List[ConflictKeys] = []
@@ -630,52 +630,52 @@ class ThreeWayCommitDiffer(object):
         }
         return out
 
-    # -------------------- Dataset Diff / Conflicts ---------------------------
+    # -------------------- Arrayset Diff / Conflicts ---------------------------
 
-    def _dataset_diff(self):
+    def _arrayset_diff(self):
 
         mutFunc = partial(_schema_mutation_finder, sch_nt_func=_schema_dict_to_nt)
-        self.am_dsetD = DifferBase(mut_func=mutFunc)
-        self.am_dsetD.a_data = _isolate_dset_schemas(self.acont['datasets'])
-        self.am_dsetD.d_data = _isolate_dset_schemas(self.mcont['datasets'])
-        self.am_dsetD.compute()
+        self.am_asetD = DifferBase(mut_func=mutFunc)
+        self.am_asetD.a_data = _isolate_aset_schemas(self.acont['arraysets'])
+        self.am_asetD.d_data = _isolate_aset_schemas(self.mcont['arraysets'])
+        self.am_asetD.compute()
 
-        self.ad_dsetD = DifferBase(mut_func=mutFunc)
-        self.ad_dsetD.a_data = _isolate_dset_schemas(self.acont['datasets'])
-        self.ad_dsetD.d_data = _isolate_dset_schemas(self.dcont['datasets'])
-        self.ad_dsetD.compute()
+        self.ad_asetD = DifferBase(mut_func=mutFunc)
+        self.ad_asetD.a_data = _isolate_aset_schemas(self.acont['arraysets'])
+        self.ad_asetD.d_data = _isolate_aset_schemas(self.dcont['arraysets'])
+        self.ad_asetD.compute()
 
-    def dataset_conflicts(self) -> ConflictRecords:
-        '''
+    def arrayset_conflicts(self) -> ConflictRecords:
+        """
         t1: added in master & dev with different values
         t21: removed in master, mutated in dev
         t22: removed in dev, mutated in master
         t3: mutated in master & dev to different values
-        '''
+        """
         out: MutableMapping[str, Union[bool, Iterable[ConflictKeys]]] = {}
         tempt1: List[ConflictKeys] = []
         tempt3: List[ConflictKeys] = []
 
         # addition conflicts
-        addition_keys = self.am_dsetD.additions.intersection(self.ad_dsetD.additions)
-        for dsetn in addition_keys:
-            m_srec = _schema_dict_to_nt({dsetn: self.am_dsetD.d_data[dsetn]})
-            d_srec = _schema_dict_to_nt({dsetn: self.ad_dsetD.d_data[dsetn]})
+        addition_keys = self.am_asetD.additions.intersection(self.ad_asetD.additions)
+        for asetn in addition_keys:
+            m_srec = _schema_dict_to_nt({asetn: self.am_asetD.d_data[asetn]})
+            d_srec = _schema_dict_to_nt({asetn: self.ad_asetD.d_data[asetn]})
             if m_srec != d_srec:
-                tempt1.append(dsetn)
+                tempt1.append(asetn)
         out['t1'] = tempt1
 
         # removal conflicts
-        out['t21'] = self.am_dsetD.removals.intersection(self.ad_dsetD.mutations)
-        out['t22'] = self.ad_dsetD.removals.intersection(self.am_dsetD.mutations)
+        out['t21'] = self.am_asetD.removals.intersection(self.ad_asetD.mutations)
+        out['t22'] = self.ad_asetD.removals.intersection(self.am_asetD.mutations)
 
         # mutation conflicts
-        mutation_keys = self.am_dsetD.mutations.intersection(self.ad_dsetD.mutations)
-        for dsetn in mutation_keys:
-            m_srec = _schema_dict_to_nt({dsetn: self.am_dsetD.d_data[dsetn]})
-            d_srec = _schema_dict_to_nt({dsetn: self.ad_dsetD.d_data[dsetn]})
+        mutation_keys = self.am_asetD.mutations.intersection(self.ad_asetD.mutations)
+        for asetn in mutation_keys:
+            m_srec = _schema_dict_to_nt({asetn: self.am_asetD.d_data[asetn]})
+            d_srec = _schema_dict_to_nt({asetn: self.ad_asetD.d_data[asetn]})
             if m_srec != d_srec:
-                tempt3.append(dsetn)
+                tempt3.append(asetn)
         out['t3'] = tempt3
 
         for k in list(out.keys()):
@@ -684,10 +684,10 @@ class ThreeWayCommitDiffer(object):
         res = ConflictRecords(**out)
         return res
 
-    def dataset_changes(self):
+    def arrayset_changes(self):
         out = {
-            'master': self.am_dsetD.kv_diff_out(),
-            'dev': self.ad_dsetD.kv_diff_out(),
+            'master': self.am_asetD.kv_diff_out(),
+            'dev': self.ad_asetD.kv_diff_out(),
         }
         return out
 
@@ -697,61 +697,61 @@ class ThreeWayCommitDiffer(object):
 
         # ---------------- ancestor -> master changes -------------------------
 
-        m_dsets = self.am_dsetD.unchanged.union(
-            self.am_dsetD.additions).union(self.am_dsetD.mutations)
-        for dset_name in m_dsets:
-            if dset_name in self.acont['datasets']:
-                a_dset_data = self.acont['datasets'][dset_name]['data']
+        m_asets = self.am_asetD.unchanged.union(
+            self.am_asetD.additions).union(self.am_asetD.mutations)
+        for aset_name in m_asets:
+            if aset_name in self.acont['arraysets']:
+                a_aset_data = self.acont['arraysets'][aset_name]['data']
             else:
-                a_dset_data = {}
-            self.am_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.am_sampD[dset_name].a_data = a_dset_data
-            self.am_sampD[dset_name].d_data = self.mcont['datasets'][dset_name]['data']
-            self.am_sampD[dset_name].compute()
+                a_aset_data = {}
+            self.am_sampD[aset_name] = DifferBase(mut_func=_samples_mutation_finder)
+            self.am_sampD[aset_name].a_data = a_aset_data
+            self.am_sampD[aset_name].d_data = self.mcont['arraysets'][aset_name]['data']
+            self.am_sampD[aset_name].compute()
 
-        for dset_name in self.am_dsetD.removals:
-            self.am_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.am_sampD[dset_name].a_data = self.acont['datasets'][dset_name]['data']
-            self.am_sampD[dset_name].d_data = {}
-            self.am_sampD[dset_name].compute()
+        for aset_name in self.am_asetD.removals:
+            self.am_sampD[aset_name] = DifferBase(mut_func=_samples_mutation_finder)
+            self.am_sampD[aset_name].a_data = self.acont['arraysets'][aset_name]['data']
+            self.am_sampD[aset_name].d_data = {}
+            self.am_sampD[aset_name].compute()
 
         # ---------------- ancestor -> dev changes ----------------------------
 
-        d_dsets = self.ad_dsetD.unchanged.union(
-            self.ad_dsetD.additions).union(self.ad_dsetD.mutations)
-        for dset_name in d_dsets:
-            if dset_name in self.acont['datasets']:
-                a_dset_data = self.acont['datasets'][dset_name]['data']
+        d_asets = self.ad_asetD.unchanged.union(
+            self.ad_asetD.additions).union(self.ad_asetD.mutations)
+        for aset_name in d_asets:
+            if aset_name in self.acont['arraysets']:
+                a_aset_data = self.acont['arraysets'][aset_name]['data']
             else:
-                a_dset_data = {}
-            self.ad_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.ad_sampD[dset_name].a_data = a_dset_data
-            self.ad_sampD[dset_name].d_data = self.dcont['datasets'][dset_name]['data']
-            self.ad_sampD[dset_name].compute()
+                a_aset_data = {}
+            self.ad_sampD[aset_name] = DifferBase(mut_func=_samples_mutation_finder)
+            self.ad_sampD[aset_name].a_data = a_aset_data
+            self.ad_sampD[aset_name].d_data = self.dcont['arraysets'][aset_name]['data']
+            self.ad_sampD[aset_name].compute()
 
-        for dset_name in self.ad_dsetD.removals:
-            self.ad_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.ad_sampD[dset_name].a_data = self.acont['datasets'][dset_name]['data']
-            self.ad_sampD[dset_name].d_data = {}
-            self.ad_sampD[dset_name].compute()
+        for aset_name in self.ad_asetD.removals:
+            self.ad_sampD[aset_name] = DifferBase(mut_func=_samples_mutation_finder)
+            self.ad_sampD[aset_name].a_data = self.acont['arraysets'][aset_name]['data']
+            self.ad_sampD[aset_name].d_data = {}
+            self.ad_sampD[aset_name].compute()
 
     def sample_conflicts(self) -> ConflictRecords:
-        '''
+        """
         t1: added in master & dev with different values
         t21: removed in master, mutated in dev
         t22: removed in dev, mutated in master
         t3: mutated in master & dev to different values
-        '''
+        """
         out = {}
-        all_dset_names = set(self.ad_sampD.keys()).union(set(self.am_sampD.keys()))
-        for dsetn in all_dset_names:
-            # When dataset IN `dev` OR `master` AND NOT IN ancestor OR `other`.
+        all_aset_names = set(self.ad_sampD.keys()).union(set(self.am_sampD.keys()))
+        for asetn in all_aset_names:
+            # When arrayset IN `dev` OR `master` AND NOT IN ancestor OR `other`.
             try:
-                mdiff = self.am_sampD[dsetn]
+                mdiff = self.am_sampD[asetn]
             except KeyError:
                 mdiff = DifferBase(mut_func=_samples_mutation_finder)
             try:
-                ddiff = self.ad_sampD[dsetn]
+                ddiff = self.ad_sampD[asetn]
             except KeyError:
                 ddiff = DifferBase(mut_func=_samples_mutation_finder)
 
@@ -782,14 +782,14 @@ class ThreeWayCommitDiffer(object):
             for k in list(tempOut.keys()):
                 tempOut[k] = tuple(tempOut[k])
             tempOut['conflict'] = any([bool(len(x)) for x in tempOut.values()])
-            out[dsetn] = ConflictRecords(**tempOut)
+            out[asetn] = ConflictRecords(**tempOut)
 
         return out
 
     def sample_changes(self):
         out = {
-            'master': {dsetn: self.am_sampD[dsetn].kv_diff_out() for dsetn in self.am_sampD},
-            'dev': {dsetn: self.ad_sampD[dsetn].kv_diff_out() for dsetn in self.ad_sampD},
+            'master': {asetn: self.am_sampD[asetn].kv_diff_out() for asetn in self.am_sampD},
+            'dev': {asetn: self.ad_sampD[asetn].kv_diff_out() for asetn in self.ad_sampD},
         }
         return out
 
@@ -798,27 +798,27 @@ class ThreeWayCommitDiffer(object):
     def all_changes(self, include_master: bool = True, include_dev: bool = True) -> dict:
 
         meta = self.meta_changes()
-        dsets = self.dataset_changes()
+        asets = self.arrayset_changes()
         samples = self.sample_changes()
 
         if not include_master:
             meta.__delitem__('master')
-            dsets.__delitem__('master')
+            asets.__delitem__('master')
             samples.__delitem__('master')
         elif not include_dev:
             meta.__delitem__('dev')
-            dsets.__delitem__('dev')
+            asets.__delitem__('dev')
             samples.__delitem__('dev')
 
         res = {
             'metadata': meta,
-            'datasets': dsets,
+            'arraysets': asets,
             'samples': samples,
         }
         return res
 
     def determine_conflicts(self):
-        '''Evaluate and collect all possible conflicts in a repo differ instance
+        """Evaluate and collect all possible conflicts in a repo differ instance
 
         Parameters
         ----------
@@ -828,19 +828,19 @@ class ThreeWayCommitDiffer(object):
         Returns
         -------
         dict
-            containing conflict info in `dset`, `meta`, `sample` and `conflict_found`
-            boolean field.
-        '''
-        dset_confs = self.dataset_conflicts()
+            containing conflict info in `aset`, `meta`, `sample` and
+            `conflict_found` boolean field.
+        """
+        aset_confs = self.arrayset_conflicts()
         meta_confs = self.meta_conflicts()
         sample_confs = self.sample_conflicts()
 
         conflictFound = any(
-            [dset_confs.conflict, meta_confs.conflict,
+            [aset_confs.conflict, meta_confs.conflict,
              *[confval.conflict for confval in sample_confs.values()]])
 
         confs = {
-            'dset': dset_confs,
+            'aset': aset_confs,
             'meta': meta_confs,
             'sample': sample_confs,
             'conflict_found': conflictFound,

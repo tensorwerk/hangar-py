@@ -6,16 +6,16 @@ from .. import constants as c
 from . import parsing
 from .parsing import RawDataRecordKey, RawDataRecordVal
 from .parsing import MetadataRecordKey, MetadataRecordVal
-from .parsing import RawDatasetSchemaVal
+from .parsing import RawArraysetSchemaVal
 from ..context import TxnRegister
 
 RawDataTuple = Tuple[RawDataRecordKey, RawDataRecordVal]
 RawMetaTuple = Tuple[MetadataRecordKey, MetadataRecordVal]
 
-'''
+"""
 Data record queries
 -------------------
-'''
+"""
 
 
 class RecordQuery(object):
@@ -26,13 +26,13 @@ class RecordQuery(object):
 # ------------------ traversing the unpacked records ------------------------------------
 
     def _traverse_all_records(self) -> Iterator[Tuple[bytes, bytes]]:
-        '''Pull out all records in the database as a tuple of binary encoded
+        """Pull out all records in the database as a tuple of binary encoded
 
         Returns
         -------
         list of tuples of bytes
             list type stack of tuples with each db_key, db_val pair
-        '''
+        """
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
@@ -43,13 +43,13 @@ class RecordQuery(object):
             TxnRegister().abort_reader_txn(self._dataenv)
 
     def _traverse_metadata_records(self) -> Dict[bytes, bytes]:
-        '''Internal method to traverse all metadata records and pull out keys/db_values
+        """Internal method to traverse all metadata records and pull out keys/db_values
 
         Returns
         -------
         Dict[bytes, bytes]
             dictionary of metadata db keys and db_values
-        '''
+        """
         metadataRecords = {}
         metadataCountKey = parsing.metadata_count_db_key()
         try:
@@ -67,14 +67,14 @@ class RecordQuery(object):
 
         return metadataRecords
 
-    def _traverse_dataset_schema_records(self) -> Dict[bytes, bytes]:
-        '''Internal method to travers all the schema records and pull out keys/db_values
+    def _traverse_arrayset_schema_records(self) -> Dict[bytes, bytes]:
+        """Internal method to traverse all schema records and pull out k/v db pairs.
 
         Returns
         -------
         Dict[bytes, bytes]
             dictionary of db schema keys and db_values
-        '''
+        """
         schemaRecords = {}
         startSchemaRangeKey = f'{c.K_SCHEMA}'.encode()
         try:
@@ -94,30 +94,31 @@ class RecordQuery(object):
 
         return schemaRecords
 
-    def _traverse_dataset_data_records(self, dataset_name) -> Dict[bytes, bytes]:
-        '''Internal method to traverse dataset data records and get keys/db_values
+    def _traverse_arrayset_data_records(self, arrayset_name) -> Dict[bytes, bytes]:
+        """Internal method to traverse arrayset data records and get keys/db_values
 
-        The datset name is required because this method controls the cursor movement by
-        first setting it's position on the dataset record count key, reading it's value
-        "N" and then sequentially pulling records out of the db for N loops.
+        The arrayset name is required because this method controls the cursor
+        movement by first setting it's position on the arrayset record count
+        key, reading it's value "N" and then sequentially pulling records out of
+        the db for N loops.
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to traverse records for.
+        arrayset_name : str
+            name of the arrayset to traverse records for.
 
         Returns
         -------
         Dict[bytes, bytes]
             dict of db_key/db_values for each record traversed
-        '''
+        """
         data_records = {}
-        startDsetRecCountRngK = parsing.dataset_record_count_db_key_from_raw_key(dataset_name)
+        startAsetRecCountRngK = parsing.arrayset_record_count_db_key_from_raw_key(arrayset_name)
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
-                dataRecordsExist = cursor.set_range(startDsetRecCountRngK)
-                dataRecKeySubString = f'{startDsetRecCountRngK.decode()}{c.SEP_KEY}'.encode()
+                dataRecordsExist = cursor.set_range(startAsetRecCountRngK)
+                dataRecKeySubString = f'{startAsetRecCountRngK.decode()}{c.SEP_KEY}'.encode()
                 cursor.next()
                 while dataRecordsExist:
                     dataRecKey, dataRecVal = cursor.item()
@@ -133,85 +134,85 @@ class RecordQuery(object):
 
         return data_records
 
-# ------------------------- process datasets --------------------------------------------
+# ------------------------- process arraysets --------------------------------------------
 
-    def dataset_names(self) -> List[str]:
-        '''Find all named datasets in the checkout
+    def arrayset_names(self) -> List[str]:
+        """Find all named arraysets in the checkout
 
         Returns
         -------
         List[str]
-            list of all dataset names
-        '''
-        recs = self._traverse_dataset_schema_records()
-        dataset_names = list(map(parsing.dataset_record_schema_raw_key_from_db_key, recs.keys()))
-        return dataset_names
+            list of all arrayset names
+        """
+        recs = self._traverse_arrayset_schema_records()
+        arrayset_names = map(parsing.arrayset_record_schema_raw_key_from_db_key, recs.keys())
+        return list(arrayset_names)
 
-    def dataset_data_records(self, dataset_name: str) -> Iterable[RawDataTuple]:
-        '''Returns the raw data record key and record values for a specific dataset.
+    def arrayset_data_records(self, arrayset_name: str) -> Iterable[RawDataTuple]:
+        """Returns the raw data record key and record values for a specific arrayset.
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to pull records for
+        arrayset_name : str
+            name of the arrayset to pull records for
 
         Yields
         ------
         tuple
             generator of key and value data record specs
-        '''
-        recs = self._traverse_dataset_data_records(dataset_name)
+        """
+        recs = self._traverse_arrayset_data_records(arrayset_name)
         if len(recs) > 0:
             data_rec_keys = map(parsing.data_record_raw_key_from_db_key, recs.keys())
             data_rec_vals = map(parsing.data_record_raw_val_from_db_val, recs.values())
             recs = zip(data_rec_keys, data_rec_vals)
         return recs
 
-    def dataset_data_names(self, dataset_name):
-        '''Find all data names contained within a dataset.
+    def arrayset_data_names(self, arrayset_name):
+        """Find all data names contained within a arrayset.
 
-        If you need both names, and hash values, call the `dataset_data_records`
+        If you need both names, and hash values, call the `arrayset_data_records`
         function. The underlying cost of searching the db is identical, this just provides
         a pretty filter on top.
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to retrieve names for
+        arrayset_name : str
+            name of the arrayset to retrieve names for
 
         Returns
         -------
         list of str
-            list of data names contained in the dataset
-        '''
-        recs = self._traverse_dataset_data_records(dataset_name)
+            list of data names contained in the arrayset
+        """
+        recs = self._traverse_arrayset_data_records(arrayset_name)
         data_key_rec = map(parsing.data_record_raw_key_from_db_key, recs.keys())
         data_names = list(map(lambda x: x.data_name, data_key_rec))
         return data_names
 
-    def dataset_data_hashes(self, dataset_name: str) -> Set[RawDataRecordVal]:
-        '''Find all data hashes contained within a particular dataset
+    def arrayset_data_hashes(self, arrayset_name: str) -> Set[RawDataRecordVal]:
+        """Find all data hashes contained within a particular arrayset
 
         Note: this method does not remove any duplicates which may be present,
         if dedup is required, process it downstream
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to find the hashes contained in
+        arrayset_name : str
+            name of the arrayset to find the hashes contained in
 
         Returns
         -------
         list
-            all hash values for all data pieces in the dataset
-        '''
-        recs = self._traverse_dataset_data_records(dataset_name)
+            all hash values for all data pieces in the arrayset
+        """
+        recs = self._traverse_arrayset_data_records(arrayset_name)
         data_val_rec = map(parsing.data_record_raw_val_from_db_val, recs.values())
         all_hashes = set(data_val_rec)
         return all_hashes
 
     def data_hashes(self) -> Set[RawDataRecordVal]:
-        '''Find all data hashes contained within all datasets
+        """Find all data hashes contained within all arraysets
 
         Note: this method does not remove any duplicates which may be present,
         if dedup is required, process it downstream
@@ -220,19 +221,19 @@ class RecordQuery(object):
         -------
         list
             all hash values for all data pieces in the commit
-        '''
-        datasets = self.dataset_names()
+        """
+        arraysets = self.arrayset_names()
         all_hashes = set()
-        for dataset in datasets:
-            recs = self._traverse_dataset_data_records(dataset)
+        for arrayset in arraysets:
+            recs = self._traverse_arrayset_data_records(arrayset)
             data_val_rec = set(map(parsing.data_record_raw_val_from_db_val, recs.values()))
             all_hashes.update(data_val_rec)
         return all_hashes
 
 # ------------------------- process schema ----------------------------------------------
 
-    def dataset_schema_spec(self, dataset_name) -> RawDatasetSchemaVal:
-        '''Return the schema spec for a specific dataset name.
+    def arrayset_schema_spec(self, arrayset_name) -> RawArraysetSchemaVal:
+        """Return the schema spec for a specific arrayset name.
 
         If you need both names, and schema spec values, use the `schema_specs` method. The
         underlying cost of searching the db is identical, and this is just a useful filter
@@ -240,74 +241,74 @@ class RecordQuery(object):
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to get the schema for
+        arrayset_name : str
+            name of the arrayset to get the schema for
 
         Returns
         -------
-        RawDatasetSchemaVal
-            raw schema spec for the dataset requested
-        '''
-        recs = self._traverse_dataset_schema_records()
-        dsetSchemaKey = parsing.dataset_record_schema_db_key_from_raw_key(dataset_name)
-        schemaRecVal = recs[dsetSchemaKey]
-        schemaRec = parsing.dataset_record_schema_raw_val_from_db_val(schemaRecVal)
+        RawArraysetSchemaVal
+            raw schema spec for the arrayset requested
+        """
+        recs = self._traverse_arrayset_schema_records()
+        asetSchemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(arrayset_name)
+        schemaRecVal = recs[asetSchemaKey]
+        schemaRec = parsing.arrayset_record_schema_raw_val_from_db_val(schemaRecVal)
         return schemaRec
 
-    def schema_specs(self) -> Dict[str, RawDatasetSchemaVal]:
-        '''Return the all schema specs defined by all datasets.
+    def schema_specs(self) -> Dict[str, RawArraysetSchemaVal]:
+        """Return the all schema specs defined by all arraysets.
 
         Returns
         -------
         Dict[str, RawDataSchemaVal]
-            dict of dataset names: raw schema spec for each dataset schema
-        '''
-        recs = self._traverse_dataset_schema_records()
+            dict of arrayset names: raw schema spec for each arrayset schema
+        """
+        recs = self._traverse_arrayset_schema_records()
         if len(recs) > 0:
-            schema_rec_keys = map(parsing.dataset_record_schema_raw_key_from_db_key, recs.keys())
-            schema_rec_vals = map(parsing.dataset_record_schema_raw_val_from_db_val, recs.values())
-            recs = dict(zip(schema_rec_keys, schema_rec_vals))
+            schKeys = map(parsing.arrayset_record_schema_raw_key_from_db_key, recs.keys())
+            schVals = map(parsing.arrayset_record_schema_raw_val_from_db_val, recs.values())
+            recs = dict(zip(schKeys, schVals))
         return recs
 
     def schema_hashes(self) -> List[str]:
-        '''Find all schema hashes inside of a commit
+        """Find all schema hashes inside of a commit
 
         Returns
         -------
         List[str]
             list of all schema hash digests
-        '''
-        recs = self._traverse_dataset_schema_records()
+        """
+        recs = self._traverse_arrayset_schema_records()
         all_schema_hashes = []
         if len(recs) > 0:
-            schema_rec_vals = map(parsing.dataset_record_schema_raw_val_from_db_val, recs.values())
+            schema_rec_vals = map(parsing.arrayset_record_schema_raw_val_from_db_val, recs.values())
             schema_hashs = map(lambda x: x.schema_hash, schema_rec_vals)
             all_schema_hashes.extend(schema_hashs)
         return all_schema_hashes
 
     def data_hash_to_schema_hash(self) -> Dict[str, str]:
-        '''For all hashs in the commit, map sample hash to schema hash.
+        """For all hashs in the commit, map sample hash to schema hash.
 
         Returns
         -------
         Dict[str, str]
-            mapping of sample hash to dset_schema_hash
-        '''
-        dsetns = self.dataset_names()
+            mapping of sample hash to aset_schema_hash
+        """
+        asetns = self.arrayset_names()
         odict = {}
-        for dsetn in dsetns:
-            dset_hash_vals = self.dataset_data_hashes(dsetn)
-            dset_schema_spec = self.dataset_schema_spec(dsetn)
-            dset_schema_hash = dset_schema_spec.schema_hash
-            for dset_hash_val in dset_hash_vals:
-                odict[dset_hash_val.data_hash] = dset_schema_hash
+        for asetn in asetns:
+            aset_hash_vals = self.arrayset_data_hashes(asetn)
+            aset_schema_spec = self.arrayset_schema_spec(asetn)
+            aset_schema_hash = aset_schema_spec.schema_hash
+            for aset_hash_val in aset_hash_vals:
+                odict[aset_hash_val.data_hash] = aset_schema_hash
 
         return odict
 
 # --------------------------- process metadata ------------------------------------------
 
     def metadata_names(self) -> List[str]:
-        '''Find all metadata names contained within checkout
+        """Find all metadata names contained within checkout
 
         If you need both names, and hash values, call the `metadata_records` function. The
         underlying cost of searching the db is identical, this just provides a pretty
@@ -316,8 +317,8 @@ class RecordQuery(object):
         Returns
         -------
         List[str]
-            list of metadata names contained in the dataset
-        '''
+            list of metadata names contained in the checkout
+        """
         recs = self._traverse_metadata_records()
         if len(recs) > 0:
             meta_key_rec = map(parsing.metadata_record_raw_key_from_db_key, recs.keys())
@@ -327,13 +328,13 @@ class RecordQuery(object):
         return meta_names
 
     def metadata_records(self) -> Iterable[RawMetaTuple]:
-        '''returns all the metadata record specs for all metadata keys
+        """returns all the metadata record specs for all metadata keys
 
         Returns
         -------
         Iterable[RawMetaTuple]
             dict of metadata names: metadata record spec for all metadata pieces
-        '''
+        """
         recs = self._traverse_metadata_records()
         if len(recs) > 0:
             meta_rec_keys = map(parsing.metadata_record_raw_key_from_db_key, recs.keys())
@@ -342,7 +343,7 @@ class RecordQuery(object):
         return recs
 
     def metadata_hashes(self) -> List[str]:
-        '''Find all hashs for all metadata in a commit
+        """Find all hashs for all metadata in a commit
 
         This method does not deduplicate identical hash records. if needed, postprocess
         downstream
@@ -351,7 +352,7 @@ class RecordQuery(object):
         -------
         List[str]
             list of all hashes in the commit
-        '''
+        """
         recs = self._traverse_metadata_records()
         all_hashes = []
         if len(recs) > 0:
@@ -363,27 +364,27 @@ class RecordQuery(object):
 # ---------------------------------- python access to all records at once ---------------
 
     def all_records(self):
-        '''Get a nested dict of all metadata and data records out from an unpacked commit.
+        """Get a nested dict of all metadata and data records out from an unpacked commit.
 
         .. todo:: Better documentation of this.
 
         Returns
         -------
         dict
-            dict with primary keys: 'datasetes', 'metadata'; with datasets nesting
+            dict with primary keys: 'arraysets', 'metadata'; with arraysets nesting
             'schema' and 'data' keys/values inside
-        '''
-        dset_names = self.dataset_names()
+        """
+        aset_names = self.arrayset_names()
         schema_records = self.schema_specs()
-        dsetRecs = {}
-        for dsetName in dset_names:
-            dsetRecs[dsetName] = {
-                'schema': schema_records[dsetName],
-                'data': dict(self.dataset_data_records(dsetName)),
+        asetRecs = {}
+        for asetName in aset_names:
+            asetRecs[asetName] = {
+                'schema': schema_records[asetName],
+                'data': dict(self.arrayset_data_records(asetName)),
             }
 
         res = {
-            'datasets': dsetRecs,
+            'arraysets': asetRecs,
             'metadata': dict(self.metadata_records()),
         }
         return res

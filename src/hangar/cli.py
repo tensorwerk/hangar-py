@@ -40,8 +40,8 @@ def main(ctx, version):
 @click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
 @click.pass_context
 def init(ctx, name, email, overwrite):
-    '''Initialize an empty repository at the current path
-    '''
+    """Initialize an empty repository at the current path
+    """
     P = os.getcwd()
     repo = Repository(path=P, exists=False)
     try:
@@ -58,11 +58,11 @@ def init(ctx, name, email, overwrite):
 @click.argument('remote', nargs=1, required=True)
 @click.pass_context
 def clone(ctx, remote, name, email, overwrite):
-    '''Initialize a repository at the current path and fetch updated records from REMOTE.
+    """Initialize a repository at the current path and fetch updated records from REMOTE.
 
     Note: This method does not actually download the data to disk. Please look
     into the ``fetch-data`` command.
-    '''
+    """
     P = os.getcwd()
     repo = Repository(path=P, exists=False)
     repo.clone(user_name=name,
@@ -77,11 +77,11 @@ def clone(ctx, remote, name, email, overwrite):
 @click.argument('branch', nargs=1, required=True)
 @click.pass_context
 def fetch_records(ctx, remote, branch):
-    '''Retrieve the commit history from REMOTE for BRANCH.
+    """Retrieve the commit history from REMOTE for BRANCH.
 
     This method does not fetch the data associated with the commits. See
     `fetch-data` to download the tensor data corresponding to a commit.
-    '''
+    """
     P = os.getcwd()
     repo = Repository(path=P)
     bName = repo.remote.fetch(remote=remote, branch=branch)
@@ -91,19 +91,19 @@ def fetch_records(ctx, remote, branch):
 @main.command(name='fetch-data')
 @click.argument('remote', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, required=True)
-@click.option('--dset', '-d', multiple=True, required=False, default=None,
-              help='specify any number of dset keys to fetch data for.')
+@click.option('--aset', '-d', multiple=True, required=False, default=None,
+              help='specify any number of aset keys to fetch data for.')
 @click.option('--nbytes', '-n', default=None, required=False,
               help='total amount of data to retrieve in MB/GB.')
 @click.option('--all-history', '-a', 'all_', is_flag=True, default=False, required=False,
               help='Retrieve data referenced in every parent commit accessible to the STARTPOINT')
 @click.pass_context
-def fetch_data(ctx, remote, startpoint, dset, nbytes, all_):
-    '''Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
+def fetch_data(ctx, remote, startpoint, aset, nbytes, all_):
+    """Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
     commit of a branch. Please review optional arguments for other behaviors
-    '''
+    """
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
     from hangar.utils import parse_bytes
 
@@ -120,19 +120,19 @@ def fetch_data(ctx, remote, startpoint, dset, nbytes, all_):
         commit = expand_short_commit_digest(repo._env.refenv, startpoint)
         click.echo(f'Fetching data for STARTPOINT HEAD: {commit}')
 
-    click.echo(f'dset argument: {dset}')
+    click.echo(f'aset argument: {aset}')
     try:
         max_nbytes = parse_bytes(nbytes)
         click.echo(f'nbytes argument: {max_nbytes}')
     except AttributeError:
         max_nbytes = None
 
-    if len(dset) == 0:
-        dset = None
+    if len(aset) == 0:
+        aset = None
 
     commits = repo.remote.fetch_data(remote=remote,
                                      commit=commit,
-                                     dataset_names=dset,
+                                     arrayset_names=aset,
                                      max_num_bytes=max_nbytes,
                                      retrieve_all_history=all_)
     click.echo(f'completed data for commits: {commits}')
@@ -143,8 +143,8 @@ def fetch_data(ctx, remote, startpoint, dset, nbytes, all_):
 @click.argument('branch', nargs=1, required=True)
 @click.pass_context
 def push(ctx, remote, branch):
-    '''Upload local BRANCH commit history / data to REMOTE server.
-    '''
+    """Upload local BRANCH commit history / data to REMOTE server.
+    """
     P = os.getcwd()
     repo = Repository(path=P)
     commit_hash = repo.remote.push(remote=remote, branch=branch)
@@ -153,17 +153,17 @@ def push(ctx, remote, branch):
 
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
-def remote(ctx, argument):
-    '''Operations for working with remote server references
-    '''
+def remote(ctx):
+    """Operations for working with remote server references
+    """
     pass
 
 
 @remote.command(name='list')
 @click.pass_context
 def list_remotes(ctx):
-    '''List all remote repository records.
-    '''
+    """List all remote repository records.
+    """
     P = os.getcwd()
     repo = Repository(path=P)
     click.echo(repo.remote.list_all())
@@ -174,11 +174,11 @@ def list_remotes(ctx):
 @click.argument('address', nargs=1, required=True)
 @click.pass_context
 def add_remote(ctx, name, address):
-    '''Add a new remote server NAME with url ADDRESS to the local client.
+    """Add a new remote server NAME with url ADDRESS to the local client.
 
     This name must be unique. In order to update an old remote, please remove it
     and re-add the remote NAME / ADDRESS combination
-    '''
+    """
     P = os.getcwd()
     repo = Repository(path=P)
     click.echo(repo.remote.add(name=name, address=address))
@@ -188,10 +188,10 @@ def add_remote(ctx, name, address):
 @click.argument('name', nargs=1, required=True)
 @click.pass_context
 def remove_remote(ctx, name):
-    '''Remove the remote server NAME from the local client.
+    """Remove the remote server NAME from the local client.
 
     This will not remove any tracked remote reference branches.
-    '''
+    """
     P = os.getcwd()
     repo = Repository(path=P)
     click.echo(repo.remote.remove(name=name))
@@ -201,13 +201,13 @@ def remove_remote(ctx, name):
 @click.argument('startpoint', nargs=1, required=False)
 @click.pass_context
 def summary(ctx, startpoint):
-    '''Display content summary at STARTPOINT (short-digest or branch).
+    """Display content summary at STARTPOINT (short-digest or branch).
 
     If no argument is passed in, the staging area branch HEAD wil be used as the
     starting point. In order to recieve a machine readable, and more complete
     version of this information, please see the ``Repository.summary()`` method
     of the API.
-    '''
+    """
     P = os.getcwd()
     repo = Repository(path=P)
     if startpoint is None:
@@ -223,11 +223,11 @@ def summary(ctx, startpoint):
 @click.argument('startpoint', required=False, default=None)
 @click.pass_context
 def log(ctx, startpoint):
-    '''Display commit graph starting at STARTPOINT (short-digest or name)
+    """Display commit graph starting at STARTPOINT (short-digest or name)
 
     If no argument is passed in, the staging area branch HEAD will be used as the
     starting point.
-    '''
+    """
     P = os.getcwd()
     repo = Repository(path=P)
     if startpoint is None:
@@ -242,18 +242,18 @@ def log(ctx, startpoint):
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
 def branch(ctx):
-    '''operate on and list branch pointers.
-    '''
+    """operate on and list branch pointers.
+    """
     pass
 
 
 @branch.command(name='list')
 @click.pass_context
 def branch_list(ctx):
-    '''list all branch names
+    """list all branch names
 
     Includes both remote branches as well as local branches.
-    '''
+    """
     P = os.getcwd()
     repo = Repository(path=P)
     click.echo(repo.list_branches())
@@ -264,11 +264,11 @@ def branch_list(ctx):
 @click.argument('startpoint', nargs=1, default=None, required=False)
 @click.pass_context
 def branch_create(ctx, name, startpoint):
-    '''Create a branch with NAME at STARTPOINT (short-digest or branch)
+    """Create a branch with NAME at STARTPOINT (short-digest or branch)
 
     If no STARTPOINT is provided, the new branch is positioned at the HEAD of
     the staging area branch, automatically.
-    '''
+    """
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
 
     P = os.getcwd()
@@ -285,7 +285,9 @@ def branch_create(ctx, name, startpoint):
     else:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
 
-    click.echo(f'BRANCH: ' + repo.create_branch(name, base_commit=base_commit) + f' HEAD: {base_commit}')
+    click.echo(f'BRANCH: ' +
+               repo.create_branch(name, base_commit=base_commit) +
+               f' HEAD: {base_commit}')
 
 
 @main.command()
@@ -298,7 +300,7 @@ def branch_create(ctx, name, startpoint):
 @click.option('--timeout', default=60*60*24, required=False, show_default=True,
               help='time (in seconds) before server is stopped automatically')
 def server(overwrite, ip, port, timeout):
-    '''Start a hangar server, initializing one if does not exist.
+    """Start a hangar server, initializing one if does not exist.
 
     The server is configured to top working in 24 Hours from the time it was
     initially started. To modify this value, please see the ``--timeout``
@@ -313,7 +315,7 @@ def server(overwrite, ip, port, timeout):
 
     More simply put, we know more, so we can optimize access more; similar, but
     not identical.
-    '''
+    """
     P = os.getcwd()
     ip_port = f'{ip}:{port}'
     server, hangserver, channel_address = serve(P, overwrite, channel_address=ip_port)
@@ -344,10 +346,10 @@ def server(overwrite, ip, port, timeout):
 @click.option('-z', is_flag=True, help='display the staged hash record db')
 @click.option('--limit', default=30, help='limit the amount of records displayed before truncation')
 def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
-    '''DEVELOPER TOOL ONLY
+    """DEVELOPER TOOL ONLY
 
     display key/value pairs making up the dbs
-    '''
+    """
     from hangar.context import Environments
     from hangar.records.summarize import details
     from hangar import constants as c

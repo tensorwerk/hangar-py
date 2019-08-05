@@ -15,14 +15,14 @@ from .queries import RecordQuery
 from ..utils import symlink_rel
 
 
-'''
+"""
 Reading commit specifications and parents.
 ------------------------------------------
-'''
+"""
 
 
 def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> str:
-    '''Find the a full commit hash from a short version provided by the user
+    """Find the a full commit hash from a short version provided by the user
 
     Parameters
     ----------
@@ -42,7 +42,7 @@ def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> st
         If the short commit hash can reference two full commit digests
     KeyError
         if no expanded commit digest is found starting with the short version.
-    '''
+    """
     reftxn = TxnRegister().begin_reader_txn(refenv)
     commitParentStart = parsing.commit_parent_db_key_from_raw_key(commit_hash)
     with reftxn.cursor() as cursor:
@@ -68,7 +68,7 @@ def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> st
 
 
 def check_commit_hash_in_history(refenv, commit_hash):
-    '''Check if a commit hash exists in the repository history
+    """Check if a commit hash exists in the repository history
 
     Parameters
     ----------
@@ -81,7 +81,7 @@ def check_commit_hash_in_history(refenv, commit_hash):
     -------
     bool
         True if exists, otherwise False
-    '''
+    """
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
         commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
@@ -93,7 +93,7 @@ def check_commit_hash_in_history(refenv, commit_hash):
 
 
 def get_commit_spec(refenv, commit_hash):
-    '''Get the commit specifications of a particular hash.
+    """Get the commit specifications of a particular hash.
 
     Parameters
     ----------
@@ -111,7 +111,7 @@ def get_commit_spec(refenv, commit_hash):
     ------
     ValueError
         if no commit exists with the provided hash
-    '''
+    """
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
         parentCommitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
@@ -127,7 +127,7 @@ def get_commit_spec(refenv, commit_hash):
 
 
 def get_commit_ancestors(refenv, commit_hash):
-    '''find the ancestors of a particular commit hash.
+    """find the ancestors of a particular commit hash.
 
     Parameters
     ----------
@@ -146,7 +146,7 @@ def get_commit_ancestors(refenv, commit_hash):
     ------
     ValueError
         if no commit exists with the provided hash
-    '''
+    """
 
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
@@ -163,7 +163,7 @@ def get_commit_ancestors(refenv, commit_hash):
 
 
 def get_commit_ancestors_graph(refenv, starting_commit):
-    '''returns a DAG of all commits which start at some hash as they point to the repo root.
+    """returns a DAG of all commits starting at some hash pointing to the repo root.
 
     Parameters
     ----------
@@ -178,7 +178,7 @@ def get_commit_ancestors_graph(refenv, starting_commit):
         a dictionary where each key is a commit hash encountered along the way,
         and it's value is a list containing either one or two elements which
         identify the child commits of that parent hash.
-    '''
+    """
     parent_commit = starting_commit
     commit_graph = {}
     seen = set(starting_commit)
@@ -218,14 +218,14 @@ def get_commit_ancestors_graph(refenv, starting_commit):
     return commit_graph
 
 
-'''
+"""
 Methods for reading packed commit data and reconstructing an unpacked format.
 -----------------------------------------------------------------------------
-'''
+"""
 
 
 def get_commit_ref(refenv, commit_hash):
-    '''Read the commit data record references from a specific commit.
+    """Read the commit data record references from a specific commit.
 
     This only returns a list of tuples with binary encoded key/value pairs.
 
@@ -246,7 +246,7 @@ def get_commit_ref(refenv, commit_hash):
     ------
     ValueError
         if no commit exists with the provided hash
-    '''
+    """
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
         commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit_hash)
@@ -262,7 +262,7 @@ def get_commit_ref(refenv, commit_hash):
 
 
 def get_commit_ref_contents(refenv, commit_hash):
-    '''hackish way to convert lmdb from compressed structure to in memory without a new env.
+    """hackish way to convert lmdb from compressed structure to in memory without a new env.
 
     .. todo:: Completly refactor this mess...
 
@@ -277,7 +277,7 @@ def get_commit_ref_contents(refenv, commit_hash):
     -------
     dict
         nested dict
-    '''
+    """
     with tempfile.TemporaryDirectory() as tempD:
         tmpDF = os.path.join(tempD, 'test.lmdb')
         tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
@@ -289,7 +289,7 @@ def get_commit_ref_contents(refenv, commit_hash):
 
 
 def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
-    '''unpack a commit record ref into a new key/val db for reader checkouts.
+    """unpack a commit record ref into a new key/val db for reader checkouts.
 
     Parameters
     ----------
@@ -299,7 +299,7 @@ def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
         environment handle open for writing on disk. this db must be empty.
     commit_hash : str
         hash of the commit to read in from refs and unpack in a checkout.
-    '''
+    """
 
     commitRefs = get_commit_ref(refenv=refenv, commit_hash=commit_hash)
     cmttxn = TxnRegister().begin_writer_txn(cmtrefenv)
@@ -319,7 +319,7 @@ def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
     return
 
 
-'''
+"""
 Methods to write new commits
 ----------------------------
 
@@ -330,7 +330,7 @@ The functions below act to:
     - Coordinate record hashing
     - Write the commit record
     - Update the branch head to point to the new commit hash
-'''
+"""
 
 # ---------------- Functions to format the writen values of a commit --------------------
 
@@ -340,7 +340,7 @@ def _commit_ancestors(branchenv: lmdb.Environment,
                       is_merge_commit: bool = False,
                       master_branch_name: str = '',
                       dev_branch_name: str = '') -> bytes:
-    '''Format the commit parent db value, finding HEAD commits automatically.
+    """Format the commit parent db value, finding HEAD commits automatically.
 
     This method handles formating for both regular & merge commits through the
     the keyword only arguments.
@@ -364,7 +364,7 @@ def _commit_ancestors(branchenv: lmdb.Environment,
     bytes
         Commit parent db value formatted appropriately based on the repo state and
         any specified arguments.
-    '''
+    """
     if not is_merge_commit:
         masterBranch = heads.get_staging_branch_head(branchenv)
         master_ancestor = heads.get_branch_head_commit(branchenv, masterBranch)
@@ -382,7 +382,7 @@ def _commit_ancestors(branchenv: lmdb.Environment,
 
 
 def _commit_spec(message: str, user: str, email: str) -> bytes:
-    '''Format the commit specification according to the supplied username and email.
+    """Format the commit specification according to the supplied username and email.
 
     This method currently only acts as a pass through to the parsing options
     (with time filled in).
@@ -400,7 +400,7 @@ def _commit_spec(message: str, user: str, email: str) -> bytes:
     -------
     bytes
         Formatted value for the specification field of the commit.
-    '''
+    """
     commitSpecVal = parsing.commit_spec_db_val_from_raw_val(
         commit_time=time.time(),
         commit_message=message,
@@ -410,7 +410,7 @@ def _commit_spec(message: str, user: str, email: str) -> bytes:
 
 
 def _commit_ref(stageenv: lmdb.Environment) -> bytes:
-    '''Query and format all staged data records, and format it for ref storage.
+    """Query and format all staged data records, and format it for ref storage.
 
     Parameters
     ----------
@@ -422,7 +422,7 @@ def _commit_ref(stageenv: lmdb.Environment) -> bytes:
     bytes
         Serialized and compressed version of all staged record data.
 
-    '''
+    """
     querys = RecordQuery(dataenv=stageenv)
     allRecords = tuple(querys._traverse_all_records())
     commitRefVal = parsing.commit_ref_db_val_from_raw_val(allRecords)
@@ -434,7 +434,7 @@ def _commit_ref(stageenv: lmdb.Environment) -> bytes:
 
 def commit_records(message, branchenv, stageenv, refenv, repo_path,
                    *, is_merge_commit=False, merge_master=None, merge_dev=None):
-    '''Commit all staged records to the repository, updating branch HEAD as needed.
+    """Commit all staged records to the repository, updating branch HEAD as needed.
 
     This method is intended to work for both merge commits as well as regular
     ancestor commits.
@@ -462,7 +462,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     -------
     string
         Commit hash of the newly added commit
-    '''
+    """
     commitParentVal = _commit_ancestors(branchenv=branchenv,
                                          is_merge_commit=is_merge_commit,
                                          master_branch_name=merge_master,
@@ -514,7 +514,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
 
 
 def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
-    '''DANGER ZONE: Delete the stage db and replace it with a copy of a commit environent.
+    """DANGER ZONE: Delete the stage db and replace it with a copy of a commit environent.
 
     .. warning::
 
@@ -529,7 +529,7 @@ def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
         lmdb environment opened to the staging area.
     commit_hash : str
         commit hash to read from the refenv and replace the stage contents with.
-    '''
+    """
     stagetxn = TxnRegister().begin_writer_txn(stageenv)
     with stagetxn.cursor() as cursor:
         positionExists = cursor.first()
@@ -543,7 +543,7 @@ def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
 
 
 def replace_staging_area_with_refs(stageenv, sorted_content):
-    '''DANGER ZONE: Delete all stage db records and replace it with specified data.
+    """DANGER ZONE: Delete all stage db records and replace it with specified data.
 
     .. warning::
 
@@ -559,7 +559,7 @@ def replace_staging_area_with_refs(stageenv, sorted_content):
         stageenv db. index 0 -> db key; index 1 -> db val, it is assumed that the
         order of the tuples is lexigraphically sorted by index 0 values, if not,
         this will result in unknown behavior.
-    '''
+    """
     stagetxn = TxnRegister().begin_writer_txn(stageenv)
     with stagetxn.cursor() as cursor:
         positionExists = cursor.first()
@@ -579,7 +579,7 @@ def replace_staging_area_with_refs(stageenv, sorted_content):
 
 
 def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False):
-    '''Move symlinks to hdf5 files from process directory to store directory
+    """Move symlinks to hdf5 files from process directory to store directory
 
     In process writes never directly access files in the data directory.
     Instead, when the file is created is is symlinked to either the remote data
@@ -599,7 +599,7 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
         default is False, which means that all changes will occur in the staging
         area)
 
-    '''
+    """
     store_dir = pjoin(repo_path, c.DIR_DATA_STORE)
 
     if not remote_operation:
@@ -629,7 +629,7 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
 
 
 def list_all_commits(refenv):
-    '''returns a list of all commits stored in the repostiory
+    """returns a list of all commits stored in the repostiory
 
     Parameters
     ----------
@@ -640,7 +640,7 @@ def list_all_commits(refenv):
     -------
     list
         list of all commit digests.
-    '''
+    """
     refTxn = TxnRegister().begin_reader_txn(refenv)
     try:
         commits = set()

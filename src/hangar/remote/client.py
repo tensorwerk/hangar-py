@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class HangarClient(object):
-    '''Client which connects and handles data transfer to the hangar server.
+    """Client which connects and handles data transfer to the hangar server.
 
     Parameters
     ----------
@@ -54,7 +54,7 @@ class HangarClient(object):
     wait_for_read_timeout : float, optional, kwarg-only, by default 5.
         If `wait_for_ready` is True, the time in seconds which the client should
         wait before raising an error. Must be positive value (greater than 0)
-    '''
+    """
 
     def __init__(self,
                  envs: Environments,
@@ -88,8 +88,8 @@ class HangarClient(object):
         self._setup_client_channel_config()
 
     def _setup_client_channel_config(self):
-        '''get grpc client configuration from server and setup channel and stub for use.
-        '''
+        """get grpc client configuration from server and setup channel and stub for use.
+        """
         tmp_insec_channel = grpc.insecure_channel(self.address)
         tmp_channel = grpc.intercept_channel(tmp_insec_channel, self.header_adder_int)
         tmp_stub = hangar_service_pb2_grpc.HangarServiceStub(tmp_channel)
@@ -124,27 +124,27 @@ class HangarClient(object):
         self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
 
     def close(self):
-        '''Close reader file handles and the GRPC channel connection, invalidating this instance.
-        '''
+        """Close reader file handles and the GRPC channel connection, invalidating this instance.
+        """
         for backend_accessor in self._rFs.values():
             backend_accessor.close()
         self.channel.close()
 
     def ping_pong(self) -> str:
-        '''Ping server to ensure that connection is working
+        """Ping server to ensure that connection is working
 
         Returns
         -------
         str
             Should be value 'PONG'
-        '''
+        """
         request = hangar_service_pb2.PingRequest()
         response: hangar_service_pb2.PingReply = self.stub.PING(request)
         return response.result
 
     def push_branch_record(self, name: str, head: str
                            ) -> hangar_service_pb2.PushBranchRecordReply:
-        '''Create a branch (if new) or update the server branch HEAD to new commit.
+        """Create a branch (if new) or update the server branch HEAD to new commit.
 
         Parameters
         ----------
@@ -157,7 +157,7 @@ class HangarClient(object):
         -------
         hangar_service_pb2.PushBranchRecordReply
             code indicating success, message with human readable info
-        '''
+        """
         rec = hangar_service_pb2.BranchRecord(name=name, commit=head)
         request = hangar_service_pb2.PushBranchRecordRequest(rec=rec)
         response = self.stub.PushBranchRecord(request)
@@ -165,7 +165,7 @@ class HangarClient(object):
 
     def fetch_branch_record(self, name: str
                             ) -> hangar_service_pb2.FetchBranchRecordReply:
-        '''Get the latest head commit the server knows about for a given branch
+        """Get the latest head commit the server knows about for a given branch
 
         Parameters
         ----------
@@ -177,7 +177,7 @@ class HangarClient(object):
         hangar_service_pb2.FetchBranchRecordReply
             rec containing name and head commit if branch exists, along with
             standard error proto if it does not exist on the server.
-        '''
+        """
         rec = hangar_service_pb2.BranchRecord(name=name)
         request = hangar_service_pb2.FetchBranchRecordRequest(rec=rec)
         response = self.stub.FetchBranchRecord(request)
@@ -186,7 +186,7 @@ class HangarClient(object):
     def push_commit_record(self, commit: str, parentVal: bytes, specVal: bytes,
                            refVal: bytes
                            ) -> hangar_service_pb2.PushBranchRecordReply:
-        '''Push a new commit reference to the server.
+        """Push a new commit reference to the server.
 
         Parameters
         ----------
@@ -203,7 +203,7 @@ class HangarClient(object):
         -------
         hangar_service_pb2.PushBranchRecordReply
             standard error proto
-        '''
+        """
         cIter = chunks.clientCommitChunkedIterator(commit=commit,
                                                    parentVal=parentVal,
                                                    specVal=specVal,
@@ -212,7 +212,7 @@ class HangarClient(object):
         return response
 
     def fetch_commit_record(self, commit: str) -> Tuple[str, bytes, bytes, bytes]:
-        '''get the refs for a commit digest
+        """get the refs for a commit digest
 
         Parameters
         ----------
@@ -223,7 +223,7 @@ class HangarClient(object):
         -------
         Tuple[str, bytes, bytes, bytes]
             ['commit hash', 'parentVal', 'specVal', 'refVal']
-        '''
+        """
         request = hangar_service_pb2.FetchCommitRequest(commit=commit)
         replies = self.stub.FetchCommit(request)
         for idx, reply in enumerate(replies):
@@ -242,7 +242,7 @@ class HangarClient(object):
         return (commit, parentVal, specVal, refVal)
 
     def fetch_schema(self, schema_hash: str) -> Tuple[str, bytes]:
-        '''get the schema specification for a schema hash
+        """get the schema specification for a schema hash
 
         Parameters
         ----------
@@ -253,7 +253,7 @@ class HangarClient(object):
         -------
         Tuple[str, bytes]
             ['schema hash', 'schemaVal']
-        '''
+        """
         schema_rec = hangar_service_pb2.SchemaRecord(digest=schema_hash)
         request = hangar_service_pb2.FetchSchemaRequest(rec=schema_rec)
         reply = self.stub.FetchSchema(request)
@@ -266,7 +266,7 @@ class HangarClient(object):
 
     def push_schema(self, schema_hash: str,
                     schemaVal: bytes) -> hangar_service_pb2.PushSchemaReply:
-        '''push a schema hash record to the remote server
+        """push a schema hash record to the remote server
 
         Parameters
         ----------
@@ -279,7 +279,7 @@ class HangarClient(object):
         -------
         hangar_service_pb2.PushSchemaReply
             standard error proto indicating success
-        '''
+        """
         rec = hangar_service_pb2.SchemaRecord(digest=schema_hash,
                                               blob=schemaVal)
         request = hangar_service_pb2.PushSchemaRequest(rec=rec)
@@ -288,7 +288,7 @@ class HangarClient(object):
 
     def fetch_data(self, schema_hash: str,
                    digests: Sequence[str]) -> Sequence[Tuple[str, np.ndarray]]:
-        '''Fetch data hash digests for a particular schema.
+        """Fetch data hash digests for a particular schema.
 
         As the total size of the data to be transferred isn't known before this
         operation occurs, if more tensor data digests are requested then the
@@ -313,7 +313,7 @@ class HangarClient(object):
         ------
         RuntimeError
             if received digest != requested or what was reported to be sent.
-        '''
+        """
         totalSize, buf = 0, io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
         packed_digests = map(packer.pack, digests)
@@ -362,7 +362,7 @@ class HangarClient(object):
                   schema_hash: str,
                   digests: Sequence[str],
                   pbar: tqdm = None) -> hangar_service_pb2.PushDataReply:
-        '''Given a schema and digest list, read the data and send to the server
+        """Given a schema and digest list, read the data and send to the server
 
         Parameters
         ----------
@@ -384,7 +384,7 @@ class HangarClient(object):
             if one of the input digests does not exist on the client
         rpc_error
             if the server received corrupt data
-        '''
+        """
         totalSize, buf = 0, io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
         hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
@@ -427,7 +427,7 @@ class HangarClient(object):
         return response
 
     def fetch_label(self, digest: str) -> Tuple[str, bytes]:
-        '''get a the raw bytes for a metadata/label digest
+        """get a the raw bytes for a metadata/label digest
 
         Parameters
         ----------
@@ -443,7 +443,7 @@ class HangarClient(object):
         ------
         RuntimeError
             if the received data does not match the requested hash value
-        '''
+        """
         rec = hangar_service_pb2.HashRecord(digest=digest)
         request = hangar_service_pb2.FetchLabelRequest(rec=rec)
         reply = self.stub.FetchLabel(request)
@@ -455,7 +455,7 @@ class HangarClient(object):
         return (received_hash, uncompBlob)
 
     def push_label(self, digest: str, labelVal: bytes) -> hangar_service_pb2.PushLabelReply:
-        '''send a label/metadata digest & value to the remote server
+        """send a label/metadata digest & value to the remote server
 
         Parameters
         ----------
@@ -468,7 +468,7 @@ class HangarClient(object):
         -------
         hangar_service_pb2.PushLabelReply
             standard error proto indicating success
-        '''
+        """
         rec = hangar_service_pb2.HashRecord(digest=digest)
         request = hangar_service_pb2.PushLabelRequest(rec=rec)
         request.blob = blosc.compress(labelVal)

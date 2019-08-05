@@ -1,8 +1,5 @@
 *.py[cod]
 
-# Notebook Examples (Must be Force Added)
-*.ipynb
-
 # C extensions
 *.so
 
