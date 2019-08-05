@@ -23,6 +23,9 @@ class TestTorchDataLoader(object):
         with pytest.raises(TypeError):
             # if more than one dataset, those should be in a list/tuple
             make_torch_dataset(first_dset, first_dset)
+        with pytest.raises(TypeError):
+            # first argument can only be a list/tuple or a hangar dataset
+            make_torch_dataset({'first': first_dset, 'second': first_dset})
         with pytest.raises(RuntimeError):
             # datasets with different length
             make_torch_dataset([first_dset, second_dset])
@@ -34,6 +37,7 @@ class TestTorchDataLoader(object):
             assert dset1.shape == (6, 5, 7)
             assert dset2.shape == (6, 5, 7)
         assert total_samples == 18  # drop last is True
+        co.close()
 
     def test_with_keys_and_index_range(self, repo_with_20_samples):
         repo = repo_with_20_samples
@@ -61,14 +65,17 @@ class TestTorchDataLoader(object):
             assert batch[0].size(0) == 3
             for sample in batch[0]:
                 assert not np.allclose(sample, bad_tensor)
+        co.close()
 
     def test_field_names(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
         first_dset = co.datasets['_dset']
         second_dset = co.datasets['second_dset']
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError):  # number of dsets and field_names are different
             make_torch_dataset([first_dset, second_dset], field_names=('input',))
+        with pytest.raises(TypeError):  # field_names's type is wrong
+            make_torch_dataset([first_dset, second_dset], field_names={'input': '', 'target': ''})
         torch_dset = make_torch_dataset([first_dset, second_dset], field_names=('input', 'target'))
         assert hasattr(torch_dset[1], 'input')
         assert hasattr(torch_dset[1], 'target')
@@ -77,6 +84,7 @@ class TestTorchDataLoader(object):
             for sample in loader:
                 assert hasattr(sample, 'input')
                 assert hasattr(sample, 'target')
+        co.close()
 
 
 class TestTfDataLoader(object):
