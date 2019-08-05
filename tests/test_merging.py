@@ -21,10 +21,10 @@ def test_ff_merge_no_conf_correct_contents_for_name_or_hash_checkout(repo_1_br_n
     coByName = repo_1_br_no_conf.checkout(branch='master')
     coByHash = repo_1_br_no_conf.checkout(commit=cmt_hash)
 
-    assert len(coByHash.datasets) == len(coByName.datasets)
-    for dsetn in coByHash.datasets.keys():
-        dset_byHash = coByHash.datasets[dsetn]
-        dset_byName = coByName.datasets[dsetn]
+    assert len(coByHash.cellstores) == len(coByName.cellstores)
+    for dsetn in coByHash.cellstores.keys():
+        dset_byHash = coByHash.cellstores[dsetn]
+        dset_byName = coByName.cellstores[dsetn]
         assert len(dset_byHash) == len(dset_byHash)
         for k, v in dset_byHash.items():
             assert np.allclose(v, dset_byName[k])
@@ -72,20 +72,20 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     assert co.metadata['hello'] == 'world'
     assert co.metadata['foo'] == 'bar'
 
-    # datasets
-    assert len(co.datasets) == 1
-    assert 'dummy' in co.datasets
-    # dataset samples
-    dset = co.datasets['dummy']
+    # cellstores
+    assert len(co.cellstores) == 1
+    assert 'dummy' in co.cellstores
+    # cellstore samples
+    dset = co.cellstores['dummy']
     assert len(dset) == 50
 
-    # dataset sample values
+    # cellstore sample values
     checkarr = np.zeros_like(np.arange(50))
     for k, v in dset.items():
         checkarr[:] = int(k)
         assert np.allclose(v, checkarr)
 
-    # dataset sample keys
+    # cellstore sample keys
     dset_keys = list(dset.keys())
     for genKey in range(30):
         assert str(genKey) in dset_keys
@@ -188,7 +188,7 @@ class TestMetadataConflicts(object):
         co.close()
 
 
-class TestDatasetSampleConflicts(object):
+class TestCellstoreSampleConflicts(object):
 
     def test_conflict_additions_same_str_name_different_value(self, repo_2_br_no_conf):
         newdata = np.arange(50)
@@ -196,7 +196,7 @@ class TestDatasetSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy']['15'] = newdata
+        co.cellstores['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -209,7 +209,7 @@ class TestDatasetSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy'][15] = newdata
+        co.cellstores['dummy'][15] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -222,8 +222,8 @@ class TestDatasetSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy'][15] = newdata
-        co.datasets['dummy']['15'] = newdata
+        co.cellstores['dummy'][15] = newdata
+        co.cellstores['dummy']['15'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
@@ -236,14 +236,14 @@ class TestDatasetSampleConflicts(object):
 
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy']['15'] = newdata
-        co.datasets['dummy'][15] = newdata
+        co.cellstores['dummy']['15'] = newdata
+        co.cellstores['dummy'][15] = newdata
         co.commit('commit on master with same value data')
         co.close()
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        dset = co.datasets['dummy']
+        dset = co.cellstores['dummy']
         assert np.allclose(dset['15'], newdata)
         assert np.allclose(dset[15], newdata)
         co.close()
@@ -252,13 +252,13 @@ class TestDatasetSampleConflicts(object):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
         newdata = np.arange(50)
-        co.datasets['dummy']['0'] = newdata
+        co.cellstores['dummy']['0'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         newdata = newdata * 2
-        co.datasets['dummy']['0'] = newdata
+        co.cellstores['dummy']['0'] = newdata
         co.commit('commit on testbranch with conflicting data')
         co.close()
 
@@ -269,12 +269,12 @@ class TestDatasetSampleConflicts(object):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
         newdata = np.arange(50)
-        co.datasets['dummy']['0'] = newdata
+        co.cellstores['dummy']['0'] = newdata
         co.commit('commit on master with conflicting data')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.datasets['dummy'].remove('0')
+        co.cellstores['dummy'].remove('0')
         co.commit('commit on testbranch with removal')
         co.close()
 
@@ -284,19 +284,19 @@ class TestDatasetSampleConflicts(object):
     def test_no_conflict_both_removal(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.datasets['dummy'].remove('0')
-        del co.datasets['dummy'][21]
+        co.cellstores['dummy'].remove('0')
+        del co.cellstores['dummy'][21]
         co.commit('commit on master with removal')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.datasets['dummy'].remove('0')
-        del co.datasets['dummy'][10]
+        co.cellstores['dummy'].remove('0')
+        del co.cellstores['dummy'][10]
         co.commit('commit on testbranch with removal')
         co.close()
 
         cmt_hash = repo.merge('merge commit', 'master', 'testbranch')
         co = repo.checkout(commit=cmt_hash)
-        dset = co.datasets['dummy']
+        dset = co.cellstores['dummy']
         assert '0' not in dset
         assert len(dset) == 47

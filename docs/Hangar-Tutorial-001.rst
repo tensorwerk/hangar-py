@@ -5,7 +5,7 @@ Creating A Repository And Working With Data
 This tutorial will review the first steps of working with a hangar
 repository.
 
-To fit with the beginner’s theme, we will use the MNIST dataset. Later
+To fit with the beginner’s theme, we will use the MNIST cellstore. Later
 examples will show off how to work with much more complex data.
 
 .. code:: python
@@ -79,19 +79,19 @@ sent to your screen!
        Base Branch  : master
 
 
-A checkout allows access to ``datasets`` and ``metadata``
-=========================================================
+A checkout allows access to ``cellstores`` and ``metadata``
+===========================================================
 
-The `dataset` and `metadata` attributes of a checkout provide
+The `cellstore` and `metadata` attributes of a checkout provide
 the interface to working with all of the data on disk!
 
 .. code:: python
 
-   >>> co.datasets
-   Hangar Datasets
+   >>> co.cellstores
+   Hangar Cellstores
        Writeable: True
-       Dataset Names:
-           -                # No datasets added yet!
+       Cellstore Names:
+           -                # No cellstores added yet!
 
    >>> co.metadata
    Hangar Metadata
@@ -99,15 +99,15 @@ the interface to working with all of the data on disk!
        Access Mode    : a
 
 
-Before data can be added to a repository, a dataset must be initialized.
-------------------------------------------------------------------------
+Before data can be added to a repository, a cellstore must be initialized.
+--------------------------------------------------------------------------
 
-We're going to first load up a the MNIST pickled dataset so it can be added to
+We're going to first load up a the MNIST pickled cellstore so it can be added to
 the repo!
 
 .. code:: python
 
-   # Load the dataset
+   # Load the cellstore
    >>> with gzip.open('/Users/rick/projects/tensorwerk/hangar-dev-data/mnist.pkl.gz', 'rb') as f:
    ...     train_set, valid_set, test_set = pickle.load(f, encoding='bytes')
 
@@ -122,21 +122,21 @@ the repo!
    >>> trlabels = train_set[1]
 
 
-A Dataset is a named grouping of data samples where each sample shares a number
-of similar attributes and array properties. See the docstrings in
-`co.datasets.init_dataset`:
+A Cellstore is a named grouping of data samples where each sample shares a
+number of similar attributes and array properties. See the docstrings in
+`co.cellstores.init_cellstore`:
 
-.. automethod:: hangar.dataset.Datasets.init_dataset
+.. automethod:: hangar.cellstore.Cellstores.init_cellstore
    :noindex:
 
 Let's try it out here:
 
 .. code:: python
 
-   >>> co.datasets.init_dataset(name='mnist_training_images', prototype=trimgs[0])
-   Dataset prototype shape: (784,), dtype: uint8
-   Hangar DatasetDataWriter
-       Dataset Name     : mnist_training_images
+   >>> co.cellstores.init_cellstore(name='mnist_training_images', prototype=trimgs[0])
+   Cellstore prototype shape: (784,), dtype: uint8
+   Hangar CellstoreDataWriter
+       Cellstore Name     : mnist_training_images
        Schema Hash      : RM4DefFsjRs=
        Variable Shape   : False
        (max) Shape      : (784,)
@@ -149,20 +149,20 @@ Let's try it out here:
 Interaction
 ===========
 
-When a dataset is initialized, a dataset accessor object will be returned,
+When a cellstore is initialized, a cellstore accessor object will be returned,
 however, depending on your use case, this may or may not be the most convenient
-way to access a dataset.
+way to access a cellstore.
 
 In general, we have implemented a full ``dict`` mapping interface on top of all
-object. To access the ``'mnist_training_images'`` dataset you can just use a
+object. To access the ``'mnist_training_images'`` cellstore you can just use a
 dict style access like the following (note: if operating in ipython/jupyter, the
-dataset keys will autocomplete for you).
+cellstore keys will autocomplete for you).
 
 .. code:: python
 
-   >>> co.datasets['mnist_training_images']
-   Hangar DatasetDataWriter
-       Dataset Name     : mnist_training_images
+   >>> co.cellstores['mnist_training_images']
+   Hangar CellstoreDataWriter
+       Cellstore Name     : mnist_training_images
        Schema Hash      : RM4DefFsjRs=
        Variable Shape   : False
        (max) Shape      : (784,)
@@ -174,14 +174,14 @@ dataset keys will autocomplete for you).
 
 .. code:: python
 
-   >>> train_dset = co.datasets['mnist_training_images']
+   >>> train_dset = co.cellstores['mnist_training_images']
 
 the full dictionary style mapping interface is implemented
 
 Adding Data
 -----------
 
-To add data to a named dataset, we can use dict-style setting, or the
+To add data to a named cellstore, we can use dict-style setting, or the
 ``.add`` method.
 
 .. code:: python
@@ -190,8 +190,8 @@ To add data to a named dataset, we can use dict-style setting, or the
    >>> train_dset.add(data=trimgs[1], name='1')
    >>> train_dset['51'] = trimgs[51]
 
-How many samples are in the dataset?
-------------------------------------
+How many samples are in the cellstore?
+--------------------------------------
 
 .. code:: python
 
@@ -223,8 +223,8 @@ Dictionary Style Retrieval for known keys
 .. code:: python
 
    >>> train_dset
-   Hangar DatasetDataWriter
-       Dataset Name     : mnist_training_images
+   Hangar CellstoreDataWriter
+       Cellstore Name     : mnist_training_images
        Schema Hash      : RM4DefFsjRs=
        Variable Shape   : False
        (max) Shape      : (784,)
@@ -261,10 +261,10 @@ manager form of the ``.add`` and ``.get`` methods!
 In order to make sure that all your data is always safe in Hangar, the backend
 diligently ensures that all contexts (operations which can somehow interact
 with the record structures) are opened and closed appropriately. When you use the
-context manager form of a dataset object, we can offload a significant amount of
+context manager form of a cellstore object, we can offload a significant amount of
 work to the python runtime, and dramatically increase read and write speeds.
 
-Most datasets we’ve tested see an increased throughput differential of 250% -
+Most cellstores we’ve tested see an increased throughput differential of 250% -
 500% for writes and 300% - 600% for reads when comparing using the context
 manager form vs the naked form!
 
@@ -272,10 +272,10 @@ manager form vs the naked form!
 
    # ------------------ Context Manager Form ----------------------
 
-   >>> dset_trimgs = co.datasets.init_dataset(name='train_images', prototype=sample_trimg)
-   >>> dset_trlabels = co.datasets.init_dataset(name='train_labels', prototype=sample_trlabel)
+   >>> dset_trimgs = co.cellstores.init_cellstore(name='train_images', prototype=sample_trimg)
+   >>> dset_trlabels = co.cellstores.init_cellstore(name='train_labels', prototype=sample_trlabel)
 
-   >>> pbar = tqdm(total=trimgs.shape[0]*2)  # one record for each dataset
+   >>> pbar = tqdm(total=trimgs.shape[0]*2)  # one record for each cellstore
    >>> with dset_trimgs, dset_trlabels:
    ...     for idx, img in enumerate(trimgs):
    ...         if (idx % 500 == 0):
@@ -329,16 +329,17 @@ tutorials)
 Don’t Forget to Close the Write-Enabled Checkout
 ------------------------------------------------
 
-We mentioned in `Checking out the repo for writing`_ that when a `write-enabled`
-checkout is created, it places a lock on writers until it is closed. If for
-whatever reason the program terminates without closing the write-enabled
-checkout, this lock will persist (forever technically, but realistically until
-it is manually freed).
+We mentioned in `Checking out the repo for writing`_ that when a
+``write-enabled`` checkout is created, it places a lock on writers until it is
+closed. If for whatever reason the program terminates without closing the
+write-enabled checkout, this lock will persist (forever technically, but
+realistically until it is manually freed).
 
 .. automethod:: hangar.checkout.WriterCheckout.close
    :noindex:
 
-Luckily, preventing this issue from occurring is as simple as calling `close()`!
+Luckily, preventing this issue from occurring is as simple as calling
+``close()``!
 
 .. code:: python
 
@@ -416,9 +417,9 @@ general has been built to be the only way to directly access it!
     ==================
     | DataSets
     |-----------------
-    |  Number of Named Datasets: 2
+    |  Number of Named Cellstores: 2
     |
-    |  * Dataset Name: train_images
+    |  * Cellstore Name: train_images
     |    Num Arrays: 50000
     |    Details:
     |    - schema_hash: RM4DefFsjRs=
@@ -427,7 +428,7 @@ general has been built to be the only way to directly access it!
     |    - schema_max_shape: [784]
     |    - schema_is_named: True
     |
-    |  * Dataset Name: train_labels
+    |  * Cellstore Name: train_labels
     |    Num Arrays: 50000
     |    Details:
     |    - schema_hash: ncbHqE6Xldg=

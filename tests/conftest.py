@@ -40,7 +40,7 @@ def repo(managed_tmpdir) -> Repository:
 @pytest.fixture()
 def written_repo(repo):
     co = repo.checkout(write=True)
-    co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float64)
+    co.cellstores.init_cellstore(name='_dset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -49,7 +49,7 @@ def written_repo(repo):
 @pytest.fixture()
 def variable_shape_written_repo(repo):
     co = repo.checkout(write=True)
-    co.datasets.init_dataset(name='_dset', shape=(10, 10), dtype=np.float64, variable_shape=True)
+    co.cellstores.init_cellstore(name='_dset', shape=(10, 10), dtype=np.float64, variable_shape=True)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -77,12 +77,12 @@ def randomsizedarray():
 @pytest.fixture()
 def written_two_cmt_repo(repo, array5by7):
     co = repo.checkout(write=True)
-    co.datasets.init_dataset(name='_dset', shape=(5, 7), dtype=np.float32)
+    co.cellstores.init_cellstore(name='_dset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(2):
         if cIdx != 0:
             co = repo.checkout(write=True)
 
-        with co.datasets['_dset'] as d:
+        with co.cellstores['_dset'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range((cIdx + 1) * 5):
@@ -98,11 +98,11 @@ def repo_1_br_no_conf(request, repo):
 
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch='master')
-    co1.datasets.init_dataset(
+    co1.cellstores.init_cellstore(
         name='dummy', prototype=dummyData, named_samples=True, backend=request.param)
     for idx in range(10):
         dummyData[:] = idx
-        co1.datasets['dummy'][str(idx)] = dummyData
+        co1.cellstores['dummy'][str(idx)] = dummyData
     co1.metadata['hello'] = 'world'
     co1.metadata['somemetadatakey'] = 'somemetadatavalue'
     co1.commit('first commit adding dummy data and hello meta')
@@ -112,8 +112,8 @@ def repo_1_br_no_conf(request, repo):
     co2 = repo.checkout(write=True, branch='testbranch')
     for idx in range(10, 20):
         dummyData[:] = idx
-        co2.datasets['dummy'][str(idx)] = dummyData
-        co2.datasets['dummy'][idx] = dummyData
+        co2.cellstores['dummy'][str(idx)] = dummyData
+        co2.cellstores['dummy'][idx] = dummyData
     co2.metadata['foo'] = 'bar'
     co2.commit('first commit on test branch adding non-conflict data and meta')
     co2.close()
@@ -128,8 +128,8 @@ def repo_2_br_no_conf(repo_1_br_no_conf):
     co1 = repo.checkout(write=True, branch='master')
     for idx in range(20, 30):
         dummyData[:] = idx
-        co1.datasets['dummy'][str(idx)] = dummyData
-        co1.datasets['dummy'][idx] = dummyData
+        co1.cellstores['dummy'][str(idx)] = dummyData
+        co1.cellstores['dummy'][idx] = dummyData
     co1.commit('second commit on master adding non-conflict data')
     co1.close()
     return repo

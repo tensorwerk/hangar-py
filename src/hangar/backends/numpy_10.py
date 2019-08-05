@@ -13,12 +13,12 @@ Storage Method
 
 * Data is written to specific subarray indexes inside a numpy memmapped array on disk.
 
-* Each dataset is a zero-initialized array of
+* Each file is a zero-initialized array of
 
   *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
 
   *  ``shape: (COLLECTION_SIZE, *{schema_shape})``; ie ``(500, 10)`` or ``(500,
-     4, 3)``. The first index in the dataset is referred to as a "collection
+     4, 3)``. The first index in the array is referred to as a "collection
      index".
 
 Record Format
@@ -116,11 +116,11 @@ _SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
 NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec',
                                    [('backend', str), ('uid', str),
-                                    ('checksum', str), ('dataset_idx', int),
+                                    ('checksum', str), ('collection_idx', int),
                                     ('shape', Tuple[int])])
 
 
-def numpy_10_encode(uid: str, checksum: int, dataset_idx: int, shape: tuple) -> bytes:
+def numpy_10_encode(uid: str, checksum: int, collection_idx: int, shape: tuple) -> bytes:
     '''converts the numpy data spect to an appropriate db value
 
     Parameters
@@ -129,12 +129,12 @@ def numpy_10_encode(uid: str, checksum: int, dataset_idx: int, shape: tuple) -> 
         file name (schema uid) of the np file to find this data piece in.
     checksum : int
         adler32 checksum of the data as computed on that local machine.
-    dataset_idx : int
+    collection_idx : int
         collection first axis index in which this data piece resides.
     shape : tuple
-        shape of the data sample written to the collection idx. ie:
-        what subslices of the hdf5 dataset should be read to retrieve
-        the sample as recorded.
+        shape of the data sample written to the collection idx. ie: what
+        subslices of the array should be read to retrieve the sample as
+        recorded.
 
     Returns
     -------
@@ -144,7 +144,7 @@ def numpy_10_encode(uid: str, checksum: int, dataset_idx: int, shape: tuple) -> 
     out_str = f'{_FmtCode}{c.SEP_KEY}'\
               f'{uid}{c.SEP_HSH}{checksum}'\
               f'{c.SEP_HSH}'\
-              f'{dataset_idx}'\
+              f'{collection_idx}'\
               f'{c.SEP_SLC}'\
               f'{_ShapeFmtRE.sub("", str(shape))}'
     return out_str.encode()
@@ -162,10 +162,10 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
     -------
     DataHashSpec
         numpy data hash specification containing `backend`, `schema`, and
-        `uid`, `dataset_idx` and `shape` fields.
+        `uid`, `collection_idx` and `shape` fields.
     '''
     db_str = db_val.decode()
-    _, uid, checksum, dataset_idx, shape_vs = _SplitDecoderRE.split(db_str)
+    _, uid, checksum, collection_idx, shape_vs = _SplitDecoderRE.split(db_str)
     # if the data is of empty shape -> shape_vs = '' str.split() default value
     # of none means split according to any whitespace, and discard empty strings
     # from the result. So long as c.SEP_LST = ' ' this will work
@@ -173,7 +173,7 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
     raw_val = NUMPY_10_DataHashSpec(backend=_FmtCode,
                                     uid=uid,
                                     checksum=checksum,
-                                    dataset_idx=int(dataset_idx),
+                                    collection_idx=int(collection_idx),
                                     shape=shape)
     return raw_val
 
@@ -287,7 +287,7 @@ class NUMPY_10_FileHandles(object):
         os.rmdir(process_dir)
 
     def _create_schema(self, *, remote_operation: bool = False):
-        '''stores the shape and dtype as the schema of a dataset.
+        '''stores the shape and dtype as the schema of a cellstore.
 
         Parameters
         ----------
@@ -350,7 +350,7 @@ class NUMPY_10_FileHandles(object):
           all future reads of the subarray from that process, but which would
           not be persisted to disk.
         '''
-        srcSlc = (self.slcExpr[hashVal.dataset_idx],
+        srcSlc = (self.slcExpr[hashVal.collection_idx],
                   *(self.slcExpr[0:x] for x in hashVal.shape))
         try:
             res = self.Fp[hashVal.uid][srcSlc]
@@ -401,6 +401,6 @@ class NUMPY_10_FileHandles(object):
         self.wFp[self.w_uid][destSlc] = array
         hashVal = numpy_10_encode(uid=self.w_uid,
                                   checksum=checksum,
-                                  dataset_idx=self.hIdx,
+                                  collection_idx=self.hIdx,
                                   shape=array.shape)
         return hashVal

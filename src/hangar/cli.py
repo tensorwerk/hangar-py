@@ -132,7 +132,7 @@ def fetch_data(ctx, remote, startpoint, dset, nbytes, all_):
 
     commits = repo.remote.fetch_data(remote=remote,
                                      commit=commit,
-                                     dataset_names=dset,
+                                     cellstore_names=dset,
                                      max_num_bytes=max_nbytes,
                                      retrieve_all_history=all_)
     click.echo(f'completed data for commits: {commits}')
@@ -285,7 +285,9 @@ def branch_create(ctx, name, startpoint):
     else:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
 
-    click.echo(f'BRANCH: ' + repo.create_branch(name, base_commit=base_commit) + f' HEAD: {base_commit}')
+    click.echo(f'BRANCH: ' +
+               repo.create_branch(name, base_commit=base_commit) +
+               f' HEAD: {base_commit}')
 
 
 @main.command()

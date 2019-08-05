@@ -269,7 +269,7 @@ class Remotes(object):
                    branch: str = None,
                    commit: str = None,
                    *,
-                   dataset_names: Optional[Sequence[str]] = None,
+                   cellstore_names: Optional[Sequence[str]] = None,
                    max_num_bytes: int = None,
                    retrieve_all_history: bool = False) -> List[str]:
         '''Retrieve the data for some commit which exists in a `partial` state.
@@ -346,10 +346,10 @@ class Remotes(object):
                             while notEmpty:
                                 notEmpty = curs.delete()
                     commiting.unpack_commit_ref(self._env.refenv, tmpDB, commit)
-                    # dataset_names option
-                    if dataset_names is not None:
-                        for dsetn in dataset_names:
-                            cmtData_hashs = queries.RecordQuery(tmpDB).dataset_data_hashes(dsetn)
+                    # cellstore_names option
+                    if cellstore_names is not None:
+                        for dsetn in cellstore_names:
+                            cmtData_hashs = queries.RecordQuery(tmpDB).cellstore_data_hashes(dsetn)
                             allHashs.update(cmtData_hashs)
                     else:
                         cmtData_hashs = queries.RecordQuery(tmpDB).data_hashes()

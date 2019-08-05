@@ -62,7 +62,7 @@ class ContentWriter(object):
         return ret
 
     def schema(self, schema_hash: str, schemaVal: bytes) -> Union[str, bool]:
-        '''Write a dataset schema hash specification record to the db
+        '''Write a cellstore schema hash specification record to the db
 
         Parameters
         ----------
@@ -120,7 +120,7 @@ class ContentWriter(object):
             schemaVal = hashTxn.get(schemaKey)
         finally:
             TxnRegister().abort_reader_txn(self.env.hashenv)
-        schema_val = parsing.dataset_record_schema_raw_val_from_db_val(schemaVal)
+        schema_val = parsing.cellstore_record_schema_raw_val_from_db_val(schemaVal)
 
         usedBackend = backend if backend else schema_val.schema_default_backend
         accessor = BACKEND_ACCESSOR_MAP[usedBackend]

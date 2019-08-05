@@ -6,7 +6,7 @@ from .. import constants as c
 from . import parsing
 from .parsing import RawDataRecordKey, RawDataRecordVal
 from .parsing import MetadataRecordKey, MetadataRecordVal
-from .parsing import RawDatasetSchemaVal
+from .parsing import RawCellstoreSchemaVal
 from ..context import TxnRegister
 
 RawDataTuple = Tuple[RawDataRecordKey, RawDataRecordVal]
@@ -67,8 +67,8 @@ class RecordQuery(object):
 
         return metadataRecords
 
-    def _traverse_dataset_schema_records(self) -> Dict[bytes, bytes]:
-        '''Internal method to travers all the schema records and pull out keys/db_values
+    def _traverse_cellstore_schema_records(self) -> Dict[bytes, bytes]:
+        '''Internal method to traverse all schema records and pull out k/v db pairs.
 
         Returns
         -------
@@ -94,17 +94,18 @@ class RecordQuery(object):
 
         return schemaRecords
 
-    def _traverse_dataset_data_records(self, dataset_name) -> Dict[bytes, bytes]:
-        '''Internal method to traverse dataset data records and get keys/db_values
+    def _traverse_cellstore_data_records(self, cellstore_name) -> Dict[bytes, bytes]:
+        '''Internal method to traverse cellstore data records and get keys/db_values
 
-        The datset name is required because this method controls the cursor movement by
-        first setting it's position on the dataset record count key, reading it's value
-        "N" and then sequentially pulling records out of the db for N loops.
+        The cellstore name is required because this method controls the cursor
+        movement by first setting it's position on the cellstore record count
+        key, reading it's value "N" and then sequentially pulling records out of
+        the db for N loops.
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to traverse records for.
+        cellstore_name : str
+            name of the cellstore to traverse records for.
 
         Returns
         -------
@@ -112,7 +113,7 @@ class RecordQuery(object):
             dict of db_key/db_values for each record traversed
         '''
         data_records = {}
-        startDsetRecCountRngK = parsing.dataset_record_count_db_key_from_raw_key(dataset_name)
+        startDsetRecCountRngK = parsing.cellstore_record_count_db_key_from_raw_key(cellstore_name)
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
@@ -133,85 +134,85 @@ class RecordQuery(object):
 
         return data_records
 
-# ------------------------- process datasets --------------------------------------------
+# ------------------------- process cellstores --------------------------------------------
 
-    def dataset_names(self) -> List[str]:
-        '''Find all named datasets in the checkout
+    def cellstore_names(self) -> List[str]:
+        '''Find all named cellstores in the checkout
 
         Returns
         -------
         List[str]
-            list of all dataset names
+            list of all cellstore names
         '''
-        recs = self._traverse_dataset_schema_records()
-        dataset_names = list(map(parsing.dataset_record_schema_raw_key_from_db_key, recs.keys()))
-        return dataset_names
+        recs = self._traverse_cellstore_schema_records()
+        cellstore_names = map(parsing.cellstore_record_schema_raw_key_from_db_key, recs.keys())
+        return list(cellstore_names)
 
-    def dataset_data_records(self, dataset_name: str) -> Iterable[RawDataTuple]:
-        '''Returns the raw data record key and record values for a specific dataset.
+    def cellstore_data_records(self, cellstore_name: str) -> Iterable[RawDataTuple]:
+        '''Returns the raw data record key and record values for a specific cellstore.
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to pull records for
+        cellstore_name : str
+            name of the cellstore to pull records for
 
         Yields
         ------
         tuple
             generator of key and value data record specs
         '''
-        recs = self._traverse_dataset_data_records(dataset_name)
+        recs = self._traverse_cellstore_data_records(cellstore_name)
         if len(recs) > 0:
             data_rec_keys = map(parsing.data_record_raw_key_from_db_key, recs.keys())
             data_rec_vals = map(parsing.data_record_raw_val_from_db_val, recs.values())
             recs = zip(data_rec_keys, data_rec_vals)
         return recs
 
-    def dataset_data_names(self, dataset_name):
-        '''Find all data names contained within a dataset.
+    def cellstore_data_names(self, cellstore_name):
+        '''Find all data names contained within a cellstore.
 
-        If you need both names, and hash values, call the `dataset_data_records`
+        If you need both names, and hash values, call the `cellstore_data_records`
         function. The underlying cost of searching the db is identical, this just provides
         a pretty filter on top.
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to retrieve names for
+        cellstore_name : str
+            name of the cellstore to retrieve names for
 
         Returns
         -------
         list of str
-            list of data names contained in the dataset
+            list of data names contained in the cellstore
         '''
-        recs = self._traverse_dataset_data_records(dataset_name)
+        recs = self._traverse_cellstore_data_records(cellstore_name)
         data_key_rec = map(parsing.data_record_raw_key_from_db_key, recs.keys())
         data_names = list(map(lambda x: x.data_name, data_key_rec))
         return data_names
 
-    def dataset_data_hashes(self, dataset_name: str) -> Set[RawDataRecordVal]:
-        '''Find all data hashes contained within a particular dataset
+    def cellstore_data_hashes(self, cellstore_name: str) -> Set[RawDataRecordVal]:
+        '''Find all data hashes contained within a particular cellstore
 
         Note: this method does not remove any duplicates which may be present,
         if dedup is required, process it downstream
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to find the hashes contained in
+        cellstore_name : str
+            name of the cellstore to find the hashes contained in
 
         Returns
         -------
         list
-            all hash values for all data pieces in the dataset
+            all hash values for all data pieces in the cellstore
         '''
-        recs = self._traverse_dataset_data_records(dataset_name)
+        recs = self._traverse_cellstore_data_records(cellstore_name)
         data_val_rec = map(parsing.data_record_raw_val_from_db_val, recs.values())
         all_hashes = set(data_val_rec)
         return all_hashes
 
     def data_hashes(self) -> Set[RawDataRecordVal]:
-        '''Find all data hashes contained within all datasets
+        '''Find all data hashes contained within all cellstores
 
         Note: this method does not remove any duplicates which may be present,
         if dedup is required, process it downstream
@@ -221,18 +222,18 @@ class RecordQuery(object):
         list
             all hash values for all data pieces in the commit
         '''
-        datasets = self.dataset_names()
+        cellstores = self.cellstore_names()
         all_hashes = set()
-        for dataset in datasets:
-            recs = self._traverse_dataset_data_records(dataset)
+        for cellstore in cellstores:
+            recs = self._traverse_cellstore_data_records(cellstore)
             data_val_rec = set(map(parsing.data_record_raw_val_from_db_val, recs.values()))
             all_hashes.update(data_val_rec)
         return all_hashes
 
 # ------------------------- process schema ----------------------------------------------
 
-    def dataset_schema_spec(self, dataset_name) -> RawDatasetSchemaVal:
-        '''Return the schema spec for a specific dataset name.
+    def cellstore_schema_spec(self, cellstore_name) -> RawCellstoreSchemaVal:
+        '''Return the schema spec for a specific cellstore name.
 
         If you need both names, and schema spec values, use the `schema_specs` method. The
         underlying cost of searching the db is identical, and this is just a useful filter
@@ -240,33 +241,33 @@ class RecordQuery(object):
 
         Parameters
         ----------
-        dataset_name : str
-            name of the dataset to get the schema for
+        cellstore_name : str
+            name of the cellstore to get the schema for
 
         Returns
         -------
-        RawDatasetSchemaVal
-            raw schema spec for the dataset requested
+        RawCellstoreSchemaVal
+            raw schema spec for the cellstore requested
         '''
-        recs = self._traverse_dataset_schema_records()
-        dsetSchemaKey = parsing.dataset_record_schema_db_key_from_raw_key(dataset_name)
+        recs = self._traverse_cellstore_schema_records()
+        dsetSchemaKey = parsing.cellstore_record_schema_db_key_from_raw_key(cellstore_name)
         schemaRecVal = recs[dsetSchemaKey]
-        schemaRec = parsing.dataset_record_schema_raw_val_from_db_val(schemaRecVal)
+        schemaRec = parsing.cellstore_record_schema_raw_val_from_db_val(schemaRecVal)
         return schemaRec
 
-    def schema_specs(self) -> Dict[str, RawDatasetSchemaVal]:
-        '''Return the all schema specs defined by all datasets.
+    def schema_specs(self) -> Dict[str, RawCellstoreSchemaVal]:
+        '''Return the all schema specs defined by all cellstores.
 
         Returns
         -------
         Dict[str, RawDataSchemaVal]
-            dict of dataset names: raw schema spec for each dataset schema
+            dict of cellstore names: raw schema spec for each cellstore schema
         '''
-        recs = self._traverse_dataset_schema_records()
+        recs = self._traverse_cellstore_schema_records()
         if len(recs) > 0:
-            schema_rec_keys = map(parsing.dataset_record_schema_raw_key_from_db_key, recs.keys())
-            schema_rec_vals = map(parsing.dataset_record_schema_raw_val_from_db_val, recs.values())
-            recs = dict(zip(schema_rec_keys, schema_rec_vals))
+            schKeys = map(parsing.cellstore_record_schema_raw_key_from_db_key, recs.keys())
+            schVals = map(parsing.cellstore_record_schema_raw_val_from_db_val, recs.values())
+            recs = dict(zip(schKeys, schVals))
         return recs
 
     def schema_hashes(self) -> List[str]:
@@ -277,10 +278,10 @@ class RecordQuery(object):
         List[str]
             list of all schema hash digests
         '''
-        recs = self._traverse_dataset_schema_records()
+        recs = self._traverse_cellstore_schema_records()
         all_schema_hashes = []
         if len(recs) > 0:
-            schema_rec_vals = map(parsing.dataset_record_schema_raw_val_from_db_val, recs.values())
+            schema_rec_vals = map(parsing.cellstore_record_schema_raw_val_from_db_val, recs.values())
             schema_hashs = map(lambda x: x.schema_hash, schema_rec_vals)
             all_schema_hashes.extend(schema_hashs)
         return all_schema_hashes
@@ -293,11 +294,11 @@ class RecordQuery(object):
         Dict[str, str]
             mapping of sample hash to dset_schema_hash
         '''
-        dsetns = self.dataset_names()
+        dsetns = self.cellstore_names()
         odict = {}
         for dsetn in dsetns:
-            dset_hash_vals = self.dataset_data_hashes(dsetn)
-            dset_schema_spec = self.dataset_schema_spec(dsetn)
+            dset_hash_vals = self.cellstore_data_hashes(dsetn)
+            dset_schema_spec = self.cellstore_schema_spec(dsetn)
             dset_schema_hash = dset_schema_spec.schema_hash
             for dset_hash_val in dset_hash_vals:
                 odict[dset_hash_val.data_hash] = dset_schema_hash
@@ -316,7 +317,7 @@ class RecordQuery(object):
         Returns
         -------
         List[str]
-            list of metadata names contained in the dataset
+            list of metadata names contained in the checkout
         '''
         recs = self._traverse_metadata_records()
         if len(recs) > 0:
@@ -370,20 +371,20 @@ class RecordQuery(object):
         Returns
         -------
         dict
-            dict with primary keys: 'datasetes', 'metadata'; with datasets nesting
+            dict with primary keys: 'cellstores', 'metadata'; with cellstores nesting
             'schema' and 'data' keys/values inside
         '''
-        dset_names = self.dataset_names()
+        dset_names = self.cellstore_names()
         schema_records = self.schema_specs()
         dsetRecs = {}
         for dsetName in dset_names:
             dsetRecs[dsetName] = {
                 'schema': schema_records[dsetName],
-                'data': dict(self.dataset_data_records(dsetName)),
+                'data': dict(self.cellstore_data_records(dsetName)),
             }
 
         res = {
-            'datasets': dsetRecs,
+            'cellstores': dsetRecs,
             'metadata': dict(self.metadata_records()),
         }
         return res

@@ -20,6 +20,7 @@ def test_starting_up_repo_warns_should_exist_no_args(managed_tmpdir):
     co.close()
     repo._env._close_environments()
 
+
 def test_starting_up_repo_warns_should_exist_manual_args(managed_tmpdir):
     with pytest.warns(UserWarning):
         repo = Repository(path=managed_tmpdir, exists=True)
@@ -56,15 +57,15 @@ def test_initial_read_checkout(managed_tmpdir):
     repo._env._close_environments()
 
 
-def test_initial_dataset(managed_tmpdir, randomsizedarray):
+def test_initial_cellstore(managed_tmpdir, randomsizedarray):
     repo = Repository(path=managed_tmpdir, exists=False)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
 
     w_checkout = repo.checkout(write=True)
-    assert len(w_checkout.datasets) == 0
+    assert len(w_checkout.cellstores) == 0
     with pytest.raises(KeyError):
-        w_checkout.datasets['dset']
-    dset = w_checkout.datasets.init_dataset('dset', prototype=randomsizedarray)
+        w_checkout.cellstores['dset']
+    dset = w_checkout.cellstores.init_cellstore('dset', prototype=randomsizedarray)
     assert dset._dsetn == 'dset'
     w_checkout.close()
     repo._env._close_environments()

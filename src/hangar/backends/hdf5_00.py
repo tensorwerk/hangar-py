@@ -226,8 +226,8 @@ class HDF5_00_FileHandles(object):
     '''Manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
-    "writeable" state. This is an issue where multiple datasets may need to
-    write to the same dataset schema.
+    "writeable" state. This is an issue where multiple cellstores may need to
+    write to the same cellstore schema.
     '''
 
     def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
@@ -471,7 +471,7 @@ class HDF5_00_FileHandles(object):
         return (chunk_shape, chunk_nbytes)
 
     def _create_schema(self, *, remote_operation: bool = False):
-        '''stores the shape and dtype as the schema of a dataset.
+        '''stores the shape and dtype as the schema of a cellstore.
 
         Parameters
         ----------

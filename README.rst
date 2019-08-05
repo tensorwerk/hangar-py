@@ -67,7 +67,7 @@ and creating home-brewed version control systems for data. At it's core Hangar
 is designed to solve many of the same problems faced by traditional code version
 control system (ie. ``Git``), just adapted for numerical data:
 
-* Time travel through the historical evolution of a dataset
+* Time travel through the historical evolution of a dataset.
 * Zero-cost Branching to enable exploratory analysis and collaboration
 * Cheap Merging to build datasets over time (with multiple collaborators)
 * Completely abstracted organization and management of data files on disk
@@ -92,7 +92,7 @@ The Hangar Workflow:
        Checkout Branch
               |
               ▼
-     Create/Access Datasets
+     Create/Access Data
               |
               ▼
     Add/Remove/Update Samples

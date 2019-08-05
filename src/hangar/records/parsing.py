@@ -257,8 +257,8 @@ being the checkout objects ability to perform write operations.
 
 The following records can be parsed:
     * data records
-    * dataset count records
-    * dataset schema records
+    * cellstore count records
+    * cellstore schema records
     * metadata records
     * metadata count records
 '''
@@ -277,14 +277,14 @@ RawDataRecordVal = NamedTuple('RawDataRecordVal', [
 RawDataRecordVal.__doc__ = 'Represents a Data Sample Record Hash Value'
 
 
-RawDatasetSchemaVal = NamedTuple('RawDatasetSchemaVal', [
+RawCellstoreSchemaVal = NamedTuple('RawCellstoreSchemaVal', [
     ('schema_hash', str),
     ('schema_dtype', int),
     ('schema_is_var', bool),
     ('schema_max_shape', tuple),
     ('schema_is_named', bool),
     ('schema_default_backend', str)])
-RawDatasetSchemaVal.__doc__ = 'Information Specifying a Dataset Schema'
+RawCellstoreSchemaVal.__doc__ = 'Information Specifying a Cellstore Schema'
 
 '''
 Parsing functions to convert lmdb data record keys/vals to/from python vars
@@ -340,7 +340,7 @@ def data_record_db_key_from_raw_key(dset_name: str, data_name: Union[str, int]) 
     Parameters
     ----------
     dset_name : string
-        name of the dataset for the record
+        name of the cellstore for the record
     data_name : Union[string, int]
         name of the data sample for the record
 
@@ -374,19 +374,19 @@ def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
 
 
 '''
-Functions to convert dataset count records to/from python objects.
+Functions to convert cellstore count records to/from python objects.
 ------------------------------------------------------------------
 '''
 
 # ------------------ raw count -> db dset record count  --------------------
 
 
-def dataset_record_count_db_key_from_raw_key(dset_name):
+def cellstore_record_count_db_key_from_raw_key(dset_name):
     db_record_count_key = f'{c.K_STGARR}{dset_name}'.encode()
     return db_record_count_key
 
 
-def dataset_record_count_db_val_from_raw_val(dset_record_count):
+def cellstore_record_count_db_val_from_raw_val(dset_record_count):
     db_record_count_val = f'{dset_record_count}'.encode()
     return db_record_count_val
 
@@ -394,31 +394,31 @@ def dataset_record_count_db_val_from_raw_val(dset_record_count):
 # ------------------ db dset record count -> raw count --------------------
 
 
-def dataset_record_count_raw_key_from_db_key(db_key):
+def cellstore_record_count_raw_key_from_db_key(db_key):
     dset_name = db_key.decode().replace(c.K_STGARR, '', 1)
     return dset_name
 
 
-def dataset_record_count_raw_val_from_db_val(db_val):
+def cellstore_record_count_raw_val_from_db_val(db_val):
     record_count = int(db_val.decode())
     return record_count
 
 
 '''
-Functions to convert dataset schema records to/from python objects.
+Functions to convert cellstore schema records to/from python objects.
 --------------------------------------------------------------------
 '''
 
 # ----------------- raw schema -> db schema -----------------------------
 
 
-def dataset_record_schema_db_key_from_raw_key(dset_name):
-    '''Get the db schema key for a named dataset
+def cellstore_record_schema_db_key_from_raw_key(dset_name):
+    '''Get the db schema key for a named cellstore
 
     Parameters
     ----------
     dset_name : string
-        the name of the dataset whose schema is found.
+        the name of the cellstore whose schema is found.
 
     Returns
     -------
@@ -429,29 +429,29 @@ def dataset_record_schema_db_key_from_raw_key(dset_name):
     return db_schema_key
 
 
-def dataset_record_schema_db_val_from_raw_val(schema_hash,
-                                              schema_is_var, schema_max_shape,
-                                              schema_dtype, schema_is_named,
-                                              schema_default_backend):
-    '''Format the db_value which includes all details of the dataset schema.
+def cellstore_record_schema_db_val_from_raw_val(schema_hash,
+                                                schema_is_var, schema_max_shape,
+                                                schema_dtype, schema_is_named,
+                                                schema_default_backend):
+    '''Format the db_value which includes all details of the cellstore schema.
 
     Parameters
     ----------
     schema_hash : string
         The hash of the schema calculated at initialization.
     schema_is_var : bool
-        Are samples in the dataset variable shape or not?
+        Are samples in the cellstore variable shape or not?
     schema_max_shape : tuple of ints (size along each dimension)
-        The maximum shape of the data pieces. For fixed shape datasets, all
+        The maximum shape of the data pieces. For fixed shape cellstores, all
         input tensors must have the same dimension size and rank as this
-        specification. For variable-shape datasets, tensor rank must match, but
+        specification. For variable-shape cellstores, tensor rank must match, but
         the size of each dimension may be less than or equal to the
         corresponding dimension here.
     schema_dtype : int
-        The datatype numeric code (`np.dtype.num`) of the dataset. All input
+        The datatype numeric code (`np.dtype.num`) of the cellstore. All input
         tensors must exactally match this datatype.
     schema_is_named : bool
-        Are samples in the datasets identifiable with names, or not.
+        Are samples in the cellstores identifiable with names, or not.
     schema_default_backend : str
         backend specification for the schema default backend.
 
@@ -474,32 +474,32 @@ def dataset_record_schema_db_val_from_raw_val(schema_hash,
 
 # -------------- db schema -> raw schema -------------------------------
 
-def dataset_record_schema_raw_key_from_db_key(db_key: bytes) -> str:
+def cellstore_record_schema_raw_key_from_db_key(db_key: bytes) -> str:
     dset_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
     return dset_name
 
 
-def dataset_record_schema_raw_val_from_db_val(db_val: bytes) -> RawDatasetSchemaVal:
+def cellstore_record_schema_raw_val_from_db_val(db_val: bytes) -> RawCellstoreSchemaVal:
     schema_spec = json.loads(db_val)
     schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
-    raw_val = RawDatasetSchemaVal(**schema_spec)
+    raw_val = RawCellstoreSchemaVal(**schema_spec)
     return raw_val
 
 
 '''
-Functions to convert total daset count records to/from python objects
+Functions to convert total dset count records to/from python objects
 ---------------------------------------------------------------------
 '''
 
 # ------------------------ raw -> db ------------------------------------------
 
 
-def dataset_total_count_db_key() -> bytes:
+def cellstore_total_count_db_key() -> bytes:
     db_key = c.K_STGARR.encode()
     return db_key
 
 
-def dataset_total_count_db_val_from_raw_val(number_of_dsets: int) -> bytes:
+def cellstore_total_count_db_val_from_raw_val(number_of_dsets: int) -> bytes:
     db_val = f'{number_of_dsets}'.encode()
     return db_val
 
@@ -507,7 +507,7 @@ def dataset_total_count_db_val_from_raw_val(number_of_dsets: int) -> bytes:
 # --------------------------- db -> raw ---------------------------------------
 
 
-def dataset_total_count_raw_val_from_db_val(db_val: bytes) -> int:
+def cellstore_total_count_raw_val_from_db_val(db_val: bytes) -> int:
     raw_val = int(db_val.decode())
     return raw_val
 

@@ -7,7 +7,7 @@ import lmdb
 from .records import commiting, heads
 from .records.parsing import (MetadataRecordKey, MetadataRecordVal,
                               RawDataRecordKey, RawDataRecordVal,
-                              RawDatasetSchemaVal)
+                              RawCellstoreSchemaVal)
 from .records.queries import RecordQuery
 
 HistoryDiffStruct = NamedTuple('HistoryDiffStruct', [('masterHEAD', str),
@@ -158,7 +158,7 @@ class WriterUserDiff(BaseUserDiff):
         '''Determine if changes have been made in the staging area
 
         If the contents of the staging area and it's parent commit are the same,
-        the status is said to be "CLEAN". If even one dataset or metadata record
+        the status is said to be "CLEAN". If even one cellstore or metadata record
         has changed however, the status is "DIRTY".
 
         Returns
@@ -249,7 +249,7 @@ class WriterUserDiff(BaseUserDiff):
         Returns
         -------
         dict
-            contains all `addition`, `mutation`, `removals` and `unchanged` datasets
+            contains all `addition`, `mutation`, `removals` and `unchanged` cellstores
             schema, samples, and metadata references in the current staging area.
         '''
         commit_hash = heads.get_branch_head_commit(self._branchenv, self._branch_name)
@@ -402,10 +402,10 @@ def _meta_mutation_finder(a_unchanged_kv: MetaRecordKV,
     mutations = set([MetadataRecordKey(m.meta_key) for m in arecs.difference(drecs)])
     return mutations
 
-# -------------------- Dataset Schemas Differ ---------------------------------
+# -------------------- Cellstore Schemas Differ ---------------------------------
 
 
-DatasetSchemaRecord = NamedTuple('DatasetSchemaRecord', [
+CellstoreSchemaRecord = NamedTuple('CellstoreSchemaRecord', [
     ('dset_name', str),
     ('schema_hash', str),
     ('schema_dtype', int),
@@ -413,46 +413,46 @@ DatasetSchemaRecord = NamedTuple('DatasetSchemaRecord', [
     ('schema_max_shape', tuple),
     ('schema_is_named', bool),
 ])
-DatasetSchemaKV = Dict[str, RawDatasetSchemaVal]
+CellstoreSchemaKV = Dict[str, RawCellstoreSchemaVal]
 
 
-def _isolate_dset_schemas(dataset_specs: Dict[str, dict]) -> DatasetSchemaKV:
-    '''Isolate only the schema specification from a full dataset records dict.
+def _isolate_dset_schemas(cellstore_specs: Dict[str, dict]) -> CellstoreSchemaKV:
+    '''Isolate only the schema specification from a full cellstore records dict.
 
     Parameters
     ----------
-    dataset_specs :  Dict[str, dict]
-        dict containing both dataset names and keys of `schema` and `data`
-        record specification for any number of datasets
+    cellstore_specs :  Dict[str, dict]
+        dict containing both cellstore names and keys of `schema` and `data`
+        record specification for any number of cellstores
 
     Returns
     -------
-    DatasetSchemaKV
-        containing keys for dataset names and values of the schema specification
+    CellstoreSchemaKV
+        containing keys for cellstore names and values of the schema specification
     '''
     schemas_dict = {}
-    for k, v in dataset_specs.items():
+    for k, v in cellstore_specs.items():
         schemas_dict[k] = v['schema']
     return schemas_dict
 
 
-def _schema_dict_to_nt(record_dict: Dict[str, DatasetSchemaRecord]) -> Set[DatasetSchemaRecord]:
+def _schema_dict_to_nt(record_dict: Dict[str, CellstoreSchemaRecord]) -> Set[CellstoreSchemaRecord]:
     '''Convert schema records specification dict into set of named tuples
 
     Parameters
     ----------
     record_dict : dict
-        dict containing keys for dataset names and values as nested dicts of the
+        dict containing keys for cellstore names and values as nested dicts of the
         schema specification
 
     Returns
     -------
-    Set[DatasetSchemaRecord]
-        of nametuples each recording a dataset schema specification
+    Set[CellstoreSchemaRecord]
+        of nametuples each recording a cellstore schema specification
     '''
     records = set()
     for k, v in record_dict.items():
-        rec = DatasetSchemaRecord(
+        rec = CellstoreSchemaRecord(
             dset_name=k,
             schema_hash=v.schema_hash,
             schema_dtype=v.schema_dtype,
@@ -465,7 +465,7 @@ def _schema_dict_to_nt(record_dict: Dict[str, DatasetSchemaRecord]) -> Set[Datas
 
 def _schema_mutation_finder(sch_nt_func, a_unchanged_kv: dict,
                             d_unchanged_kv: dict) -> Set[str]:
-    '''Determine mutated dataset schemas between an ancestor and dev commit
+    '''Determine mutated cellstore schemas between an ancestor and dev commit
 
     Parameters
     ----------
@@ -473,16 +473,16 @@ def _schema_mutation_finder(sch_nt_func, a_unchanged_kv: dict,
         function to be used to convert the schema specification dict into set of
         named tuples
     a_unchanged_kv : dict
-        containing dataset names as keys and nested dictionary (specifying
+        containing cellstore names as keys and nested dictionary (specifying
         schema parameters) as the value for the ancestor commit
     d_unchanged_kv : dict
-        containing dataset names as keys and nested dictionary (specifying
+        containing cellstore names as keys and nested dictionary (specifying
         schema parameters) as the value for the dev commit
 
     Returns
     -------
     Set[str]
-        of mutated dataset names whose schemas mutated
+        of mutated cellstore names whose schemas mutated
     '''
     arecords = sch_nt_func(a_unchanged_kv)
     drecords = sch_nt_func(d_unchanged_kv)
@@ -571,7 +571,7 @@ class ThreeWayCommitDiffer(object):
         self.ad_sampD: MutableMapping[str, DifferBase] = {}
 
         self._meta_diff()
-        self._dataset_diff()
+        self._cellstore_diff()
         self._sample_diff()
 
     # -------------------- Metadata Diff / Conflicts --------------------------
@@ -630,22 +630,22 @@ class ThreeWayCommitDiffer(object):
         }
         return out
 
-    # -------------------- Dataset Diff / Conflicts ---------------------------
+    # -------------------- Cellstore Diff / Conflicts ---------------------------
 
-    def _dataset_diff(self):
+    def _cellstore_diff(self):
 
         mutFunc = partial(_schema_mutation_finder, sch_nt_func=_schema_dict_to_nt)
         self.am_dsetD = DifferBase(mut_func=mutFunc)
-        self.am_dsetD.a_data = _isolate_dset_schemas(self.acont['datasets'])
-        self.am_dsetD.d_data = _isolate_dset_schemas(self.mcont['datasets'])
+        self.am_dsetD.a_data = _isolate_dset_schemas(self.acont['cellstores'])
+        self.am_dsetD.d_data = _isolate_dset_schemas(self.mcont['cellstores'])
         self.am_dsetD.compute()
 
         self.ad_dsetD = DifferBase(mut_func=mutFunc)
-        self.ad_dsetD.a_data = _isolate_dset_schemas(self.acont['datasets'])
-        self.ad_dsetD.d_data = _isolate_dset_schemas(self.dcont['datasets'])
+        self.ad_dsetD.a_data = _isolate_dset_schemas(self.acont['cellstores'])
+        self.ad_dsetD.d_data = _isolate_dset_schemas(self.dcont['cellstores'])
         self.ad_dsetD.compute()
 
-    def dataset_conflicts(self) -> ConflictRecords:
+    def cellstore_conflicts(self) -> ConflictRecords:
         '''
         t1: added in master & dev with different values
         t21: removed in master, mutated in dev
@@ -684,7 +684,7 @@ class ThreeWayCommitDiffer(object):
         res = ConflictRecords(**out)
         return res
 
-    def dataset_changes(self):
+    def cellstore_changes(self):
         out = {
             'master': self.am_dsetD.kv_diff_out(),
             'dev': self.ad_dsetD.kv_diff_out(),
@@ -700,18 +700,18 @@ class ThreeWayCommitDiffer(object):
         m_dsets = self.am_dsetD.unchanged.union(
             self.am_dsetD.additions).union(self.am_dsetD.mutations)
         for dset_name in m_dsets:
-            if dset_name in self.acont['datasets']:
-                a_dset_data = self.acont['datasets'][dset_name]['data']
+            if dset_name in self.acont['cellstores']:
+                a_dset_data = self.acont['cellstores'][dset_name]['data']
             else:
                 a_dset_data = {}
             self.am_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
             self.am_sampD[dset_name].a_data = a_dset_data
-            self.am_sampD[dset_name].d_data = self.mcont['datasets'][dset_name]['data']
+            self.am_sampD[dset_name].d_data = self.mcont['cellstores'][dset_name]['data']
             self.am_sampD[dset_name].compute()
 
         for dset_name in self.am_dsetD.removals:
             self.am_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.am_sampD[dset_name].a_data = self.acont['datasets'][dset_name]['data']
+            self.am_sampD[dset_name].a_data = self.acont['cellstores'][dset_name]['data']
             self.am_sampD[dset_name].d_data = {}
             self.am_sampD[dset_name].compute()
 
@@ -720,18 +720,18 @@ class ThreeWayCommitDiffer(object):
         d_dsets = self.ad_dsetD.unchanged.union(
             self.ad_dsetD.additions).union(self.ad_dsetD.mutations)
         for dset_name in d_dsets:
-            if dset_name in self.acont['datasets']:
-                a_dset_data = self.acont['datasets'][dset_name]['data']
+            if dset_name in self.acont['cellstores']:
+                a_dset_data = self.acont['cellstores'][dset_name]['data']
             else:
                 a_dset_data = {}
             self.ad_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
             self.ad_sampD[dset_name].a_data = a_dset_data
-            self.ad_sampD[dset_name].d_data = self.dcont['datasets'][dset_name]['data']
+            self.ad_sampD[dset_name].d_data = self.dcont['cellstores'][dset_name]['data']
             self.ad_sampD[dset_name].compute()
 
         for dset_name in self.ad_dsetD.removals:
             self.ad_sampD[dset_name] = DifferBase(mut_func=_samples_mutation_finder)
-            self.ad_sampD[dset_name].a_data = self.acont['datasets'][dset_name]['data']
+            self.ad_sampD[dset_name].a_data = self.acont['cellstores'][dset_name]['data']
             self.ad_sampD[dset_name].d_data = {}
             self.ad_sampD[dset_name].compute()
 
@@ -745,7 +745,7 @@ class ThreeWayCommitDiffer(object):
         out = {}
         all_dset_names = set(self.ad_sampD.keys()).union(set(self.am_sampD.keys()))
         for dsetn in all_dset_names:
-            # When dataset IN `dev` OR `master` AND NOT IN ancestor OR `other`.
+            # When cellstore IN `dev` OR `master` AND NOT IN ancestor OR `other`.
             try:
                 mdiff = self.am_sampD[dsetn]
             except KeyError:
@@ -798,7 +798,7 @@ class ThreeWayCommitDiffer(object):
     def all_changes(self, include_master: bool = True, include_dev: bool = True) -> dict:
 
         meta = self.meta_changes()
-        dsets = self.dataset_changes()
+        dsets = self.cellstore_changes()
         samples = self.sample_changes()
 
         if not include_master:
@@ -812,7 +812,7 @@ class ThreeWayCommitDiffer(object):
 
         res = {
             'metadata': meta,
-            'datasets': dsets,
+            'cellstores': dsets,
             'samples': samples,
         }
         return res
@@ -831,7 +831,7 @@ class ThreeWayCommitDiffer(object):
             containing conflict info in `dset`, `meta`, `sample` and `conflict_found`
             boolean field.
         '''
-        dset_confs = self.dataset_conflicts()
+        dset_confs = self.cellstore_conflicts()
         meta_confs = self.meta_conflicts()
         sample_confs = self.sample_conflicts()
 

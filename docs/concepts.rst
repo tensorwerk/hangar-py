@@ -15,7 +15,7 @@ At it's core hangar is designed to solve many of the same problems faced by
 traditional code version control system (ie. ``Git``), just adapted for
 numerical data:
 
-* Time travel through the historical evolution of a dataset
+* Time travel through the historical evolution of a dataset.
 * Zero-cost Branching to enable exploratory analysis and collaboration
 * Cheap Merging to build datasets over time (with multiple collaborators)
 * Completely abstracted organization and management of data files on disk
@@ -87,48 +87,48 @@ it gets, and this simplicity is what enables us to be unconstrained as we build
 abstractions and utilities to operate on it.
 
 
-Abstraction 1: What is a Dataset?
-=================================
+Abstraction 1: What is a Cellstore?
+===================================
 
-Let's get philosophical and talk about what a "Dataset" is. The word "Dataset"
-invokes some some meaning to humans; A dataset may a canonical name (like
+Let's get philosophical and talk about what a "Cellstore" is. The word "Cellstore"
+invokes some some meaning to humans; A cellstore may a canonical name (like
 "MNIST" or "CoCo"), it will have a source where it comes from, (ideally) it has a
 purpose for some real-world task, it will have people who build, aggregate, and
-nurture it, and most importantly a Dataset always contains pieces of some type
+nurture it, and most importantly a Cellstore always contains pieces of some type
 of information type which describes "something".
 
 It's an abstract definition, but it is only us, the humans behind the machine, which
 associate "Data" with some meaning in the real world; it is in the same vein
-which we associate a group of Data in a "Dataset" with some real world meaning.
+which we associate a group of Data in a "Cellstore" with some real world meaning.
 
-Our first abstraction is therefore the "Dataset": a grouping of some similar Data
-pieces. To define a "Dataset" in Hangar, we need only provide:
+Our first abstraction is therefore the "Cellstore": a grouping of some similar Data
+pieces. To define a "Cellstore" in Hangar, we need only provide:
 
 * a name
 * a type
 * a shape
 
-Abstraction 2: What Makes up a Dataset?
+Abstraction 2: What Makes up a Cellstore?
 =======================================
 
 The individual pieces of information ("Data") which are grouped together in a
-"Dataset" are called "Samples" in the Hangar vernacular. According to the
-specification set by our definition of a Dataset, all samples must be numeric
+"Cellstore" are called "Samples" in the Hangar vernacular. According to the
+specification set by our definition of a Cellstore, all samples must be numeric
 arrays with each having:
 
 1) Same data type (standard ``Numpy`` data types are supported).
 2) A shape with each dimension size <= the shape (``max shape``) set in the
-   dataset specification (more on this later).
+   cellstore specification (more on this later).
 
-Additionally, samples in a dataset can either be named, or unnamed (depending on
-how you interpret what the information contained in the Dataset actually
+Additionally, samples in a cellstore can either be named, or unnamed (depending on
+how you interpret what the information contained in the Cellstore actually
 represents).
 
 Effective use of Hangar relies on having an understanding of what exactly a
-"Sample" is in a particular Dataset. The most effective way to find out is to
+"Sample" is in a particular Cellstore. The most effective way to find out is to
 ask: "What is the smallest piece of data which has a useful meaning to 'me' (or
-'my' downstream processes". In the MNIST dataset, this would be a single digit
-image (a 28x28 array); for a medical dataset it might be an entire (512x320x320)
+'my' downstream processes". In the MNIST cellstore, this would be a single digit
+image (a 28x28 array); for a medical cellstore it might be an entire (512x320x320)
 MRI volume scan for a particular patient; while for the NASDAQ Stock Ticker it
 might be an hours worth of price data points (or less, or more!) The point is
 that when you think about what a sample is, it should typically be the smallest
@@ -158,7 +158,7 @@ time by various "Committers" across any number of "Branches". Though there are
 many conceptual similarities in what a Git repo and a Hangar Repository achieve,
 Hangar is designed with the express purpose of dealing with numeric data. As
 such, when you read/write to/from a Repository, the main way of interaction with
-information will be through (an arbitrary number of) Datasets in each Commit. A
+information will be through (an arbitrary number of) Cellstores in each Commit. A
 simple key/value store is also included to store metadata, but as it is a minor
 point is will largely be ignored for the rest of this post.
 
@@ -186,7 +186,7 @@ disk in some domain-specific - or custom built - binary format (ie. a ``.jpg``
 image, ``.nii`` neuroimaging informatics study, ``.cvs`` tabular data, etc.), and
 just deal with the hassle of maintaining all the infrastructure around reading,
 writing, transforming, and preprocessing these files into useable numerical data
-every time they want to interact with their Datasets. Even disregarding the
+every time they want to interact with their Cellstores. Even disregarding the
 computational cost/overhead of preprocessing & transforming the data on every
 read/write, these schemes require significant amounts of human capital
 (developer time) to be spent on building, testing, and upkeep/maintenance; all
@@ -212,7 +212,7 @@ over the past few decades.
 
 In a sense, the backend of Hangar serves two functions:
 
-1) Bookkeeping: recording information about about datasets, samples, commits, etc.
+1) Bookkeeping: recording information about about cellstores, samples, commits, etc.
 2) Data Storage: highly optimized interfaces which store and retrieve data from
    from disk through its backend utility.
 
@@ -228,7 +228,7 @@ deal of care has been taken to optimize parameters in the backend interface
 which affects performance and compression of data samples.
 
 The choice of backend to store a piece of data is selected automatically from
-heuristics based on the dataset specification, system details, and context of
+heuristics based on the cellstore specification, system details, and context of
 the storage service internal to Hangar. **As a user, this is completely
 transparent to you** in all steps of interacting with the repository. It does
 not require (or even accept) user specified configuration.
@@ -241,7 +241,7 @@ plans to potentially support more as needs arise):
 3) `TileDb <https://tiledb.io/>`_ (in development)
 
 
-Open Source Software Style Collaboration in Dataset Curation
+Open Source Software Style Collaboration in Cellstore Curation
 ============================================================
 
 Specialized Domain Knowledge is A Scarce Resource
@@ -250,7 +250,7 @@ Specialized Domain Knowledge is A Scarce Resource
 A common side effect of the `The Domain-Specific File Format Problem`_ is that
 anyone who wants to work with an organization's/project's data needs to not only
 have some domain expertise (so they can do useful things with the data), but
-they also need to have a non-trivial understanding of the projects dataset, file
+they also need to have a non-trivial understanding of the projects cellstore, file
 format, and access conventions / transformation pipelines. *In a world where
 highly specialized talent is already scarce, this phenomenon shrinks the pool of
 available collaborators dramatically.*
@@ -283,9 +283,9 @@ reasonable that they should be the ones to benefit from all that work.
     collaboration in todays world?
 
 The impetus for developing a tool like Hangar is the belief that if it is
-simple for anyone with domain knowledge to collaboratively curate datasets
+simple for anyone with domain knowledge to collaboratively curate cellstores
 containing information they care about, then they will.* Open source software
-development benefits everyone, we believe open source dataset curation can do
+development benefits everyone, we believe open source cellstore curation can do
 the same.
 
 How To Overcome The "Size" Problem
@@ -300,10 +300,10 @@ How To Overcome The "Size" Problem
     Repository <https://github.com/tensorwerk/hangar-py>`_
 
 Even if the greatest tool imaginable existed to version, branch, and merge
-datasets, it would face one massive problem which if it didn't solve would kill
+cellstores, it would face one massive problem which if it didn't solve would kill
 the project: *The size of data can very easily exceeds what can fit on (most)
 contributors laptops or personal workstations*. This section explains how Hangar
-can handle working with datasets which are prohibitively large to download or
+can handle working with cellstores which are prohibitively large to download or
 store on a single machine.
 
 As mentioned in `High Performance From Simplicity`_, under the hood Hangar deals
@@ -311,7 +311,7 @@ with "Data" and "Bookkeeping" completely separately. We've previously covered wh
 exactly we mean by Data in `How Hangar Thinks About Data`_, so we'll briefly
 cover the second major component of Hangar here. In short "Bookkeeping" describes
 everything about the repository. By everything, we do mean that the Bookkeeping
-records describe everything: all commits, parents, branches, datasets, samples,
+records describe everything: all commits, parents, branches, cellstores, samples,
 data descriptors, schemas, commit message, etc. Though complete, these records
 are fairly small (tens of MB in size for decently sized repositories with decent
 history), and are highly compressed for fast transfer between a Hangar
@@ -371,7 +371,7 @@ to the "change author's" intentions. Simply put: the new version is valid and
 what is expected by the authors.
 
 This concept of what it means to merge text does not generally map well to
-changes made in a dataset we'll explore why through this section, but look back
+changes made in a cellstore we'll explore why through this section, but look back
 to the philosophy of Data outlined in `How Hangar Thinks About Data`_ for
 inspiration as we begin. Remember, in the Hangar design a Sample is the smallest
 array which contains useful information. As any smaller selection of the sample
@@ -388,21 +388,21 @@ operations which can occur.
 
 :Addition:
 
-    An operation which creates a dataset, sample, or some metadata which
+    An operation which creates a cellstore, sample, or some metadata which
     did not previously exist in the relevant branch history.
 
 :Removal:
 
-    An operation which removes some dataset, a sample, or some metadata which
+    An operation which removes some cellstore, a sample, or some metadata which
     existed in the parent of the commit under consideration. (Note: removing a
-    dataset also removes all samples contained in it)
+    cellstore also removes all samples contained in it)
 
 :Mutation:
 
     An operation which sets: data to a sample, the value of some metadata key,
-    or a dataset schema, to a different value than what it had previously been
-    created with (Note: a dataset schema mutation is observed when a dataset is
-    removed, and a new dataset with the same name is created with a different
+    or a cellstore schema, to a different value than what it had previously been
+    created with (Note: a cellstore schema mutation is observed when a cellstore is
+    removed, and a new cellstore with the same name is created with a different
     dtype/shape, all in the same commit)
 
 Merging Changes
@@ -473,16 +473,16 @@ command by using the built in ``diff`` tools. When diffing commits, Hangar will
 provide a list of conflicts which it identifies. In general these fall into 4
 catagories:
 
-1) **Additions** in both branches which created new keys (samples / datasets /
+1) **Additions** in both branches which created new keys (samples / cellstores /
    metadata) with non-compatible values. For samples & metadata, the hash of the
-   data is compared, for datasets, the schema specification is checked for
+   data is compared, for cellstores, the schema specification is checked for
    compatibility in a method custom to the internal workings of Hangar.
 2) **Removal** in ``Master Commit/Branch`` **& Mutation** in ``Dev Commit/Branch``.
-   Applies for samples, datasets, and metadata identically.
+   Applies for samples, cellstores, and metadata identically.
 3) **Mutation** in ``Dev Commit/Branch`` **& Removal** in ``Master Commit/Branch``.
-   Applies for samples, datasets, and metadata identically.
+   Applies for samples, cellstores, and metadata identically.
 4) **Mutations** on keys both branches to non-compatible values. For samples &
-   metadata, the hash of the data is compared, for datasets, the schema
+   metadata, the hash of the data is compared, for cellstores, the schema
    specification is checked for compatibility in a method custom to the internal
    workings of Hangar.
 

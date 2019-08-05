@@ -22,18 +22,18 @@ Write Enabled Checkout
    :members:
    :exclude-members: __init__
 
-Datasets
---------
+Cellstores
+----------
 
-.. autoclass:: hangar.dataset.Datasets()
+.. autoclass:: hangar.cellstore.Cellstores()
    :members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-Dataset Data
-------------
+Cellstore Data
+--------------
 
-.. autoclass:: hangar.dataset.DatasetDataWriter()
+.. autoclass:: hangar.cellstore.CellstoreDataWriter()
    :members:
    :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
@@ -63,18 +63,18 @@ Read Only Checkout
    :members:
    :exclude-members: __init__
 
-Datasets
---------
+Cellstores
+----------
 
-.. autoclass:: hangar.dataset.Datasets()
+.. autoclass:: hangar.cellstore.Cellstores()
    :members: keys, values, items, get, iswriteable
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-Dataset Data
-------------
+Cellstore Data
+--------------
 
-.. autoclass:: hangar.dataset.DatasetDataReader()
+.. autoclass:: hangar.cellstore.CellstoreDataReader()
    :members:
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__

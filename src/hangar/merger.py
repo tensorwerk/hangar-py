@@ -336,7 +336,7 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     Returns
     -------
     dict
-        nested dict specifying datasets and metadata record specs of the new
+        nested dict specifying cellstores and metadata record specs of the new
         merge commit.
 
     Raises
@@ -351,24 +351,24 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
         msg = f'HANGAR VALUE ERROR:: Merge ABORTED with conflict: {confs}'
         raise ValueError(msg) from None
 
-    # merging: dataset schemas
+    # merging: cellstore schemas
     m_schema_dict = {}
-    for dsetn in m_cont['datasets']:
-        m_schema_dict[dsetn] = m_cont['datasets'][dsetn]['schema']
-    o_schema_dict = _merge_changes(cmtDiffer.dataset_changes(), m_schema_dict)
+    for dsetn in m_cont['cellstores']:
+        m_schema_dict[dsetn] = m_cont['cellstores'][dsetn]['schema']
+    o_schema_dict = _merge_changes(cmtDiffer.cellstore_changes(), m_schema_dict)
 
-    # merging: dataset samples
+    # merging: cellstore samples
     o_data_dict = {}
     sample_changes = cmtDiffer.sample_changes()
     for dsetn in o_schema_dict:
-        if dsetn not in m_cont['datasets']:
-            o_data_dict[dsetn] = d_cont['datasets'][dsetn]['data']
+        if dsetn not in m_cont['cellstores']:
+            o_data_dict[dsetn] = d_cont['cellstores'][dsetn]['data']
             continue
         else:
-            m_dsetn_data_dict = m_cont['datasets'][dsetn]['data']
+            m_dsetn_data_dict = m_cont['cellstores'][dsetn]['data']
 
-        if dsetn not in d_cont['datasets']:
-            o_data_dict[dsetn] = m_cont['datasets'][dsetn]['data']
+        if dsetn not in d_cont['cellstores']:
+            o_data_dict[dsetn] = m_cont['cellstores'][dsetn]['data']
             continue
 
         dset_sample_changes = {
@@ -383,9 +383,9 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     # collect all merge results into final data structure
     outDict = {}
     outDict['metadata'] = o_meta_dict
-    outDict['datasets'] = {}
+    outDict['cellstores'] = {}
     for dsetn, dsetSchema in o_schema_dict.items():
-        outDict['datasets'][dsetn] = {
+        outDict['cellstores'][dsetn] = {
             'schema': dsetSchema,
             'data': o_data_dict[dsetn]
         }
@@ -404,7 +404,7 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
     Parameters
     ----------
     patchedRecs : dict
-        nested dict which specifies all records for datasets & metadata
+        nested dict which specifies all records for cellstores & metadata
 
     Returns
     -------
@@ -414,15 +414,15 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
         that an lmdb `putmulti` operation can be performed with `append=True`.
     '''
     entries = []
-    numDsetsKey = parsing.dataset_total_count_db_key()
-    numDsetsVal = parsing.dataset_total_count_db_val_from_raw_val(
-        number_of_dsets=len(patchedRecs['datasets'].keys()))
+    numDsetsKey = parsing.cellstore_total_count_db_key()
+    numDsetsVal = parsing.cellstore_total_count_db_val_from_raw_val(
+        number_of_dsets=len(patchedRecs['cellstores'].keys()))
     entries.append((numDsetsKey, numDsetsVal))
 
-    for dsetn in patchedRecs['datasets'].keys():
-        schemaSpec = patchedRecs['datasets'][dsetn]['schema']
-        schemaKey = parsing.dataset_record_schema_db_key_from_raw_key(dsetn)
-        schemaVal = parsing.dataset_record_schema_db_val_from_raw_val(
+    for dsetn in patchedRecs['cellstores'].keys():
+        schemaSpec = patchedRecs['cellstores'][dsetn]['schema']
+        schemaKey = parsing.cellstore_record_schema_db_key_from_raw_key(dsetn)
+        schemaVal = parsing.cellstore_record_schema_db_val_from_raw_val(
             schema_hash=schemaSpec.schema_hash,
             schema_is_var=schemaSpec.schema_is_var,
             schema_max_shape=schemaSpec.schema_max_shape,
@@ -431,10 +431,10 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
             schema_default_backend=schemaSpec.schema_default_backend)
         entries.append((schemaKey, schemaVal))
 
-        dataRecs = patchedRecs['datasets'][dsetn]['data']
+        dataRecs = patchedRecs['cellstores'][dsetn]['data']
         numDataRecs = len(dataRecs.keys())
-        numDataKey = parsing.dataset_record_count_db_key_from_raw_key(dsetn)
-        numDataVal = parsing.dataset_record_count_db_val_from_raw_val(numDataRecs)
+        numDataKey = parsing.cellstore_record_count_db_key_from_raw_key(dsetn)
+        numDataVal = parsing.cellstore_record_count_db_val_from_raw_val(numDataRecs)
         entries.append((numDataKey, numDataVal))
 
         for dataRawK, dataRawV in dataRecs.items():

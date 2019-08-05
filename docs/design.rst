@@ -41,7 +41,7 @@ disk.
 
   The atomicity of interactions is completely hidden from a normal user; they
   shouldn't have to care about this or even know this exists. However, this
-  is also why using the context-manager style dataset interaction scheme can
+  is also why using the context-manager style cellstore interaction scheme can
   result in ~2x times speedup on writes/reads. We can just pass on most of the
   work to the python ``contextlib`` package instead of having to begin and
   commit/abort (depending on interaction mode) transactions with every call to
@@ -69,7 +69,7 @@ key/value pair of (`hash`, `backend_specification`).
 .. note::
 
   The record backend stores hash information in a separate location from the
-  commit references (which associate a `(datasetname, sample name/id)` to a
+  commit references (which associate a `(cellstorename, sample name/id)` to a
   `sample_hash`). This let's us separate the historical repository
   information from a particular computer's location of a data piece. All we need in
   the public history is to know that some data with a particular hash is
@@ -78,13 +78,13 @@ key/value pair of (`hash`, `backend_specification`).
 
 On the other hand, if a data sample is added to a repository which already has a
 record of some hash, we don't even involve the storage backend. All we need to
-do is just record that a new sample in a dataset was added with that hash. It
+do is just record that a new sample in a cellstore was added with that hash. It
 makes no sense to write the same data twice.
 
 This method can actually result in massive space savings for some common use
-cases. For the MNIST dataset, the training label data is typically a 1D-array of
-size 50,000. Because there are only 10 labels, we only need to store 10 ints on
-disk, and just keep references to the rest.
+cases. For the MNIST cellstore, the training label data is typically a 1D-array
+of size 50,000. Because there are only 10 labels, we only need to store 10 ints
+on disk, and just keep references to the rest.
 
 
 The Basics of Collaboration: Branching and Merging
@@ -224,7 +224,6 @@ differences we want to highlight due to their implementation differences:
    single machine. Checking out a commit for reading does not touch the staging
    area status.
 2) Only one process can interact with the a write-enabled checkout at a time.
-   **LINK DOCS HERE**
 3) A detached head CANNOT exist for write enabled checkouts. A staging area must
    begin with an identical state to the most recent commit of a/any branch.
 4) A staging area which has had changes made in it cannot switch base branch

@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class MetadataReader(object):
     '''Class implementing get access to the metadata in a repository.
 
-    Unlike the :class:`~.dataset.DatasetDataReader` and
-    :class:`~.dataset.DatasetDataWriter`, the equivalent Metadata classes
+    Unlike the :class:`~.cellstore.CellstoreDataReader` and
+    :class:`~.cellstore.CellstoreDataWriter`, the equivalent Metadata classes
     do not need a factory function or class to coordinate access through the
     checkout. This is primarily because the metadata is only stored at a single
     level, and because the long term storage is must simpler than for array data
@@ -55,7 +55,7 @@ class MetadataReader(object):
             path to the repository on disk.
         dataenv : lmdb.Environment
             the lmdb environment in which the data records are stored. this is
-            the same as the dataset data record environments.
+            the same as the cellstore data record environments.
         labelenv : lmdb.Environment
             the lmdb environment in which the label hash key / values are stored
             permanently. When opened in by this reader instance, no write access
@@ -102,7 +102,7 @@ class MetadataReader(object):
         Parameters
         ----------
         key : Union[str, int]
-            metadata key to retrieve from the dataset
+            metadata key to retrieve from the checkout
 
         Returns
         -------
@@ -250,7 +250,7 @@ class MetadataReader(object):
 class MetadataWriter(MetadataReader):
     '''Class implementing write access to repository metadata.
 
-    Similar to the :class:`~.dataset.DatasetDataWriter`, this class
+    Similar to the :class:`~.cellstore.CellstoreDataWriter`, this class
     inherits the functionality of the :class:`~.metadata.MetadataReader` for reading. The
     only difference is that the reader will be initialized with data records
     pointing to the staging area, and not a commit which is checked out.
@@ -325,7 +325,7 @@ class MetadataWriter(MetadataReader):
         Returns
         -------
         Union[str, int]
-            Metadata key removed from the dataset (assuming operation successful)
+            Metadata key removed from the checkout (assuming operation successful)
         '''
         return self.remove(key)
 

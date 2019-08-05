@@ -98,11 +98,11 @@ def test_push_fetch_records(server_instance, backend):
         repo.init('foo', 'bar')
         dummyData = np.arange(50)
         co1 = repo.checkout(write=True, branch='master')
-        co1.datasets.init_dataset(
+        co1.cellstores.init_cellstore(
             name='dummy', prototype=dummyData, named_samples=True, backend=backend)
         for idx in range(10):
             dummyData[:] = idx
-            co1.datasets['dummy'][str(idx)] = dummyData
+            co1.cellstores['dummy'][str(idx)] = dummyData
         co1.metadata['hello'] = 'world'
         co1.metadata['somemetadatakey'] = 'somemetadatavalue'
         cmt1 = co1.commit('first commit adding dummy data and hello meta')
@@ -112,7 +112,7 @@ def test_push_fetch_records(server_instance, backend):
         co2 = repo.checkout(write=True, branch='testbranch')
         for idx in range(10, 20):
             dummyData[:] = idx
-            co2.datasets['dummy'][str(idx)] = dummyData
+            co2.cellstores['dummy'][str(idx)] = dummyData
         co2.metadata['foo'] = 'bar'
         cmt2 = co2.commit('first commit on test branch adding non-conflict data and meta')
         co2.close()
@@ -147,11 +147,11 @@ def test_fetch_records_and_data(server_instance, backend, options):
         repo.init('foo', 'bar')
         dummyData = np.arange(50)
         co1 = repo.checkout(write=True, branch='master')
-        co1.datasets.init_dataset(
+        co1.cellstores.init_cellstore(
             name='dummy', prototype=dummyData, named_samples=True, backend=backend)
         for idx in range(10):
             dummyData[:] = idx
-            co1.datasets['dummy'][str(idx)] = dummyData
+            co1.cellstores['dummy'][str(idx)] = dummyData
         co1.metadata['hello'] = 'world'
         co1.metadata['somemetadatakey'] = 'somemetadatavalue'
         cmt1 = co1.commit('first commit adding dummy data and hello meta')
@@ -161,7 +161,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
         co2 = repo.checkout(write=True, branch='testbranch')
         for idx in range(10, 20):
             dummyData[:] = idx
-            co2.datasets['dummy'][str(idx)] = dummyData
+            co2.cellstores['dummy'][str(idx)] = dummyData
         co2.metadata['foo'] = 'bar'
         cmt2 = co2.commit('first commit on test branch adding non-conflict data and meta')
         co2.close()
