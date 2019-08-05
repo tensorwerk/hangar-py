@@ -192,8 +192,8 @@ Summary
 
 .. code-block:: text
 
-   A Dataset is thought of as containing Samples, but is actually defined
-    by Datacells which store parts of fully defined Sample in structures
+   A Dataset is thought of as containing Samples, but is actually defined by
+    Datacells, which store parts of fully defined Samples in structures
        common across the full aggregation of Samples in the Dataset
 
    _____________________________________
