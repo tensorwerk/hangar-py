@@ -19,8 +19,10 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            'Commands:\n'\
            '  branch      operate on and list branch pointers.\n'\
            '  clone       Initialize a repository at the current path and fetch updated...\n'\
+           '  export      Dataset from which the samples will be exported\n'\
            '  fetch       Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data  Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
+           '  import\n'\
            '  init        Initialize an empty repository at the current path\n'\
            '  log         Display commit graph starting at STARTPOINT (short-digest or...\n'\
            '  push        Upload local BRANCH commit history / data to REMOTE server.\n'\
@@ -330,4 +332,4 @@ def test_start_server():
         res = runner.invoke(cli.server, ['--ip', 'localhost', '--port', '50111', '--timeout', '1'])
         assert time.time() - startTime >= 1
         assert res.exit_code == 0
-        assert res.stdout.startswith('Hangar Server Started')
+        assert 'Hangar Server Started' in res.stdout

@@ -199,10 +199,11 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
     yield address
 
     hangserver.env._close_environments()
-    server.stop(0.0)
+    server.stop(0.1)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.5)
+        time.sleep(0.4)
 
 
 @pytest.fixture()

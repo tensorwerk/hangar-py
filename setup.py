@@ -37,7 +37,8 @@ setup(
     name='hangar',
     version='0.2.0',
     license='Apache 2.0',
-    description='Hangar is version control for tensor data. Commit, branch, merge, revert, and collaborate in the data-defined software era.',
+    description=
+    'Hangar is version control for tensor data. Commit, branch, merge, revert, and collaborate in the data-defined software era.',
     long_description=read('README.rst'),
     author='Richard Izzo',
     author_email='rick@tensorwerk.com',
@@ -83,9 +84,10 @@ setup(
         'pyyaml',
         'tqdm',
         'wrapt',
+        'pillow',
     ],
     extras_require=extra_require,
-    entry_points={'console_scripts': [
-        'hangar = hangar.cli:main',
-    ]},
+    entry_points={
+        'console_scripts': ['hangar = hangar.cli:main']
+    },
 )

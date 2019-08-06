@@ -384,76 +384,86 @@ def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
 @click.option('-d', '--dataset', required=True,
               help='An existing dataset to which the data will be stored')
 @click.option('-p', '--path', required=True, help='Path from data will be loaded')
-# TODO continues and keep
-# @click.option('-c', '--continues', help='Continue from where it left')
-# @click.option('-k', '--keep', help='keep the path information saved. Default to True')
-@click.option('--plugin', help='Plugin name to use instead of auto-inferred plugin')
+@click.option('--plugin', default=None, type=str, help='Plugin name to use instead of auto-inferred plugin')
 def import_data(dataset, path, plugin):
     # TODO Common utility for doing these checks for all required commands
-    repo = Repository('.')
+    # TODO continues and keep
+    # @click.option('-c', '--continues', help='Continue from where it left')
+    # @click.option('-k', '--keep', help='keep the path information saved. Default to True')
+    P = os.getcwd()
+    repo = Repository(path=P)
     if not repo.initialized:
-        print("Not a hangar repository. "
-              "Create a repository and a dataset for `import` to work")
+        print("Not a hangar repository. Create a repository and a dataset for `import` to work")
         return
+
     co = repo.checkout(write=True)
     try:
-        dset = co.datasets[dataset]
-    except KeyError:
-        print(f"Could not find a dataset with name {dataset}. `import` requires an existing dataset")
-        return
+        try:
+            dset = co.datasets[dataset]
+        except KeyError:
+            print(f"Could not find a dataset with name {dataset}. `import` requires an existing dataset")
+            return
 
-    from hangar.plugins.utils import list_files, guess_plugin, get_executable_plugin
-    files = list_files(path)
-    if not plugin:
-        plugin = guess_plugin(files[0])
-    plugin_exec = get_executable_plugin(plugin)
-    co.metadata[f'_MetaForExport_{dset.name}_plugin'] = plugin_exec.name
+        from hangar.plugins import imread
+        from contextlib import suppress
 
-    # TODO: more than one datasets?
-    commit_each = 10000  # TODO: make it configurable
-    with dset:
-        for sample_name, (path, data) in tqdm(enumerate(plugin_exec), total=len(plugin_exec)):
-            # TODO: Named or nonnamed dataset
-            # TODO: running import again will overrite existing data
-            # TODO cleanup staging on exceptions
-            meta_key = f'_MetaForExport_{dset.name}_{sample_name}'
-            dset[sample_name] = data
-            co.metadata[meta_key] = path
-            if sample_name != 0 and sample_name % commit_each == 0:
-                co.commit(f'Committing from CLI import at iteration {sample_name}')
-    if co.diff.status() != 'CLEAN':
-        co.commit(f'Committing from CLI')
+        fnames = os.listdir(path)
+        with dset as ds:
+            for fname in tqdm(fnames, desc=f'adding images to dset: {ds.name}'):
+                with suppress(OSError):
+                    fpth = os.path.join(path, fname)
+                    arr = imread(fpth, plugin=plugin)
+                    try:
+                        ds[fname] = arr
+                    except ValueError as e:
+                        print(e)
+    finally:
+        co.close()
 
 
 @main.command(name='export')
-@click.option('-d', required=True, help='Dataset from which the samples will be exported')
-@click.option('-i', required=True, type=int, help='Data index (integer) or index range in `[start:end]` format')
-@click.option('-p', help='Path to which samples will be exported')
-@click.option('-k', help='Use the saved path while writing data back. Default to False')
+@click.argument('dataset', required=True)
+@click.option('-fmt', required=True, type=str, help='File extension format which will be used for exporting.')
+@click.option('-o', required=True, help='Path to which samples will be exported')
+@click.option('-s', default=False, help='Sample name to export')
 @click.option('--plugin', help='Plugin name to use instead of auto-inferred plugin')
-def export_data(d, i, p, k, plugin):
+def export_data(dataset, fmt, o, s, plugin):
+    '''Dataset from which the samples will be exported
+    '''
+    # @click.option('-i', required=True, type=int, help='Data index (integer) or index range in `[start:end]` format')
+    # @click.option('-k', help='Use the saved path while writing data back. Default to False')
     # TODO: configure all options
     # TODO Common utility for doing these checks for all required commands
-    repo = Repository('.')
+    from hangar.plugins import imsave
+
+    cwdP = os.getcwd()
+    repo = Repository(cwdP)
     if not repo.initialized:
-        print("Not a hangar repository. "
-              "Create a repository and a dataset for `import` to work")
+        print("Not a hangar repository. Create a repository and a dataset for `import` to work")
         return
+
     co = repo.checkout()  # TODO handle first repo
     try:
-        dset = co.datasets[d]
-    except KeyError:
-        print(f"Could not find a dataset with name {d}. `import` requires an existing dataset")
-        return
-    from hangar.plugins.utils import get_executable_plugin
-    sample_name = list(dset.keys())[i]  # TODO indexerror
-    data = dset[sample_name]
-    meta_plugin_key = f'_MetaForExport_{dset.name}_plugin'
-    plugin_name = co.metadata[meta_plugin_key]
-    if not p:
-        meta_file_key = f'_MetaForExport_{dset.name}_{sample_name}'
-        file = co.metadata[meta_file_key]
-    else:
-        file = p
-    plugin = get_executable_plugin(plugin_name)
-    plugin.save(file, data)
+        outP = os.path.expanduser(os.path.normpath(o))
+        dset = co.datasets[dataset]
+
+        if s:
+            if s in dset:
+                sampleNames = [s]
+            else:
+                click.echo(f'No sample name: {s} in dataset')
+                return
+        else:
+            sampleNames = list(dset.keys())
+
+        with dset as ds:
+            for sampleN in tqdm(sampleNames, desc='saving files'):
+                if sampleN.endswith(fmt):
+                    outFP = os.path.join(outP, f'{sampleN}')
+                else:
+                    outFP = os.path.join(outP, f'{sampleN}.{fmt}')
+
+                data = ds[sampleN]
+                imsave(outFP, data)
+    finally:
+        co.close()
