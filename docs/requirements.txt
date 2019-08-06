@@ -3,5 +3,4 @@ sphinx-rtd-theme
 sphinx-click
 nbsphinx
 recommonmark
-pandoc
 -e .
