@@ -3,4 +3,5 @@ sphinx-rtd-theme
 sphinx-click
 nbsphinx
 recommonmark
+IPython
 -e .

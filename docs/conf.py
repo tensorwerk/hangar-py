@@ -17,6 +17,7 @@ extensions = [
     'nbsphinx',
     'sphinx.ext.mathjax',
     'recommonmark',
+    'IPython.sphinxext.ipython_console_highlighting',
 ]
 if os.getenv('SPELLCHECK'):
     extensions += 'sphinxcontrib.spelling',
