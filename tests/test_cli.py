@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 
-from hangar import Repository, cli
-
+from hangar import Repository
+from hangar.cli import cli
 
 # -------------------------------- test data ----------------------------------
 
@@ -330,4 +330,4 @@ def test_start_server():
         res = runner.invoke(cli.server, ['--ip', 'localhost', '--port', '50111', '--timeout', '1'])
         assert time.time() - startTime >= 1
         assert res.exit_code == 0
-        assert 'Hangar Server Started' in res.stdout
+        assert res.stdout.startswith('Hangar Server Started')

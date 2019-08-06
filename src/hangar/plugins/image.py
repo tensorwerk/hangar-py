@@ -10,9 +10,8 @@ from . import ImportExportBase
 
 
 class ImagePlugin(ImportExportBase):
-    def __init__(self, files):
+    def __init__(self):
         super(ImagePlugin, self).__init__()
-        self.files = files
 
     @staticmethod
     def pil_loader(path):
@@ -23,3 +22,8 @@ class ImagePlugin(ImportExportBase):
     def load(self, file):
         # TODO: maybe use accimage in the future
         return np.array(self.pil_loader(file))
+
+    def save(self, file, data):
+        data = Image.fromarray(data)
+        with open(file, 'wb+') as f:
+            data.save(f)
