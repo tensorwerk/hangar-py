@@ -97,7 +97,7 @@ Let's get philosophical and talk about what a "Dataset" is. The word "Dataset"
 invokes some some meaning to humans; A dataset may have a canonical name (like
 "MNIST" or "CoCo"), it will have a source where it comes from, (ideally) it has
 a purpose for some real-world task, it will have people who build, aggregate,
-and nurture it, and most importantly a Datacell always contains pieces of some
+and nurture it, and most importantly a Dataset always contains pieces of some
 type of information type which describes "something".
 
 It's an abstract definition, but it is only us, the humans behind the machine,
@@ -193,20 +193,34 @@ Summary
 .. code-block:: text
 
    A Dataset is thought of as containing Samples, but is actually defined by
-    Datacells, which store parts of fully defined Samples in structures
-       common across the full aggregation of Samples in the Dataset
+   Datacells, which store parts of fully defined Samples in structures common
+               across the full aggregation of Dataset Samples.
 
-   _____________________________________
-         S1     |    S2    |     S3     |  <------------------------|
-   --------------------------------------                           |
-       image    |  image   |   image    |  <- Datacell 1  <--|      |
-     filename   | filename |  filename  |  <- Datacell 2  <--|-- Dataset
-       label    |  label   |   label    |  <- Datacell 3  <--|
-     annotation |    -     | annotation |  <- Datacell 4  <--|
+   This can essentially be represented as a key -> tensor mapping, which can
+             (optionally) be Sparse depending on usage patterns
 
+                         Dataset
+                            |
+         -----------------------------------------
+         |            |            |             |
+     Datacell 1   Datacell 2   Datacell 3    Datacell 4
+         |            |            |             |
+   ------------------------------------------------------
+       image    |  filename  |   label    |  annotation |
+   ------------------------------------------------------
+         S1     |     S1     |            |      S1     |
+         S2     |     S2     |     S2     |      S2     |
+         S3     |     S3     |     S3     |             |
+         S4     |     S4     |            |             |
 
-   If a sample does not have a piece of data, lack of info in the Datacell
-         makes no difference in any way to the larger picture.
+    More techincally, a Dataset is just a view over the columns that gives you
+   sample tuples based on the cross product of keys and columns. Hangar doesn't
+           store or track the data set, just the underlying columns.
+
+    S1 = (image[S1], filename[S1], annotation[S1])
+    S2 = (image[S2], filename[S2], label[S2], annotation[S2])
+    S3 = (image[S3], filename[S3], label[S3])
+    S3 = (image[S4], filename[S4])
 
 
 .. note::
