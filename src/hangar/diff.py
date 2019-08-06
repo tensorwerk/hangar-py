@@ -828,8 +828,8 @@ class ThreeWayCommitDiffer(object):
         Returns
         -------
         dict
-            containing conflict info in `dcell`, `meta`, `sample` and `conflict_found`
-            boolean field.
+            containing conflict info in `dcell`, `meta`, `sample` and
+            `conflict_found` boolean field.
         '''
         dcell_confs = self.datacell_conflicts()
         meta_confs = self.meta_conflicts()
