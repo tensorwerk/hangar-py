@@ -153,7 +153,7 @@ def push(ctx, remote, branch):
 
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
-def remote(ctx, argument):
+def remote(ctx):
     '''Operations for working with remote server references
     '''
     pass
