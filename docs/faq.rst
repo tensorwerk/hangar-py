@@ -180,8 +180,8 @@ Two strategies exist:
    up the data, just copy/paste or rsync it to another machine! (edited)
 
 
-On Determining ``Datagroup`` Schema Sizes
-=========================================
+On Determining ``Datacell`` Schema Sizes
+========================================
 
    Say I have a data group that specifies a data array with one dimension,
    three elements (say height, width, num channels) and later on I want to add
@@ -189,14 +189,14 @@ On Determining ``Datagroup`` Schema Sizes
    have been three scalar data groups from the start?
 
 So right now it’s not possible to change the schema (shape, dtype) of a
-datagroup. I’ve thought about such a feature for a while now, and while it will
+datacell. I’ve thought about such a feature for a while now, and while it will
 require a new user facing API option, its (almost) trivial to make it work in
 the core. It just hasn’t seemed like a priority yet...
 
 And no, I wouldn’t specify each of those as scalar data groups, they are a
 related piece of information, and generally would want to be accessed together
 
-Access patterns should generally dictate how much info is placed in a datagroup
+Access patterns should generally dictate how much info is placed in a datacell
 
 
 Is there a performance/space penalty for having lots of small data groups?
@@ -204,11 +204,11 @@ Is there a performance/space penalty for having lots of small data groups?
 
 As far as a performance / space penalty, this is where it gets good :)
 
-- Using fewer datagroups means that there are fewer records (the internal
+- Using fewer datacells means that there are fewer records (the internal
   locating info, kind-of like a git tree) to store, since each record points to
   a sample containing more information.
 
-- Using more datagroups means that the likelihood of samples having the same
+- Using more datacells means that the likelihood of samples having the same
   value increases, meaning fewer pieces of data are actually stored on disk
   (remember it’s a content addressable file store)
 
