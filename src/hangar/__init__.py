@@ -6,13 +6,13 @@ from .repository import Repository
 __all__ = ['Repository', 'serve']
 
 try:
-    from .dataloaders import make_tf_dataset
+    from .dataloaders.tfloader import make_tf_dataset
     __all__.append('make_tf_dataset')
 except Exception:
     pass
 
 try:
-    from .dataloaders import make_torch_dataset
+    from .dataloaders.torchloader import make_torch_dataset
     __all__.append('make_torch_dataset')
 except Exception:
     pass

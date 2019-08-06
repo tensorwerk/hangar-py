@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from hangar.dataloaders import make_torch_dataset, make_tf_dataset
+from hangar import make_torch_dataset, make_tf_dataset
 
 
 try:
@@ -21,19 +21,13 @@ class TestTorchDataLoader(object):
         second_dset = co.datasets['second_dset']
         del second_dset['10']
         co.commit('deleting')
-        with pytest.raises(IndexError):
+        with pytest.raises(ValueError):
             # emtpy list
             make_torch_dataset([])
         with pytest.raises(TypeError):
             # if more than one dataset, those should be in a list/tuple
             make_torch_dataset(first_dset, first_dset)
-        with pytest.raises(TypeError):
-            # first argument can only be a list/tuple or a hangar dataset
-            make_torch_dataset({'first': first_dset, 'second': first_dset})
-        with pytest.raises(RuntimeError):
-            # datasets with different length
-            make_torch_dataset([first_dset, second_dset])
-        torch_dset = make_torch_dataset([second_dset, second_dset])
+        torch_dset = make_torch_dataset([first_dset, second_dset])
         loader = DataLoader(torch_dset, batch_size=6, drop_last=True)
         total_samples = 0
         for dset1, dset2 in loader:
@@ -113,6 +107,7 @@ class TestTfDataLoader(object):
         for dset1, dset2 in tf_dset.take(2):
             assert dset1.shape == tf.TensorShape((6, 5, 7))
             assert dset2.shape == tf.TensorShape((6, 5, 7))
+        co.close()
 
     def test_variably_shaped(self, variable_shape_written_repo):
         # Variably shaped test is required since the collation is dependent on
@@ -130,3 +125,4 @@ class TestTfDataLoader(object):
             assert val[0].shape[0] == 5
             assert val[0].shape[1] == 2
             assert 11 > val[0].shape[2] > 4
+        co.close()
