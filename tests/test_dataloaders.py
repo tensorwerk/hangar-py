@@ -1,11 +1,11 @@
 import pytest
 import numpy as np
-from hangar import make_torch_dataset, make_tf_dataset
 
 
 try:
     import torch
     from torch.utils.data import DataLoader
+    from hangar import make_torch_dataset
 except (ImportError, ModuleNotFoundError):
     skipTorch = True
 else:
@@ -88,6 +88,7 @@ class TestTorchDataLoader(object):
 try:
     import tensorflow as tf
     tf.compat.v1.enable_eager_execution()
+    from hangar import make_tf_dataset
 except (ImportError, ModuleNotFoundError):
     skipTF = True
 else:

@@ -1,4 +1,5 @@
 from functools import partial
+import warnings
 
 try:
     import tensorflow as tf
@@ -56,7 +57,7 @@ def make_tf_dataset(hangar_datasets, keys=None, index_range=None, shuffle=True):
     Examples
     --------
     >>> from hangar import Repository
-    >>> from hangar.dataloaders import make_tf_dataset
+    >>> from hangar import make_tf_dataset
     >>> import tensorflow as tf
     >>> tf.compat.v1.enable_eager_execution()
     >>> repo = Repository('.')
@@ -73,6 +74,7 @@ def make_tf_dataset(hangar_datasets, keys=None, index_range=None, shuffle=True):
     -------
     `tf.data.Dataset` object
     """
+    warnings.warn("Dataloaders are experimental in the current release.", UserWarning)
     gdsets = GroupedDsets(hangar_datasets, keys, index_range)
     generator = partial(yield_data, gdsets.dataset_array, gdsets.sample_names, shuffle)
     # TODO: pass proper shapes for fixed shape input

@@ -1,4 +1,5 @@
 from collections import namedtuple
+import warnings
 
 try:
     from torch.utils.data import Dataset
@@ -31,7 +32,7 @@ def make_torch_dataset(hangar_datasets, keys=None, index_range=None, field_names
     --------
     >>> from hangar import Repository
     >>> from torch.utils.data import DataLoader
-    >>> from hangar.dataloaders import make_torch_dataset
+    >>> from hangar import make_torch_dataset
     >>> repo = Repository('.')
     >>> co = repo.checkout()
     >>> dset = co.datasets['dummy_dset']
@@ -45,6 +46,7 @@ def make_torch_dataset(hangar_datasets, keys=None, index_range=None, field_names
     `torch.utils.data.Dataset` object
 
     """
+    warnings.warn("Dataloaders are experimental in the current release.", UserWarning)
     gdsets = GroupedDsets(hangar_datasets, keys, index_range)
 
     if field_names:
