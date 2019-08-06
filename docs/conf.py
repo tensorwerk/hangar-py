@@ -15,6 +15,7 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx_click.ext',
     'nbsphinx',
+    'sphinx.ext.mathjax',
     'recommonmark',
 ]
 if os.getenv('SPELLCHECK'):
