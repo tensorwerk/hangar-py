@@ -1,10 +1,10 @@
 __version__ = '0.1.1'
+__all__ = ['Repository', 'serve', 'make_tf_dataset', 'make_torch_dataset']
 
 from functools import partial
 from .remote.server import serve
 from .repository import Repository
 
-__all__ = ['Repository', 'serve', 'make_tf_dataset', 'make_torch_dataset']
 
 
 def raise_RuntimeError(message, *args, **kwargs):

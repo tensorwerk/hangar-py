@@ -2,41 +2,41 @@ import warnings
 from typing import Iterable, Optional, Union
 
 
-DatasetsRef = Union['DatasetDataReader', Iterable['DatasetDataReader']]
+ArraysetsRef = Union['ArraysetDataReader', Iterable['ArraysetDataReader']]
 
 
-class GroupedDsets(object):
-    """Groups hangar datasets and validate suitability for usage in dataloaders.
+class GroupedAsets(object):
+    """Groups hangar arraysets and validate suitability for usage in dataloaders.
 
-    It can choose a subset of samples in the hangar datasets by checking the
-    list of keys or an index range. :class:`GroupedDsets` does not expect all the
-    input hangar datasets to have same length and same keys. It takes a `set.union`
-    of sample names from all the datasets and `keys` argument if passed and hence
+    It can choose a subset of samples in the hangar arraysets by checking the
+    list of keys or an index range. :class:`GroupedAsets` does not expect all the
+    input hangar arraysets to have same length and same keys. It takes a `set.union`
+    of sample names from all the arraysets and `keys` argument if passed and hence
     discard non-common keys while fetching. Based on `keys` or `index_range`
     (ignore `index_range` if `keys` is present) it makes a subset of sample names which
-    is then used to fetch the data from hangar datasets.
+    is then used to fetch the data from hangar arraysets.
     """
 
     def __init__(self,
-                 hangar_datasets: DatasetsRef,
+                 arraysets: ArraysetsRef,
                  keys: Optional[Iterable[Union[int, str]]] = None,
                  index_range: Optional[slice] = None):
 
-        if not isinstance(hangar_datasets, (list, tuple)):
-            hangar_datasets = (hangar_datasets,)
-        if len(hangar_datasets) == 0:
-            raise ValueError("`hangar_datasets` cannot be empty")
+        if not isinstance(arraysets, (list, tuple)):
+            arraysets = (arraysets,)
+        if len(arraysets) == 0:
+            raise ValueError("`hangar_arraysets` cannot be empty")
 
-        dataset_names, dset_lens, full_sample_names = [], set(), []
-        for dataset in hangar_datasets:
-            kset = set(dataset.keys())
-            dataset_names.append(dataset.name)
+        arrayset_names, aset_lens, full_sample_names = [], set(), []
+        for arrayset in arraysets:
+            kset = set(arrayset.keys())
+            arrayset_names.append(arrayset.name)
             full_sample_names.append(kset)
-            dset_lens.add(len(kset))
+            aset_lens.add(len(kset))
         sample_names = set.intersection(*full_sample_names)
         del full_sample_names
-        if len(dset_lens) > 1:
-            warnings.warn('Datasets do not contain equal num samples', UserWarning)
+        if len(aset_lens) > 1:
+            warnings.warn('Arraysets do not contain equal num samples', UserWarning)
 
         if keys:
             if not isinstance(keys, (list, tuple, set)):
@@ -45,7 +45,7 @@ class GroupedDsets(object):
             noncommon_keys = keys.difference(sample_names)
             if len(noncommon_keys) > 0:
                 raise ValueError(
-                    f'Requested keys: {noncommon_keys} do not exist in all datasets.')
+                    f'Requested keys: {noncommon_keys} do not exist in all arraysets.')
             self._allowed_samples = tuple(keys)
         elif index_range:
             if not isinstance(index_range, slice):
@@ -54,52 +54,53 @@ class GroupedDsets(object):
         else:
             self._allowed_samples = tuple(sample_names)
 
-        self.dataset_array = hangar_datasets
-        self.dataset_names = dataset_names
+        self.arrayset_array = arraysets
+        self.arrayset_names = arrayset_names
 
     def get_types(self, converter=None):
         """
-        Get dtypes of the all the datasets in the `GroupedDsets`.
+        Get dtypes of the all the arraysets in the `GroupedAsets`.
 
         Parameters
         ----------
         converter : Callable
-            A function that takes default dtype (numpy) and convert it to another format
+            A function that takes default dtype (numpy) and convert it to another
+            format
 
         Returns
         -------
         A tuple of types
-
         """
         types = []
-        for dset in self.dataset_array:
+        for aset in self.arrayset_array:
             if converter:
-                types.append(converter(dset.dtype))
+                types.append(converter(aset.dtype))
             else:
-                types.append(dset.dtype)
+                types.append(aset.dtype)
         return tuple(types)
 
     def get_shapes(self, converter=None):
         """
-        Get shapes of the all the datasets in the `GroupedDsets`.
+        Get shapes of the all the arraysets in the `GroupedAsets`.
 
         Parameters
         ----------
         converter : Callable
-            A function that takes default shape (numpy) and convert it to another format
+            A function that takes default shape (numpy) and convert it to another
+            format
 
         Returns
         -------
-        A tuple of dataset shapes
+        A tuple of arrayset shapes
         """
-        if self.dataset_array[0].variable_shape:
+        if self.arrayset_array[0].variable_shape:
             return None
         shapes = []
-        for dset in self.dataset_array:
+        for aset in self.arrayset_array:
             if converter:
-                shapes.append(converter(dset.shape))
+                shapes.append(converter(aset.shape))
             else:
-                shapes.append(dset.shape)
+                shapes.append(aset.shape)
         return tuple(shapes)
 
     @property
