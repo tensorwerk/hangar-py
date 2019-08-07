@@ -1,5 +1,4 @@
 import atexit
-import logging
 import os
 import weakref
 from contextlib import suppress
@@ -16,8 +15,6 @@ from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
 from .records import commiting, hashs, heads
 from .utils import cm_weakref_obj_proxy
-
-logger = logging.getLogger(__name__)
 
 
 class ReaderCheckout(object):
@@ -128,7 +125,6 @@ class ReaderCheckout(object):
             e = PermissionError(
                 f'Unable to operate on past checkout objects which have been '
                 f'closed. No operation occurred. Please use a new checkout.')
-            logger.error(e, exc_info=False)
             raise e from None
 
     @property
@@ -513,7 +509,6 @@ class WriterCheckout(object):
                 del self._differ
             err = f'Unable to operate on past checkout objects which have been '\
                   f'closed. No operation occurred. Please use a new checkout.'
-            logger.error(err, exc_info=0)
             raise PermissionError(err) from None
 
         try:
@@ -525,7 +520,6 @@ class WriterCheckout(object):
                 del self._metadata
             with suppress(AttributeError):
                 del self._differ
-            logger.error(e, exc_info=0)
             raise e from None
 
     def __setup(self):
@@ -559,7 +553,6 @@ class WriterCheckout(object):
                     f'{current_head}. Please commit or stash uncommitted changes '
                     f'before checking out a different branch for writing.')
                 self.close()
-                logger.error(e, exc_info=1)
                 raise e
         else:
             if current_head != self._branch_name:
@@ -607,7 +600,6 @@ class WriterCheckout(object):
             If no changes have been made in the staging area, no commit occurs.
         '''
         self.__acquire_writer_lock()
-        logger.info(f'Commit operation requested with message: {commit_message}')
 
         open_dcells = []
         for datacell in self._datacells.values():
@@ -623,8 +615,7 @@ class WriterCheckout(object):
 
             if self._differ.status() == 'CLEAN':
                 e = RuntimeError('No changes made in staging area. Cannot commit.')
-                logger.error(e, exc_info=False)
-                raise e
+                raise e from None
 
             self._datacells._close()
             commit_hash = commiting.commit_records(message=commit_message,
@@ -643,7 +634,6 @@ class WriterCheckout(object):
             if open_meta:
                 self._metadata.__enter__()
 
-        logger.info(f'Commit completed. Commit hash: {commit_hash}')
         return commit_hash
 
     def reset_staging_area(self) -> str:
@@ -671,12 +661,11 @@ class WriterCheckout(object):
             If no changes have been made to the staging area, No-Op.
         '''
         self.__acquire_writer_lock()
-        logger.info(f'Hard reset requested with writer_lock: {self._writer_lock}')
+        print(f'Hard reset requested with writer_lock: {self._writer_lock}')
 
         if self._differ.status() == 'CLEAN':
             e = RuntimeError(f'No changes made in staging area. No reset necessary.')
-            logger.error(e, exc_info=False)
-            raise e
+            raise e from None
 
         self._datacells._close()
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
@@ -689,7 +678,6 @@ class WriterCheckout(object):
                                                    stageenv=self._stageenv,
                                                    commit_hash=head_commit)
 
-        logger.info(f'Hard reset completed, staging area head commit: {head_commit}')
         self._metadata = MetadataWriter(
             mode='a',
             repo_pth=self._repo_path,
@@ -742,7 +730,6 @@ class WriterCheckout(object):
         with suppress(AttributeError):
             del self._differ
 
-        logger.info(f'writer checkout of {self._branch_name} closed')
         heads.release_writer_lock(self._branchenv, self._writer_lock)
 
         del self._refenv

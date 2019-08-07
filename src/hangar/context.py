@@ -1,4 +1,3 @@
-import logging
 import os
 import platform
 import shutil
@@ -6,16 +5,13 @@ import tempfile
 import warnings
 from collections import Counter
 from os.path import join as pjoin
-from typing import MutableMapping
-from typing import Optional
+from typing import MutableMapping, Optional
 
 import lmdb
 import yaml
 
 from . import constants as c
 from . import __version__
-
-logger = logging.getLogger(__name__)
 
 
 class TxnRegisterSingleton(type):
@@ -117,9 +113,7 @@ class TxnRegister(metaclass=TxnRegisterSingleton):
         ancestors = self.WriterAncestors[lmdbenv]
         if ancestors == 0:
             msg = f'hash ancestors are zero but commit called on {lmdbenv}'
-            err = RuntimeError(msg)
-            logger.error(msg)
-            raise err
+            raise RuntimeError(msg)
         elif ancestors == 1:
             self.WriterTxn[lmdbenv].commit()
             self.WriterTxn.__delitem__(lmdbenv)
@@ -172,8 +166,8 @@ Todo, refactor to avoid the need for these imports to be below TxnRegister,
 if they aren't right now, we get circular imports...
 '''
 
-from .records import commiting, heads, parsing, vcompat
-from .utils import readme_contents
+from .records import commiting, heads, parsing, vcompat  # noqa: E402
+from .utils import readme_contents  # noqa: E402
 
 
 class Environments(object):
@@ -203,27 +197,25 @@ class Environments(object):
         return ret
 
     def _startup(self) -> bool:
-        '''When first access to the Repo starts, attempt to open the lmdb.Environments.
+        '''When first access to the Repo starts, attempt to open the db envs.
 
         This function is designed to fail if a repository does not exist at the
-        :py:attribute:`repo_path` which is specified, so the user can explicitly choose
-        to initialize the repo. Once opened, the lmdb environments should not be
-        closed until the program terminates.
+        :py:attribute:`repo_path` which is specified, so the user can
+        explicitly choose to initialize the repo. Once opened, the lmdb
+        environments should not be closed until the program terminates.
 
         Returns
         -------
-        bool
-            False if no repository exists at the given path, otherwise True
+        bool False if no repository exists at the given path, otherwise True
 
         Warns
         -----
-        UserWarning
-            Should the repository not exist at the provided repo path.
+        UserWarning Should the repository not exist at the provided repo path.
 
         Raises
         ------
-        RuntimeError
-            If the repository version is not compatible with the current software.
+        RuntimeError If the repository version is not compatible with the
+        current software.
         '''
         if not os.path.isfile(pjoin(self.repo_path, c.LMDB_BRANCH_NAME)):
             msg = f'No repository exists at {self.repo_path}, please use `repo.init()` method'
@@ -277,7 +269,7 @@ class Environments(object):
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STAGE))
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA_REMOTE))
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA))
-        logger.info(f'Hangar Repo initialized at: {self.repo_path}')
+        print(f'Hangar Repo initialized at: {self.repo_path}')
 
         userConf = {'name': user_name, 'email': user_email}
         with open(pjoin(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
@@ -294,7 +286,7 @@ class Environments(object):
         return self.repo_path
 
     def checkout_commit(self, branch_name: str = '', commit: str = '') -> str:
-        '''Set up environments for read only access & with records referencing commit hash dbs.
+        '''Set up db environment with unpacked commit ref records.
 
         Parameters
         ----------
@@ -320,26 +312,24 @@ class Environments(object):
             head_branch = heads.get_staging_branch_head(self.branchenv)
             commit_hash = heads.get_branch_head_commit(self.branchenv, head_branch)
             txt = f'\n Warning: Neither BRANCH or COMMIT specified.'\
-                  f'\n * Checking out writing HEAD BRANCH: {head_branch} at COMMIT: {commit_hash}'
-        logger.info(txt)
+                  f'\n * Checking out writing HEAD BRANCH: {head_branch}'
+        print(txt)
 
-        # On UNIX-like system, an open process still retains ability to interact
-        # with disk space allocated to a file when it is removed from disk.
-        # Windows does not, and will not allow file to be removed if a process
-        # is interacting with it. While the CM form is cleaner, this hack allows
-        # similar usage on Windows platforms.
+        # On UNIX-like system, an open process still retains ability to
+        # interact with disk space allocated to a file when it is removed from
+        # disk. Windows does not, and will not allow file to be removed if a
+        # process is interacting with it. While the CM form is cleaner, this
+        # hack allows similar usage on Windows platforms.
 
         if platform.system() != 'Windows':
             with tempfile.TemporaryDirectory() as tempD:
                 tmpDF = os.path.join(tempD, f'{commit_hash}.lmdb')
-                logger.debug(f'checkout creating temp in CM: {tmpDF}')
                 tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
                 commiting.unpack_commit_ref(self.refenv, tmpDB, commit_hash)
                 self.cmtenv[commit_hash] = tmpDB
         else:
             tempD = tempfile.mkdtemp()
             tmpDF = os.path.join(tempD, f'{commit_hash}.lmdb')
-            logger.debug(f'checkout creating temp: {tmpDF}')
             tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
             commiting.unpack_commit_ref(self.refenv, tmpDB, commit_hash)
             self.cmtenv[commit_hash] = tmpDB
@@ -349,14 +339,22 @@ class Environments(object):
     def _open_environments(self):
         '''Open the standard lmdb databases at the repo path.
 
-        If any commits are checked out (in an unpacked state), read those in as well.
+        If any commits are checked out (in an unpacked state), read those in as
+        well.
         '''
-        self.refenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_REF_NAME), **c.LMDB_SETTINGS)
-        self.hashenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_HASH_NAME), **c.LMDB_SETTINGS)
-        self.stageenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_STAGE_REF_NAME), **c.LMDB_SETTINGS)
-        self.branchenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_BRANCH_NAME), **c.LMDB_SETTINGS)
-        self.labelenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_META_NAME), **c.LMDB_SETTINGS)
-        self.stagehashenv = lmdb.open(path=pjoin(self.repo_path, c.LMDB_STAGE_HASH_NAME), **c.LMDB_SETTINGS)
+        ref_pth = pjoin(self.repo_path, c.LMDB_REF_NAME)
+        hash_pth = pjoin(self.repo_path, c.LMDB_HASH_NAME)
+        stage_pth = pjoin(self.repo_path, c.LMDB_STAGE_REF_NAME)
+        branch_pth = pjoin(self.repo_path, c.LMDB_BRANCH_NAME)
+        label_pth = pjoin(self.repo_path, c.LMDB_META_NAME)
+        stagehash_pth = pjoin(self.repo_path, c.LMDB_STAGE_HASH_NAME)
+
+        self.refenv = lmdb.open(path=ref_pth, **c.LMDB_SETTINGS)
+        self.hashenv = lmdb.open(path=hash_pth, **c.LMDB_SETTINGS)
+        self.stageenv = lmdb.open(path=stage_pth, **c.LMDB_SETTINGS)
+        self.branchenv = lmdb.open(path=branch_pth, **c.LMDB_SETTINGS)
+        self.labelenv = lmdb.open(path=label_pth, **c.LMDB_SETTINGS)
+        self.stagehashenv = lmdb.open(path=stagehash_pth, **c.LMDB_SETTINGS)
 
     def _close_environments(self):
 

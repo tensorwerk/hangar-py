@@ -435,26 +435,6 @@ class TestDataWithFixedSizedDatacell(object):
         co.close()
 
     @pytest.mark.parametrize("dcell_backend", ['00', '10'])
-    def test_adding_same_data_again_with_same_name(self, dcell_backend, repo, array5by7):
-        co = repo.checkout(write=True)
-        dcell = co.datacells.init_datacell('dcell', prototype=array5by7, backend=dcell_backend)
-        dcell['1'] = array5by7
-        with pytest.raises(LookupError):
-            # raises before commit
-            dcell['1'] = array5by7
-        co.commit('this is a commit message')
-        with pytest.raises(LookupError):
-            # raises after commit
-            dcell['1'] = array5by7
-        co.close()
-        co = repo.checkout(write=True)
-        dcell = co.datacells['dcell']
-        with pytest.raises(LookupError):
-            # raises in another checkout
-            dcell['1'] = array5by7
-        co.close()
-
-    @pytest.mark.parametrize("dcell_backend", ['00', '10'])
     def test_writer_context_manager_datacell_add_sample(self, dcell_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         dcell = co.datacells.init_datacell('dcell', prototype=randomsizedarray, backend=dcell_backend)

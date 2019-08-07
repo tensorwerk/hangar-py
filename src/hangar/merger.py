@@ -1,16 +1,4 @@
-import os
-import logging
-
-import lmdb
-
-from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
-from .records import commiting, hashs, heads, parsing
-
-logger = logging.getLogger(__name__)
-
-'''
-Merge Methods
--------------
+'''Merge Methods
 
 In the current implementation only fast-forward and a competent, but limited,
 three-way merge algorithm are implemented. All user facing API calls should be
@@ -23,6 +11,12 @@ funneled through the :function:`select_merge_algorithm` function
     creating new branches from the last "good" state, after which new merge
     operations can be attempted (if desired.)
 '''
+import os
+
+import lmdb
+
+from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
+from .records import commiting, hashs, heads, parsing
 
 
 def select_merge_algorithm(message: str,
@@ -85,17 +79,15 @@ def select_merge_algorithm(message: str,
                              refenv=refenv,
                              branch_name=current_head)
     if wDiffer.status() != 'CLEAN':
-        msg = 'HANGAR RUNTIME ERROR: Changes are currently pending in the staging area '\
-              'To avoid mangled histories, the staging area must exist in a clean state '\
-              'Please reset or commit any changes before the merge operation'
-        e = RuntimeError(msg)
-        logger.error(e, exc_info=False)
+        e = RuntimeError(
+            'HANGAR RUNTIME ERROR: Changes are currently pending in the staging area ',
+            'To avoid mangled histories, the staging area must exist in a clean state ',
+            'Please reset or commit any changes before the merge operation')
         raise e from None
 
     try:
         heads.acquire_writer_lock(branchenv=branchenv, writer_uuid=writer_uuid)
     except PermissionError as e:
-        logger.error(e, exc_info=False)
         raise e from None
 
     try:
@@ -105,7 +97,7 @@ def select_merge_algorithm(message: str,
         branchHistory = rDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
 
         if branchHistory.canFF is True:
-            logger.info('Selected Fast-Forward Merge Strategy')
+            print('Selected Fast-Forward Merge Strategy')
             success = _fast_forward_merge(
                 branchenv=branchenv,
                 stageenv=stageenv,
@@ -115,7 +107,7 @@ def select_merge_algorithm(message: str,
                 new_masterHEAD=branchHistory.devHEAD,
                 repo_path=repo_path)
         else:
-            logger.info('Selected 3-Way Merge Strategy')
+            print('Selected 3-Way Merge Strategy')
             success = _three_way_merge(
                 message=message,
                 master_branch_name=master_branch_name,
@@ -189,7 +181,6 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
         hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
 
     except ValueError as e:
-        logger.error(e, exc_info=False)
         raise e from None
 
     return outBranchName
@@ -254,7 +245,6 @@ def _three_way_merge(message: str,
     try:
         mergeContents = _compute_merge_results(a_cont=aCont, m_cont=mCont, d_cont=dCont)
     except ValueError as e:
-        logger.error(e, exc_info=False)
         raise e from None
 
     fmtCont = _merge_dict_to_lmdb_tuples(patchedRecs=mergeContents)

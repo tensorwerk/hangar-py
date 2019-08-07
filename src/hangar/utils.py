@@ -1,4 +1,3 @@
-import logging
 import os
 import random
 import re
@@ -14,8 +13,6 @@ import wrapt
 
 from . import __version__
 from .constants import DIR_HANGAR
-
-logger = logging.getLogger(__name__)
 
 
 def set_blosc_nthreads() -> int:

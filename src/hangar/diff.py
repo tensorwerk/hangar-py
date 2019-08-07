@@ -1,6 +1,6 @@
 from functools import partial
-from typing import (Callable, Dict, Iterable, List, MutableMapping, NamedTuple,
-                    Optional, Sequence, Set, Tuple, Union)
+from typing import (
+    Callable, Iterable, List, MutableMapping, NamedTuple, Set, Union)
 
 import lmdb
 
@@ -368,7 +368,7 @@ MetaRecord = NamedTuple('MetaRecord', [
     ('meta_key', Union[str, int]),
     ('meta_hash', str)
 ])
-MetaRecordKV = Dict[MetadataRecordKey, MetadataRecordVal]
+MetaRecordKV = MutableMapping[MetadataRecordKey, MetadataRecordVal]
 
 
 def _meta_mutation_finder(a_unchanged_kv: MetaRecordKV,
@@ -413,15 +413,15 @@ DatacellSchemaRecord = NamedTuple('DatacellSchemaRecord', [
     ('schema_max_shape', tuple),
     ('schema_is_named', bool),
 ])
-DatacellSchemaKV = Dict[str, RawDatacellSchemaVal]
+DatacellSchemaKV = MutableMapping[str, RawDatacellSchemaVal]
 
 
-def _isolate_dcell_schemas(datacell_specs: Dict[str, dict]) -> DatacellSchemaKV:
+def _isolate_dcell_schemas(datacell_specs: MutableMapping[str, dict]) -> DatacellSchemaKV:
     '''Isolate only the schema specification from a full datacell records dict.
 
     Parameters
     ----------
-    datacell_specs :  Dict[str, dict]
+    datacell_specs :  MutableMapping[str, dict]
         dict containing both datacell names and keys of `schema` and `data`
         record specification for any number of datacells
 
@@ -436,7 +436,7 @@ def _isolate_dcell_schemas(datacell_specs: Dict[str, dict]) -> DatacellSchemaKV:
     return schemas_dict
 
 
-def _schema_dict_to_nt(record_dict: Dict[str, DatacellSchemaRecord]) -> Set[DatacellSchemaRecord]:
+def _schema_dict_to_nt(record_dict: MutableMapping[str, DatacellSchemaRecord]) -> Set[DatacellSchemaRecord]:
     '''Convert schema records specification dict into set of named tuples
 
     Parameters
@@ -497,7 +497,7 @@ SamplesDataRecord = NamedTuple('SamplesDataRecord', [
     ('data_name', Union[str, int]),
     ('data_hash', str),
 ])
-SamplesDataKV = Dict[RawDataRecordKey, RawDataRecordVal]
+SamplesDataKV = MutableMapping[RawDataRecordKey, RawDataRecordVal]
 
 
 def _samples_mutation_finder(a_unchanged_kv: SamplesDataKV,

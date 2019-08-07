@@ -1,5 +1,4 @@
 import os
-import logging
 import weakref
 import warnings
 from typing import Union, Optional, List
@@ -12,8 +11,6 @@ from .diagnostics import graphing, ecosystem
 from .records import heads, parsing, summarize, vcompat
 from .checkout import ReaderCheckout, WriterCheckout
 from .utils import is_valid_directory_path, is_suitable_user_key
-
-logger = logging.getLogger(__name__)
 
 
 class Repository(object):
@@ -48,8 +45,7 @@ class Repository(object):
         try:
             usr_path = is_valid_directory_path(path)
         except (TypeError, NotADirectoryError, PermissionError) as e:
-            logger.error(e, exc_info=False)
-            raise
+            raise e from None
 
         repo_pth = os.path.join(usr_path, c.DIR_HANGAR)
         if exists is False:
@@ -232,7 +228,6 @@ class Repository(object):
             else:
                 raise ValueError("Argument `write` only takes True or False as value")
         except (RuntimeError, ValueError) as e:
-            logger.error(e, exc_info=False, extra=self._env.__dict__)
             raise e from None
 
     def clone(self, user_name: str, user_email: str, remote_address: str,
@@ -474,11 +469,10 @@ class Repository(object):
         '''
         self.__verify_repo_initialized()
         if not is_suitable_user_key(name):
-            msg = f'Branch name provided: `{name}` invalid. Must only contain '\
-                  f'alpha-numeric or "." "_" "-" ascii characters.'
-            e = ValueError(msg)
-            logger.error(e, exc_info=False)
-            raise e
+            e = ValueError(
+                f'Branch name provided: `{name}` invalid. Must only contain '
+                f'alpha-numeric or "." "_" "-" ascii characters.')
+            raise e from None
         didCreateBranch = heads.create_branch(
             branchenv=self._env.branchenv,
             name=name,

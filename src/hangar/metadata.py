@@ -1,7 +1,6 @@
 import os
 import hashlib
 from typing import Optional, Union, Iterator, Tuple, Dict
-import logging
 
 import lmdb
 
@@ -10,32 +9,30 @@ from .records import parsing
 from .records.queries import RecordQuery
 from .utils import is_suitable_user_key, is_ascii
 
-logger = logging.getLogger(__name__)
-
 
 class MetadataReader(object):
     '''Class implementing get access to the metadata in a repository.
 
     Unlike the :class:`~.datacell.DatacellDataReader` and
-    :class:`~.datacell.DatacellDataWriter`, the equivalent Metadata classes
-    do not need a factory function or class to coordinate access through the
+    :class:`~.datacell.DatacellDataWriter`, the equivalent Metadata classes do
+    not need a factory function or class to coordinate access through the
     checkout. This is primarily because the metadata is only stored at a single
-    level, and because the long term storage is must simpler than for array data
-    (just write to a lmdb database).
+    level, and because the long term storage is must simpler than for array
+    data (just write to a lmdb database).
 
     .. note::
 
-       It is important to realize that this is not intended to serve as a general
-       store large amounts of textual data, and has no optimization to support such
-       use cases at this time. This should only serve to attach helpful labels, or
-       other quick information primarily intended for human book-keeping, to the
-       main tensor data!
+        It is important to realize that this is not intended to serve as a general
+        store large amounts of textual data, and has no optimization to support
+        such use cases at this time. This should only serve to attach helpful
+        labels, or other quick information primarily intended for human
+        book-keeping, to the main tensor data!
 
     .. note::
 
-       Write-enabled metadata objects are not thread or process safe. Read-only
-       checkouts can use multithreading safety to retrieve data via the
-       standard :py:meth:`.MetadataReader.get` calls
+        Write-enabled metadata objects are not thread or process safe. Read-only
+        checkouts can use multithreading safety to retrieve data via the standard
+        :py:meth:`.MetadataReader.get` calls
 
     '''
 
@@ -238,8 +235,7 @@ class MetadataReader(object):
             metaVal = self._labelTxn.get(self._mspecs[key])
             meta_val = parsing.hash_meta_raw_val_from_db_val(metaVal)
         except KeyError:
-            msg = f'The checkout does not contain metadata with key: {key}'
-            raise KeyError(msg)
+            raise KeyError(f'The checkout does not contain metadata with key: {key}')
         finally:
             if tmpconman:
                 self.__exit__()
@@ -352,8 +348,6 @@ class MetadataWriter(MetadataReader):
             If the `key` contains any whitespace or non alpha-numeric characters.
         ValueError
             If the `value` contains any non ascii characters.
-        LookupError
-            If an identical key/value pair exists in the checkout
         '''
         try:
             if not is_suitable_user_key(key):
@@ -364,7 +358,6 @@ class MetadataWriter(MetadataReader):
                 raise ValueError(
                     f'Metadata Value: `{value}` not allowed. Must be ascii-only string')
         except ValueError as e:
-            logger.error(e, exc_info=False)
             raise e from None
 
         try:
@@ -377,14 +370,13 @@ class MetadataWriter(MetadataReader):
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             metaRecVal = parsing.metadata_record_db_val_from_raw_val(val_hash)
 
-            # check if meta record already exists
+            # check if meta record already exists with same key
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
                 existingMetaRec = parsing.metadata_record_raw_val_from_db_val(existingMetaRecVal)
+                # check if meta record already exists with same key/val
                 if val_hash == existingMetaRec.meta_hash:
-                    raise LookupError(
-                        f'HANGAR KEY EXISTS ERROR:: metadata already contains key: `{key}` '
-                        f'with value: `{value}` & hash: {val_hash}')
+                    return key
 
             # write new data if label hash does not exist
             existingHashVal = self._labelTxn.get(hashKey, default=False)
@@ -401,10 +393,6 @@ class MetadataWriter(MetadataReader):
                 self._dataTxn.put(metaCountKey, newMetaCountVal)
             self._dataTxn.put(metaRecKey, metaRecVal)
             self._mspecs[key] = hashKey
-
-        except LookupError as e:
-            logger.error(e, exc_info=False)
-            raise e
 
         finally:
             if tmpconman:
@@ -462,7 +450,6 @@ class MetadataWriter(MetadataReader):
                 self._dataTxn.put(metaRecCountKey, newMetaRecCountVal)
 
         except (KeyError, ValueError) as e:
-            logger.error(e, exc_info=False)
             raise e from None
 
         finally:

@@ -1,5 +1,4 @@
 import hashlib
-import logging
 import os
 import warnings
 from multiprocessing import cpu_count, get_context
@@ -15,8 +14,6 @@ from .context import TxnRegister
 from .records import parsing
 from .records.queries import RecordQuery
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key
-
-logger = logging.getLogger(__name__)
 
 
 class DatacellDataReader(object):
@@ -128,27 +125,27 @@ class DatacellDataReader(object):
         self._is_conman = False
         return
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Union[str, int]) -> np.ndarray:
         '''Retrieve a sample with a given key. Convenience method for dict style access.
 
         .. seealso:: :meth:`get`
 
         Parameters
         ----------
-        key : string
+        key : Union[str, int]
             sample key to retrieve from the datacell
 
         Returns
         -------
-        np.array
+        np.ndarray
             sample array data corresponding to the provided key
         '''
         return self.get(key)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Union[str, int]]:
         return self.keys()
 
-    def __len__(self):
+    def __len__(self) -> int:
         '''Check how many samples are present in a given datacell
 
         Returns
@@ -158,12 +155,12 @@ class DatacellDataReader(object):
         '''
         return len(self._sspecs)
 
-    def __contains__(self, key):
+    def __contains__(self, key: Union[str, int]) -> bool:
         '''Determine if a key is a valid sample name in the datacell
 
         Parameters
         ----------
-        key : string
+        key : Union[str, int]
             name to check if it is a sample in the datacell
 
         Returns
@@ -207,37 +204,37 @@ class DatacellDataReader(object):
             val.close()
 
     @property
-    def name(self):
+    def name(self) -> str:
         '''Name of the datacell. Read-Only attribute.
         '''
         return self._dcelln
 
     @property
-    def dtype(self):
+    def dtype(self) -> np.dtype:
         '''Datatype of the datacell schema. Read-only attribute.
         '''
         return np.typeDict[self._schema_dtype_num]
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int]:
         '''Shape (or `max_shape`) of the datacell sample tensors. Read-only attribute.
         '''
         return self._schema_max_shape
 
     @property
-    def variable_shape(self):
+    def variable_shape(self) -> bool:
         '''Bool indicating if datacell schema is variable sized. Read-only attribute.
         '''
         return self._schema_variable
 
     @property
-    def named_samples(self):
+    def named_samples(self) -> bool:
         '''Bool indicating if samples are named. Read-only attribute.
         '''
         return self._samples_are_named
 
     @property
-    def iswriteable(self):
+    def iswriteable(self) -> bool:
         '''Bool indicating if this datacell object is write-enabled. Read-only attribute.
         '''
         return False if self._mode == 'r' else True
@@ -318,7 +315,7 @@ class DatacellDataReader(object):
         for name in tuple(self._sspecs.keys()):
             yield (name, self.get(name))
 
-    def get(self, name: str) -> np.ndarray:
+    def get(self, name: Union[str, int]) -> np.ndarray:
         '''Retrieve a sample in the datacell with a specific name.
 
         The method is thread/process safe IF used in a read only checkout. Use
@@ -337,12 +334,12 @@ class DatacellDataReader(object):
 
         Parameters
         ----------
-        name : str
+        name : Union[str, int]
             Name of the sample to retrieve data for.
 
         Returns
         -------
-        np.array
+        np.ndarray
             Tensor data stored in the datacell archived with provided name(s).
 
         Raises
@@ -357,8 +354,11 @@ class DatacellDataReader(object):
         except KeyError:
             raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in dcell: {self._dcelln}')
 
-    def get_batch(self, names: list,
-                  *, n_cpus: int = None, start_method: str = 'spawn') -> list:
+    def get_batch(self,
+                  names: Iterable[Union[str, int]],
+                  *,
+                  n_cpus: int = None,
+                  start_method: str = 'spawn') -> List[np.ndarray]:
         '''Retrieve a batch of sample data with the provided names.
 
         This method is (technically) thread & process safe, though it should not
@@ -370,7 +370,7 @@ class DatacellDataReader(object):
 
         Parameters
         ----------
-        name : list, tuple
+        name : Iterable[Union[str, int]]
             list/tuple of sample names to retrieve data for.
         n_cpus : int, kwarg-only
             if not None, uses num_cpus / 2 of the system for retrieval. Setting
@@ -383,7 +383,7 @@ class DatacellDataReader(object):
 
         Returns
         -------
-        list(np.ndarray)
+        List[np.ndarray]
             Tensor data stored in the datacell archived with provided name(s).
 
             If a single sample name is passed in as the, the corresponding
@@ -552,9 +552,6 @@ class DatacellDataWriter(DatacellDataReader):
         ValueError
             If the datatype of the input data does not match the specified data type of
             the datacell
-        LookupError
-            If a data sample with the same name and hash value already exists in the
-            datacell.
         '''
 
         # ------------------------ argument type checking ---------------------
@@ -576,9 +573,9 @@ class DatacellDataWriter(DatacellDataReader):
                 raise ValueError(f'`data` must be "C" contiguous array.')
 
             if self._schema_variable is True:
-                if data.ndim != len(self._schema_max_shape):
+                if data.ndim > len(self._schema_max_shape):
                     raise ValueError(
-                        f'`data` rank: {data.ndim} != dcell rank: {len(self._schema_max_shape)}')
+                        f'`data` rank: {data.ndim} > dcell rank: {len(self._schema_max_shape)}')
                 for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
                     if dDimSize > schDimSize:
                         raise ValueError(
@@ -590,7 +587,6 @@ class DatacellDataWriter(DatacellDataReader):
                     f'`data` shape: {data.shape} != fixed dcell shape: {self._schema_max_shape}')
 
         except ValueError as e:
-            logger.error(e, exc_info=False)
             raise e from None
 
         # --------------------- add data to storage backend -------------------
@@ -603,15 +599,14 @@ class DatacellDataWriter(DatacellDataReader):
             full_hash = hashlib.blake2b(data.tobytes(), digest_size=20).hexdigest()
             hashKey = parsing.hash_data_db_key_from_raw_key(full_hash)
 
-            # check if data record already exists
+            # check if data record already exists with given key
             dataRecKey = parsing.data_record_db_key_from_raw_key(self._dcelln, name)
             existingDataRecVal = self._dataTxn.get(dataRecKey, default=False)
             if existingDataRecVal:
+                # check if data record already with same key & hash value
                 existingDataRec = parsing.data_record_raw_val_from_db_val(existingDataRecVal)
                 if full_hash == existingDataRec.data_hash:
-                    raise LookupError(
-                        f'Datacell: {self._dcelln} already contains identical object named:'
-                        f'{name} with same hash value: {full_hash}')
+                    return name
 
             # write new data if data hash does not exist
             existingHashVal = self._hashTxn.get(hashKey, default=False)
@@ -633,11 +628,6 @@ class DatacellDataWriter(DatacellDataReader):
                 newDcellCount = parsing.datacell_record_count_raw_val_from_db_val(dcellCountVal) + 1
                 newDcellCountVal = parsing.datacell_record_count_db_val_from_raw_val(newDcellCount)
                 self._dataTxn.put(dcellCountKey, newDcellCountVal)
-
-        except LookupError as e:
-            logger.error(e, exc_info=False)
-            raise
-
         finally:
             if tmpconman:
                 self.__exit__()
@@ -715,8 +705,7 @@ class DatacellDataWriter(DatacellDataReader):
                 self._dataTxn.put(dcellDataCountKey, newDcellDataCountVal)
 
         except KeyError as e:
-            logger.error(e, exc_info=False)
-            raise
+            raise e from None
 
         finally:
             if not self._is_conman:
@@ -813,7 +802,7 @@ class Datacells(object):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Datacell Names / Partial Remote References:\
-                \n      - ' + '\n      - '.join(
+                \n      - '                                                       + '\n      - '.join(
             f'{dcelln} / {dcell.contains_remote_references}'
             for dcelln, dcell in self._datacells.items())
         p.text(res)
@@ -839,7 +828,7 @@ class Datacells(object):
         '''
         return self.keys()
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Union[DatacellDataReader, DatacellDataWriter]:
         '''Dict style access to return the datacell object with specified key/name.
 
         Parameters
@@ -886,14 +875,14 @@ class Datacells(object):
         '''
         return True if key in self._datacells else False
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._datacells)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[str]:
         return iter(self._datacells)
 
     @property
-    def iswriteable(self):
+    def iswriteable(self) -> bool:
         '''Bool indicating if this datacell object is write-enabled. Read-only attribute.
         '''
         return False if self._mode == 'r' else True
@@ -990,8 +979,7 @@ class Datacells(object):
             return wr
         except KeyError:
             e = KeyError(f'No datacell exists with name: {name}')
-            logger.error(e, exc_info=False)
-            raise e
+            raise e from None
 
 # ------------------------ Writer-Enabled Methods Only ------------------------------
 
@@ -1028,7 +1016,7 @@ class Datacells(object):
         for dskey in list(self._datacells):
             self._datacells[dskey].__exit__(*exc)
 
-    def multi_add(self, mapping: dict) -> str:
+    def multi_add(self, mapping: Mapping[str, np.ndarray]) -> str:
         '''Add related samples to un-named datacells with the same generated key.
 
         If you have multiple datacells in a checkout whose samples are related to
@@ -1048,7 +1036,7 @@ class Datacells(object):
 
         Parameters
         ----------
-        mapping: dict
+        mapping: Mapping[str, np.ndarray]
             Dict mapping (any number of) datacell names to tensor data (samples)
             which to add. The datacells must exist, and must be set to accept
             samples which are not named by the user
@@ -1079,7 +1067,6 @@ class Datacells(object):
                 self._datacells[k].add(v, bulkn=data_name)
 
         except KeyError as e:
-            logger.error(e, exc_info=False)
             raise e from None
 
         finally:
@@ -1089,14 +1076,14 @@ class Datacells(object):
         return data_name
 
     def init_datacell(self,
-                       name: str,
-                       shape: Union[int, Tuple[int]] = None,
-                       dtype: np.dtype = None,
-                       prototype: np.ndarray = None,
-                       named_samples: bool = True,
-                       variable_shape: bool = False,
-                       *,
-                       backend: str = None):
+                      name: str,
+                      shape: Union[int, Tuple[int]] = None,
+                      dtype: np.dtype = None,
+                      prototype: np.ndarray = None,
+                      named_samples: bool = True,
+                      variable_shape: bool = False,
+                      *,
+                      backend: str = None) -> DatacellDataWriter:
         '''Initializes a datacell in the repository.
 
         Datacells are groups of related data pieces (samples). All samples within
@@ -1198,8 +1185,7 @@ class Datacells(object):
                 backend = backend_from_heuristics(prototype)
 
         except (ValueError, LookupError) as e:
-            logger.error(e, exc_info=False)
-            raise e
+            raise e from None
 
         # ----------- Determine schema format details -------------------------
 
@@ -1273,9 +1259,9 @@ class Datacells(object):
         datatxn = TxnRegister().begin_writer_txn(self._dataenv)
         try:
             if dcell_name not in self._datacells:
-                e = KeyError(f'HANGAR KEY ERROR:: Cannot remove: {dcell_name}. Key does not exist.')
-                logger.error(e, exc_info=False)
-                raise e
+                e = KeyError(f'Cannot remove: {dcell_name}. Key does not exist.')
+                raise e from None
+
             self._datacells[dcell_name]._close()
             self._datacells.__delitem__(dcell_name)
 

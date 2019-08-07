@@ -1,10 +1,4 @@
-import platform
-import time
-import os
-
-from os import mkdir, getcwd, chdir
-from os.path import join as pjoin
-from random import randint
+from os import getcwd
 
 import numpy as np
 import pytest
@@ -336,4 +330,4 @@ def test_start_server():
         res = runner.invoke(cli.server, ['--ip', 'localhost', '--port', '50111', '--timeout', '1'])
         assert time.time() - startTime >= 1
         assert res.exit_code == 0
-        assert res.stdout.startswith('Hangar Server Started')
+        assert 'Hangar Server Started' in res.stdout
