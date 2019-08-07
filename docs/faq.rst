@@ -164,8 +164,8 @@ time I’ve developed Hangar where we lost data irrecoverably:
 
    .. seealso::
 
-      - https://hangar-py.readthedocs.io/en/latest/Hangar-Tutorial-001.html#performance
-      - https://hangar-py.readthedocs.io/en/latest/design.html
+      - :ref:`ref-tutorial` (Part 1, In section: "performance")
+      - :ref:`ref-hangar-under-the-hood`
 
 
 How Can a Hangar Repository be Backed Up?
