@@ -49,13 +49,13 @@ def written_repo(repo):
 @pytest.fixture()
 def repo_with_20_samples(written_repo, array5by7):
     co = written_repo.checkout(write=True)
-    second_dset = co.datasets.init_dataset('second_dset', prototype=array5by7)
-    first_dset = co.datasets['_dset']
+    second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7)
+    first_aset = co.arraysets['_aset']
     for i in range(20):
         array5by7[:] = i
         array5by7[:] = i
-        first_dset[str(i)] = array5by7
-        second_dset[str(i)] = array5by7
+        first_aset[str(i)] = array5by7
+        second_aset[str(i)] = array5by7
     co.commit('20 samples')
     co.close()
     yield written_repo
@@ -189,7 +189,6 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
         time.sleep(0.5)
-
 
 
 @pytest.fixture()

@@ -1,4 +1,3 @@
-
 try:
     from torch.utils.data import Dataset
 except (ImportError, ModuleNotFoundError):
@@ -54,9 +53,16 @@ def make_torch_dataset(arraysets,
     `torch.utils.data.Dataset`
     """
     warnings.warn("Dataloaders are Experimental in the current release", UserWarning)
+    if keys:
+        if not isinstance(keys, (list, tuple, set)):
+            raise TypeError(f'type(keys): {type(keys)} != (list, tuple, set)')
+
     gasets = GroupedAsets(arraysets, keys, index_range)
 
     if field_names:
+        if not isinstance(field_names, (list, tuple, set)):
+            raise TypeError(
+                f'type(field_names): {type(field_names)} != (list, tuple, set)')
         if len(field_names) != len(arraysets):
             m = f'len(field_names): {len(field_names)} != len(arraysets): {len(arraysets)}'
             raise ValueError(m)

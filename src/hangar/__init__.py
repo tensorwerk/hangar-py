@@ -6,17 +6,16 @@ from .remote.server import serve
 from .repository import Repository
 
 
+def raise_ImportError(message, *args, **kwargs):
+    raise ImportError(message)
 
-def raise_RuntimeError(message, *args, **kwargs):
-    raise RuntimeError(message)
-
-
-try:
-    from .dataloaders import make_tf_dataset
-except Exception:
-    make_tf_dataset = partial(raise_RuntimeError, "Could not import tensorflow. Install dependencies")
 
 try:
-    from .dataloaders import make_torch_dataset
-except Exception:
-    make_torch_dataset = partial(raise_RuntimeError, "Could not import torch. Install dependencies")
+    from .dataloaders.tfloader import make_tf_dataset
+except ImportError:
+    make_tf_dataset = partial(raise_ImportError, "Could not import tensorflow. Install dependencies")
+
+try:
+    from .dataloaders.torchloader import make_torch_dataset
+except ImportError:
+    make_torch_dataset = partial(raise_ImportError, "Could not import torch. Install dependencies")

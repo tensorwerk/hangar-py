@@ -13,18 +13,18 @@ import random
 from .common import GroupedAsets
 
 
-def yield_data(hangar_arraysets, sample_names, shuffle=False):
+def yield_data(arraysets, sample_names, shuffle=False):
     if shuffle:
         sample_names = list(sample_names)
         random.shuffle(sample_names)
     for name in sample_names:
-        yield tuple([aset[name] for aset in hangar_arraysets])
+        yield tuple([aset[name] for aset in arraysets])
 
 
-def make_tf_arrayset(arraysets,
-                     keys: Sequence[str] = None,
-                     index_range: slice = None,
-                     shuffle: bool = True):
+def make_tf_dataset(arraysets,
+                    keys: Sequence[str] = None,
+                    index_range: slice = None,
+                    shuffle: bool = True):
     """
     Uses the hangar arraysets to make a tensorflow dataset. It uses
     `from_generator` function from `tensorflow.data.Dataset` with a generator

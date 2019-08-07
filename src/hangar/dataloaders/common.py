@@ -1,5 +1,5 @@
 import warnings
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional, Union, Tuple, List
 
 
 ArraysetsRef = Union['ArraysetDataReader', Iterable['ArraysetDataReader']]
@@ -9,12 +9,12 @@ class GroupedAsets(object):
     """Groups hangar arraysets and validate suitability for usage in dataloaders.
 
     It can choose a subset of samples in the hangar arraysets by checking the
-    list of keys or an index range. :class:`GroupedAsets` does not expect all the
-    input hangar arraysets to have same length and same keys. It takes a `set.union`
-    of sample names from all the arraysets and `keys` argument if passed and hence
-    discard non-common keys while fetching. Based on `keys` or `index_range`
-    (ignore `index_range` if `keys` is present) it makes a subset of sample names which
-    is then used to fetch the data from hangar arraysets.
+    list of keys or an index range. :class:`GroupedAsets` does not expect all
+    the input hangar arraysets to have same length and same keys. It takes a
+    `set.union` of sample names from all the arraysets and `keys` argument if
+    passed and hence discard non-common keys while fetching. Based on `keys` or
+    `index_range` (ignore `index_range` if `keys` is present) it makes a subset
+    of sample names which is then used to fetch the data from hangar arraysets.
     """
 
     def __init__(self,
@@ -22,40 +22,39 @@ class GroupedAsets(object):
                  keys: Optional[Iterable[Union[int, str]]] = None,
                  index_range: Optional[slice] = None):
 
-        if not isinstance(arraysets, (list, tuple)):
+        self.arrayset_array = []
+        self.arrayset_names = []
+        self._allowed_samples: Tuple[Union[str, int]] = None
+
+        if not isinstance(arraysets, (list, tuple, set)):
             arraysets = (arraysets,)
         if len(arraysets) == 0:
-            raise ValueError("`hangar_arraysets` cannot be empty")
+            raise ValueError('len(arraysets) cannot == 0')
 
-        arrayset_names, aset_lens, full_sample_names = [], set(), []
+        aset_lens = set()
+        all_aset_keys = []
         for arrayset in arraysets:
-            kset = set(arrayset.keys())
-            arrayset_names.append(arrayset.name)
-            full_sample_names.append(kset)
-            aset_lens.add(len(kset))
-        sample_names = set.intersection(*full_sample_names)
-        del full_sample_names
+            self.arrayset_array.append(arrayset)
+            self.arrayset_names.append(arrayset.name)
+            aset_lens.add(len(arrayset))
+            all_aset_keys.append(set(arrayset.keys()))
+        common_aset_keys = set.intersection(*all_aset_keys)
+
         if len(aset_lens) > 1:
             warnings.warn('Arraysets do not contain equal num samples', UserWarning)
 
         if keys:
-            if not isinstance(keys, (list, tuple, set)):
-                keys = (keys,)
-            keys = set(keys)
-            noncommon_keys = keys.difference(sample_names)
+            keys = set(keys,)
+            noncommon_keys = keys.difference(common_aset_keys)
             if len(noncommon_keys) > 0:
-                raise ValueError(
-                    f'Requested keys: {noncommon_keys} do not exist in all arraysets.')
+                raise ValueError(f'Keys: {noncommon_keys} do not exist in all arraysets.')
             self._allowed_samples = tuple(keys)
         elif index_range:
             if not isinstance(index_range, slice):
-                raise TypeError(f"`index_range` must be a slice, not {type(keys)}")
-            self._allowed_samples = tuple(sample_names)[index_range]
+                raise TypeError(f'type(index_range): {type(index_range)} != slice')
+            self._allowed_samples = tuple(common_aset_keys)[index_range]
         else:
-            self._allowed_samples = tuple(sample_names)
-
-        self.arrayset_array = arraysets
-        self.arrayset_names = arrayset_names
+            self._allowed_samples = tuple(common_aset_keys)
 
     def get_types(self, converter=None):
         """
@@ -74,6 +73,7 @@ class GroupedAsets(object):
         types = []
         for aset in self.arrayset_array:
             if converter:
+                print(aset)
                 types.append(converter(aset.dtype))
             else:
                 types.append(aset.dtype)
