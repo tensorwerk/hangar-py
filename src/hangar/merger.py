@@ -1,16 +1,4 @@
-import os
-import logging
-
-import lmdb
-
-from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
-from .records import commiting, hashs, heads, parsing
-
-logger = logging.getLogger(__name__)
-
-'''
-Merge Methods
--------------
+"""Merge Methods
 
 In the current implementation only fast-forward and a competent, but limited,
 three-way merge algorithm are implemented. All user facing API calls should be
@@ -22,7 +10,13 @@ funneled through the :function:`select_merge_algorithm` function
     to revert a bad merge commit. All revert like operations should be made by
     creating new branches from the last "good" state, after which new merge
     operations can be attempted (if desired.)
-'''
+"""
+import os
+
+import lmdb
+
+from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
+from .records import commiting, hashs, heads, parsing
 
 
 def select_merge_algorithm(message: str,
@@ -35,7 +29,7 @@ def select_merge_algorithm(message: str,
                            repo_path: str,
                            *,
                            writer_uuid: str = 'MERGE_PROCESS') -> str:
-    '''Entry point to perform a merge.
+    """Entry point to perform a merge.
 
     Automatically selects algorithm and does the operation if no conflicts are
     found. This call requires that the staging area status be "CLEAN", if
@@ -78,24 +72,22 @@ def select_merge_algorithm(message: str,
     -------
     str
         commit hash of the merge if this was a successful operation.
-    '''
+    """
     current_head = heads.get_staging_branch_head(branchenv)
     wDiffer = WriterUserDiff(stageenv=stageenv,
                              branchenv=branchenv,
                              refenv=refenv,
                              branch_name=current_head)
     if wDiffer.status() != 'CLEAN':
-        msg = 'HANGAR RUNTIME ERROR: Changes are currently pending in the staging area '\
-              'To avoid mangled histories, the staging area must exist in a clean state '\
-              'Please reset or commit any changes before the merge operation'
-        e = RuntimeError(msg)
-        logger.error(e, exc_info=False)
+        e = RuntimeError(
+            'HANGAR RUNTIME ERROR: Changes are currently pending in the staging area ',
+            'To avoid mangled histories, the staging area must exist in a clean state ',
+            'Please reset or commit any changes before the merge operation')
         raise e from None
 
     try:
         heads.acquire_writer_lock(branchenv=branchenv, writer_uuid=writer_uuid)
     except PermissionError as e:
-        logger.error(e, exc_info=False)
         raise e from None
 
     try:
@@ -105,7 +97,7 @@ def select_merge_algorithm(message: str,
         branchHistory = rDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
 
         if branchHistory.canFF is True:
-            logger.info('Selected Fast-Forward Merge Strategy')
+            print('Selected Fast-Forward Merge Strategy')
             success = _fast_forward_merge(
                 branchenv=branchenv,
                 stageenv=stageenv,
@@ -115,7 +107,7 @@ def select_merge_algorithm(message: str,
                 new_masterHEAD=branchHistory.devHEAD,
                 repo_path=repo_path)
         else:
-            logger.info('Selected 3-Way Merge Strategy')
+            print('Selected 3-Way Merge Strategy')
             success = _three_way_merge(
                 message=message,
                 master_branch_name=master_branch_name,
@@ -149,7 +141,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
                         master_branch: str,
                         new_masterHEAD: str,
                         repo_path: os.PathLike) -> str:
-    '''Update branch head pointer to perform a fast-forward merge.
+    """Update branch head pointer to perform a fast-forward merge.
 
     This method does not check that it is safe to do this operation, all
     verification should happen before this point is reached
@@ -176,7 +168,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
     str
         if successful, returns the commit hash the master branch name was
         updated to.
-    '''
+    """
     try:
         commiting.replace_staging_area_with_commit(
             refenv=refenv, stageenv=stageenv, commit_hash=new_masterHEAD)
@@ -189,7 +181,6 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
         hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
 
     except ValueError as e:
-        logger.error(e, exc_info=False)
         raise e from None
 
     return outBranchName
@@ -209,7 +200,7 @@ def _three_way_merge(message: str,
                      refenv: lmdb.Environment,
                      stagehashenv: lmdb.Environment,
                      repo_path: os.PathLike) -> str:
-    '''Merge strategy with diff/patch computed from changes since last common ancestor.
+    """Merge strategy with diff/patch computed from changes since last common ancestor.
 
     Parameters
     ----------
@@ -246,7 +237,7 @@ def _three_way_merge(message: str,
     ------
     ValueError
         If a conflict is found, the operation will abort before completing.
-    '''
+    """
     aCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=ancestorHEAD)
     mCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=masterHEAD)
     dCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=devHEAD)
@@ -254,7 +245,6 @@ def _three_way_merge(message: str,
     try:
         mergeContents = _compute_merge_results(a_cont=aCont, m_cont=mCont, d_cont=dCont)
     except ValueError as e:
-        logger.error(e, exc_info=False)
         raise e from None
 
     fmtCont = _merge_dict_to_lmdb_tuples(patchedRecs=mergeContents)
@@ -276,7 +266,7 @@ def _three_way_merge(message: str,
 
 
 def _merge_changes(changes: dict, m_dict: dict) -> dict:
-    '''Common class which can merge changes between two branches.
+    """Common class which can merge changes between two branches.
 
     This class does NOT CHECK FOR MERGE CONFLICTS, and will result in UNDEFINED
     BEHAVIOR if conflicts are present. All validations must be performed
@@ -296,7 +286,7 @@ def _merge_changes(changes: dict, m_dict: dict) -> dict:
     dict
         record structure similar to `m_dict` input with changes merged into
         it which were made on the `dev` branch.
-    '''
+    """
     m_added = changes['master']['additions']
     m_unchanged = changes['master']['unchanged']
     # m_removed = changes['master']['removals']
@@ -322,7 +312,7 @@ def _merge_changes(changes: dict, m_dict: dict) -> dict:
 
 
 def _compute_merge_results(a_cont, m_cont, d_cont):
-    '''Compute the diff of a 3-way merge and patch historical contents to get new state
+    """Compute the diff of a 3-way merge and patch historical contents to get new state
 
     Parameters
     ----------
@@ -336,14 +326,14 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     Returns
     -------
     dict
-        nested dict specifying datasets and metadata record specs of the new
+        nested dict specifying arraysets and metadata record specs of the new
         merge commit.
 
     Raises
     ------
     ValueError
         If a conflict is found, the operation is aborted
-    '''
+    """
     # conflict checking
     cmtDiffer = ThreeWayCommitDiffer(a_cont, m_cont, d_cont)
     confs = cmtDiffer.determine_conflicts()
@@ -351,31 +341,31 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
         msg = f'HANGAR VALUE ERROR:: Merge ABORTED with conflict: {confs}'
         raise ValueError(msg) from None
 
-    # merging: dataset schemas
+    # merging: arrayset schemas
     m_schema_dict = {}
-    for dsetn in m_cont['datasets']:
-        m_schema_dict[dsetn] = m_cont['datasets'][dsetn]['schema']
-    o_schema_dict = _merge_changes(cmtDiffer.dataset_changes(), m_schema_dict)
+    for asetn in m_cont['arraysets']:
+        m_schema_dict[asetn] = m_cont['arraysets'][asetn]['schema']
+    o_schema_dict = _merge_changes(cmtDiffer.arrayset_changes(), m_schema_dict)
 
-    # merging: dataset samples
+    # merging: arrayset samples
     o_data_dict = {}
     sample_changes = cmtDiffer.sample_changes()
-    for dsetn in o_schema_dict:
-        if dsetn not in m_cont['datasets']:
-            o_data_dict[dsetn] = d_cont['datasets'][dsetn]['data']
+    for asetn in o_schema_dict:
+        if asetn not in m_cont['arraysets']:
+            o_data_dict[asetn] = d_cont['arraysets'][asetn]['data']
             continue
         else:
-            m_dsetn_data_dict = m_cont['datasets'][dsetn]['data']
+            m_asetn_data_dict = m_cont['arraysets'][asetn]['data']
 
-        if dsetn not in d_cont['datasets']:
-            o_data_dict[dsetn] = m_cont['datasets'][dsetn]['data']
+        if asetn not in d_cont['arraysets']:
+            o_data_dict[asetn] = m_cont['arraysets'][asetn]['data']
             continue
 
-        dset_sample_changes = {
-            'master': sample_changes['master'][dsetn],
-            'dev': sample_changes['dev'][dsetn],
+        aset_sample_changes = {
+            'master': sample_changes['master'][asetn],
+            'dev': sample_changes['dev'][asetn],
         }
-        o_data_dict[dsetn] = _merge_changes(dset_sample_changes, m_dsetn_data_dict)
+        o_data_dict[asetn] = _merge_changes(aset_sample_changes, m_asetn_data_dict)
 
     # merging: metadata
     o_meta_dict = _merge_changes(cmtDiffer.meta_changes(), m_cont['metadata'])
@@ -383,17 +373,17 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     # collect all merge results into final data structure
     outDict = {}
     outDict['metadata'] = o_meta_dict
-    outDict['datasets'] = {}
-    for dsetn, dsetSchema in o_schema_dict.items():
-        outDict['datasets'][dsetn] = {
-            'schema': dsetSchema,
-            'data': o_data_dict[dsetn]
+    outDict['arraysets'] = {}
+    for asetn, asetSchema in o_schema_dict.items():
+        outDict['arraysets'][asetn] = {
+            'schema': asetSchema,
+            'data': o_data_dict[asetn]
         }
     return outDict
 
 
 def _merge_dict_to_lmdb_tuples(patchedRecs):
-    '''Create a lexicographically sorted iterable of (key/val tuples) from a dict.
+    """Create a lexicographically sorted iterable of (key/val tuples) from a dict.
 
     .. note::
 
@@ -404,7 +394,7 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
     Parameters
     ----------
     patchedRecs : dict
-        nested dict which specifies all records for datasets & metadata
+        nested dict which specifies all records for arraysets & metadata
 
     Returns
     -------
@@ -412,17 +402,17 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
         iterable of tuples formatted correctly to serve an a drop in replacement
         for the staging environment, with elements lexicographically sorted so
         that an lmdb `putmulti` operation can be performed with `append=True`.
-    '''
+    """
     entries = []
-    numDsetsKey = parsing.dataset_total_count_db_key()
-    numDsetsVal = parsing.dataset_total_count_db_val_from_raw_val(
-        number_of_dsets=len(patchedRecs['datasets'].keys()))
-    entries.append((numDsetsKey, numDsetsVal))
+    numAsetsKey = parsing.arrayset_total_count_db_key()
+    numAsetsVal = parsing.arrayset_total_count_db_val_from_raw_val(
+        number_of_asets=len(patchedRecs['arraysets'].keys()))
+    entries.append((numAsetsKey, numAsetsVal))
 
-    for dsetn in patchedRecs['datasets'].keys():
-        schemaSpec = patchedRecs['datasets'][dsetn]['schema']
-        schemaKey = parsing.dataset_record_schema_db_key_from_raw_key(dsetn)
-        schemaVal = parsing.dataset_record_schema_db_val_from_raw_val(
+    for asetn in patchedRecs['arraysets'].keys():
+        schemaSpec = patchedRecs['arraysets'][asetn]['schema']
+        schemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(asetn)
+        schemaVal = parsing.arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schemaSpec.schema_hash,
             schema_is_var=schemaSpec.schema_is_var,
             schema_max_shape=schemaSpec.schema_max_shape,
@@ -431,15 +421,15 @@ def _merge_dict_to_lmdb_tuples(patchedRecs):
             schema_default_backend=schemaSpec.schema_default_backend)
         entries.append((schemaKey, schemaVal))
 
-        dataRecs = patchedRecs['datasets'][dsetn]['data']
+        dataRecs = patchedRecs['arraysets'][asetn]['data']
         numDataRecs = len(dataRecs.keys())
-        numDataKey = parsing.dataset_record_count_db_key_from_raw_key(dsetn)
-        numDataVal = parsing.dataset_record_count_db_val_from_raw_val(numDataRecs)
+        numDataKey = parsing.arrayset_record_count_db_key_from_raw_key(asetn)
+        numDataVal = parsing.arrayset_record_count_db_val_from_raw_val(numDataRecs)
         entries.append((numDataKey, numDataVal))
 
         for dataRawK, dataRawV in dataRecs.items():
             dataRecKey = parsing.data_record_db_key_from_raw_key(
-                dset_name=dataRawK.dset_name,
+                aset_name=dataRawK.aset_name,
                 data_name=dataRawK.data_name)
             dataRecVal = parsing.data_record_db_val_from_raw_val(
                 data_hash=dataRawV.data_hash)

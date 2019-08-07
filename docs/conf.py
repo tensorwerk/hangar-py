@@ -15,7 +15,9 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx_click.ext',
     'nbsphinx',
+    'sphinx.ext.mathjax',
     'recommonmark',
+    'IPython.sphinxext.ipython_console_highlighting',
 ]
 if os.getenv('SPELLCHECK'):
     extensions += 'sphinxcontrib.spelling',

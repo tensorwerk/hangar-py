@@ -11,18 +11,18 @@ import numpy as np
 def test_heuristics_select_backend(repo, prototype, expected_backend):
 
     wco = repo.checkout(write=True)
-    dset = wco.datasets.init_dataset('dset', prototype=prototype)
-    assert dset._backend == expected_backend
-    dset['0'] = prototype
+    aset = wco.arraysets.init_arrayset('aset', prototype=prototype)
+    assert aset._backend == expected_backend
+    aset['0'] = prototype
     wco.commit('first commit')
-    assert dset._backend == expected_backend
-    assert np.allclose(prototype, dset['0'])
+    assert aset._backend == expected_backend
+    assert np.allclose(prototype, aset['0'])
     wco.close()
 
     nwco = repo.checkout(write=True)
-    ndset = nwco.datasets['dset']
-    assert ndset._backend == expected_backend
-    assert np.allclose(prototype, ndset['0'])
+    naset = nwco.arraysets['aset']
+    assert naset._backend == expected_backend
+    assert np.allclose(prototype, naset['0'])
     nwco.close()
 
 
@@ -37,18 +37,18 @@ def test_heuristics_select_backend(repo, prototype, expected_backend):
 def test_manual_override_heuristics_select_backend(repo, prototype, backend):
 
     wco = repo.checkout(write=True)
-    dset = wco.datasets.init_dataset('dset', prototype=prototype, backend=backend)
-    assert dset._backend == backend
-    dset['0'] = prototype
+    aset = wco.arraysets.init_arrayset('aset', prototype=prototype, backend=backend)
+    assert aset._backend == backend
+    aset['0'] = prototype
     wco.commit('first commit')
-    assert dset._backend == backend
-    assert np.allclose(prototype, dset['0'])
+    assert aset._backend == backend
+    assert np.allclose(prototype, aset['0'])
     wco.close()
 
     nwco = repo.checkout(write=True)
-    ndset = nwco.datasets['dset']
-    assert ndset._backend == backend
-    assert np.allclose(prototype, ndset['0'])
+    naset = nwco.arraysets['aset']
+    assert naset._backend == backend
+    assert np.allclose(prototype, naset['0'])
     nwco.close()
 
 
@@ -56,5 +56,5 @@ def test_manual_override_heuristics_invalid_value_raises_error(repo):
 
     wco = repo.checkout(write=True)
     with pytest.raises(ValueError):
-        dset = wco.datasets.init_dataset('dset', prototype=np.arange(10), backend='ERROR')
+        aset = wco.arraysets.init_arrayset('aset', prototype=np.arange(10), backend='ERROR')
     wco.close()

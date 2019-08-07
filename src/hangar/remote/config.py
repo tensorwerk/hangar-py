@@ -1,4 +1,4 @@
-'''Provides editable config of server & rpc behavior from on disk yaml file
+"""Provides editable config of server & rpc behavior from on disk yaml file
 
 Portions of this code have been taken and modified from the "Dask" project.
 
@@ -37,7 +37,7 @@ INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
-'''
+"""
 import os
 from os import makedirs
 from functools import lru_cache
@@ -53,7 +53,7 @@ defaults = []
 
 
 def update(old, new, priority='new'):
-    ''' Update a nested dictionary with values from another
+    """ Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
 
@@ -76,7 +76,7 @@ def update(old, new, priority='new'):
     >>> b = {'x': 2, 'y': {'b': 3}}
     >>> update(a, b, priority='old')  # doctest: +SKIP
     {'x': 1, 'y': {'a': 2, 'b': 3}}
-    '''
+    """
     for k, v in new.items():
         if k not in old and isinstance(v, dict):
             old[k] = {}
@@ -93,7 +93,7 @@ def update(old, new, priority='new'):
 
 
 def merge(*dicts):
-    ''' Update a sequence of nested dictionaries
+    """ Update a sequence of nested dictionaries
 
     This prefers the values in the latter dictionaries to those in the former
 
@@ -103,7 +103,7 @@ def merge(*dicts):
     >>> b = {'y': {'b': 3}}
     >>> merge(a, b)  # doctest: +SKIP
     {'x': 1, 'y': {'a': 2, 'b': 3}}
-    '''
+    """
     result = {}
     for d in dicts:
         update(result, d)
@@ -111,11 +111,11 @@ def merge(*dicts):
 
 
 def collect_yaml(paths):
-    ''' Collect configuration from yaml files
+    """ Collect configuration from yaml files
 
     This searches through a list of paths, expands to find all yaml or json
     files, and then parses each file.
-    '''
+    """
     # Find all paths
     file_paths = []
     for path in paths:
@@ -149,7 +149,7 @@ def collect_yaml(paths):
 
 
 def ensure_file(source, destination=None, comment=False):
-    '''
+    """
     Copy file to default location if it does not already exist
 
     This tries to move a default configuration file to a default location if
@@ -167,7 +167,7 @@ def ensure_file(source, destination=None, comment=False):
         Destination directory.
     comment : bool, False by default
         Whether or not to comment out the config file when copying.
-    '''
+    """
     if destination is None:
         raise FileNotFoundError('not currenly accepting no-destination option')
 
@@ -209,7 +209,7 @@ def ensure_file(source, destination=None, comment=False):
 
 
 def collect(paths=[], env=None):
-    '''
+    """
     Collect configuration from paths and environment variables
 
     Parameters
@@ -223,7 +223,7 @@ def collect(paths=[], env=None):
     Returns
     -------
     config: dict
-    '''
+    """
     if env is None:
         env = os.environ
     configs = []
@@ -235,7 +235,7 @@ def collect(paths=[], env=None):
 
 
 def refresh(config=config, defaults=defaults, **kwargs):
-    '''
+    """
     Update configuration by re-reading yaml files and env variables
 
     This mutates the global hangar.config.config, or the config parameter if
@@ -252,7 +252,7 @@ def refresh(config=config, defaults=defaults, **kwargs):
     may not change behavior, even if configuration changes.  It is recommended
     to restart your python process if convenient to ensure that new
     configuration changes take place.
-    '''
+    """
     get.cache_clear()
     config.clear()
 
@@ -264,7 +264,7 @@ def refresh(config=config, defaults=defaults, **kwargs):
 
 @lru_cache(maxsize=128)
 def get(key, default=no_default, config=config):
-    '''
+    """
     Get elements from global config
 
     Use '.' for nested access
@@ -280,7 +280,7 @@ def get(key, default=no_default, config=config):
 
     >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
-    '''
+    """
     keys = key.split('.')
     result = config
     for k in keys:

@@ -9,6 +9,9 @@ matrix:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
         - TOXENV=docs
+      addons:
+        apt_packages:
+          - pandoc
     - os: linux
       dist: xenial
       language: python

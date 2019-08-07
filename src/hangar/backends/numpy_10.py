@@ -1,4 +1,4 @@
-'''Local Numpy memmap Backend Implementation, Identifier: ``NUMPY_10``
+"""Local Numpy memmap Backend Implementation, Identifier: ``NUMPY_10``
 
 Backend Identifiers
 ===================
@@ -13,12 +13,12 @@ Storage Method
 
 * Data is written to specific subarray indexes inside a numpy memmapped array on disk.
 
-* Each dataset is a zero-initialized array of
+* Each file is a zero-initialized array of
 
   *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
 
   *  ``shape: (COLLECTION_SIZE, *{schema_shape})``; ie ``(500, 10)`` or ``(500,
-     4, 3)``. The first index in the dataset is referred to as a "collection
+     4, 3)``. The first index in the array is referred to as a "collection
      index".
 
 Record Format
@@ -36,16 +36,13 @@ Fields Recorded for Each Array
 Separators used
 ---------------
 
-*  ``SEP_KEY``
-*  ``SEP_HSH``
-*  ``SEP_LST``
-*  ``SEP_SLC``
+*  ``SEP_KEY: ":"``
+*  ``SEP_HSH: "$"``
+*  ``SEP_LST: " "``
+*  ``SEP_SLC: "*"``
 
 Examples
 --------
-
-Note: all examples use ``SEP_KEY: ":"``, ``SEP_HSH: "$"``, ``SEP_LST: " "``,
-``SEP_SLC: "*"``
 
 1)  Adding the first piece of data to a file:
 
@@ -81,7 +78,7 @@ Technical Notes
    itself to serve as a quick way to verify no disk corruption occurred. This is
    required since numpy has no built in data integrity validation methods when
    reading from disk.
-'''
+"""
 import os
 import re
 from collections import ChainMap
@@ -116,12 +113,12 @@ _SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
 NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec',
                                    [('backend', str), ('uid', str),
-                                    ('checksum', str), ('dataset_idx', int),
+                                    ('checksum', str), ('collection_idx', int),
                                     ('shape', Tuple[int])])
 
 
-def numpy_10_encode(uid: str, checksum: int, dataset_idx: int, shape: tuple) -> bytes:
-    '''converts the numpy data spect to an appropriate db value
+def numpy_10_encode(uid: str, checksum: int, collection_idx: int, shape: tuple) -> bytes:
+    """converts the numpy data spect to an appropriate db value
 
     Parameters
     ----------
@@ -129,29 +126,29 @@ def numpy_10_encode(uid: str, checksum: int, dataset_idx: int, shape: tuple) -> 
         file name (schema uid) of the np file to find this data piece in.
     checksum : int
         adler32 checksum of the data as computed on that local machine.
-    dataset_idx : int
+    collection_idx : int
         collection first axis index in which this data piece resides.
     shape : tuple
-        shape of the data sample written to the collection idx. ie:
-        what subslices of the hdf5 dataset should be read to retrieve
-        the sample as recorded.
+        shape of the data sample written to the collection idx. ie: what
+        subslices of the array should be read to retrieve the sample as
+        recorded.
 
     Returns
     -------
     bytes
         hash data db value recording all input specifications
-    '''
+    """
     out_str = f'{_FmtCode}{c.SEP_KEY}'\
               f'{uid}{c.SEP_HSH}{checksum}'\
               f'{c.SEP_HSH}'\
-              f'{dataset_idx}'\
+              f'{collection_idx}'\
               f'{c.SEP_SLC}'\
               f'{_ShapeFmtRE.sub("", str(shape))}'
     return out_str.encode()
 
 
 def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
-    '''converts a numpy data hash db val into a numpy data python spec
+    """converts a numpy data hash db val into a numpy data python spec
 
     Parameters
     ----------
@@ -162,10 +159,10 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
     -------
     DataHashSpec
         numpy data hash specification containing `backend`, `schema`, and
-        `uid`, `dataset_idx` and `shape` fields.
-    '''
+        `uid`, `collection_idx` and `shape` fields.
+    """
     db_str = db_val.decode()
-    _, uid, checksum, dataset_idx, shape_vs = _SplitDecoderRE.split(db_str)
+    _, uid, checksum, collection_idx, shape_vs = _SplitDecoderRE.split(db_str)
     # if the data is of empty shape -> shape_vs = '' str.split() default value
     # of none means split according to any whitespace, and discard empty strings
     # from the result. So long as c.SEP_LST = ' ' this will work
@@ -173,7 +170,7 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
     raw_val = NUMPY_10_DataHashSpec(backend=_FmtCode,
                                     uid=uid,
                                     checksum=checksum,
-                                    dataset_idx=int(dataset_idx),
+                                    collection_idx=int(collection_idx),
                                     shape=shape)
     return raw_val
 
@@ -214,7 +211,7 @@ class NUMPY_10_FileHandles(object):
             self.wFp[self.w_uid].flush()
 
     def open(self, mode: str, *, remote_operation: bool = False):
-        '''open numpy file handle coded directories
+        """open numpy file handle coded directories
 
         Parameters
         ----------
@@ -223,7 +220,7 @@ class NUMPY_10_FileHandles(object):
         remote_operation : bool, optional, kwarg only
             True if remote operations call this method. Changes the symlink
             directories used while writing., by default False
-        '''
+        """
         self.mode = mode
         if self.mode == 'a':
             process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
@@ -244,8 +241,8 @@ class NUMPY_10_FileHandles(object):
                 self.rFp[uid] = partial(open_memmap, file_pth, 'r')
 
     def close(self, *args, **kwargs):
-        '''Close any open file handles.
-        '''
+        """Close any open file handles.
+        """
         if self.mode == 'a':
             if self.w_uid in self.wFp:
                 self.wFp[self.w_uid].flush()
@@ -259,7 +256,7 @@ class NUMPY_10_FileHandles(object):
 
     @staticmethod
     def delete_in_process_data(repo_path, *, remote_operation=False):
-        '''Removes some set of files entirely from the stage/remote directory.
+        """Removes some set of files entirely from the stage/remote directory.
 
         DANGER ZONE. This should essentially only be used to perform hard resets
         of the repository state.
@@ -271,7 +268,7 @@ class NUMPY_10_FileHandles(object):
         remote_operation : optional, kwarg only, bool
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
-        '''
+        """
         data_dir = pjoin(repo_path, c.DIR_DATA, _FmtCode)
         PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
         process_dir = pjoin(repo_path, PDIR, _FmtCode)
@@ -287,7 +284,7 @@ class NUMPY_10_FileHandles(object):
         os.rmdir(process_dir)
 
     def _create_schema(self, *, remote_operation: bool = False):
-        '''stores the shape and dtype as the schema of a dataset.
+        """stores the shape and dtype as the schema of a arrayset.
 
         Parameters
         ----------
@@ -296,7 +293,7 @@ class NUMPY_10_FileHandles(object):
             place the file symlink in the staging directory. Instead symlink it
             to a special remote staging directory. (default is False, which places the
             symlink in the stage data directory.)
-        '''
+        """
         uid = random_string()
         file_path = pjoin(self.DATADIR, f'{uid}.npy')
         m = open_memmap(file_path,
@@ -314,7 +311,7 @@ class NUMPY_10_FileHandles(object):
         symlink_rel(file_path, symlink_file_path)
 
     def read_data(self, hashVal: NUMPY_10_DataHashSpec) -> np.ndarray:
-        '''Read data from disk written in the numpy_00 fmtBackend
+        """Read data from disk written in the numpy_00 fmtBackend
 
         Parameters
         ----------
@@ -349,8 +346,8 @@ class NUMPY_10_FileHandles(object):
           perform a "copy on write"-like operation which would be propogated to
           all future reads of the subarray from that process, but which would
           not be persisted to disk.
-        '''
-        srcSlc = (self.slcExpr[hashVal.dataset_idx],
+        """
+        srcSlc = (self.slcExpr[hashVal.collection_idx],
                   *(self.slcExpr[0:x] for x in hashVal.shape))
         try:
             res = self.Fp[hashVal.uid][srcSlc]
@@ -373,7 +370,7 @@ class NUMPY_10_FileHandles(object):
         return out
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
-        '''writes array data to disk in the numpy_00 fmtBackend
+        """writes array data to disk in the numpy_00 fmtBackend
 
         Parameters
         ----------
@@ -387,7 +384,7 @@ class NUMPY_10_FileHandles(object):
         -------
         bytes
             db hash record value specifying location information
-        '''
+        """
         checksum = adler32(array)
         if self.w_uid in self.wFp:
             self.hIdx += 1
@@ -401,6 +398,6 @@ class NUMPY_10_FileHandles(object):
         self.wFp[self.w_uid][destSlc] = array
         hashVal = numpy_10_encode(uid=self.w_uid,
                                   checksum=checksum,
-                                  dataset_idx=self.hIdx,
+                                  collection_idx=self.hIdx,
                                   shape=array.shape)
         return hashVal

@@ -41,7 +41,7 @@ disk.
 
   The atomicity of interactions is completely hidden from a normal user; they
   shouldn't have to care about this or even know this exists. However, this
-  is also why using the context-manager style dataset interaction scheme can
+  is also why using the context-manager style arrayset interaction scheme can
   result in ~2x times speedup on writes/reads. We can just pass on most of the
   work to the python ``contextlib`` package instead of having to begin and
   commit/abort (depending on interaction mode) transactions with every call to
@@ -55,36 +55,36 @@ From the very beginning we knew that while it would be easy to just store all
 data in every commit as independent arrays on disk, such a naive implementation
 would just absolutely eat up disk space for any repository with a non-trivial
 history. Hangar commits should be fast and use minimal disk space, duplicating
-data just doesn't make sense for such a system. And so we decided on implementing
-a content addressable data store backend.
+data just doesn't make sense for such a system. And so we decided on
+implementing a content addressable data store backend.
 
 When a user requests to add data to a hangar repository, one of the first
 operations which occur is to generate a hash of the array contents. If the hash
-does not match a piece of data already placed in the hangar repository, the data
-is sent to the appropriate storage backend methods. On success, the backend
-sends back some arbitrary specification which can be used to retrieve that same
-piece of data from that particular backend. The record backend then stores a
-key/value pair of (`hash`, `backend_specification`).
+does not match a piece of data already placed in the hangar repository, the
+data is sent to the appropriate storage backend methods. On success, the
+backend sends back some arbitrary specification which can be used to retrieve
+that same piece of data from that particular backend. The record backend then
+stores a key/value pair of (`hash`, `backend_specification`).
 
 .. note::
 
   The record backend stores hash information in a separate location from the
-  commit references (which associate a `(datasetname, sample name/id)` to a
+  commit references (which associate a `(arraysetname, sample name/id)` to a
   `sample_hash`). This let's us separate the historical repository
   information from a particular computer's location of a data piece. All we need in
   the public history is to know that some data with a particular hash is
   associated with a commit. No one but the system which actually needs to access
   the data needs to know where it can be found.
 
-On the other hand, if a data sample is added to a repository which already has a
-record of some hash, we don't even involve the storage backend. All we need to
-do is just record that a new sample in a dataset was added with that hash. It
-makes no sense to write the same data twice.
+On the other hand, if a data sample is added to a repository which already has
+a record of some hash, we don't even involve the storage backend. All we need
+to do is just record that a new sample in a arrayset was added with that hash.
+It makes no sense to write the same data twice.
 
 This method can actually result in massive space savings for some common use
-cases. For the MNIST dataset, the training label data is typically a 1D-array of
-size 50,000. Because there are only 10 labels, we only need to store 10 ints on
-disk, and just keep references to the rest.
+cases. For the MNIST arrayset, the training label data is typically a 1D-array
+of size 50,000. Because there are only 10 labels, we only need to store 10 ints
+on disk, and just keep references to the rest.
 
 
 The Basics of Collaboration: Branching and Merging
@@ -92,9 +92,9 @@ The Basics of Collaboration: Branching and Merging
 
 Up to this point, we haven't actually discussed much about how data and records
 are treated on disk. We'll leave an entire walkthrough of the backend record
-structure for another tutorial, but let's introduce the basics here, and see how
-we enable the types of branching and merging operations you might be used to
-with source code (at largely the same speed!).
+structure for another tutorial, but let's introduce the basics here, and see
+how we enable the types of branching and merging operations you might be used
+to with source code (at largely the same speed!).
 
 Here's a few core principles to keep in mind:
 
@@ -102,33 +102,32 @@ Numbers == Numbers
 ------------------
 
 Hangar has no concept of what a piece of data is outside of a string of bytes /
-numerical array, and most importantly, *hangar does not care*; Hangar is a tool,
-and we leave it up to you to know what your data actually
-means)!
+numerical array, and most importantly, *hangar does not care*; Hangar is a
+tool, and we leave it up to you to know what your data actually means)!
 
 At the end of the day when the data is placed into *some* collection on disk,
-the storage backend we use won't care either. In fact, this is the entire reason
-why Hangar can do what it can; we don't attempt to treat data as anything other
-then a series of bytes on disk!
+the storage backend we use won't care either. In fact, this is the entire
+reason why Hangar can do what it can; we don't attempt to treat data as
+anything other then a series of bytes on disk!
 
 The fact that *Hangar does not care about what your data represents* is a
 fundamental underpinning of how the system works under the hood. It is the
 *designed and intended behavior* of Hangar to dump arrays to disk in what would
-seem like completely arbitrary buffers/locations to an outside observer. And for
-the most part, they would be essentially correct in their observation that data
-samples on disk are in strange locations.
+seem like completely arbitrary buffers/locations to an outside observer. And
+for the most part, they would be essentially correct in their observation that
+data samples on disk are in strange locations.
 
 While there is almost no organization or hierarchy for the actual data samples
 when they are stored on disk, that is not to say that they are stored without
-care! We may not care about global trends, but we do care a great deal about the
-byte order/layout, sequentiality, chunking/compression and validations
+care! We may not care about global trends, but we do care a great deal about
+the byte order/layout, sequentiality, chunking/compression and validations
 operations which are applied across the bytes which make up a data sample.
 
 In other words, we optimize for utility and performance on the backend, not so
 that a human can understand the file format without a computer! After the array
 has been saved to disk, all we care about is that bookkeeper can record some
-unique information about where some piece of content is, and how we can read it.
-**None of that information is stored alongside the data itself - Remember:
+unique information about where some piece of content is, and how we can read
+it. **None of that information is stored alongside the data itself - Remember:
 numbers are just numbers - they don't have any concept of what they are**.
 
 
@@ -138,10 +137,10 @@ Records != Numbers
 *The form numerical data takes once dumped on disk is completely irrelevant to
 the specifications of records in the repository history.*
 
-Now, let's unpack this for a bit. We know from`Numbers == Numbers`_ that data is
-saved to disk in some arbitrary locations with some arbitrary backend. We also
-know from `Data Is Large, We Don't Waste Space`_ that the permanent repository
-information only contains a record which links a sample name to a
+Now, let's unpack this for a bit. We know from`Numbers == Numbers`_ that data
+is saved to disk in some arbitrary locations with some arbitrary backend. We
+also know from `Data Is Large, We Don't Waste Space`_ that the permanent
+repository information only contains a record which links a sample name to a
 hash. We also assert that there is also a mapping of hash to storage backend
 specification kept somewhere (doesn't matter what that mapping is for the
 moment). With those 3 pieces of information, it's obvious that once data is
@@ -160,15 +159,15 @@ commit records as they existed at that point in time.
   semi inefficient, and will be changed in the future so that unchanged records
   are note duplicated across commits.
 
-An example is given below of the keys -> values mapping which stores each of the
-staged records, and which are packed up / compressed on commit (and subsequently
-unpacked on checkout!).
+An example is given below of the keys -> values mapping which stores each of
+the staged records, and which are packed up / compressed on commit (and
+subsequently unpacked on checkout!).
 
 ::
 
-    Num dsets                      'a.'               -> '2'
+    Num asets                      'a.'               -> '2'
     ---------------------------------------------------------------------------
-    Name of dset -> num samples || 'a.train_images'   -> '10'
+    Name of aset -> num samples || 'a.train_images'   -> '10'
     Name of data -> hash        || 'a.train_images.0' -> BAR_HASH_1'
     Name of data -> hash        || 'a.train_images.1' -> BAR_HASH_2'
     Name of data -> hash        || 'a.train_images.2' -> BAR_HASH_3'
@@ -180,7 +179,7 @@ unpacked on checkout!).
     Name of data -> hash        || 'a.train_images.8' -> BAR_HASH_9'
     Name of data -> hash        || 'a.train_images.9' -> BAR_HASH_0'
     ---------------------------------------------------------------------------
-    Name of dset -> num samples || 'a.train_labels'   -> '10'
+    Name of aset -> num samples || 'a.train_labels'   -> '10'
     Name of data -> hash        || 'a.train_labels.0' -> BAR_HASH_11'
     Name of data -> hash        || 'a.train_labels.1' -> BAR_HASH_12'
     Name of data -> hash        || 'a.train_labels.2' -> BAR_HASH_13'
@@ -207,13 +206,14 @@ unpacked on checkout!).
 History is Relative
 -------------------
 
-Though it may be a bit obvious to state, it is of critical importance to realize
-that it is only because we store the full contents of the repository staging
-area as it existed in the instant just prior to a commit, that the integrity of
-full repository history can be verified from a single commit's contents and
-expected hash value. More so, any single commit has only a topical relationship
-to a commit at any other point in time. It is only our imposition of a commit's
-ancestry tree which actualizes any subsequent insights or interactivity
+Though it may be a bit obvious to state, it is of critical importance to
+realize that it is only because we store the full contents of the repository
+staging area as it existed in the instant just prior to a commit, that the
+integrity of full repository history can be verified from a single commit's
+contents and expected hash value. More so, any single commit has only a topical
+relationship to a commit at any other point in time. It is only our imposition
+of a commit's ancestry tree which actualizes any subsequent insights or
+interactivity
 
 While the general process of topological ordering: create branch, checkout
 branch, commit a few times, and merge, follows the `git` model fairly well at a
@@ -224,7 +224,6 @@ differences we want to highlight due to their implementation differences:
    single machine. Checking out a commit for reading does not touch the staging
    area status.
 2) Only one process can interact with the a write-enabled checkout at a time.
-   **LINK DOCS HERE**
 3) A detached head CANNOT exist for write enabled checkouts. A staging area must
    begin with an identical state to the most recent commit of a/any branch.
 4) A staging area which has had changes made in it cannot switch base branch

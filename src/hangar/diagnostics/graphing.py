@@ -87,7 +87,7 @@ class GraphState(Enum):  # pylint: disable=too-few-public-methods
 
 
 class Graph(object):
-    '''
+    """
     The commit currently being processed
             struct commit *commit
 
@@ -168,7 +168,7 @@ class Graph(object):
     The current default column color being used. This is
     stored as an index into the array column_colors.
             unsigned short default_column_color
-    '''
+    """
     def __init__(self,
                  fh=None,
                  first_parent_only=False,
@@ -216,7 +216,7 @@ class Graph(object):
 
     def show_nodes(self, dag, spec, branch, start, order, stop='',
                    *, show_time=True, show_user=True):
-        '''Printing function that displays a DAG representing the commit history
+        """Printing function that displays a DAG representing the commit history
 
         Print a revision history alongside a revision graph drawn with ASCII
         characters. Nodes printed as an * character are parents of the working
@@ -240,7 +240,7 @@ class Graph(object):
             commit hash to stop generating the graph at if the DAG contains more
             history than is needed (the default is '', which is the "parent" of
             the initial repository commit.)
-        '''
+        """
         if start == stop:
             return
 
@@ -307,10 +307,10 @@ class Graph(object):
         return self._get_current_column_color()
 
     def _insert_into_new_columns(self, commit, mapping_index):
-        '''
+        """
         If the commit is already in the new_columns list, we don't need to add
         it. Just update the mapping correctly.
-        '''
+        """
         for i in range(self.num_new_columns):
             if self.new_columns[i].commit == commit:
                 self.mapping[mapping_index] = i
@@ -324,14 +324,14 @@ class Graph(object):
         return mapping_index + 2
 
     def _update_width(self, is_commit_in_existing_columns):
-        '''
+        """
         Compute the width needed to display the graph for this commit. This is
         the maximum width needed for any row. All other rows will be padded to
         this width.
 
         Compute the number of columns in the widest row: Count each existing
         column (self.num_columns), and each new column added by this commit.
-        '''
+        """
         max_cols = self.num_columns + self.num_parents
 
         # Even if the current commit has no parents to be printed, it still
@@ -349,14 +349,14 @@ class Graph(object):
         self.width = max_cols * 2
 
     def _update_columns(self):
-        '''
+        """
         Swap self.columns with self.new_columns self.columns contains the state
         for the previous commit, and new_columns now contains the state for our
         commit.
 
         We'll re-use the old columns array as storage to compute the new columns
         list for the commit after this one.
-        '''
+        """
         self.columns, self.new_columns = self.new_columns, self.columns
         self.num_columns = self.num_new_columns
         self.num_new_columns = 0
@@ -458,11 +458,11 @@ class Graph(object):
             self.state = GraphState.COMMIT
 
     def _is_mapping_correct(self):
-        '''
+        """
         The mapping is up to date if each entry is at its target, or is 1
         greater than its target. (If it is 1 greater than the target, '/' will
         be printed, so it will look correct on the next row.)
-        '''
+        """
         for i in range(self.mapping_size):
             target = self.mapping[i]
             if target < 0:
@@ -473,11 +473,11 @@ class Graph(object):
         return True
 
     def _pad_horizontally(self, chars_written):
-        '''Add spaces to string end so all lines of a commit have the same width.
+        """Add spaces to string end so all lines of a commit have the same width.
 
         This way, fields printed to the right of the graph will remain aligned
         for the entire commit.
-        '''
+        """
         if chars_written >= self.width:
             return
 
@@ -485,8 +485,8 @@ class Graph(object):
         self.buf += ' ' * extra
 
     def _output_padding_line(self):
-        '''Output a padding row, that leaves all branch lines unchanged
-        '''
+        """Output a padding row, that leaves all branch lines unchanged
+        """
         for i in range(self.num_new_columns):
             self._write_column(self.new_columns[i], '|')
             self.buf += ' '
@@ -494,8 +494,8 @@ class Graph(object):
         self._pad_horizontally(self.num_new_columns * 2)
 
     def _output_skip_line(self):
-        '''Output an ellipsis to indicate that a portion of the graph is missing.
-        '''
+        """Output an ellipsis to indicate that a portion of the graph is missing.
+        """
         self.buf += '...'
         self._pad_horizontally(3)
 
@@ -505,12 +505,12 @@ class Graph(object):
             self._update_state(GraphState.COMMIT)
 
     def _output_pre_commit_line(self):
-        '''Formats a row with increased space around a commit with multiple parents.
+        """Formats a row with increased space around a commit with multiple parents.
 
         This is done in order to make room for the commit. It should only be
         called when there are 3 or more parents. We need 2 extra rows for every
         parent over 2.
-        '''
+        """
         assert self.num_parents >= 3, 'not enough parents to add expansion row'
         num_expansion_rows = (self.num_parents - 2) * 2
 
@@ -561,10 +561,10 @@ class Graph(object):
 
     # Draw an octopus merge and return the number of characters written.
     def _draw_octopus_merge(self):
-        '''
+        """
         Here dashless_commits represents the number of parents which don't
         need to have dashes (because their edges fit neatly under the commit).
-        '''
+        """
         dashless_commits = 2
         num_dashes = ((self.num_parents - dashless_commits) * 2) - 1
         for i in range(num_dashes):
@@ -575,12 +575,12 @@ class Graph(object):
         return num_dashes + 1
 
     def _output_commit_line(self):  # noqa: C901, E501 pylint: disable=too-many-branches
-        '''
+        """
         Output the row containing this commit Iterate up to and including
         self.num_columns, since the current commit may not be in any of the
         existing columns. (This happens when the current commit doesn't have
         any children that we have already processed.)
-        '''
+        """
         seen_this = False
         chars_written = 0
         for i in range(self.num_columns + 1):
@@ -803,13 +803,13 @@ class Graph(object):
             return False
 
     def _padding_line(self):
-        '''Output a padding line in the graph.
+        """Output a padding line in the graph.
 
         This is similar to next_line(). However, it is guaranteed to never print
         the current commit line. Instead, if the commit line is next, it will
         simply output a line of vertical padding, extending the branch lines
         downwards, but leaving them otherwise unchanged.
-        '''
+        """
         if self.state != GraphState.COMMIT:
             self._next_line()
             return

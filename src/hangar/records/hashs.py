@@ -14,13 +14,13 @@ class HashQuery(object):
     # ------------------ traversing the unpacked records ----------------------
 
     def _traverse_all_records(self, keys=True, vals=True):
-        '''Pull out all records in the database as a tuple of binary encoded
+        """Pull out all records in the database as a tuple of binary encoded
 
         Returns
         -------
         list of tuples of bytes
             list type stack of tuples with each db_key, db_val pair
-        '''
+        """
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             with hashtxn.cursor() as cursor:
@@ -31,13 +31,13 @@ class HashQuery(object):
             TxnRegister().abort_reader_txn(self._hashenv)
 
     def _traverse_all_hash_records(self, keys=True, vals=True):
-        '''Pull out all records in the database as a tuple of binary encoded
+        """Pull out all records in the database as a tuple of binary encoded
 
         Returns
         -------
         list of tuples of bytes
             list type stack of tuples with each db_key, db_val pair
-        '''
+        """
         startHashRangeKey = f'{c.K_HASH}'.encode()
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
@@ -60,13 +60,13 @@ class HashQuery(object):
             TxnRegister().abort_reader_txn(self._hashenv)
 
     def _traverse_all_schema_records(self, keys=True, vals=True):
-        '''Pull out all records in the database as a tuple of binary encoded
+        """Pull out all records in the database as a tuple of binary encoded
 
         Returns
         -------
         list of tuples of bytes
             list type stack of tuples with each db_key, db_val pair
-        '''
+        """
         startSchemaRangeKey = f'{c.K_SCHEMA}'.encode()
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
@@ -118,7 +118,7 @@ class HashQuery(object):
 
 
 def delete_in_process_data(repo_path, *, remote_operation=False):
-    '''DANGER! Permanently delete uncommitted data files/links for stage or remote area.
+    """DANGER! Permanently delete uncommitted data files/links for stage or remote area.
 
     This searches each backend accessors staged (or remote) folder structure for
     files, and if any are present the symlinks in stagedir and backing data
@@ -131,7 +131,7 @@ def delete_in_process_data(repo_path, *, remote_operation=False):
     remote_operation : optional, kwarg only, bool
         If true, modify contents of the remote_dir, if false (default) modify
         contents of the staging directory.
-    '''
+    """
     for backend, accesor in BACKEND_ACCESSOR_MAP.items():
         if accesor is not None:
             accesor.delete_in_process_data(repo_path=repo_path,
@@ -139,7 +139,7 @@ def delete_in_process_data(repo_path, *, remote_operation=False):
 
 
 def clear_stage_hash_records(stagehashenv):
-    '''Drop all records in the stagehashenv db
+    """Drop all records in the stagehashenv db
 
     This operation should be performed anytime a reset of the staging area is
     performed (including for commits, merges, and checkouts)
@@ -148,7 +148,7 @@ def clear_stage_hash_records(stagehashenv):
     ----------
     stagehashenv : lmdb.Environment
         db where staged data hash additions are recorded
-    '''
+    """
     stagehashtxn = TxnRegister().begin_writer_txn(stagehashenv)
     with stagehashtxn.cursor() as cursor:
         positionExists = cursor.first()
@@ -159,7 +159,7 @@ def clear_stage_hash_records(stagehashenv):
 
 
 def remove_stage_hash_records_from_hashenv(hashenv, stagehashenv):
-    '''Remove references to data additions during a hard reset
+    """Remove references to data additions during a hard reset
 
     For every hash record in stagehashenv, remove the corresponding k/v pair
     from the hashenv db. This is a dangerous operation if the stagehashenv was
@@ -172,7 +172,7 @@ def remove_stage_hash_records_from_hashenv(hashenv, stagehashenv):
     stagehashenv : lmdb.Environment
         db where all the staged hash records to be removed are stored.
 
-    '''
+    """
     stageHashKeys = HashQuery(stagehashenv).list_all_hash_keys_db()
     hashtxn = TxnRegister().begin_writer_txn(hashenv)
     for hashKey in stageHashKeys:

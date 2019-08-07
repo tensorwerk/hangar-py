@@ -12,7 +12,7 @@ New Features
   (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Remote server data backend added.
   (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
-* Selection heuristics to determine appropriate backend from dataset schema.
+* Selection heuristics to determine appropriate backend from arrayset schema.
   (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Partial remote clones and fetch operations now fully supported.
   (`#85 <https://github.com/tensorwerk/hangar-py/pull/85>`__) `@rlizzo <https://github.com/rlizzo>`__
@@ -26,7 +26,7 @@ Improvements
   (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Backend addition and update developer protocols and documentation.
   (`#70 <https://github.com/tensorwerk/hangar-py/pull/70>`__) `@rlizzo <https://github.com/rlizzo>`__
-* Read-only checkout dataset sample ``get`` methods now are multithread and multiprocess safe.
+* Read-only checkout arrayset sample ``get`` methods now are multithread and multiprocess safe.
   (`#84 <https://github.com/tensorwerk/hangar-py/pull/84>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Read-only checkout metadata sample ``get`` methods are thread safe if used within a context manager.
   (`#101 <https://github.com/tensorwerk/hangar-py/pull/101>`__) `@rlizzo <https://github.com/rlizzo>`__
@@ -50,6 +50,7 @@ Bug Fixes
 Breaking changes
 ----------------
 
+* Renamed all references to ``datasets`` in the API / world-view to ``arraysets``.
 * These are backwards incompatible changes. For all versions > 0.2, repository upgrade utilities will
   be provided if breaking changes occur.
 
@@ -93,7 +94,7 @@ Improvements
 Bug Fixes
 ---------
 
-* Ensure references to checkout dataset or metadata objects cannot operate after the checkout is closed.
+* Ensure references to checkout arrayset or metadata objects cannot operate after the checkout is closed.
   (`#41 <https://github.com/tensorwerk/hangar-py/pull/41>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Sensible exception classes and error messages raised on a variety of situations (Many commits).
   `@hhsecond <https://github.com/hhsecond>`__ & `@rlizzo <https://github.com/rlizzo>`__

@@ -8,7 +8,7 @@ from ..records import parsing
 
 
 class ContentWriter(object):
-    '''Common methods to client & server which write content received.
+    """Common methods to client & server which write content received.
 
     These are special methods configured especially for remote operations.
     They do not honor the public facing API or data write/read conventions
@@ -18,7 +18,7 @@ class ContentWriter(object):
     ----------
     envs : context.Environments
         main hangar environment context object.
-    '''
+    """
 
     def __init__(self, envs):
 
@@ -26,7 +26,7 @@ class ContentWriter(object):
 
     def commit(self, commit: str, parentVal: bytes, specVal: bytes,
                refVal: bytes) -> Union[str, bool]:
-        '''Write a commit record to the ref db
+        """Write a commit record to the ref db
 
         Parameters
         ----------
@@ -46,7 +46,7 @@ class ContentWriter(object):
 
             False if the commit hash existed in the db previously and
             no records were written.
-        '''
+        """
         commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit)
         commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit)
         commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit)
@@ -62,7 +62,7 @@ class ContentWriter(object):
         return ret
 
     def schema(self, schema_hash: str, schemaVal: bytes) -> Union[str, bool]:
-        '''Write a dataset schema hash specification record to the db
+        """Write a arrayset schema hash specification record to the db
 
         Parameters
         ----------
@@ -77,7 +77,7 @@ class ContentWriter(object):
             schema_hash written if operation was successful.
 
             False if the schema_hash existed in db and no records written.
-        '''
+        """
         schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
         hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
         try:
@@ -92,7 +92,7 @@ class ContentWriter(object):
              schema_hash: str,
              received_data: Sequence[Tuple[str, np.ndarray]],
              backend: str = None) -> List[str]:
-        '''Write data content to the hash records database
+        """Write data content to the hash records database
 
         Parameters
         ----------
@@ -113,14 +113,14 @@ class ContentWriter(object):
         -------
         List[str]
             list of str of all data digests written by this method.
-        '''
+        """
         schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
         hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
         try:
             schemaVal = hashTxn.get(schemaKey)
         finally:
             TxnRegister().abort_reader_txn(self.env.hashenv)
-        schema_val = parsing.dataset_record_schema_raw_val_from_db_val(schemaVal)
+        schema_val = parsing.arrayset_record_schema_raw_val_from_db_val(schemaVal)
 
         usedBackend = backend if backend else schema_val.schema_default_backend
         accessor = BACKEND_ACCESSOR_MAP[usedBackend]
@@ -144,7 +144,7 @@ class ContentWriter(object):
         return saved_digests
 
     def label(self, digest: str, labelVal: bytes) -> Union[str, bool]:
-        '''write a metadata / label hash record & content to the db.
+        """write a metadata / label hash record & content to the db.
 
         Parameters
         ----------
@@ -160,7 +160,7 @@ class ContentWriter(object):
 
             False if some content already exists with the same digest in the
             db and no operation was performed.
-        '''
+        """
         labelHashKey = parsing.hash_meta_db_key_from_raw_key(digest)
         labelTxn = TxnRegister().begin_writer_txn(self.env.labelenv)
         try:
@@ -179,7 +179,7 @@ RawCommitContent = NamedTuple('RawCommitContent', [('commit', str),
 
 
 class ContentReader(object):
-    '''Common methods to client & server which read content.
+    """Common methods to client & server which read content.
 
     These are special methods configured especially for remote operations.
     They do not honor the public facing API or data write/read conventions
@@ -189,13 +189,13 @@ class ContentReader(object):
     ----------
     envs : context.Environments
         main hangar environment context object.
-    '''
+    """
     def __init__(self, envs):
 
         self.env: Environments = envs
 
     def commit(self, commit: str) -> Union[RawCommitContent, bool]:
-        '''Read a commit with a given hash and get db formatted content
+        """Read a commit with a given hash and get db formatted content
 
         Parameters
         ----------
@@ -209,7 +209,7 @@ class ContentReader(object):
             'cmtParentVal', 'cmtSpecVal', 'cmtRefVal') if operation successful.
 
             False if commit does not exist with provided digest.
-        '''
+        """
         cmtRefKey = parsing.commit_ref_db_key_from_raw_key(commit)
         cmtParentKey = parsing.commit_parent_db_key_from_raw_key(commit)
         cmtSpecKey = parsing.commit_spec_db_key_from_raw_key(commit)
@@ -230,7 +230,7 @@ class ContentReader(object):
             return ret
 
     def schema(self, schema_hash: str) -> Union[bytes, bool]:
-        '''Read db formatted schema val for a schema hash
+        """Read db formatted schema val for a schema hash
 
         Parameters
         ----------
@@ -243,7 +243,7 @@ class ContentReader(object):
             db formatted representation of schema bytes if schema_hash exists
 
             False if the schema_hash does not exist in the db.
-        '''
+        """
         schemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
         hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
         try:
@@ -255,7 +255,7 @@ class ContentReader(object):
         return ret
 
     def label(self, digest: str) -> Union[bytes, bool]:
-        '''Read db formatted label / metadata val for a label / metadata digest
+        """Read db formatted label / metadata val for a label / metadata digest
 
         Parameters
         ----------
@@ -268,7 +268,7 @@ class ContentReader(object):
             bytes db formatted representation of the label if digest exists
 
             False if the digest does not exist in the db.
-        '''
+        """
         labelKey = parsing.hash_meta_db_key_from_raw_key(digest)
         labelTxn = TxnRegister().begin_reader_txn(self.env.labelenv)
         try:

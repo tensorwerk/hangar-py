@@ -65,7 +65,7 @@ def test_three_way_merge_graph(capfd):
             'fed88489ab6e59913aee935169b15fe68755d82c': ['0ff3f2ec156ab8e1026b5271630ccae4556cc260']},
         'specs': {
             '074f81d6b9fa5fa856175d47c7cc95cc4a839965': {
-                'commit_message': 'adding in the new testing datasets',
+                'commit_message': 'adding in the new testing arraysets',
                 'commit_time': 1562203830.775428, 'commit_user': 'Foo User', 'commit_email': 'foo@bar.com'},
             'e5ea58dd9c7ffacd45fb128ddc00aced08d13889': {
                 'commit_message': 'commit adding validation images and labels',
@@ -101,7 +101,7 @@ def test_three_way_merge_graph(capfd):
         show_time=False,
         show_user=False)
 
-    real = '*   074f81d6b9fa5fa856175d47c7cc95cc4a839965 (master) : adding in the new testing datasets\n'\
+    real = '*   074f81d6b9fa5fa856175d47c7cc95cc4a839965 (master) : adding in the new testing arraysets\n'\
            '|\\  \n'\
            '| * 3c9530ac0da1106c0acbe1201900c51548bbcdd9 (add-test) : added testing labels only\n'\
            '| * fed88489ab6e59913aee935169b15fe68755d82c : added testing images only\n'\
@@ -157,7 +157,7 @@ def test_octopus_merge_graph(capfd):
                 'commit_time': 1562363265.374819, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
             '21f274d31abc09ede4ad6753f079297885b02a09': {'commit_message': 'another commit on test banch after adding to new_set',
                 'commit_time': 1562363265.56455, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
-            '5c0ea20c6513f135f0131d9e10d86801ded29537': {'commit_message': 'second commit on test branch with new dset',
+            '5c0ea20c6513f135f0131d9e10d86801ded29537': {'commit_message': 'second commit on test branch with new aset',
                 'commit_time': 1562363265.545484, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
             '10e84be056afb2ace6b7ba044ce1e9c9811eae4f': {'commit_message': 'first commit on test branch',
                 'commit_time': 1562363265.524131, 'commit_user': 'test user', 'commit_email': 'test@email.com'}},
@@ -205,7 +205,7 @@ def test_octopus_merge_graph(capfd):
            '* |   9152a4578f74b36838f8187e43c8644b1eba47b5 : this is the first merge\n'\
            '|\\ \\  \n'\
            '| * | 21f274d31abc09ede4ad6753f079297885b02a09 (test_branch) : another commit on test banch after adding to new_set\n'\
-           '| * | 5c0ea20c6513f135f0131d9e10d86801ded29537 : second commit on test branch with new dset\n'\
+           '| * | 5c0ea20c6513f135f0131d9e10d86801ded29537 : second commit on test branch with new aset\n'\
            '| * | 10e84be056afb2ace6b7ba044ce1e9c9811eae4f : first commit on test branch\n'\
            '* | | ef7b6e5bcaaebf62b9e02902ff60eb7862c3472d : third commit on master\n'\
            '|/ /  \n'\
@@ -271,7 +271,7 @@ def test_octopus_large_merge_graph(capfd):
                 'commit_time': 1562363265.374819, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
             '21f274d31abc09ede4ad6753f079297885b02a09': {'commit_message': 'another commit on test banch after adding to new_set',
                 'commit_time': 1562363265.56455, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
-            '5c0ea20c6513f135f0131d9e10d86801ded29537': {'commit_message': 'second commit on test branch with new dset',
+            '5c0ea20c6513f135f0131d9e10d86801ded29537': {'commit_message': 'second commit on test branch with new aset',
                 'commit_time': 1562363265.545484, 'commit_user': 'test user', 'commit_email': 'test@email.com'},
             '10e84be056afb2ace6b7ba044ce1e9c9811eae4f': {'commit_message': 'first commit on test branch',
                 'commit_time': 1562363265.524131, 'commit_user': 'test user', 'commit_email': 'test@email.com'}},
@@ -338,7 +338,7 @@ def test_octopus_large_merge_graph(capfd):
            '| |/| | |   \n'\
            '| * | | | 21f274d31abc09ede4ad6753f079297885b02a09 (test_branch) (05Jul2019 21:47:45)(test user): another commit on test banch after adding to new_set\n'\
            '| |/ / /  \n'\
-           '| * | |   5c0ea20c6513f135f0131d9e10d86801ded29537 (05Jul2019 21:47:45)(test user): second commit on test branch with new dset\n'\
+           '| * | |   5c0ea20c6513f135f0131d9e10d86801ded29537 (05Jul2019 21:47:45)(test user): second commit on test branch with new aset\n'\
            '| |\\ \\ \\  \n'\
            '| |/ / /  \n'\
            '|/| | |   \n'\

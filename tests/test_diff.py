@@ -42,8 +42,8 @@ class TestReaderDiff(object):
 
         # mutating and removing data from testbranch
         testco = repo.checkout(write=True, branch='testbranch')
-        testco.datasets['dummy']['1'] = dummyData
-        del testco.datasets['dummy']['2']
+        testco.arraysets['dummy']['1'] = dummyData
+        del testco.arraysets['dummy']['2']
         testco.commit("mutation and removal")
         testco.close()
 
@@ -66,8 +66,8 @@ class TestReaderDiff(object):
 
         # mutating and removing data from testbranch
         testco = repo.checkout(write=True, branch='testbranch')
-        testco.datasets['dummy']['1'] = dummyData
-        del testco.datasets['dummy']['2']
+        testco.arraysets['dummy']['1'] = dummyData
+        del testco.arraysets['dummy']['2']
         testco.commit("mutation and removal")
         testco.close()
 
@@ -78,11 +78,11 @@ class TestReaderDiff(object):
 
         diffs = diffdata[0]
 
-        # testing datasets and metadata that has no change
-        assert diffs['datasets']['dev']['additions'] == {}
-        assert diffs['datasets']['dev']['mutations'] == {}
-        assert diffs['datasets']['dev']['removals'] == {}
-        assert 'dummy' in diffs['datasets']['master']['unchanged'].keys()
+        # testing arraysets and metadata that has no change
+        assert diffs['arraysets']['dev']['additions'] == {}
+        assert diffs['arraysets']['dev']['mutations'] == {}
+        assert diffs['arraysets']['dev']['removals'] == {}
+        assert 'dummy' in diffs['arraysets']['master']['unchanged'].keys()
         assert create_meta_nt('foo' ) in diffs['metadata']['dev']['additions'].keys()
         assert len(diffs['metadata']['master']['additions'].keys()) == 0
         assert create_meta_nt('hello') in diffs['metadata']['master']['unchanged'].keys()
@@ -109,14 +109,14 @@ class TestReaderDiff(object):
         # adding data in master
         co = repo.checkout(write=True)
         dummyData[:] = 123
-        co.datasets['dummy']['55'] = dummyData
+        co.arraysets['dummy']['55'] = dummyData
         co.commit('Adding data in master')
         co.close()
 
         # adding data in testbranch
         co = repo.checkout(write=True, branch='testbranch')
         dummyData[:] = 234
-        co.datasets['dummy']['55'] = dummyData
+        co.arraysets['dummy']['55'] = dummyData
         co.commit('adding data in testbranch')
         co.close()
 
@@ -133,14 +133,14 @@ class TestReaderDiff(object):
         dummyData[:] = 123
         repo = repo_1_br_no_conf
         co = repo.checkout(write=True)
-        del co.datasets['dummy']['6']
-        co.datasets['dummy']['7'] = dummyData
+        del co.arraysets['dummy']['6']
+        co.arraysets['dummy']['7'] = dummyData
         co.commit('removal & mutation in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.datasets['dummy']['6'] = dummyData
-        del co.datasets['dummy']['7']
+        co.arraysets['dummy']['6'] = dummyData
+        del co.arraysets['dummy']['7']
         co.commit('removal & mutation in dev')
         co.close()
 
@@ -158,13 +158,13 @@ class TestReaderDiff(object):
         dummyData[:] = 123
         repo = repo_1_br_no_conf
         co = repo.checkout(write=True)
-        co.datasets['dummy']['7'] = dummyData
+        co.arraysets['dummy']['7'] = dummyData
         co.commit('mutation in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         dummyData[:] = 234
-        co.datasets['dummy']['7'] = dummyData
+        co.arraysets['dummy']['7'] = dummyData
         co.commit('mutation in dev')
         co.close()
 
@@ -174,84 +174,84 @@ class TestReaderDiff(object):
         assert conflicts['sample']['dummy'].t3[0].data_name == '7'
         co.close()
 
-    def test_dset_addition_conflict(self, written_repo):
+    def test_aset_addition_conflict(self, written_repo):
         # t1
         repo = written_repo
 
         repo.create_branch('testbranch')
         co = repo.checkout(write=True)
-        co.datasets.init_dataset(name='testing_dset', shape=(5, 7), dtype=np.float64)
-        co.commit('dset init in master')
+        co.arraysets.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float64)
+        co.commit('aset init in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.datasets.init_dataset(name='testing_dset', shape=(7, 7), dtype=np.float64)
-        co.commit('dset init in dev')
+        co.arraysets.init_arrayset(name='testing_aset', shape=(7, 7), dtype=np.float64)
+        co.commit('aset init in dev')
         co.close()
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['dset'].t1) == 1
-        assert conflicts['dset'].t1[0] == 'testing_dset'
+        assert len(conflicts['aset'].t1) == 1
+        assert conflicts['aset'].t1[0] == 'testing_aset'
         co.close()
 
-    def test_dset_removal_conflict(self, written_repo):
+    def test_aset_removal_conflict(self, written_repo):
         # t21 and t22
         repo = written_repo
         co = repo.checkout(write=True)
-        co.datasets.init_dataset(name='testing_dset1', shape=(5, 7), dtype=np.float64)
-        co.datasets.init_dataset(name='testing_dset2', shape=(5, 7), dtype=np.float64)
-        co.commit('added dsets')
+        co.arraysets.init_arrayset(name='testing_aset1', shape=(5, 7), dtype=np.float64)
+        co.arraysets.init_arrayset(name='testing_aset2', shape=(5, 7), dtype=np.float64)
+        co.commit('added asets')
         co.close()
         repo.create_branch('testbranch')
 
         co = repo.checkout(write=True)
-        del co.datasets['testing_dset1']
-        del co.datasets['testing_dset2']
-        co.datasets.init_dataset(name='testing_dset2', shape=(5, 7), dtype=np.float32)
+        del co.arraysets['testing_aset1']
+        del co.arraysets['testing_aset2']
+        co.arraysets.init_arrayset(name='testing_aset2', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        del co.datasets['testing_dset1']
-        del co.datasets['testing_dset2']
-        co.datasets.init_dataset(name='testing_dset1', shape=(5, 7), dtype=np.float32)
+        del co.arraysets['testing_aset1']
+        del co.arraysets['testing_aset2']
+        co.arraysets.init_arrayset(name='testing_aset1', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from dev')
         co.close()
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['dset'].t21) == 1
-        assert len(conflicts['dset'].t22) == 1
-        assert conflicts['dset'].t21[0] == 'testing_dset1'
-        assert conflicts['dset'].t22[0] == 'testing_dset2'
+        assert len(conflicts['aset'].t21) == 1
+        assert len(conflicts['aset'].t22) == 1
+        assert conflicts['aset'].t21[0] == 'testing_aset1'
+        assert conflicts['aset'].t22[0] == 'testing_aset2'
         co.close()
 
-    def test_dset_mutation_conflict(self, written_repo):
+    def test_aset_mutation_conflict(self, written_repo):
         # t3
         repo = written_repo
         co = repo.checkout(write=True)
-        co.datasets.init_dataset(name='testing_dset', shape=(5, 7), dtype=np.float64)
-        co.commit('added dset')
+        co.arraysets.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float64)
+        co.commit('added aset')
         co.close()
         repo.create_branch('testbranch')
 
         co = repo.checkout(write=True)
-        del co.datasets['testing_dset']
-        co.datasets.init_dataset(name='testing_dset', shape=(7, 7), dtype=np.float64)
+        del co.arraysets['testing_aset']
+        co.arraysets.init_arrayset(name='testing_aset', shape=(7, 7), dtype=np.float64)
         co.commit('mutation from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        del co.datasets['testing_dset']
-        co.datasets.init_dataset(name='testing_dset', shape=(5, 7), dtype=np.float32)
+        del co.arraysets['testing_aset']
+        co.arraysets.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float32)
         co.commit('mutation from dev')
         co.close()
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['dset'].t3) == 1
-        assert conflicts['dset'].t3[0] == 'testing_dset'
+        assert len(conflicts['aset'].t3) == 1
+        assert conflicts['aset'].t3[0] == 'testing_aset'
         co.close()
 
     def test_meta_addition_conflict(self, repo_1_br_no_conf):
@@ -319,22 +319,22 @@ class TestReaderDiff(object):
         repo = written_repo
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='testbranch')
-        dset = co.datasets['_dset']
-        dset2 = co.datasets.init_dataset('dset2', prototype=array5by7)
-        dset2[1] = array5by7
-        with dset, co.metadata:
-            dset[100] = array5by7
+        aset = co.arraysets['_aset']
+        aset2 = co.arraysets.init_arrayset('aset2', prototype=array5by7)
+        aset2[1] = array5by7
+        with aset, co.metadata:
+            aset[100] = array5by7
             co.metadata['crazykey'] = 'crazyvalue'
             co.commit('inside cm')
-            dset[101] = array5by7
+            aset[101] = array5by7
             co.commit('another commit inside cm')
         co.close()
         co = repo.checkout(branch='testbranch')
-        assert np.allclose(co.datasets['_dset'][101], array5by7)
+        assert np.allclose(co.arraysets['_aset'][101], array5by7)
         diff = co.diff.branch('master')[0]
         assert create_meta_nt('crazykey') in diff['metadata']['master']['additions'].keys()
-        assert 'dset2' in diff['datasets']['master']['additions'].keys()
-        for record in diff['samples']['master']['_dset']['additions']:
+        assert 'aset2' in diff['arraysets']['master']['additions'].keys()
+        for record in diff['samples']['master']['_aset']['additions']:
             assert record.data_name in [100, 101]
         co.close()
 
@@ -360,23 +360,23 @@ class TestWriterDiff(object):
             co.diff.status()  # Read checkout doesn't have status()
 
         co = repo.checkout(write=True)
-        co.datasets['_dset']['45'] = dummyData
+        co.arraysets['_aset']['45'] = dummyData
         assert co.diff.status() == 'DIRTY'
         diffs = co.diff.staged()[0]
-        for key in diffs['samples']['master']['_dset']['additions'].keys():
+        for key in diffs['samples']['master']['_aset']['additions'].keys():
             assert key.data_name == '45'
         co.commit('adding')
         assert co.diff.status() == 'CLEAN'
         co.close()
 
-    def test_status_and_staged_dset(self, written_repo):
+    def test_status_and_staged_aset(self, written_repo):
         repo = written_repo
         co = repo.checkout(write=True)
-        co.datasets.init_dataset(name='sampledset', shape=(3, 5), dtype=np.float32)
+        co.arraysets.init_arrayset(name='sampleaset', shape=(3, 5), dtype=np.float32)
         assert co.diff.status() == 'DIRTY'
         diff = co.diff.staged()[0]
-        assert 'sampledset' in diff['datasets']['master']['additions'].keys()
-        assert '_dset' in diff['datasets']['master']['unchanged'].keys()
-        co.commit('init dset')
+        assert 'sampleaset' in diff['arraysets']['master']['additions'].keys()
+        assert '_aset' in diff['arraysets']['master']['unchanged'].keys()
+        co.commit('init aset')
         assert co.diff.status() == 'CLEAN'
         co.close()

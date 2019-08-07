@@ -29,11 +29,11 @@ protoc.main((
     hangarProtoPath,
 ))
 
-'''
+"""
 Because python3 requires explicit relative imports (which is not yet supported
 in the Google protoc compiler), we have to replace the 'import foo_grpc' line
 with the 'from . import foo' line in the generated grpc code.
-'''
+"""
 
 hangar_service_grpc_path_orig = os.path.join(hangarProtoDir, 'hangar_service_pb2_grpc.py')
 hangar_service_grpc_path_old = os.path.join(hangarProtoDir, 'hangar_service_pb2_grpc.py.old')

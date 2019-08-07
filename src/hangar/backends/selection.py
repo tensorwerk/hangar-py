@@ -1,4 +1,4 @@
-'''Definition and dynamic routing to Hangar backend implementations.
+"""Definition and dynamic routing to Hangar backend implementations.
 
 This module defines the available backends for a Hangar installation & provides
 dynamic routing of method calls to the appropriate backend from a stored record
@@ -82,7 +82,7 @@ future the following ruleset is specified and MUST BE HONORED:
 Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the
 process.
-'''
+"""
 from collections import namedtuple
 from typing import Dict, Union, Callable, Mapping
 
@@ -131,7 +131,7 @@ BACKEND_ACCESSOR_MAP: _AccessorMap = {
 
 
 def backend_decoder(db_val: bytes) -> _DataHashSpecs:
-    '''Determine backend and decode specification for a raw hash record value.
+    """Determine backend and decode specification for a raw hash record value.
 
     Parameters
     ----------
@@ -144,14 +144,14 @@ def backend_decoder(db_val: bytes) -> _DataHashSpecs:
         decoded specification with fields filled out uniquely for each backend.
         The only field common to all backends is located at index [0] with the
         field name `backend`.
-    '''
+    """
     parser = BACKEND_DECODER_MAP[db_val[:2]]
     decoded = parser(db_val)
     return decoded
 
 
 def backend_from_heuristics(array: np.ndarray) -> str:
-    '''Given a prototype array, attempt to select the appropriate backend.
+    """Given a prototype array, attempt to select the appropriate backend.
 
     Parameters
     ----------
@@ -166,7 +166,7 @@ def backend_from_heuristics(array: np.ndarray) -> str:
     TODO
     ----
     Configuration of this entire module as the available backends fill out.
-    '''
+    """
 
     # uncompressed numpy memmap data is most appropriate for data whose shape is
     # likely small tabular row data (CSV or such...)

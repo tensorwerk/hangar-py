@@ -1,4 +1,3 @@
-import logging
 import os
 import random
 import re
@@ -15,11 +14,9 @@ import wrapt
 from . import __version__
 from .constants import DIR_HANGAR
 
-logger = logging.getLogger(__name__)
-
 
 def set_blosc_nthreads() -> int:
-    '''set the blosc library to two less than the core count on the system.
+    """set the blosc library to two less than the core count on the system.
 
     If less than 2 cores are ncores-2, we set the value to two.
 
@@ -27,7 +24,7 @@ def set_blosc_nthreads() -> int:
     -------
     int
         ncores blosc will use on the system
-    '''
+    """
     nCores = blosc.detect_number_of_cores()
     if nCores <= 2:
         nUsed = 1
@@ -40,19 +37,19 @@ def set_blosc_nthreads() -> int:
 
 
 def random_string(n: int = 6) -> str:
-    '''Generate a case random string of ascii letters and digits of some length.
+    """Generate a case random string of ascii letters and digits of some length.
 
     Parameters
     ----------
     n: int, optional
         The number of characters which the output string will have. Default = 6
-    '''
+    """
     letters = ''.join([string.ascii_letters, string.digits])
     return ''.join(random.choice(letters) for i in range(n))
 
 
 def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
-    '''Creates a weakproxy reference honoring optional use context managers.
+    """Creates a weakproxy reference honoring optional use context managers.
 
     This is required because (for some unknown reason) `weakproxy`
     references will not actually pass through the `__enter__` attribute of
@@ -71,7 +68,7 @@ def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
     -------
     ObjectProxy
         object analogous to a plain weakproxy object.
-    '''
+    """
     wr = weakref.proxy(obj)
     setattr(wr, '__enter__', partial(obj.__class__.__enter__, wr))
     setattr(wr, '__exit__', partial(obj.__class__.__exit__, wr))
@@ -80,7 +77,7 @@ def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
 
 
 def symlink_rel(src: os.PathLike, dst: os.PathLike):
-    '''Create symbolic links which actually work like they should
+    """Create symbolic links which actually work like they should
 
     Parameters
     ----------
@@ -88,7 +85,7 @@ def symlink_rel(src: os.PathLike, dst: os.PathLike):
         create a symbolic link pointic to src
     dst : os.PathLike
         create a link named dst
-    '''
+    """
     rel_path_src = os.path.relpath(src, os.path.dirname(dst))
     os.symlink(rel_path_src, dst)
 
@@ -97,7 +94,7 @@ _SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)
 
 
 def is_suitable_user_key(key: Union[str, int]) -> bool:
-    '''Checks if string contains only alpha-numeric ascii chars or ['.', '-' '_'] (no whitespace)
+    """Checks if string contains only alpha-numeric ascii chars or ['.', '-' '_'] (no whitespace)
 
     Necessary because python 3.6 does not have a str.isascii() method.
 
@@ -110,7 +107,7 @@ def is_suitable_user_key(key: Union[str, int]) -> bool:
     -------
     bool
         True if only ascii characters in the string, else False.
-    '''
+    """
     try:
         if isinstance(key, int) and (key >= 0):
             str_data = str(key)
@@ -124,7 +121,7 @@ def is_suitable_user_key(key: Union[str, int]) -> bool:
 
 
 def is_ascii(str_data: str) -> bool:
-    '''Checks if string contains only ascii chars.
+    """Checks if string contains only ascii chars.
 
     Necessary because python 3.6 does not have a str.isascii() method.
 
@@ -137,7 +134,7 @@ def is_ascii(str_data: str) -> bool:
     -------
     bool
         True if only ascii characters in the string, else False.
-    '''
+    """
     try:
         str_data.encode('ascii')
     except UnicodeEncodeError:
@@ -146,7 +143,7 @@ def is_ascii(str_data: str) -> bool:
 
 
 def find_next_prime(N: int) -> int:
-    '''Find next prime >= N
+    """Find next prime >= N
 
     Parameters
     ----------
@@ -157,7 +154,7 @@ def find_next_prime(N: int) -> int:
     -------
     int
         the next prime found after the number N
-    '''
+    """
     def is_prime(n):
         if n % 2 == 0:
             return False
@@ -179,7 +176,7 @@ def find_next_prime(N: int) -> int:
 
 
 def file_size(p: os.PathLike) -> int:
-    '''Query the file size of a specific file
+    """Query the file size of a specific file
 
     Parameters
     ----------
@@ -195,7 +192,7 @@ def file_size(p: os.PathLike) -> int:
     -------
     int
         nbytes the file consumes on disk.
-    '''
+    """
     if not os.path.isfile(p):
         err = f'Cannot query size of: {p}. File does not exist'
         raise FileNotFoundError(err)
@@ -204,7 +201,7 @@ def file_size(p: os.PathLike) -> int:
 
 
 def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
-    '''size of all files in a folder.
+    """size of all files in a folder.
 
     Default is to not include subdirectories. Set "recurse=True"
     to enable recursive calculation.
@@ -220,7 +217,7 @@ def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
     -------
     int
         number of bytes used up in the repo_path
-    '''
+    """
     total = 0
     for entry in os.scandir(p):
         if entry.is_file(follow_symlinks=False):
@@ -231,7 +228,7 @@ def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
 
 
 def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
-    '''Check if path is directory which user has write permission to.
+    """Check if path is directory which user has write permission to.
 
     Parameters
     ----------
@@ -252,7 +249,7 @@ def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
         If the path does not exist, or is not a directory on disk
     PermissionError
         If the user does not have write access to the specified path
-    '''
+    """
     try:
         usr_path = os.path.expanduser(p)
     except TypeError:
@@ -352,7 +349,7 @@ def parse_bytes(s: str) -> int:
 
 
 def readme_contents(user_name: str, user_email: str) -> StringIO:
-    '''Create the Hangar README.txt contents used to fill out file on repo initialization
+    """Create the Hangar README.txt contents used to fill out file on repo initialization
 
     Parameters
     ----------
@@ -365,7 +362,7 @@ def readme_contents(user_name: str, user_email: str) -> StringIO:
     -------
     StringIO
         Buffered string text ready to be sent to a file writer.
-    '''
+    """
     buf = StringIO()
     buf.write(f'This directory has been used to initialize a Hangar Repository\n')
     buf.write(f'\n')
