@@ -34,6 +34,8 @@ class GroupedAsets(object):
         aset_lens = set()
         all_aset_keys = []
         for arrayset in arraysets:
+            if arrayset.iswriteable is True:
+                raise TypeError(f'Cannot load arraysets opened in `write-enabled` checkout.')
             self.arrayset_array.append(arrayset)
             self.arrayset_names.append(arrayset.name)
             aset_lens.add(len(arrayset))

@@ -18,11 +18,14 @@ class TestTorchDataLoader(object):
     def test_multiple_dataset_loader(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout(write=True)
-        first_aset = co.arraysets['_aset']
         second_aset = co.arraysets['second_aset']
         del second_aset['10']
         co.commit('deleting')
+        co.close()
 
+        co = repo.checkout()
+        first_aset = co.arraysets['_aset']
+        second_aset = co.arraysets['second_aset']
         with pytest.raises(ValueError):
             # emtpy list
             make_torch_dataset([])
@@ -38,6 +41,15 @@ class TestTorchDataLoader(object):
             assert dset1.shape == (6, 5, 7)
             assert dset2.shape == (6, 5, 7)
         assert total_samples == 18  # drop last is True
+        co.close()
+
+    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout(write=True)
+        first_aset = co.arraysets['_aset']
+        second_aset = co.arraysets['second_aset']
+        with pytest.raises(TypeError):
+            make_torch_dataset([first_aset, second_aset])
         co.close()
 
     def test_with_keys_and_index_range(self, repo_with_20_samples):
@@ -104,7 +116,7 @@ class TestTfDataLoader(object):
 
     def test_dataset_loader(self, repo_with_20_samples):
         repo = repo_with_20_samples
-        co = repo.checkout(write=True)
+        co = repo.checkout()
         first_aset = co.arraysets['_aset']
         second_aset = co.arraysets['second_aset']
 
@@ -116,6 +128,15 @@ class TestTfDataLoader(object):
             assert dset2.shape == tf.TensorShape((6, 5, 7))
         co.close()
 
+    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout(write=True)
+        first_aset = co.arraysets['_aset']
+        second_aset = co.arraysets['second_aset']
+        with pytest.raises(TypeError):
+            make_torch_dataset([first_aset, second_aset])
+        co.close()
+
     def test_variably_shaped(self, variable_shape_written_repo):
         # Variably shaped test is required since the collation is dependent on
         # the way we return the data from generator
@@ -125,6 +146,10 @@ class TestTfDataLoader(object):
         for i in range(5, 10):
             aset[i] = np.random.random((2, i))
         co.commit('added data')
+        co.close()
+
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
         tf_dset = make_tf_dataset(aset)
         shape_obj = tf.TensorShape((2, None))
         tf_dset = tf_dset.padded_batch(5, padded_shapes=(shape_obj,))
