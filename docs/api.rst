@@ -6,6 +6,7 @@ Python API
 
 This is the python API for the Hangar project.
 
+
 Repository
 ==========
 
@@ -94,3 +95,17 @@ Differ
 .. autoclass:: hangar.diff.ReaderUserDiff()
    :members:
    :exclude-members: __init__
+
+
+ML Framework Dataloaders
+========================
+
+Tensorflow
+----------
+
+.. autofunction:: hangar.make_tf_dataset
+
+Pytorch
+-------
+
+.. autofunction:: hangar.make_torch_dataset

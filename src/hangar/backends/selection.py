@@ -83,7 +83,6 @@ Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the
 process.
 """
-from collections import namedtuple
 from typing import Dict, Union, Callable, Mapping
 
 import numpy as np

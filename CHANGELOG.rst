@@ -18,6 +18,10 @@ New Features
   (`#85 <https://github.com/tensorwerk/hangar-py/pull/85>`__) `@rlizzo <https://github.com/rlizzo>`__
 * CLI has been placed under test coverage, added interface usage to docs.
   (`#85 <https://github.com/tensorwerk/hangar-py/pull/85>`__) `@rlizzo <https://github.com/rlizzo>`__
+* TensorFlow and PyTorch Machine Learning Dataloader Methods (*Experimental Release*).
+  (`#91 <https://github.com/tensorwerk/hangar-py/pull/91>`__)
+  lead: `@hhsecond <https://github.com/hhsecond>`__, co-author: `@rlizzo <https://github.com/rlizzo>`__,
+  reviewed by: `@elistevens <https://github.com/elistevens>`__
 
 Improvements
 ------------
@@ -38,6 +42,7 @@ Improvements
 * Repository software version compatability methods added to ensure upgrade paths in the future.
   (`#101 <https://github.com/tensorwerk/hangar-py/pull/101>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Many tests added (including support for Mac OSX on Travis-CI).
+  lead: `@rlizzo <https://github.com/rlizzo>`__, co-author: `@hhsecond <https://github.com/hhsecond>`__
 
 Bug Fixes
 ---------

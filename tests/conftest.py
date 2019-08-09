@@ -47,6 +47,20 @@ def written_repo(repo):
 
 
 @pytest.fixture()
+def repo_with_20_samples(written_repo, array5by7):
+    co = written_repo.checkout(write=True)
+    second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7)
+    first_aset = co.arraysets['_aset']
+    for i in range(20):
+        array5by7[:] = i
+        first_aset[str(i)] = array5by7
+        second_aset[str(i)] = array5by7
+    co.commit('20 samples')
+    co.close()
+    yield written_repo
+
+
+@pytest.fixture()
 def variable_shape_written_repo(repo):
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(name='_aset', shape=(10, 10), dtype=np.float64, variable_shape=True)
@@ -63,7 +77,7 @@ def w_checkout(written_repo):
 
 
 @pytest.fixture()
-def array5by7(scope='session'):
+def array5by7():
     return np.random.random((5, 7))
 
 
@@ -174,7 +188,6 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
         time.sleep(0.5)
-
 
 
 @pytest.fixture()

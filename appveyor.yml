@@ -16,7 +16,7 @@ environment:
     #   PYTHON_HOME: C:\Python36-x64
     #   PYTHON_VERSION: '3.6'
     #   PYTHON_ARCH: '64'
-    - TOXENV: 'py36-nocov'
+    - TOXENV: 'py36-nocov-ml'
       TOXPYTHON: C:\Python36-x64\python.exe
       PYTHON_HOME: C:\Python36-x64
       PYTHON_VERSION: '3.6'
@@ -26,7 +26,7 @@ environment:
     #   PYTHON_HOME: C:\Python37-x64
     #   PYTHON_VERSION: '3.7'
     #   PYTHON_ARCH: '64'
-    - TOXENV: 'py37-nocov'
+    - TOXENV: 'py37-nocov-ml'
       TOXPYTHON: C:\Python37-x64\python.exe
       PYTHON_HOME: C:\Python37-x64
       PYTHON_VERSION: '3.7'

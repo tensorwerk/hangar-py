@@ -29,7 +29,7 @@ matrix:
       env:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
-        - TOXENV=py37-cover,report
+        - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
     - os: osx
@@ -45,7 +45,7 @@ matrix:
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
         - TR_PYTHON_VERSION="3.7"
-        - TOXENV=py37-cover,report
+        - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
 before_install:
