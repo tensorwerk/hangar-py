@@ -1,4 +1,4 @@
-__version__ = '0.1.1'
+__version__ = '0.2.0'
 __all__ = ['Repository', 'serve', 'make_tf_dataset', 'make_torch_dataset']
 
 from functools import partial
