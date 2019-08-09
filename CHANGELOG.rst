@@ -2,8 +2,8 @@
 Change Log
 ==========
 
-`In-Progress`_
-==============
+`v0.2.0`_ (2019-08-09)
+======================
 
 New Features
 ------------
@@ -124,4 +124,5 @@ Breaking changes
 .. _v0.0.0: https://github.com/tensorwerk/hangar-py/commit/2aff3805c66083a7fbb2ebf701ceaf38ac5165c7
 .. _v0.1.0: https://github.com/tensorwerk/hangar-py/compare/v0.0.0...v0.1.0
 .. _v0.1.1: https://github.com/tensorwerk/hangar-py/compare/v0.1.0...v0.1.1
-.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...master
+.. _v_0.2.0: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...v0.2.0
+.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.2.0...master
