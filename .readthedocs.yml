@@ -23,4 +23,5 @@ python:
           - dev
     - method: setuptools
       path: .
+    - requirements: docs/requirements_rtd.txt
   system_packages: true
