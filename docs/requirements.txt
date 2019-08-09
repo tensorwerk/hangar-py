@@ -4,4 +4,6 @@ sphinx-click
 nbsphinx
 recommonmark
 IPython
+tensorflow
+torch==1.2.0+cpu
 -e .
