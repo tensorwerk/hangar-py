@@ -53,7 +53,6 @@ def repo_with_20_samples(written_repo, array5by7):
     first_aset = co.arraysets['_aset']
     for i in range(20):
         array5by7[:] = i
-        array5by7[:] = i
         first_aset[str(i)] = array5by7
         second_aset[str(i)] = array5by7
     co.commit('20 samples')

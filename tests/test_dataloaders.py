@@ -15,6 +15,32 @@ except ImportError:
                     reason='pytorch is not installed in the test environment.')
 class TestTorchDataLoader(object):
 
+    def test_warns_experimental(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout()
+        first_aset = co.arraysets['_aset']
+        second_aset = co.arraysets['second_aset']
+        with pytest.warns(UserWarning, match='Dataloaders are experimental'):
+            make_torch_dataset([first_aset, second_aset])
+        co.close()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_warns_arrayset_sample_size_mismatch(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout(write=True)
+        second_aset = co.arraysets['second_aset']
+        del second_aset['10']
+        co.commit('deleting')
+        co.close()
+
+        co = repo.checkout()
+        first_aset = co.arraysets['_aset']
+        second_aset = co.arraysets['second_aset']
+        with pytest.warns(UserWarning, match='Arraysets do not contain equal num samples'):
+            make_torch_dataset([first_aset, second_aset])
+        co.close()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     def test_multiple_dataset_loader(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout(write=True)
@@ -33,7 +59,8 @@ class TestTorchDataLoader(object):
             # if more than one dataset, those should be in a list/tuple
             make_torch_dataset(first_aset, first_aset)
 
-        torch_dset = make_torch_dataset([first_aset, second_aset])
+        with pytest.warns(UserWarning, match='Arraysets do not contain equal num samples'):
+            torch_dset = make_torch_dataset([first_aset, second_aset])
         loader = DataLoader(torch_dset, batch_size=6, drop_last=True)
         total_samples = 0
         for dset1, dset2 in loader:
@@ -43,6 +70,7 @@ class TestTorchDataLoader(object):
         assert total_samples == 18  # drop last is True
         co.close()
 
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout(write=True)
@@ -52,34 +80,59 @@ class TestTorchDataLoader(object):
             make_torch_dataset([first_aset, second_aset])
         co.close()
 
-    def test_with_keys_and_index_range(self, repo_with_20_samples):
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_with_keys(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
         aset = co.arraysets['_aset']
 
         # with keys
-        keys = ['2', '4', '7', '9', '15', '18']
-        bad_tensor = aset['1']
+        keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
+        bad_tensor0 = aset['0']
+        bad_tensor1 = aset['1']
+        bad_tensor3 = aset['3']
+        bad_tensor8 = aset['8']
+
         torch_dset = make_torch_dataset(aset, keys=keys)
         loader = DataLoader(torch_dset, batch_size=3)
         total_batches = 0
         for batch in loader:
             assert batch[0].size(0) == 3
             total_batches += 1
-            for sample in batch[0]:
-                assert not np.allclose(sample, bad_tensor)
-        assert total_batches == 2
-
-        # with index range
-        index_range = slice(10, 16)
-        torch_dset = make_torch_dataset(aset, index_range=index_range)
-        loader = DataLoader(torch_dset, batch_size=3)
-        for batch in loader:
-            assert batch[0].size(0) == 3
-            for sample in batch[0]:
-                assert not np.allclose(sample, bad_tensor)
+            for sample in batch:
+                assert not np.allclose(sample, bad_tensor0)
+                assert not np.allclose(sample, bad_tensor1)
+                assert not np.allclose(sample, bad_tensor3)
+                assert not np.allclose(sample, bad_tensor8)
+        assert total_batches == 3
         co.close()
 
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_with_index_range(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
+
+        # with keys
+        bad_tensor0 = aset['0']
+        bad_tensor1 = aset['1']
+
+        # with index range
+        index_range = slice(2, 20)
+        torch_dset = make_torch_dataset(aset, index_range=index_range)
+        loader = DataLoader(torch_dset, batch_size=3)
+        total_batches = 0
+        for batch in loader:
+            assert batch[0].size(0) == 3
+            total_batches += 1
+            for sample in batch:
+                assert not np.allclose(sample, bad_tensor0)
+                assert not np.allclose(sample, bad_tensor1)
+        assert total_batches == 6
+        co.close()
+
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     def test_field_names(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
@@ -114,6 +167,32 @@ except ImportError:
     reason='tensorflow is not installed in the test environment.')
 class TestTfDataLoader(object):
 
+    def test_warns_experimental(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout()
+        first_aset = co.arraysets['_aset']
+        second_aset = co.arraysets['second_aset']
+        with pytest.warns(UserWarning, match='Dataloaders are experimental'):
+            make_tf_dataset([first_aset, second_aset])
+        co.close()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_wans_arrayset_sample_size_mismatch(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout(write=True)
+        second_aset = co.arraysets['second_aset']
+        del second_aset['10']
+        co.commit('deleting')
+        co.close()
+
+        co = repo.checkout()
+        first_aset = co.arraysets['_aset']
+        second_aset = co.arraysets['second_aset']
+        with pytest.warns(UserWarning, match='Arraysets do not contain equal num samples'):
+            make_tf_dataset([first_aset, second_aset])
+        co.close()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     def test_dataset_loader(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
@@ -128,15 +207,69 @@ class TestTfDataLoader(object):
             assert dset2.shape == tf.TensorShape((6, 5, 7))
         co.close()
 
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_with_keys(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
+
+        # with keys
+        keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
+        bad_tensor0 = aset['0']
+        bad_tensor1 = aset['1']
+        bad_tensor3 = aset['3']
+        bad_tensor8 = aset['8']
+
+        tf_dset = make_tf_dataset(aset, keys=keys)
+        tf_dset = tf_dset.batch(3)
+        total_batches = 0
+        for dset1 in tf_dset:
+            total_batches += 1
+            assert dset1[0].shape == tf.TensorShape((3, 5, 7))
+            for sample in dset1[0]:
+                assert not np.allclose(sample, bad_tensor0)
+                assert not np.allclose(sample, bad_tensor1)
+                assert not np.allclose(sample, bad_tensor3)
+                assert not np.allclose(sample, bad_tensor8)
+        assert total_batches == 3
+        co.close()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_with_index_range(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
+
+        # with keys
+        bad_tensor0 = aset['0']
+        bad_tensor1 = aset['1']
+
+        # with index range
+        index_range = slice(2, 20)
+        tf_dset = make_tf_dataset(aset, index_range=index_range)
+        tf_dset = tf_dset.batch(3)
+        total_batches = 0
+        for dset1 in tf_dset:
+            total_batches += 1
+            assert dset1[0].shape == tf.TensorShape((3, 5, 7))
+            for sample in dset1[0]:
+                assert not np.allclose(sample, bad_tensor0)
+                assert not np.allclose(sample, bad_tensor1)
+        assert total_batches == 6
+        co.close()
+
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout(write=True)
         first_aset = co.arraysets['_aset']
         second_aset = co.arraysets['second_aset']
         with pytest.raises(TypeError):
-            make_torch_dataset([first_aset, second_aset])
+            make_tf_dataset([first_aset, second_aset])
         co.close()
 
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     def test_variably_shaped(self, variable_shape_written_repo):
         # Variably shaped test is required since the collation is dependent on
         # the way we return the data from generator

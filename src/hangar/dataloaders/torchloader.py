@@ -52,7 +52,7 @@ def make_torch_dataset(arraysets,
     -------
     `torch.utils.data.Dataset`
     """
-    warnings.warn("Dataloaders are Experimental in the current release", UserWarning)
+    warnings.warn("Dataloaders are experimental in the current release", UserWarning)
     if keys:
         if not isinstance(keys, (list, tuple, set)):
             raise TypeError(f'type(keys): {type(keys)} != (list, tuple, set)')

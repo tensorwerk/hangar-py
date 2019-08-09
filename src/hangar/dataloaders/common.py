@@ -54,7 +54,13 @@ class GroupedAsets(object):
         elif index_range:
             if not isinstance(index_range, slice):
                 raise TypeError(f'type(index_range): {type(index_range)} != slice')
-            self._allowed_samples = tuple(common_aset_keys)[index_range]
+            # need to sort before sliceing on index_range, but since sample
+            # keys can be mixed int and str type, convert to common format and
+            # sort on that first
+            str_keys = [i if isinstance(i, str) else f'#{i}' for i in common_aset_keys]
+            sorted_keys = sorted(str_keys)
+            converted_keys = [int(i[1:]) if i.startswith('#') else i for i in sorted_keys]
+            self._allowed_samples = tuple(converted_keys)[index_range]
         else:
             self._allowed_samples = tuple(common_aset_keys)
 
