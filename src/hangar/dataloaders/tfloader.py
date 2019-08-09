@@ -49,7 +49,7 @@ def make_tf_dataset(arraysets,
 
     Parameters
     ----------
-    arraysets : `hangar.arrayset.ArraysetDataReader` or Sequence
+    arraysets : :class:`~hangar.arrayset.ArraysetDataReader` or Sequence
         A arrayset object, a tuple of arrayset object or a list of arrayset
         objects`
     keys : Sequence[str]
@@ -82,7 +82,7 @@ def make_tf_dataset(arraysets,
 
     Returns
     -------
-    `tf.data.Dataset`
+    :class:`tf.data.Dataset`
     """
     warnings.warn("Dataloaders are experimental in the current release.", UserWarning)
     gasets = GroupedAsets(arraysets, keys, index_range)
