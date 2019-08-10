@@ -4,7 +4,7 @@ from typing import (
 
 import lmdb
 
-from .records import commiting, heads
+from .records import commiting, heads, parsing
 from .records.parsing import (MetadataRecordKey, MetadataRecordVal,
                               RawDataRecordKey, RawDataRecordVal,
                               RawArraysetSchemaVal)
@@ -634,6 +634,37 @@ def find_conflicts(pair1: Set[Tuple[bytes, bytes]],
         else:
             seen.add(k)
     return conflict
+
+
+def raw_from_db_change(changes):
+    samples = {}
+    metadata = {}
+    schema = {}
+    for k, v in changes:
+        if k.startswith(b'a:'):
+            if k.endswith(b':'):
+                continue
+            rk = parsing.data_record_raw_key_from_db_key(k)
+            rv = parsing.data_record_raw_val_from_db_val(v)
+            samples[rk] = rv
+        elif k.startswith(b'l:'):
+            if k.endswith(b':'):
+                continue
+            rk = parsing.metadata_record_raw_key_from_db_key(k)
+            rv = parsing.metadata_record_raw_val_from_db_val(v)
+            metadata[rk] = rv
+        elif k.startswith(b's:'):
+            if k.endswith(b':'):
+                continue
+            rk = parsing.arrayset_record_schema_raw_key_from_db_key(k)
+            rv = parsing.arrayset_record_schema_raw_val_from_db_val(v)
+            samples[rk] = rv
+    out = {
+        'metadata': metadata,
+        'samples': samples,
+        'schema': schema,
+    }
+    return out
 
 # ------------------------- Commit Differ -------------------------------------
 
