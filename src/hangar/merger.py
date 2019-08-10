@@ -15,7 +15,7 @@ import os
 
 import lmdb
 
-from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
+from .diff import WriterUserDiff, ReaderUserDiff
 from .records import commiting, hashs, heads, parsing
 
 
@@ -334,6 +334,8 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
     ValueError
         If a conflict is found, the operation is aborted
     """
+    a = 0
+    '''
     # conflict checking
     cmtDiffer = ThreeWayCommitDiffer(a_cont, m_cont, d_cont)
     confs = cmtDiffer.determine_conflicts()
@@ -380,6 +382,8 @@ def _compute_merge_results(a_cont, m_cont, d_cont):
             'data': o_data_dict[asetn]
         }
     return outDict
+    '''
+    return None
 
 
 def _merge_dict_to_lmdb_tuples(patchedRecs):

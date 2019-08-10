@@ -313,7 +313,6 @@ def get_commit_ref_env(refenv, commit_hash):
     return tmpDB
 
 
-
 def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
     """unpack a commit record ref into a new key/val db for reader checkouts.
 
