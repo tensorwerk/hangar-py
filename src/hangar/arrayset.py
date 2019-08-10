@@ -698,14 +698,14 @@ class ArraysetDataWriter(ArraysetDataReader):
                 # otherwise just decrement the count of asets
                 else:
                     newTotalNumAsetsVal = parsing.arrayset_total_count_db_val_from_raw_val(newTotalNumAsets)
-                    self._dataTxn.put(newTotalNumAsetsVal)
+                    self._dataTxn.put(totalNumAsetsKey, newTotalNumAsetsVal)
             # otherwise just decrement the arrayset record count
             else:
                 newAsetDataCountVal = parsing.arrayset_record_count_db_val_from_raw_val(newAsetDataCount)
                 self._dataTxn.put(asetDataCountKey, newAsetDataCountVal)
 
         except KeyError as e:
-            raise e from None
+            raise e
 
         finally:
             if not self._is_conman:

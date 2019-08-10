@@ -288,6 +288,32 @@ def get_commit_ref_contents(refenv, commit_hash):
     return outDict
 
 
+def get_commit_ref_env(refenv, commit_hash):
+    """hackish way to convert lmdb from compressed structure to in memory without a new env.
+
+    .. todo:: Completly refactor this mess...
+
+    Parameters
+    ----------
+    refenv : lmdb.Environment
+        lmdb environment where the commit refs are stored
+    commit_hash : str
+        hash of the commit to get the contents of
+
+    Returns
+    -------
+    dict
+        nested dict
+    """
+    with tempfile.TemporaryDirectory() as tempD:
+        tmpDF = os.path.join(tempD, 'test.lmdb')
+        tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
+        unpack_commit_ref(refenv, tmpDB, commit_hash)
+
+    return tmpDB
+
+
+
 def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
     """unpack a commit record ref into a new key/val db for reader checkouts.
 

@@ -382,7 +382,7 @@ Functions to convert arrayset count records to/from python objects.
 
 
 def arrayset_record_count_db_key_from_raw_key(aset_name):
-    db_record_count_key = f'{c.K_STGARR}{aset_name}'.encode()
+    db_record_count_key = f'{c.K_STGARR}{aset_name}{c.SEP_KEY}'.encode()
     return db_record_count_key
 
 
@@ -396,6 +396,7 @@ def arrayset_record_count_db_val_from_raw_val(aset_record_count):
 
 def arrayset_record_count_raw_key_from_db_key(db_key):
     aset_name = db_key.decode().replace(c.K_STGARR, '', 1)
+    aset_name = aset_name.replace(c.SEP_KEY, '', 1)
     return aset_name
 
 
