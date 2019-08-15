@@ -34,7 +34,7 @@ Wheels (PyPi)
 If you have an existing python installation on your computer, pre-built Hangar Wheels
 can be installed via pip from the Python Package Index (PyPi)::
 
-    pip instal hangar
+    pip install hangar
 
 
 Source Installation
