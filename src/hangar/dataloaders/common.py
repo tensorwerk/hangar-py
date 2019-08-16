@@ -101,14 +101,16 @@ class GroupedAsets(object):
         -------
         A tuple of arrayset shapes
         """
-        if self.arrayset_array[0].variable_shape:
-            return None
         shapes = []
         for aset in self.arrayset_array:
-            if converter:
-                shapes.append(converter(aset.shape))
+            if aset.variable_shape:
+                aset_shape = (None,) * len(aset.shape)
             else:
-                shapes.append(aset.shape)
+                aset_shape = aset.shape
+            if converter:
+                shapes.append(converter(aset_shape))
+            else:
+                shapes.append(aset_shape)
         return tuple(shapes)
 
     @property

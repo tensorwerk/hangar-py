@@ -6,7 +6,6 @@ except (ImportError, ModuleNotFoundError):
         'installed correctly to use tensorflow dataloader functions')
 
 from functools import partial
-import warnings
 from typing import Sequence
 import random
 
@@ -84,10 +83,8 @@ def make_tf_dataset(arraysets,
     -------
     :class:`tf.data.Dataset`
     """
-    warnings.warn("Dataloaders are experimental in the current release.", UserWarning)
     gasets = GroupedAsets(arraysets, keys, index_range)
     generator = partial(yield_data, gasets.arrayset_array, gasets.sample_names, shuffle)
-    # TODO: pass proper shapes for fixed shape input
     res = tf.data.Dataset.from_generator(
         generator=generator,
         output_types=gasets.get_types(converter=tf.as_dtype),

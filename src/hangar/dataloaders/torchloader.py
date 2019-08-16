@@ -7,7 +7,6 @@ except (ImportError, ModuleNotFoundError):
 
 from collections import namedtuple
 from typing import Sequence
-import warnings
 from .common import GroupedAsets
 
 
@@ -52,7 +51,6 @@ def make_torch_dataset(arraysets,
     -------
     :class:`torch.utils.data.Dataset`
     """
-    warnings.warn("Dataloaders are experimental in the current release", UserWarning)
     if keys:
         if not isinstance(keys, (list, tuple, set)):
             raise TypeError(f'type(keys): {type(keys)} != (list, tuple, set)')
