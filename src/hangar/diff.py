@@ -1,13 +1,27 @@
-from typing import Iterable, List, NamedTuple, Set, Union, Tuple
+from itertools import starmap
+from typing import Iterable
+from typing import List
+from typing import NamedTuple
+from typing import Set
+from typing import Tuple
+from typing import Union
 
 import lmdb
 
-from .records import commiting, heads, parsing
-from .records.parsing import MetadataRecordKey, RawDataRecordKey
-from .records.queries import RecordQuery
-from .context import TxnRegister
 from . import constants as c
-
+from .context import TxnRegister
+from .records import commiting
+from .records import heads
+from .records import parsing
+from .records.parsing import MetadataRecordKey
+from .records.parsing import RawDataRecordKey
+from .records.parsing import arrayset_record_schema_raw_key_from_db_key
+from .records.parsing import arrayset_record_schema_raw_val_from_db_val
+from .records.parsing import data_record_raw_key_from_db_key
+from .records.parsing import data_record_raw_val_from_db_val
+from .records.parsing import metadata_record_raw_key_from_db_key
+from .records.parsing import metadata_record_raw_val_from_db_val
+from .records.queries import RecordQuery
 
 # ------------------------- Differ Types --------------------------------------
 
@@ -95,13 +109,12 @@ def diff_envs(base_env: lmdb.Environment, head_env: lmdb.Environment) -> DiffOut
         headCur = headTxn.cursor()
         baseCur.first()
         headCur.first()
-        while cont:
+        while True:
             if moreBase and moreHead:
                 bKey, bVal = baseCur.item()
                 hKey, hVal = headCur.item()
             elif (not moreBase) and (not moreHead):
-                cont = False
-                continue
+                break
             # necessary to avoid deadlock at last items
             elif not moreBase:
                 bKey = b'x'
@@ -163,16 +176,16 @@ def _raw_from_db_change(changes: Set[Tuple[bytes, bytes]]) -> RawChanges:
     arraysets, metadata, schema = {}, {}, {}
     for k, v in changes:
         if k.startswith(b'a:'):
-            rk = parsing.data_record_raw_key_from_db_key(k)
-            rv = parsing.data_record_raw_val_from_db_val(v)
+            rk = data_record_raw_key_from_db_key(k)
+            rv = data_record_raw_val_from_db_val(v)
             arraysets[rk] = rv
         elif k.startswith(b'l:'):
-            rk = parsing.metadata_record_raw_key_from_db_key(k)
-            rv = parsing.metadata_record_raw_val_from_db_val(v)
+            rk = metadata_record_raw_key_from_db_key(k)
+            rv = metadata_record_raw_val_from_db_val(v)
             metadata[rk] = rv
         elif k.startswith(b's:'):
-            rk = parsing.arrayset_record_schema_raw_key_from_db_key(k)
-            rv = parsing.arrayset_record_schema_raw_val_from_db_val(v)
+            rk = arrayset_record_schema_raw_key_from_db_key(k)
+            rv = arrayset_record_schema_raw_val_from_db_val(v)
             schema[rk] = rv
     return RawChanges(schema=schema, samples=arraysets, metadata=metadata)
 
@@ -190,10 +203,9 @@ def _all_raw_from_db_changes(outDb: DiffConflictsOutDB) -> DiffConflictsOutRaw:
     DiffConflictsOutRaw
         Human readable struct containing `diff` and `conflict` fields.
     """
-    added = _raw_from_db_change(outDb.diff.added)
-    deleted = _raw_from_db_change(outDb.diff.deleted)
-    mutated = _raw_from_db_change(outDb.diff.mutated)
-    outRawDiff = DiffOutRaw(added=added, deleted=deleted, mutated=mutated)
+    it = (outDb.diff.added, outDb.diff.deleted, outDb.diff.mutated)
+    out = map(_raw_from_db_change, it)  # significant perf improvement for large commits
+    outRawDiff = DiffOutRaw(*out)
 
     t1 = _raw_from_db_change(outDb.conflict.t1)
     t21 = _raw_from_db_change(outDb.conflict.t21)
@@ -231,10 +243,7 @@ def _symmetric_difference_keys(pair1: Set[Tuple[bytes, bytes]],
     conflict = []
     for k, v in pair1.symmetric_difference(pair2):
         if k in seen:
-            if k.endswith(c.SEP_KEY.encode()):
-                continue
-            else:
-                conflict.append((k, v))
+            conflict.append((k, v))
         else:
             seen.add(k)
     return conflict
@@ -338,11 +347,11 @@ class BaseUserDiff(object):
             structure containing (`additions`, `deletions`, `mutations`) for
             diff, as well as the ConflictRecord struct.
         """
-        m_diff = diff_envs(a_env, m_env)
-        d_diff = diff_envs(a_env, d_env)
-        md_diff = diff_envs(d_env, m_env)
-        conflict = find_conflicts(m_diff, d_diff)
-        return DiffConflictsOutDB(diff=md_diff, conflict=conflict)
+        # it = (m_diff, d_diff, md_diff)
+        it = ((a_env, m_env), (a_env, d_env), (d_env, m_env))
+        diffs = list(starmap(diff_envs, it))  # significant perf improvement by map.
+        conflict = find_conflicts(diffs[0], diffs[1])
+        return DiffConflictsOutDB(diff=diffs[2], conflict=conflict)
 
     def _diff(self,
               a_env: lmdb.Environment,
