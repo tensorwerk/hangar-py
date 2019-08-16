@@ -51,17 +51,18 @@ class RecordQuery(object):
             dictionary of metadata db keys and db_values
         """
         metadataRecords = {}
-        metadataCountKey = parsing.metadata_count_db_key()
+        metadataRangeKey = parsing.metadata_range_key()
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
-                metadataExists = cursor.set_key(metadataCountKey)
-                if metadataExists is True:
-                    numMetadata = parsing.metadata_count_raw_val_from_db_val(cursor.value())
-                    for i in range(numMetadata):
-                        cursor.next()
-                        metaRecKey, metaRecValue = cursor.item()
-                        metadataRecords[metaRecKey] = metaRecValue
+                cursor.first()
+                if cursor.set_range(metadataRangeKey):
+                    for k, v in cursor.iternext(keys=True, values=True):
+                        if k.startswith(metadataRangeKey):
+                            metadataRecords[k] = v
+                        else:
+                            break
+
         finally:
             TxnRegister().abort_reader_txn(self._dataenv)
 
@@ -80,6 +81,7 @@ class RecordQuery(object):
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
+                cursor.first()
                 schemas_exist = cursor.set_range(startSchemaRangeKey)
                 while schemas_exist:
                     schemaRecKey, schemaRecVal = cursor.item()
@@ -113,16 +115,15 @@ class RecordQuery(object):
             dict of db_key/db_values for each record traversed
         """
         data_records = {}
-        startAsetRecCountRngK = parsing.arrayset_record_count_db_key_from_raw_key(arrayset_name)
+        startAsetRecCountRngK = parsing.arrayset_record_count_range_key(arrayset_name)
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             with datatxn.cursor() as cursor:
+                cursor.first()
                 dataRecordsExist = cursor.set_range(startAsetRecCountRngK)
-                dataRecKeySubString = f'{startAsetRecCountRngK.decode()}{c.SEP_KEY}'.encode()
-                cursor.next()
                 while dataRecordsExist:
                     dataRecKey, dataRecVal = cursor.item()
-                    if dataRecKey.startswith(dataRecKeySubString):
+                    if dataRecKey.startswith(startAsetRecCountRngK):
                         data_records[dataRecKey] = dataRecVal
                         dataRecordsExist = cursor.next()
                         continue

@@ -162,9 +162,10 @@ def server_instance(managed_tmpdir, worker_id):
 
     hangserver.env._close_environments()
     server.stop(0.0)
+    time.sleep(0.2)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.5)
+        time.sleep(0.3)
 
 
 @pytest.fixture()

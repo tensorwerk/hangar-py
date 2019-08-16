@@ -489,9 +489,9 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
         Commit hash of the newly added commit
     """
     commitParentVal = _commit_ancestors(branchenv=branchenv,
-                                         is_merge_commit=is_merge_commit,
-                                         master_branch_name=merge_master,
-                                         dev_branch_name=merge_dev)
+                                        is_merge_commit=is_merge_commit,
+                                        master_branch_name=merge_master,
+                                        dev_branch_name=merge_dev)
 
     user_info_pth = pjoin(repo_path, 'config_user.yml')
     with open(user_info_pth) as f:

@@ -622,12 +622,6 @@ class ArraysetDataWriter(ArraysetDataReader):
             dataRecVal = parsing.data_record_db_val_from_raw_val(full_hash)
             self._dataTxn.put(dataRecKey, dataRecVal)
 
-            if existingDataRecVal is False:
-                asetCountKey = parsing.arrayset_record_count_db_key_from_raw_key(self._asetn)
-                asetCountVal = self._dataTxn.get(asetCountKey, default='0'.encode())
-                newAsetCount = parsing.arrayset_record_count_raw_val_from_db_val(asetCountVal) + 1
-                newAsetCountVal = parsing.arrayset_record_count_db_val_from_raw_val(newAsetCount)
-                self._dataTxn.put(asetCountKey, newAsetCountVal)
         finally:
             if tmpconman:
                 self.__exit__()
@@ -680,29 +674,10 @@ class ArraysetDataWriter(ArraysetDataReader):
                 raise KeyError(f'No sample: {name} type: {type(name)} exists in: {self._asetn}')
             del self._sspecs[name]
 
-            asetDataCountKey = parsing.arrayset_record_count_db_key_from_raw_key(self._asetn)
-            asetDataCountVal = self._dataTxn.get(asetDataCountKey)
-            newAsetDataCount = parsing.arrayset_record_count_raw_val_from_db_val(asetDataCountVal) - 1
-
-            # if this is the last data piece existing in a arrayset, remove the arrayset
-            if newAsetDataCount == 0:
+            if len(self._sspecs) == 0:
+                # if this is the last data piece existing in a arrayset, remove the schema
                 asetSchemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(self._asetn)
-                self._dataTxn.delete(asetDataCountKey)
                 self._dataTxn.delete(asetSchemaKey)
-                totalNumAsetsKey = parsing.arrayset_total_count_db_key()
-                totalNumAsetsVal = self._dataTxn.get(totalNumAsetsKey)
-                newTotalNumAsets = parsing.arrayset_total_count_raw_val_from_db_val(totalNumAsetsVal) - 1
-                # if no more arraysets exist, delete the indexing key
-                if newTotalNumAsets == 0:
-                    self._dataTxn.delete(totalNumAsetsKey)
-                # otherwise just decrement the count of asets
-                else:
-                    newTotalNumAsetsVal = parsing.arrayset_total_count_db_val_from_raw_val(newTotalNumAsets)
-                    self._dataTxn.put(totalNumAsetsKey, newTotalNumAsetsVal)
-            # otherwise just decrement the arrayset record count
-            else:
-                newAsetDataCountVal = parsing.arrayset_record_count_db_val_from_raw_val(newAsetDataCount)
-                self._dataTxn.put(asetDataCountKey, newAsetDataCountVal)
 
         except KeyError as e:
             raise e
@@ -1193,8 +1168,8 @@ class Arraysets(object):
             (*prototype.shape, prototype.size, prototype.dtype.num), dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
 
-        asetCountKey = parsing.arrayset_record_count_db_key_from_raw_key(name)
-        asetCountVal = parsing.arrayset_record_count_db_val_from_raw_val(0)
+        # asetCountKey = parsing.arrayset_record_count_db_key_from_raw_key(name)
+        # asetCountVal = parsing.arrayset_record_count_db_val_from_raw_val(0)
         asetSchemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(name)
         asetSchemaVal = parsing.arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
@@ -1208,15 +1183,9 @@ class Arraysets(object):
 
         dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
         hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
-        numAsetsCountKey = parsing.arrayset_total_count_db_key()
-        numAsetsCountVal = dataTxn.get(numAsetsCountKey, default=('0'.encode()))
-        numAsets_count = parsing.arrayset_total_count_raw_val_from_db_val(numAsetsCountVal)
-        numAsetsCountVal = parsing.arrayset_record_count_db_val_from_raw_val(numAsets_count + 1)
         hashSchemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
         hashSchemaVal = asetSchemaVal
 
-        dataTxn.put(asetCountKey, asetCountVal)
-        dataTxn.put(numAsetsCountKey, numAsetsCountVal)
         dataTxn.put(asetSchemaKey, asetSchemaVal)
         hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
         TxnRegister().commit_writer_txn(self._dataenv)
@@ -1265,26 +1234,19 @@ class Arraysets(object):
             self._arraysets[aset_name]._close()
             self._arraysets.__delitem__(aset_name)
 
-            asetCountKey = parsing.arrayset_record_count_db_key_from_raw_key(aset_name)
-            numAsetsKey = parsing.arrayset_total_count_db_key()
-            arraysInAset = datatxn.get(asetCountKey)
-            recordsToDelete = parsing.arrayset_total_count_raw_val_from_db_val(arraysInAset)
-            recordsToDelete = recordsToDelete + 1  # depends on num subkeys per array recy
             with datatxn.cursor() as cursor:
-                cursor.set_key(asetCountKey)
-                for i in range(recordsToDelete):
-                    cursor.delete()
-            cursor.close()
+                cursor.first()
+                asetRangeKey = parsing.arrayset_record_count_range_key(aset_name)
+                recordsExist = cursor.set_range(asetRangeKey)
+                while recordsExist:
+                    k = cursor.key()
+                    if k.startswith(asetRangeKey):
+                        recordsExist = cursor.delete()
+                    else:
+                        recordsExist = False
 
             asetSchemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(aset_name)
             datatxn.delete(asetSchemaKey)
-            numAsetsVal = datatxn.get(numAsetsKey)
-            numAsets = parsing.arrayset_total_count_raw_val_from_db_val(numAsetsVal) - 1
-            if numAsets == 0:
-                datatxn.delete(numAsetsKey)
-            else:
-                numAsetsVal = parsing.arrayset_total_count_db_val_from_raw_val(numAsets)
-                datatxn.put(numAsetsKey, numAsetsVal)
         finally:
             TxnRegister().commit_writer_txn(self._dataenv)
 
