@@ -44,7 +44,7 @@ matrix:
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
-        - TR_PYTHON_VERSION="3.7"
+        - TR_PYTHON_VERSION="3.7.0"
         - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
@@ -63,7 +63,7 @@ before_install:
       export PATH=${CONDA_INSTALL_LOCN}/bin:$PATH
       conda config --set always_yes true
       conda update conda
-      conda install python=${TR_PYTHON_VERSION} zstd zlib lz4-c lz4
+      conda install -c conda-forge python=${TR_PYTHON_VERSION} python-blosc zstd zlib
       # ensure we have the latest version of pip installed
       python -m pip install -U pip
       python -m pip install -U setuptools

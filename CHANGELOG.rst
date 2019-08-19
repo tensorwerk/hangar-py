@@ -2,6 +2,15 @@
 Change Log
 ==========
 
+`In-Progress`_
+==============
+
+Improvements
+------------
+
+* Added tutorial on working with remote data.
+  (`#113 <https://github.com/tensorwerk/hangar-py/pull/113>`__) `@rlizzo <https://github.com/rlizzo>`__
+
 `v0.2.0`_ (2019-08-09)
 ======================
 
@@ -124,5 +133,5 @@ Breaking changes
 .. _v0.0.0: https://github.com/tensorwerk/hangar-py/commit/2aff3805c66083a7fbb2ebf701ceaf38ac5165c7
 .. _v0.1.0: https://github.com/tensorwerk/hangar-py/compare/v0.0.0...v0.1.0
 .. _v0.1.1: https://github.com/tensorwerk/hangar-py/compare/v0.1.0...v0.1.1
-.. _v_0.2.0: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...v0.2.0
+.. _v0.2.0: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...v0.2.0
 .. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.2.0...master
