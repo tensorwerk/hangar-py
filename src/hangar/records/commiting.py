@@ -4,6 +4,7 @@ import tempfile
 import time
 from os.path import join as pjoin
 import shutil
+from contextlib import contextmanager
 
 import lmdb
 import yaml
@@ -261,33 +262,6 @@ def get_commit_ref(refenv, commit_hash):
     return commitRefs
 
 
-def get_commit_ref_contents(refenv, commit_hash):
-    """hackish way to convert lmdb from compressed structure to in memory without a new env.
-
-    .. todo:: Completly refactor this mess...
-
-    Parameters
-    ----------
-    refenv : lmdb.Environment
-        lmdb environment where the commit refs are stored
-    commit_hash : str
-        hash of the commit to get the contents of
-
-    Returns
-    -------
-    dict
-        nested dict
-    """
-    with tempfile.TemporaryDirectory() as tempD:
-        tmpDF = os.path.join(tempD, 'test.lmdb')
-        tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-        unpack_commit_ref(refenv, tmpDB, commit_hash)
-        outDict = RecordQuery(tmpDB).all_records()
-        tmpDB.close()
-
-    return outDict
-
-
 def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
     """unpack a commit record ref into a new key/val db for reader checkouts.
 
@@ -319,6 +293,33 @@ def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
     return
 
 
+@contextmanager
+def tmp_cmt_env(refenv: lmdb.Environment, commit_hash: str):
+    """create temporary unpacked lmdb environment from compressed structure
+
+    Parameters
+    ----------
+    refenv : lmdb.Environment
+        lmdb environment where the commit refs are stored
+    commit_hash : str
+        hash of the commit to get the contents of
+
+    Returns
+    -------
+    lmdb.Environment
+        environment with all db contents from ``commit`` unpacked
+    """
+    tempD = tempfile.mkdtemp()
+    try:
+        tmpDF = os.path.join(tempD, 'test.lmdb')
+        tmpDB = lmdb.open(path=tmpDF, sync=False, writemap=True, **c.LMDB_SETTINGS)
+        unpack_commit_ref(refenv, tmpDB, commit_hash)
+        yield tmpDB
+    finally:
+        tmpDB.close()
+        shutil.rmtree(tempD)
+
+
 """
 Methods to write new commits
 ----------------------------
@@ -338,8 +339,8 @@ The functions below act to:
 def _commit_ancestors(branchenv: lmdb.Environment,
                       *,
                       is_merge_commit: bool = False,
-                      master_branch_name: str = '',
-                      dev_branch_name: str = '') -> bytes:
+                      master_branch: str = '',
+                      dev_branch: str = '') -> bytes:
     """Format the commit parent db value, finding HEAD commits automatically.
 
     This method handles formating for both regular & merge commits through the
@@ -352,10 +353,10 @@ def _commit_ancestors(branchenv: lmdb.Environment,
         branch and commit will be found.
     is_merge_commit : bool, optional
         If this is a merge commit or now, defaults to False
-    master_branch_name : str, optional
+    master_branch : str, optional
         If merge commit, the master branch name must be specified, and the
         branch HEAD commit hash will be determined automatically, defaults to ''
-    dev_branch_name : str, optional
+    dev_branch : str, optional
         If merge commit, the dev branch name must be specified, and the branch
         HEAD commit hash will be determined automatically, defaults to ''
 
@@ -370,8 +371,8 @@ def _commit_ancestors(branchenv: lmdb.Environment,
         master_ancestor = heads.get_branch_head_commit(branchenv, masterBranch)
         dev_ancestor = ''
     else:
-        master_ancestor = heads.get_branch_head_commit(branchenv, master_branch_name)
-        dev_ancestor = heads.get_branch_head_commit(branchenv, dev_branch_name)
+        master_ancestor = heads.get_branch_head_commit(branchenv, master_branch)
+        dev_ancestor = heads.get_branch_head_commit(branchenv, dev_branch)
 
     commitParentVal = parsing.commit_parent_db_val_from_raw_val(
         master_ancestor=master_ancestor,
@@ -464,9 +465,9 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
         Commit hash of the newly added commit
     """
     commitParentVal = _commit_ancestors(branchenv=branchenv,
-                                         is_merge_commit=is_merge_commit,
-                                         master_branch_name=merge_master,
-                                         dev_branch_name=merge_dev)
+                                        is_merge_commit=is_merge_commit,
+                                        master_branch=merge_master,
+                                        dev_branch=merge_dev)
 
     user_info_pth = pjoin(repo_path, 'config_user.yml')
     with open(user_info_pth) as f:

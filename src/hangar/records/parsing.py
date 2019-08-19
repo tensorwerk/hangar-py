@@ -374,37 +374,6 @@ def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
 
 
 """
-Functions to convert arrayset count records to/from python objects.
-------------------------------------------------------------------
-"""
-
-# ------------------ raw count -> db aset record count  --------------------
-
-
-def arrayset_record_count_db_key_from_raw_key(aset_name):
-    db_record_count_key = f'{c.K_STGARR}{aset_name}'.encode()
-    return db_record_count_key
-
-
-def arrayset_record_count_db_val_from_raw_val(aset_record_count):
-    db_record_count_val = f'{aset_record_count}'.encode()
-    return db_record_count_val
-
-
-# ------------------ db aset record count -> raw count --------------------
-
-
-def arrayset_record_count_raw_key_from_db_key(db_key):
-    aset_name = db_key.decode().replace(c.K_STGARR, '', 1)
-    return aset_name
-
-
-def arrayset_record_count_raw_val_from_db_val(db_val):
-    record_count = int(db_val.decode())
-    return record_count
-
-
-"""
 Functions to convert arrayset schema records to/from python objects.
 --------------------------------------------------------------------
 """
@@ -491,25 +460,10 @@ Functions to convert total aset count records to/from python objects
 ---------------------------------------------------------------------
 """
 
-# ------------------------ raw -> db ------------------------------------------
 
-
-def arrayset_total_count_db_key() -> bytes:
-    db_key = c.K_STGARR.encode()
-    return db_key
-
-
-def arrayset_total_count_db_val_from_raw_val(number_of_asets: int) -> bytes:
-    db_val = f'{number_of_asets}'.encode()
-    return db_val
-
-
-# --------------------------- db -> raw ---------------------------------------
-
-
-def arrayset_total_count_raw_val_from_db_val(db_val: bytes) -> int:
-    raw_val = int(db_val.decode())
-    return raw_val
+def arrayset_record_count_range_key(aset_name: str) -> bytes:
+    dv_key = f'{c.K_STGARR}{aset_name}{c.SEP_KEY}'.encode()
+    return dv_key
 
 
 """
@@ -520,8 +474,8 @@ Functions to convert metadata count records to/from python objects.
 # ------------------ raw count -> db aset record count  --------------------
 
 
-def metadata_count_db_key() -> bytes:
-    """return the metadata db count key
+def metadata_range_key() -> bytes:
+    """return the metadata db range counter key
 
     this is fixed at the current implementation, no arguments needed
 
@@ -535,34 +489,6 @@ def metadata_count_db_key() -> bytes:
     """
     db_key = c.K_STGMETA.encode()
     return db_key
-
-
-def metadata_count_db_val_from_raw_val(metadata_record_count: int) -> bytes:
-    """return the metadata db count value from a raw value
-
-    Parameters
-    ----------
-    metadata_record_count : int
-        value to set in the db
-
-    Returns
-    -------
-    bytes
-        db val of the new metadata count
-    """
-    db_val = str(metadata_record_count).encode()
-    return db_val
-
-
-# ------------------ db aset record count -> raw count ------------------------
-#
-# Note: there is no need for a `metadata_count_raw_key_from_db_key()` function as
-# the key is fixed and cannot be modified by callers.
-#
-
-def metadata_count_raw_val_from_db_val(db_val):
-    record_count = int(db_val.decode())
-    return record_count
 
 
 """

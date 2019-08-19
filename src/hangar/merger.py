@@ -15,8 +15,9 @@ import os
 
 import lmdb
 
-from .diff import ThreeWayCommitDiffer, WriterUserDiff, ReaderUserDiff
-from .records import commiting, hashs, heads, parsing
+from .diff import WriterUserDiff, diff_envs, find_conflicts
+from .records import commiting, hashs, heads
+from .records.commiting import tmp_cmt_env
 
 
 def select_merge_algorithm(message: str,
@@ -24,8 +25,8 @@ def select_merge_algorithm(message: str,
                            stageenv: lmdb.Environment,
                            refenv: lmdb.Environment,
                            stagehashenv: lmdb.Environment,
-                           master_branch_name: str,
-                           dev_branch_name: str,
+                           master_branch: str,
+                           dev_branch: str,
                            repo_path: str,
                            *,
                            writer_uuid: str = 'MERGE_PROCESS') -> str:
@@ -47,9 +48,9 @@ def select_merge_algorithm(message: str,
         where commit history is stored
     stagehashenv: lmdb.Environment
         where the stage hash environment data is stored
-    master_branch_name : str
+    master_branch : str
         name of the branch to serve as a merge master
-    dev_branch_name : str
+    dev_branch : str
         name of the branch to use as the feature branch
     repo_path: str
         path to the repository on disk
@@ -91,10 +92,9 @@ def select_merge_algorithm(message: str,
         raise e from None
 
     try:
-        mHEAD = heads.get_branch_head_commit(branchenv, branch_name=master_branch_name)
-        dHEAD = heads.get_branch_head_commit(branchenv, branch_name=dev_branch_name)
-        rDiffer = ReaderUserDiff(commit_hash=mHEAD, branchenv=branchenv, refenv=refenv)
-        branchHistory = rDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
+        mHEAD = heads.get_branch_head_commit(branchenv, branch_name=master_branch)
+        dHEAD = heads.get_branch_head_commit(branchenv, branch_name=dev_branch)
+        branchHistory = wDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
 
         if branchHistory.canFF is True:
             print('Selected Fast-Forward Merge Strategy')
@@ -103,16 +103,16 @@ def select_merge_algorithm(message: str,
                 stageenv=stageenv,
                 refenv=refenv,
                 stagehashenv=stagehashenv,
-                master_branch=master_branch_name,
+                master_branch=master_branch,
                 new_masterHEAD=branchHistory.devHEAD,
                 repo_path=repo_path)
         else:
             print('Selected 3-Way Merge Strategy')
             success = _three_way_merge(
                 message=message,
-                master_branch_name=master_branch_name,
+                master_branch=master_branch,
                 masterHEAD=branchHistory.masterHEAD,
-                dev_branch_name=dev_branch_name,
+                dev_branch=dev_branch,
                 devHEAD=branchHistory.devHEAD,
                 ancestorHEAD=branchHistory.ancestorHEAD,
                 branchenv=branchenv,
@@ -190,9 +190,9 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
 
 
 def _three_way_merge(message: str,
-                     master_branch_name: str,
+                     master_branch: str,
                      masterHEAD: str,
-                     dev_branch_name: str,
+                     dev_branch: str,
                      devHEAD: str,
                      ancestorHEAD: str,
                      branchenv: lmdb.Environment,
@@ -206,11 +206,11 @@ def _three_way_merge(message: str,
     ----------
     message : str
         commit message to apply to this merge commit (specified by the user)
-    master_branch_name : str
+    master_branch : str
         name of the merge master branch
     masterHEAD : str
         commit hash of the merge master HEAD
-    dev_branch_name : str
+    dev_branch : str
         name of the merge dev branch
     devHEAD : str
         commit hash of the merge dev HEAD
@@ -238,18 +238,33 @@ def _three_way_merge(message: str,
     ValueError
         If a conflict is found, the operation will abort before completing.
     """
-    aCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=ancestorHEAD)
-    mCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=masterHEAD)
-    dCont = commiting.get_commit_ref_contents(refenv=refenv, commit_hash=devHEAD)
+    with tmp_cmt_env(refenv, ancestorHEAD) as aEnv, tmp_cmt_env(
+            refenv, masterHEAD) as mEnv, tmp_cmt_env(refenv, devHEAD) as dEnv:
 
-    try:
-        mergeContents = _compute_merge_results(a_cont=aCont, m_cont=mCont, d_cont=dCont)
-    except ValueError as e:
-        raise e from None
+        m_diff = diff_envs(aEnv, mEnv)
+        d_diff = diff_envs(aEnv, dEnv)
+        conflict = find_conflicts(m_diff, d_diff)
+        if conflict.conflict is True:
+            msg = f'HANGAR VALUE ERROR:: Merge ABORTED with conflict: {conflict}'
+            raise ValueError(msg) from None
 
-    fmtCont = _merge_dict_to_lmdb_tuples(patchedRecs=mergeContents)
+        with mEnv.begin(write=True) as txn:
+            for k, _ in d_diff.deleted:
+                txn.delete(k)
+            for k, v in d_diff.mutated:
+                txn.put(k, v, overwrite=True)
+            for k, v in d_diff.added:
+                txn.put(k, v, overwrite=True)
+
+        dbcont = []
+        with mEnv.begin(write=False) as txn:
+            with txn.cursor() as cur:
+                cur.first()
+                for kv in cur.iternext(keys=True, values=True):
+                    dbcont.append(kv)
+
     hashs.delete_in_process_data(repo_path=repo_path)
-    commiting.replace_staging_area_with_refs(stageenv=stageenv, sorted_content=fmtCont)
+    commiting.replace_staging_area_with_refs(stageenv=stageenv, sorted_content=dbcont)
 
     commit_hash = commiting.commit_records(
         message=message,
@@ -258,191 +273,8 @@ def _three_way_merge(message: str,
         refenv=refenv,
         repo_path=repo_path,
         is_merge_commit=True,
-        merge_master=master_branch_name,
-        merge_dev=dev_branch_name)
+        merge_master=master_branch,
+        merge_dev=dev_branch)
 
     hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
     return commit_hash
-
-
-def _merge_changes(changes: dict, m_dict: dict) -> dict:
-    """Common class which can merge changes between two branches.
-
-    This class does NOT CHECK FOR MERGE CONFLICTS, and will result in UNDEFINED
-    BEHAVIOR if conflicts are present. All validations must be performed
-    upstream of this method.
-
-    Parameters
-    ----------
-    changes : dict
-        mapping containing changes made on `master` and `dev` branch.
-    m_dict : dict
-        record structure of interest as it exists at the tip of the `master`
-        branch. Acts as the starting point from which to merge changes on `dev`
-        into.
-
-    Returns
-    -------
-    dict
-        record structure similar to `m_dict` input with changes merged into
-        it which were made on the `dev` branch.
-    """
-    m_added = changes['master']['additions']
-    m_unchanged = changes['master']['unchanged']
-    # m_removed = changes['master']['removals']
-    m_mutated = changes['master']['mutations']
-    d_added = changes['dev']['additions']
-    # d_unchanged = changes['dev']['unchanged']
-    d_removed = changes['dev']['removals']
-    d_mutated = changes['dev']['mutations']
-
-    for dK in d_added:
-        if dK not in m_added:
-            m_dict[dK] = d_added[dK]
-
-    for dK in d_removed:
-        if dK in m_unchanged:
-            del m_dict[dK]
-
-    for dK in d_mutated:
-        if dK not in m_mutated:
-            m_dict[dK] = d_mutated[dK]
-
-    return m_dict
-
-
-def _compute_merge_results(a_cont, m_cont, d_cont):
-    """Compute the diff of a 3-way merge and patch historical contents to get new state
-
-    Parameters
-    ----------
-    a_cont : dict
-        contents of the latest common ancestor of the `master` and `dev` HEAD commits.
-    m_cont : dict
-        contents of the `master` HEAD commit.
-    d_cont : dict
-        contents of the `dev` HEAD commit.
-
-    Returns
-    -------
-    dict
-        nested dict specifying arraysets and metadata record specs of the new
-        merge commit.
-
-    Raises
-    ------
-    ValueError
-        If a conflict is found, the operation is aborted
-    """
-    # conflict checking
-    cmtDiffer = ThreeWayCommitDiffer(a_cont, m_cont, d_cont)
-    confs = cmtDiffer.determine_conflicts()
-    if confs['conflict_found'] is True:
-        msg = f'HANGAR VALUE ERROR:: Merge ABORTED with conflict: {confs}'
-        raise ValueError(msg) from None
-
-    # merging: arrayset schemas
-    m_schema_dict = {}
-    for asetn in m_cont['arraysets']:
-        m_schema_dict[asetn] = m_cont['arraysets'][asetn]['schema']
-    o_schema_dict = _merge_changes(cmtDiffer.arrayset_changes(), m_schema_dict)
-
-    # merging: arrayset samples
-    o_data_dict = {}
-    sample_changes = cmtDiffer.sample_changes()
-    for asetn in o_schema_dict:
-        if asetn not in m_cont['arraysets']:
-            o_data_dict[asetn] = d_cont['arraysets'][asetn]['data']
-            continue
-        else:
-            m_asetn_data_dict = m_cont['arraysets'][asetn]['data']
-
-        if asetn not in d_cont['arraysets']:
-            o_data_dict[asetn] = m_cont['arraysets'][asetn]['data']
-            continue
-
-        aset_sample_changes = {
-            'master': sample_changes['master'][asetn],
-            'dev': sample_changes['dev'][asetn],
-        }
-        o_data_dict[asetn] = _merge_changes(aset_sample_changes, m_asetn_data_dict)
-
-    # merging: metadata
-    o_meta_dict = _merge_changes(cmtDiffer.meta_changes(), m_cont['metadata'])
-
-    # collect all merge results into final data structure
-    outDict = {}
-    outDict['metadata'] = o_meta_dict
-    outDict['arraysets'] = {}
-    for asetn, asetSchema in o_schema_dict.items():
-        outDict['arraysets'][asetn] = {
-            'schema': asetSchema,
-            'data': o_data_dict[asetn]
-        }
-    return outDict
-
-
-def _merge_dict_to_lmdb_tuples(patchedRecs):
-    """Create a lexicographically sorted iterable of (key/val tuples) from a dict.
-
-    .. note::
-
-        This  method is currently designed to parse the output of
-        :function:`~commiting.get_commit_ref_contents` and will break if that output
-        format, or the output of :function:`_compute_merge_results` changes.
-
-    Parameters
-    ----------
-    patchedRecs : dict
-        nested dict which specifies all records for arraysets & metadata
-
-    Returns
-    -------
-    iterable
-        iterable of tuples formatted correctly to serve an a drop in replacement
-        for the staging environment, with elements lexicographically sorted so
-        that an lmdb `putmulti` operation can be performed with `append=True`.
-    """
-    entries = []
-    numAsetsKey = parsing.arrayset_total_count_db_key()
-    numAsetsVal = parsing.arrayset_total_count_db_val_from_raw_val(
-        number_of_asets=len(patchedRecs['arraysets'].keys()))
-    entries.append((numAsetsKey, numAsetsVal))
-
-    for asetn in patchedRecs['arraysets'].keys():
-        schemaSpec = patchedRecs['arraysets'][asetn]['schema']
-        schemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(asetn)
-        schemaVal = parsing.arrayset_record_schema_db_val_from_raw_val(
-            schema_hash=schemaSpec.schema_hash,
-            schema_is_var=schemaSpec.schema_is_var,
-            schema_max_shape=schemaSpec.schema_max_shape,
-            schema_dtype=schemaSpec.schema_dtype,
-            schema_is_named=schemaSpec.schema_is_named,
-            schema_default_backend=schemaSpec.schema_default_backend)
-        entries.append((schemaKey, schemaVal))
-
-        dataRecs = patchedRecs['arraysets'][asetn]['data']
-        numDataRecs = len(dataRecs.keys())
-        numDataKey = parsing.arrayset_record_count_db_key_from_raw_key(asetn)
-        numDataVal = parsing.arrayset_record_count_db_val_from_raw_val(numDataRecs)
-        entries.append((numDataKey, numDataVal))
-
-        for dataRawK, dataRawV in dataRecs.items():
-            dataRecKey = parsing.data_record_db_key_from_raw_key(
-                aset_name=dataRawK.aset_name,
-                data_name=dataRawK.data_name)
-            dataRecVal = parsing.data_record_db_val_from_raw_val(
-                data_hash=dataRawV.data_hash)
-            entries.append((dataRecKey, dataRecVal))
-
-    numMetaKey = parsing.metadata_count_db_key()
-    numMetaVal = parsing.metadata_count_db_val_from_raw_val(len(patchedRecs['metadata'].keys()))
-    entries.append((numMetaKey, numMetaVal))
-
-    for metaRecRawKey, metaRecRawVal in patchedRecs['metadata'].items():
-        metaRecKey = parsing.metadata_record_db_key_from_raw_key(metaRecRawKey.meta_name)
-        metaRecVal = parsing.metadata_record_db_val_from_raw_val(metaRecRawVal.meta_hash)
-        entries.append((metaRecKey, metaRecVal))
-
-    sortedEntries = sorted(entries, key=lambda x: x[0])
-    return sortedEntries

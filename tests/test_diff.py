@@ -47,18 +47,19 @@ class TestReaderDiff(object):
         testco.commit("mutation and removal")
         testco.close()
 
-        co = repo.checkout(branch='master')
-        diffdata = co.diff.branch('testbranch')
-        diffs1 = diffdata[0]
+        co1 = repo.checkout(branch='master')
+        diffdata1 = co1.diff.branch('testbranch')
+        diffs1 = diffdata1.diff
+        co1.close()
 
-        co = repo.checkout(branch='testbranch')
-        diffdata = co.diff.branch('master')
-        diffs2 = diffdata[0]
-        assert diffs1['samples']['dev']['dummy']['additions'] == diffs2['samples']['master']['dummy']['additions']
-        assert diffs1['samples']['dev']['dummy']['mutations'] == diffs2['samples']['master']['dummy']['mutations']
-        assert diffs1['samples']['dev']['dummy']['removals'] == diffs2['samples']['master']['dummy']['removals']
-        assert diffs1['samples']['dev']['dummy']['unchanged'] == diffs2['samples']['master']['dummy']['unchanged']
-        co.close()
+        co2 = repo.checkout(branch='testbranch')
+        diffdata2 = co2.diff.branch('master')
+        diffs2 = diffdata2.diff
+        co2.close()
+
+        assert diffs1.added.samples == diffs2.added.samples
+        assert diffs1.deleted.samples == diffs2.deleted.samples
+        assert diffs1.mutated.samples == diffs2.mutated.samples
 
     def test_diff_data_samples(self, repo_1_br_no_conf):
         repo = repo_1_br_no_conf
@@ -73,32 +74,28 @@ class TestReaderDiff(object):
 
         co = repo.checkout(branch='master')
         diffdata = co.diff.branch('testbranch')
-        conflict_dict = diffdata[1]
-        assert conflict_dict['conflict_found'] is False
+        conflicts = diffdata.conflict
+        assert conflicts.conflict is False
 
-        diffs = diffdata[0]
+        diffs = diffdata.diff
 
         # testing arraysets and metadata that has no change
-        assert diffs['arraysets']['dev']['additions'] == {}
-        assert diffs['arraysets']['dev']['mutations'] == {}
-        assert diffs['arraysets']['dev']['removals'] == {}
-        assert 'dummy' in diffs['arraysets']['master']['unchanged'].keys()
-        assert create_meta_nt('foo' ) in diffs['metadata']['dev']['additions'].keys()
-        assert len(diffs['metadata']['master']['additions'].keys()) == 0
-        assert create_meta_nt('hello') in diffs['metadata']['master']['unchanged'].keys()
-        assert create_meta_nt('hello') in diffs['metadata']['dev']['unchanged'].keys()
-        assert diffs['metadata']['dev']['mutations'] == {}
-        assert diffs['metadata']['dev']['removals'] == {}
+        assert len(diffs.added.samples) == 20
+        assert len(diffs.mutated.samples) == 1
+        assert len(diffs.deleted.samples) == 1
 
-        # testing datarecords for addition, unchanged mutated, removed
-        for datarecord in diffs['samples']['dev']['dummy']['additions']:
+        assert len(diffs.added.metadata) == 1
+        assert len(diffs.deleted.metadata) == 0
+        assert len(diffs.mutated.metadata) == 0
+
+        assert len(diffs.added.schema) == 0
+        assert len(diffs.deleted.schema) == 0
+        assert len(diffs.mutated.schema) == 0
+
+        for datarecord in diffs.added.samples:
             assert 9 < int(datarecord.data_name) < 20
-        for datarecord in diffs['samples']['dev']['dummy']['unchanged']:
-            assert 0 <= int(datarecord.data_name) < 10
-        for removed in diffs['samples']['dev']['dummy']['removals']:
-            removed.data_name == 2
-        for mutated in diffs['samples']['dev']['dummy']['mutations']:
-            mutated.data_name == 1
+        for mutated in diffs.mutated.samples:
+            assert mutated.data_name == '1'
         co.close()
 
     def test_sample_addition_conflict(self, repo_1_br_no_conf):
@@ -121,10 +118,11 @@ class TestReaderDiff(object):
         co.close()
 
         co = repo.checkout()
-        conflicts = co.diff.branch('testbranch')[1]
-        assert conflicts['conflict_found'] is True
-        assert len(conflicts['sample']['dummy'].t1) == 1
-        assert conflicts['sample']['dummy'].t1[0].data_name == '55'
+        conflicts = co.diff.branch('testbranch').conflict
+        assert conflicts.conflict is True
+        assert len(conflicts.t1.samples) == 1
+        for k in conflicts.t1.samples:
+            assert k.data_name == '55'
         co.close()
 
     def test_sample_removal_conflict(self, repo_1_br_no_conf):
@@ -145,11 +143,13 @@ class TestReaderDiff(object):
         co.close()
 
         co = repo.checkout()
-        conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['sample']['dummy'].t21) == 1
-        assert len(conflicts['sample']['dummy'].t22) == 1
-        assert conflicts['sample']['dummy'].t21[0].data_name == '6'
-        assert conflicts['sample']['dummy'].t22[0].data_name == '7'
+        conflicts = co.diff.branch('testbranch').conflict
+        assert len(conflicts.t21.samples) == 1
+        assert len(conflicts.t22.samples) == 1
+        for k in conflicts.t21.samples.keys():
+            assert k.data_name == '6'
+        for k in conflicts.t22.samples.keys():
+            assert k.data_name == '7'
         co.close()
 
     def test_sample_mutation_conflict(self, repo_1_br_no_conf):
@@ -169,9 +169,10 @@ class TestReaderDiff(object):
         co.close()
 
         co = repo.checkout()
-        conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['sample']['dummy'].t3) == 1
-        assert conflicts['sample']['dummy'].t3[0].data_name == '7'
+        conflicts = co.diff.branch('testbranch').conflict
+        assert len(conflicts.t3.samples) == 1
+        for k in conflicts.t3.samples:
+            assert k.data_name == '7'
         co.close()
 
     def test_aset_addition_conflict(self, written_repo):
@@ -190,9 +191,10 @@ class TestReaderDiff(object):
         co.close()
 
         co = repo.checkout()
-        conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['aset'].t1) == 1
-        assert conflicts['aset'].t1[0] == 'testing_aset'
+        conflicts = co.diff.branch('testbranch').conflict
+        assert len(conflicts.t1.schema) == 1
+        for k in conflicts.t1.schema:
+            assert k == 'testing_aset'
         co.close()
 
     def test_aset_removal_conflict(self, written_repo):
@@ -221,10 +223,10 @@ class TestReaderDiff(object):
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['aset'].t21) == 1
-        assert len(conflicts['aset'].t22) == 1
-        assert conflicts['aset'].t21[0] == 'testing_aset1'
-        assert conflicts['aset'].t22[0] == 'testing_aset2'
+        assert len(conflicts.t21.schema) == 1
+        assert len(conflicts.t22.schema) == 1
+        assert list(conflicts.t21.schema.keys()) == ['testing_aset1']
+        assert list(conflicts.t22.schema.keys()) == ['testing_aset2']
         co.close()
 
     def test_aset_mutation_conflict(self, written_repo):
@@ -250,8 +252,8 @@ class TestReaderDiff(object):
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts['aset'].t3) == 1
-        assert conflicts['aset'].t3[0] == 'testing_aset'
+        assert len(conflicts.t3.schema) == 1
+        assert list(conflicts.t3.schema.keys()) == ['testing_aset']
         co.close()
 
     def test_meta_addition_conflict(self, repo_1_br_no_conf):
@@ -269,8 +271,9 @@ class TestReaderDiff(object):
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert conflicts['meta'].t1[0] == create_meta_nt('metatest')
-        assert len(conflicts['meta'].t1) == 1
+        for k in conflicts.t1.metadata:
+            assert k == create_meta_nt('metatest')
+        assert len(conflicts.t1.metadata) == 1
         co.close()
 
     def test_meta_removal_conflict(self, repo_1_br_no_conf):
@@ -290,11 +293,14 @@ class TestReaderDiff(object):
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert conflicts['meta'].t21[0] == create_meta_nt('hello')
-        assert len(conflicts['meta'].t21) == 1
-        assert conflicts['meta'].t22[0] == create_meta_nt('somemetadatakey')
-        assert len(conflicts['meta'].t22) == 1
         co.close()
+
+        assert len(conflicts.t21.metadata) == 1
+        for k in conflicts.t21.metadata:
+            assert k == create_meta_nt('hello')
+        assert len(conflicts.t22.metadata) == 1
+        for k in conflicts.t22.metadata:
+            assert k == create_meta_nt('somemetadatakey')
 
     def test_meta_mutation_conflict(self, repo_1_br_no_conf):
         # t3
@@ -311,8 +317,9 @@ class TestReaderDiff(object):
 
         co = repo.checkout()
         conflicts = co.diff.branch('testbranch')[1]
-        assert conflicts['meta'].t3[0] == create_meta_nt('hello')
-        assert len(conflicts['meta'].t3) == 1
+        assert len(conflicts.t3.metadata) == 1
+        for k in conflicts.t3.metadata:
+            assert k == create_meta_nt('hello')
         co.close()
 
     def test_commits_inside_cm(self, written_repo, array5by7):
@@ -331,11 +338,15 @@ class TestReaderDiff(object):
         co.close()
         co = repo.checkout(branch='testbranch')
         assert np.allclose(co.arraysets['_aset'][101], array5by7)
-        diff = co.diff.branch('master')[0]
-        assert create_meta_nt('crazykey') in diff['metadata']['master']['additions'].keys()
-        assert 'aset2' in diff['arraysets']['master']['additions'].keys()
-        for record in diff['samples']['master']['_aset']['additions']:
-            assert record.data_name in [100, 101]
+        diff = co.diff.branch('master').diff
+        assert create_meta_nt('crazykey') in diff.added.metadata.keys()
+        assert 'aset2' in diff.added.schema.keys()
+        calledWithAset = False
+        for record in diff.added.samples:
+            if record.aset_name == '_aset':
+                calledWithAset = True
+                assert record.data_name in [100, 101]
+        assert calledWithAset is True
         co.close()
 
 
@@ -346,8 +357,8 @@ class TestWriterDiff(object):
         co = repo.checkout(write=True)
         co.metadata['hello_from_test'] = 'hai to test'
         assert co.diff.status() == 'DIRTY'
-        diff = co.diff.staged()[0]
-        assert create_meta_nt('hello_from_test') in diff['metadata']['master']['additions']
+        diff = co.diff.staged().diff
+        assert create_meta_nt('hello_from_test') in diff.added.metadata
         co.commit('init metadata')
         assert co.diff.status() == 'CLEAN'
         co.close()
@@ -362,9 +373,13 @@ class TestWriterDiff(object):
         co = repo.checkout(write=True)
         co.arraysets['_aset']['45'] = dummyData
         assert co.diff.status() == 'DIRTY'
-        diffs = co.diff.staged()[0]
-        for key in diffs['samples']['master']['_aset']['additions'].keys():
-            assert key.data_name == '45'
+        diff = co.diff.staged().diff
+        calledWithAset = False
+        for record in diff.added.samples:
+            if record.aset_name == '_aset':
+                calledWithAset = True
+                assert record.data_name in '45'
+        assert calledWithAset is True
         co.commit('adding')
         assert co.diff.status() == 'CLEAN'
         co.close()
@@ -374,9 +389,8 @@ class TestWriterDiff(object):
         co = repo.checkout(write=True)
         co.arraysets.init_arrayset(name='sampleaset', shape=(3, 5), dtype=np.float32)
         assert co.diff.status() == 'DIRTY'
-        diff = co.diff.staged()[0]
-        assert 'sampleaset' in diff['arraysets']['master']['additions'].keys()
-        assert '_aset' in diff['arraysets']['master']['unchanged'].keys()
+        diff = co.diff.staged().diff
+        assert 'sampleaset' in diff.added.schema
         co.commit('init aset')
         assert co.diff.status() == 'CLEAN'
         co.close()

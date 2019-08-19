@@ -13,24 +13,7 @@ class HashQuery(object):
 
     # ------------------ traversing the unpacked records ----------------------
 
-    def _traverse_all_records(self, keys=True, vals=True):
-        """Pull out all records in the database as a tuple of binary encoded
-
-        Returns
-        -------
-        list of tuples of bytes
-            list type stack of tuples with each db_key, db_val pair
-        """
-        try:
-            hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
-            with hashtxn.cursor() as cursor:
-                cursor.first()
-                for db_kv in cursor.iternext(keys=keys, values=vals):
-                    yield db_kv
-        finally:
-            TxnRegister().abort_reader_txn(self._hashenv)
-
-    def _traverse_all_hash_records(self, keys=True, vals=True):
+    def _traverse_all_hash_records(self):
         """Pull out all records in the database as a tuple of binary encoded
 
         Returns
@@ -46,12 +29,7 @@ class HashQuery(object):
                 while hashsExist:
                     hashRecKey, hashRecVal = cursor.item()
                     if hashRecKey.startswith(startHashRangeKey):
-                        if keys and vals:
-                            yield (hashRecKey, hashRecVal)
-                        elif keys:
-                            yield hashRecKey
-                        else:
-                            yield hashRecVal
+                        yield hashRecKey
                         hashsExist = cursor.next()
                         continue
                     else:
@@ -59,7 +37,7 @@ class HashQuery(object):
         finally:
             TxnRegister().abort_reader_txn(self._hashenv)
 
-    def _traverse_all_schema_records(self, keys=True, vals=True):
+    def _traverse_all_schema_records(self):
         """Pull out all records in the database as a tuple of binary encoded
 
         Returns
@@ -75,12 +53,7 @@ class HashQuery(object):
                 while schemasExist:
                     schemaRecKey, schemaRecVal = cursor.item()
                     if schemaRecKey.startswith(startSchemaRangeKey):
-                        if keys and vals:
-                            yield (schemaRecKey, schemaRecVal)
-                        elif keys:
-                            yield schemaRecKey
-                        else:
-                            yield schemaRecVal
+                        yield schemaRecKey
                         schemasExist = cursor.next()
                         continue
                     else:
@@ -89,32 +62,18 @@ class HashQuery(object):
             TxnRegister().abort_reader_txn(self._hashenv)
 
     def list_all_hash_keys_raw(self):
-        recs = self._traverse_all_hash_records(keys=True, vals=False)
+        recs = self._traverse_all_hash_records()
         out = list(map(parsing.hash_data_raw_key_from_db_key, recs))
         return out
 
     def list_all_hash_keys_db(self):
-        recs = self._traverse_all_hash_records(keys=True, vals=False)
+        recs = self._traverse_all_hash_records()
         return recs
-
-    def list_all_hash_values_raw(self):
-        recs = self._traverse_all_hash_records(keys=False, vals=True)
-        formatted = map(backend_decoder, recs)
-        return formatted
-
-    def map_all_hash_keys_raw_to_values_raw(self):
-        keys = self.list_all_hash_keys_raw()
-        vals = self.list_all_hash_values_raw()
-        return dict(zip(keys, vals))
 
     def list_all_schema_keys_raw(self):
-        recs = self._traverse_all_schema_records(keys=True, vals=False)
+        recs = self._traverse_all_schema_records()
         out = list(map(parsing.hash_schema_raw_key_from_db_key, recs))
         return out
-
-    def list_all_schema_keys_db(self):
-        recs = self._traverse_all_schema_records(keys=True, vals=False)
-        return recs
 
 
 def delete_in_process_data(repo_path, *, remote_operation=False):

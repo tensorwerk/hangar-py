@@ -32,6 +32,7 @@ class TestArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
+        print(co.arraysets['_aset'].__dict__)
 
         # getting arrayset with dictionary like style method
         asetNew = co.arraysets['_aset']
@@ -188,6 +189,7 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
+        print(list(co.arraysets['_aset'].keys()))
         assert np.allclose(co.arraysets['_aset']['1'], co.arraysets.get('_aset').get('1'), array5by7)
         co.close()
 

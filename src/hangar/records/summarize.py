@@ -4,7 +4,7 @@ from io import StringIO
 
 import lmdb
 
-from . import heads, commiting
+from . import heads, commiting, queries
 from ..context import TxnRegister
 from ..utils import format_bytes, file_size, folder_size
 
@@ -139,46 +139,48 @@ def summary(env, *, branch='', commit=''):
         print('No commits made')
         return {}
 
-    res = commiting.get_commit_ref_contents(env.refenv, cmt)
-    nbytes = folder_size(env.repo_path, recurse=True)
-    humanBytes = format_bytes(nbytes)
-    buf = StringIO()
-    buf.write(f'Summary of Contents Contained in Data Repository \n')
-    buf.write(f' \n')
-    buf.write(f'================== \n')
-    buf.write(f'| Repository Info \n')
-    buf.write(f'|----------------- \n')
-    buf.write(f'|  Base Directory: {os.path.dirname(env.repo_path)} \n')
-    buf.write(f'|  Disk Usage: {humanBytes} \n')
-    buf.write(f' \n')
+    with commiting.tmp_cmt_env(env.refenv, cmt) as cmtrefenv:
+        query = queries.RecordQuery(cmtrefenv)
 
-    buf.write(f'=================== \n')
-    buf.write(f'| Commit Details \n')
-    buf.write(f'------------------- \n')
-    buf.write(f'|  Commit: {cmt} \n')
-    buf.write(f'|  Created: {time.asctime(time.gmtime(spec["commit_time"]))} \n')
-    buf.write(f'|  By: {spec["commit_user"]} \n')
-    buf.write(f'|  Email: {spec["commit_email"]} \n')
-    buf.write(f'|  Message: {spec["commit_message"]} \n')
-    buf.write(f' \n')
-    buf.write(f'================== \n')
-    buf.write(f'| DataSets \n')
-    buf.write(f'|----------------- \n')
+        nbytes = folder_size(env.repo_path, recurse=True)
+        humanBytes = format_bytes(nbytes)
+        buf = StringIO()
+        buf.write(f'Summary of Contents Contained in Data Repository \n')
+        buf.write(f' \n')
+        buf.write(f'================== \n')
+        buf.write(f'| Repository Info \n')
+        buf.write(f'|----------------- \n')
+        buf.write(f'|  Base Directory: {os.path.dirname(env.repo_path)} \n')
+        buf.write(f'|  Disk Usage: {humanBytes} \n')
+        buf.write(f' \n')
 
-    buf.write(f'|  Number of Named Arraysets: {len(res["arraysets"])} \n')
-    for asetn in res['arraysets']:
-        buf.write(f'|\n')
-        buf.write(f'|  * Arrayset Name: {asetn} \n')
-        buf.write(f'|    Num Arrays: {len(res["arraysets"][asetn]["data"])} \n')
+        buf.write(f'=================== \n')
+        buf.write(f'| Commit Details \n')
+        buf.write(f'------------------- \n')
+        buf.write(f'|  Commit: {cmt} \n')
+        buf.write(f'|  Created: {time.asctime(time.gmtime(spec["commit_time"]))} \n')
+        buf.write(f'|  By: {spec["commit_user"]} \n')
+        buf.write(f'|  Email: {spec["commit_email"]} \n')
+        buf.write(f'|  Message: {spec["commit_message"]} \n')
+        buf.write(f' \n')
+        buf.write(f'================== \n')
+        buf.write(f'| DataSets \n')
+        buf.write(f'|----------------- \n')
 
-        buf.write(f'|    Details: \n')
-        for k, v in res["arraysets"][asetn]["schema"]._asdict().items():
-            buf.write(f'|    - {k}: {v} \n')
+        buf.write(f'|  Number of Named Arraysets: {query.arrayset_count()} \n')
+        for asetn, asetnSchema in query.schema_specs().items():
+            buf.write(f'|\n')
+            buf.write(f'|  * Arrayset Name: {asetn} \n')
+            buf.write(f'|    Num Arrays: {query.arrayset_data_count(asetn)} \n')
 
-    buf.write(f' \n')
-    buf.write(f'================== \n')
-    buf.write(f'| Metadata: \n')
-    buf.write(f'|----------------- \n')
-    buf.write(f'|  Number of Keys: {len(res["metadata"])} \n')
+            buf.write(f'|    Details: \n')
+            for k, v in asetnSchema._asdict().items():
+                buf.write(f'|    - {k}: {v} \n')
 
-    return buf, res
+        buf.write(f' \n')
+        buf.write(f'================== \n')
+        buf.write(f'| Metadata: \n')
+        buf.write(f'|----------------- \n')
+        buf.write(f'|  Number of Keys: {query.metadata_count()} \n')
+
+    return buf

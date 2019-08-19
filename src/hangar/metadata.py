@@ -384,13 +384,6 @@ class MetadataWriter(MetadataReader):
                 hashVal = parsing.hash_meta_db_val_from_raw_val(value)
                 self._labelTxn.put(hashKey, hashVal)
 
-            # increment metadata record count
-            if existingMetaRecVal is False:
-                metaCountKey = parsing.metadata_count_db_key()
-                metaCountVal = self._dataTxn.get(metaCountKey, default='0'.encode())
-                meta_count = parsing.metadata_count_raw_val_from_db_val(metaCountVal) + 1
-                newMetaCountVal = parsing.metadata_count_db_val_from_raw_val(meta_count)
-                self._dataTxn.put(metaCountKey, newMetaCountVal)
             self._dataTxn.put(metaRecKey, metaRecVal)
             self._mspecs[key] = hashKey
 
@@ -438,16 +431,6 @@ class MetadataWriter(MetadataReader):
                 msg = f'HANGAR KEY ERROR:: No metadata exists with key: {key}'
                 raise KeyError(msg)
             del self._mspecs[key]
-
-            metaRecCountKey = parsing.metadata_count_db_key()
-            metaRecCountVal = self._dataTxn.get(metaRecCountKey)
-            meta_count = parsing.metadata_count_raw_val_from_db_val(metaRecCountVal)
-            meta_count -= 1
-            if meta_count == 0:
-                self._dataTxn.delete(metaRecCountKey)
-            else:
-                newMetaRecCountVal = parsing.metadata_count_db_val_from_raw_val(meta_count)
-                self._dataTxn.put(metaRecCountKey, newMetaRecCountVal)
 
         except (KeyError, ValueError) as e:
             raise e from None
