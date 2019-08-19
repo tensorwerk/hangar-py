@@ -106,7 +106,7 @@ COLLECTION_SIZE = 1000
 
 _FmtCode = '10'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
-_ShapeFmtRE = re.compile('[,\(\)\[\]]')
+_ShapeFmtRE = re.compile("[',\(\)\[\]]")
 # split up a formated parsed string into unique fields
 _SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
@@ -166,7 +166,7 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
     # if the data is of empty shape -> shape_vs = '' str.split() default value
     # of none means split according to any whitespace, and discard empty strings
     # from the result. So long as c.SEP_LST = ' ' this will work
-    shape = tuple(int(x) for x in shape_vs.split())
+    shape = tuple(int(x) if x != 'x' else 'x' for x in shape_vs.split())
     raw_val = NUMPY_10_DataHashSpec(backend=_FmtCode,
                                     uid=uid,
                                     checksum=checksum,
@@ -348,7 +348,7 @@ class NUMPY_10_FileHandles(object):
           not be persisted to disk.
         """
         srcSlc = (self.slcExpr[hashVal.collection_idx],
-                  *(self.slcExpr[0:x] for x in hashVal.shape))
+                  *(self.slcExpr[0:x] if x != 'x' else 0 for x in hashVal.shape))
         try:
             res = self.Fp[hashVal.uid][srcSlc]
         except TypeError:
@@ -394,10 +394,14 @@ class NUMPY_10_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
+        nDimPad = len(self.schema_shape) - array.ndim
+        padShape = tuple((*(nDimPad * ['x']), *array.shape))
+
+        destSlc = (self.slcExpr[self.hIdx],
+                   *(self.slcExpr[0:x] if x != 'x' else 0 for x in padShape))
         self.wFp[self.w_uid][destSlc] = array
         hashVal = numpy_10_encode(uid=self.w_uid,
                                   checksum=checksum,
                                   collection_idx=self.hIdx,
-                                  shape=array.shape)
+                                  shape=padShape)
         return hashVal

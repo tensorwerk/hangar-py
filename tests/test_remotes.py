@@ -1,10 +1,7 @@
 import pytest
 import numpy as np
-import time
 from os.path import join as pjoin
 from os import mkdir
-from random import randint
-import platform
 
 
 def test_list_all_remotes_works(repo):

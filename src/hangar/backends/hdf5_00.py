@@ -144,7 +144,7 @@ HDF5_FILTER = filter_opts['default'] if hdf5BloscAvail else filter_opts['backup'
 
 _FmtCode = '00'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
-_ShapeFmtRE: Pattern = re.compile('[,\(\)\[\]]')
+_ShapeFmtRE: Pattern = re.compile("[',\(\)\[\]]")
 # split up a formated parsed string into unique fields
 _SplitDecoderRE: Pattern = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
@@ -204,7 +204,7 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
     # if the data is of empty shape -> shape_vs = '' str.split() default value
     # of none means split according to any whitespace, and discard empty strings
     # from the result. So long as c.SEP_LST = ' ' this will work
-    shape = tuple(int(x) for x in shape_vs.split())
+    shape = tuple([int(x) if x != 'x' else 'x' for x in shape_vs.split()])
     raw_val = HDF5_00_DataHashSpec(backend=_FmtCode,
                                    uid=uid,
                                    dataset=dataset,
@@ -595,11 +595,13 @@ class HDF5_00_FileHandles(object):
         dsetIdx = int(hashVal.dataset_idx)
         dsetCol = f'/{hashVal.dataset}'
 
-        srcSlc = (self.slcExpr[dsetIdx], *(self.slcExpr[0:x] for x in hashVal.shape))
+        srcSlc = (self.slcExpr[dsetIdx],
+                  *(self.slcExpr[0:x] if x != 'x' else 0 for x in hashVal.shape))
         destSlc = None
 
         if self.schema_dtype is not None:
-            destArr = np.empty((hashVal.shape), self.schema_dtype)
+            outShape = hashVal.shape[hashVal.shape.count('x'):]
+            destArr = np.empty((outShape), self.schema_dtype)
             try:
                 self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
             except TypeError:
@@ -662,12 +664,16 @@ class HDF5_00_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
+        nDimPad = len(self.schema_shape) - array.ndim
+        padShape = tuple((*(nDimPad * ['x']), *array.shape))
+
         srcSlc = None
-        destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
+        destSlc = (self.slcExpr[self.hIdx],
+                   *(self.slcExpr[0:x] if x != 'x' else 0 for x in padShape))
         self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(array, srcSlc, destSlc)
 
         hashVal = hdf5_00_encode(uid=self.w_uid,
                                  dataset=self.hNextPath,
                                  dataset_idx=self.hIdx,
-                                 shape=array.shape)
+                                 shape=padShape)
         return hashVal

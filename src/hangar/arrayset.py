@@ -573,9 +573,9 @@ class ArraysetDataWriter(ArraysetDataReader):
                 raise ValueError(f'`data` must be "C" contiguous array.')
 
             if self._schema_variable is True:
-                if data.ndim != len(self._schema_max_shape):
-                    raise ValueError(
-                        f'`data` rank: {data.ndim} != aset rank: {len(self._schema_max_shape)}')
+                # if data.ndim != len(self._schema_max_shape):
+                #     raise ValueError(
+                #         f'`data` rank: {data.ndim} != aset rank: {len(self._schema_max_shape)}')
                 for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
                     if dDimSize > schDimSize:
                         raise ValueError(

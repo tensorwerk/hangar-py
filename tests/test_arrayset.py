@@ -610,38 +610,70 @@ class TestVariableSizedArrayset(object):
         wco.close()
         rco.close()
 
-
     @pytest.mark.parametrize('aset_specs', [
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
-         ['aset2', [(10,), (1,), (5,)], (10,), '00', np.uint8]
-         ],
+         ['aset2', [(10,), (1,), (5,)], (10,), '00', np.uint8]],
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
-         ],
+         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]],
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.uint8],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
-         ],
+         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]],
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.uint8],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
-         ],
+         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]],
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
-         ['aset2', [(10,), (1,), (5,)], (10,), '00', np.float32]
-         ],
+         ['aset2', [(10,), (1,), (5,)], (10,), '00', np.float32]],
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
-         ],
+         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]],
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.float32],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
-         ],
+         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]],
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.float32],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
-         ]])
+         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]]])
     def test_writer_reader_can_create_read_multiple_variable_size_arrayset(self, written_repo, aset_specs):
         repo = written_repo
         wco = repo.checkout(write=True)
         arrdict = {}
         for aset_spec in aset_specs:
             aset_name, test_shapes, max_shape, backend, dtype = aset_spec
+            wco.arraysets.init_arrayset(aset_name, shape=max_shape, dtype=dtype, variable_shape=True, backend=backend)
+
+            arrdict[aset_name] = {}
+            for idx, shape in enumerate(test_shapes):
+                arr = (np.random.random_sample(shape) * 10).astype(dtype)
+                arrdict[aset_name][str(idx)] = arr
+                wco.arraysets[aset_name][str(idx)] = arr
+
+        for aset_k in arrdict.keys():
+            for samp_k, v in arrdict[aset_k].items():
+                # make sure they are good before committed
+                assert np.allclose(wco.arraysets[aset_k][samp_k], v)
+
+        wco.commit('first')
+        rco = repo.checkout()
+
+        for aset_k in arrdict.keys():
+            for samp_k, v in arrdict[aset_k].items():
+                # make sure they are good before committed
+                assert np.allclose(wco.arraysets[aset_k][samp_k], v)
+                assert np.allclose(rco.arraysets[aset_k][samp_k], v)
+        wco.close()
+        rco.close()
+
+    @pytest.mark.parametrize('aset_specs', [
+        [['aset1', [(10, 10, 10), (10,), (10, 10), (1, 2)], (10, 10, 10), '00', ],
+         ['aset2', [(10, 10), (7,), (5, 5)], (10, 10), '00']],
+        [['aset1', [(10, 10, 10), (10,), (10, 10), (1, 2)], (10, 10, 10), '00'],
+         ['aset2', [(10, 10), (7,), (5, 5)], (10, 10), '10']],
+        [['aset1', [(10, 10, 10), (10,), (10, 10), (1, 2)], (10, 10, 10), '10'],
+         ['aset2', [(10, 10), (7,), (5, 5)], (10, 10), '00']],
+        [['aset1', [(10, 10, 10), (10,), (10, 10), (1, 2)], (10, 10, 10), '10'],
+         ['aset2', [(10, 10), (7,), (5, 5)], (10, 10), '10']]
+    ])
+    def test_rw_can_readwrite_variable_size_arrayset_samples_less_ndim(self, written_repo, aset_specs):
+        repo = written_repo
+        wco = repo.checkout(write=True)
+        arrdict = {}
+        for aset_spec in aset_specs:
+            aset_name, test_shapes, max_shape, backend = aset_spec
+            dtype = np.uint8
             wco.arraysets.init_arrayset(aset_name, shape=max_shape, dtype=dtype, variable_shape=True, backend=backend)
 
             arrdict[aset_name] = {}
