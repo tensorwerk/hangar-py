@@ -581,7 +581,7 @@ class WriterUserDiff(BaseUserDiff):
         self._branch_name: str = branch_name
 
     def _commit(self, dev_commit_hash: str) -> DiffAndConflictsDB:
-        """Compute diff between head and commit hash, returning DB formatted results.
+        """Compute diff between head and commit, returning DB formatted results.
 
         Parameters
         ----------
@@ -710,12 +710,13 @@ class WriterUserDiff(BaseUserDiff):
         return outRaw
 
     def staged(self) -> DiffAndConflicts:
-        """Return diff of staging area to last HEAD, returning user-facing results.
+        """Return diff of staging area to base, returning user-facing results.
 
         Returns
         -------
         DiffAndConflicts
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff algorithm.
+            two-tuple of `diff`, `conflict` (if any) calculated in the diff
+            algorithm.
         """
         outDb = self._staged()
         outRaw = _all_raw_from_db_changes(outDb)

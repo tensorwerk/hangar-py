@@ -10,6 +10,8 @@ Improvements
 
 * Added tutorial on working with remote data.
   (`#113 <https://github.com/tensorwerk/hangar-py/pull/113>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Large performance improvement to diff/merge algorithm (~30x previous).
+  (`#112 <https://github.com/tensorwerk/hangar-py/pull/112>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 `v0.2.0`_ (2019-08-09)
 ======================
