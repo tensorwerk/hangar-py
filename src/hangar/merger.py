@@ -15,8 +15,9 @@ import os
 
 import lmdb
 
-from .diff import WriterUserDiff, BaseUserDiff, diff_envs, find_conflicts
-from .records import commiting, hashs, heads, parsing
+from .diff import WriterUserDiff, diff_envs, find_conflicts
+from .records import commiting, hashs, heads
+from .records.commiting import tmp_cmt_env
 
 
 def select_merge_algorithm(message: str,
@@ -24,8 +25,8 @@ def select_merge_algorithm(message: str,
                            stageenv: lmdb.Environment,
                            refenv: lmdb.Environment,
                            stagehashenv: lmdb.Environment,
-                           master_branch_name: str,
-                           dev_branch_name: str,
+                           master_branch: str,
+                           dev_branch: str,
                            repo_path: str,
                            *,
                            writer_uuid: str = 'MERGE_PROCESS') -> str:
@@ -47,9 +48,9 @@ def select_merge_algorithm(message: str,
         where commit history is stored
     stagehashenv: lmdb.Environment
         where the stage hash environment data is stored
-    master_branch_name : str
+    master_branch : str
         name of the branch to serve as a merge master
-    dev_branch_name : str
+    dev_branch : str
         name of the branch to use as the feature branch
     repo_path: str
         path to the repository on disk
@@ -91,8 +92,8 @@ def select_merge_algorithm(message: str,
         raise e from None
 
     try:
-        mHEAD = heads.get_branch_head_commit(branchenv, branch_name=master_branch_name)
-        dHEAD = heads.get_branch_head_commit(branchenv, branch_name=dev_branch_name)
+        mHEAD = heads.get_branch_head_commit(branchenv, branch_name=master_branch)
+        dHEAD = heads.get_branch_head_commit(branchenv, branch_name=dev_branch)
         branchHistory = wDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
 
         if branchHistory.canFF is True:
@@ -102,16 +103,16 @@ def select_merge_algorithm(message: str,
                 stageenv=stageenv,
                 refenv=refenv,
                 stagehashenv=stagehashenv,
-                master_branch=master_branch_name,
+                master_branch=master_branch,
                 new_masterHEAD=branchHistory.devHEAD,
                 repo_path=repo_path)
         else:
             print('Selected 3-Way Merge Strategy')
             success = _three_way_merge(
                 message=message,
-                master_branch_name=master_branch_name,
+                master_branch=master_branch,
                 masterHEAD=branchHistory.masterHEAD,
-                dev_branch_name=dev_branch_name,
+                dev_branch=dev_branch,
                 devHEAD=branchHistory.devHEAD,
                 ancestorHEAD=branchHistory.ancestorHEAD,
                 branchenv=branchenv,
@@ -189,9 +190,9 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
 
 
 def _three_way_merge(message: str,
-                     master_branch_name: str,
+                     master_branch: str,
                      masterHEAD: str,
-                     dev_branch_name: str,
+                     dev_branch: str,
                      devHEAD: str,
                      ancestorHEAD: str,
                      branchenv: lmdb.Environment,
@@ -205,11 +206,11 @@ def _three_way_merge(message: str,
     ----------
     message : str
         commit message to apply to this merge commit (specified by the user)
-    master_branch_name : str
+    master_branch : str
         name of the merge master branch
     masterHEAD : str
         commit hash of the merge master HEAD
-    dev_branch_name : str
+    dev_branch : str
         name of the merge dev branch
     devHEAD : str
         commit hash of the merge dev HEAD
@@ -237,11 +238,9 @@ def _three_way_merge(message: str,
     ValueError
         If a conflict is found, the operation will abort before completing.
     """
-    aEnv = commiting.get_commit_ref_env(refenv=refenv, commit_hash=ancestorHEAD)
-    mEnv = commiting.get_commit_ref_env(refenv=refenv, commit_hash=masterHEAD)
-    dEnv = commiting.get_commit_ref_env(refenv=refenv, commit_hash=devHEAD)
+    with tmp_cmt_env(refenv, ancestorHEAD) as aEnv, tmp_cmt_env(
+            refenv, masterHEAD) as mEnv, tmp_cmt_env(refenv, devHEAD) as dEnv:
 
-    try:
         m_diff = diff_envs(aEnv, mEnv)
         d_diff = diff_envs(aEnv, dEnv)
         conflict = find_conflicts(m_diff, d_diff)
@@ -264,11 +263,6 @@ def _three_way_merge(message: str,
                 for kv in cur.iternext(keys=True, values=True):
                     dbcont.append(kv)
 
-    finally:
-        mEnv.close()
-        aEnv.close()
-        dEnv.close()
-
     hashs.delete_in_process_data(repo_path=repo_path)
     commiting.replace_staging_area_with_refs(stageenv=stageenv, sorted_content=dbcont)
 
@@ -279,8 +273,8 @@ def _three_way_merge(message: str,
         refenv=refenv,
         repo_path=repo_path,
         is_merge_commit=True,
-        merge_master=master_branch_name,
-        merge_dev=dev_branch_name)
+        merge_master=master_branch,
+        merge_dev=dev_branch)
 
     hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
     return commit_hash

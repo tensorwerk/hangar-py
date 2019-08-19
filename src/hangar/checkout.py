@@ -462,8 +462,8 @@ class WriterCheckout(object):
             stageenv=self._stageenv,
             refenv=self._refenv,
             stagehashenv=self._stagehashenv,
-            master_branch_name=self._branch_name,
-            dev_branch_name=dev_branch,
+            master_branch=self._branch_name,
+            dev_branch=dev_branch,
             repo_path=self._repo_path,
             writer_uuid=self._writer_lock)
 

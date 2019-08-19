@@ -149,6 +149,38 @@ class RecordQuery(object):
         arrayset_names = map(parsing.arrayset_record_schema_raw_key_from_db_key, recs.keys())
         return list(arrayset_names)
 
+    def arrayset_count(self) -> int:
+        """Return number of arraysets/schemas in the commit
+
+        Returns
+        -------
+        int
+            len of arraysets
+        """
+        nrecs = len(self._traverse_arrayset_schema_records())
+        return nrecs
+
+    def data_hashes(self) -> Set[RawDataRecordVal]:
+        """Find all data hashes contained within all arraysets
+
+        Note: this method does not remove any duplicates which may be present,
+        if dedup is required, process it downstream
+
+        Returns
+        -------
+        list
+            all hash values for all data pieces in the commit
+        """
+        arraysets = self.arrayset_names()
+        all_hashes = set()
+        for arrayset in arraysets:
+            recs = self._traverse_arrayset_data_records(arrayset)
+            data_val_rec = set(map(parsing.data_record_raw_val_from_db_val, recs.values()))
+            all_hashes.update(data_val_rec)
+        return all_hashes
+
+# ------------------------ processs arrayset data records -------------------------------
+
     def arrayset_data_records(self, arrayset_name: str) -> Iterable[RawDataTuple]:
         """Returns the raw data record key and record values for a specific arrayset.
 
@@ -212,24 +244,21 @@ class RecordQuery(object):
         all_hashes = set(data_val_rec)
         return all_hashes
 
-    def data_hashes(self) -> Set[RawDataRecordVal]:
-        """Find all data hashes contained within all arraysets
+    def arrayset_data_count(self, arrayset_name: str) -> int:
+        """Return the number of samples in an arrayset with the provided name
 
-        Note: this method does not remove any duplicates which may be present,
-        if dedup is required, process it downstream
+        Parameters
+        ----------
+        arrayset_name : str
+            name of the arrayset to query
 
         Returns
         -------
-        list
-            all hash values for all data pieces in the commit
+        int
+            number of samples in the arrayset with given name
         """
-        arraysets = self.arrayset_names()
-        all_hashes = set()
-        for arrayset in arraysets:
-            recs = self._traverse_arrayset_data_records(arrayset)
-            data_val_rec = set(map(parsing.data_record_raw_val_from_db_val, recs.values()))
-            all_hashes.update(data_val_rec)
-        return all_hashes
+        nrecs = len(self._traverse_arrayset_data_records(arrayset_name))
+        return nrecs
 
 # ------------------------- process schema ----------------------------------------------
 
@@ -362,30 +391,13 @@ class RecordQuery(object):
             all_hashes.extend(meta_hashs)
         return all_hashes
 
-# ---------------------------------- python access to all records at once ---------------
-
-    def all_records(self):
-        """Get a nested dict of all metadata and data records out from an unpacked commit.
-
-        .. todo:: Better documentation of this.
+    def metadata_count(self) -> int:
+        """Find the number of metadata samples in the commit
 
         Returns
         -------
-        dict
-            dict with primary keys: 'arraysets', 'metadata'; with arraysets nesting
-            'schema' and 'data' keys/values inside
+        int
+            number of metadata samples
         """
-        aset_names = self.arrayset_names()
-        schema_records = self.schema_specs()
-        asetRecs = {}
-        for asetName in aset_names:
-            asetRecs[asetName] = {
-                'schema': schema_records[asetName],
-                'data': dict(self.arrayset_data_records(asetName)),
-            }
-
-        res = {
-            'arraysets': asetRecs,
-            'metadata': dict(self.metadata_records()),
-        }
-        return res
+        nrecs = len(self._traverse_metadata_records())
+        return nrecs

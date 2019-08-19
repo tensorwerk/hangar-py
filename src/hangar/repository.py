@@ -362,13 +362,8 @@ class Repository(object):
                          show_time=show_time,
                          show_user=show_user)
 
-    def summary(self, *, branch: str = '', commit: str = '',
-                return_contents: bool = False) -> Optional[dict]:
+    def summary(self, *, branch: str = '', commit: str = '') -> None:
         """Print a summary of the repository contents to the terminal
-
-        .. note::
-
-            Programatic access is provided by the return_contents argument.
 
         Parameters
         ----------
@@ -378,21 +373,11 @@ class Repository(object):
         commit : str, optional
             A specific commit hash which should be used as the summary point.
             (Default value = '')
-        return_contents : bool
-            If true, return a full log of what records are in the repository at
-            the summary point. (Default value = False)
-
-        Returns
-        -------
-        Optional[dict]
-            contents of the entire repository (if `return_contents=True`)
         """
         self.__verify_repo_initialized()
-        ppbuf, res = summarize.summary(self._env, branch=branch, commit=commit)
-        if return_contents is True:
-            return res
-        else:
-            print(ppbuf.getvalue())
+        ppbuf = summarize.summary(self._env, branch=branch, commit=commit)
+        print(ppbuf.getvalue())
+        return None
 
     def _details(self) -> None:  # pragma: noqa
         """DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
@@ -437,8 +422,8 @@ class Repository(object):
             stageenv=self._env.stageenv,
             refenv=self._env.refenv,
             stagehashenv=self._env.stagehashenv,
-            master_branch_name=master_branch,
-            dev_branch_name=dev_branch,
+            master_branch=master_branch,
+            dev_branch=dev_branch,
             repo_path=self._repo_path)
 
         return commit_hash
