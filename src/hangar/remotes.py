@@ -284,7 +284,16 @@ class Remotes(object):
         commit : str, optional
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
-        get_all : bool, optional
+        arrayset_names : Optional[Sequence[str]]
+            Names of the arraysets which should be retrieved for the particular
+            commits, any arraysets not named will not have their data fetched
+            from the server. Default behavior is to retrieve all arraysets
+        max_num_bytes : Optional[int]
+            If you wish to limit the amount of data sent to the local machine,
+            set a `max_num_bytes` parameter. This will retrieve only this
+            amount of data from the server to be placed on the local disk.
+            Default is to retrieve all data regardless of how large.
+        retrieve_all_history : Optional[bool]
             if data should be retrieved for all history accessible by the parents
             of this commit HEAD. by default False
 
