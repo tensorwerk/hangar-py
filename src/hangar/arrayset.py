@@ -538,8 +538,6 @@ class ArraysetDataWriter(ArraysetDataReader):
         ValueError
             If no `name` arg was provided for arrayset requiring named samples.
         ValueError
-            If input data tensor rank exceeds specified rank of arrayset samples.
-        ValueError
             For variable shape arraysets, if a dimension size of the input data
             tensor exceeds specified max dimension size of the arrayset samples.
         ValueError
@@ -573,9 +571,6 @@ class ArraysetDataWriter(ArraysetDataReader):
                 raise ValueError(f'`data` must be "C" contiguous array.')
 
             if self._schema_variable is True:
-                # if data.ndim != len(self._schema_max_shape):
-                #     raise ValueError(
-                #         f'`data` rank: {data.ndim} != aset rank: {len(self._schema_max_shape)}')
                 for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
                     if dDimSize > schDimSize:
                         raise ValueError(
@@ -1092,11 +1087,11 @@ class Arraysets(object):
             all samples must be provided names, if not, no name will be assigned.
             defaults to True, which means all samples should have names.
         variable_shape : bool, optional
-            If this is a variable sized arrayset. If true, a the maximum shape is
-            set from the provided `shape` or `prototype` argument. Any sample
-            added to the arrayset can then have dimension sizes <= to this
-            initial specification (so long as they have the same rank as what
-            was specified) defaults to False.
+            If this is a variable sized arrayset. If true, a the maximum shape
+            is set from the provided `shape` or `prototype` argument. Any
+            sample added to the arrayset can then have dimension sizes <= to
+            this initial specification and rank <= rank of specification.
+            defaults to False.
         backend : DEVELOPER USE ONLY. str, optional, kwarg only
             Backend which should be used to write the arrayset files on disk.
 

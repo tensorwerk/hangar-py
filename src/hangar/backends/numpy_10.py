@@ -21,6 +21,18 @@ Storage Method
      4, 3)``. The first index in the array is referred to as a "collection
      index".
 
+*  For subarrays with rank < rank of schema (in ``variable_sized`` arraysets),
+   the data is written to the ``zeroth`` index of a larger hyperslab selection
+   normally filled by a full rank sample. While this allows lower rank samples
+   to be added, is complicates subarray slicing because we need to
+   differentiate between user defined sample shapes where an array is provided
+   with a zero-length dimension (``unsqueeze(0)``) and those which hangar
+   specified for the subarray slice. A special shape value ``x`` is used to
+   indicate this in the ``shape`` record field. When hangar encounters this,
+   it will not create a ranged slice object, but a fixed dimension field
+   (``value = 0``) upon reading/writing. Outisde of reading/writing, this
+   ``x`` value will remain in the ``shape`` record.
+
 Record Format
 =============
 
@@ -53,7 +65,7 @@ Examples
 
     ``Record Data => '10:NJUUUK$900338819$2*10'``
 
-1)  Adding to a piece of data to a the middle of a file:
+2)  Adding to a piece of data to a the middle of a file:
 
     *  Array shape (Subarray Shape): (20, 2, 3)
     *  File UID: "Mk23nl"
@@ -61,6 +73,15 @@ Examples
     *  Collection Index: 199
 
     ``Record Data => "10:Mk23nl$2546668575$199*20 2 3"``
+
+3)  Adding to a piece of data with rank dimension < schema:
+
+    *  Array shape (Subarray Shape): (2, 3)  # schema rank = 3
+    *  File UID: "LWtfVS"
+    *  Alder32 Checksum: 4050125881
+    *  Collection Index: 3
+
+    ``Record Data => b'10:LWtfVS$4050125881$3*x 2 3'``
 
 
 Technical Notes
