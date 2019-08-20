@@ -3,7 +3,7 @@ import os
 import warnings
 from multiprocessing import cpu_count, get_context
 from typing import (
-    Iterator, Iterable, List, Mapping, Optional, Tuple, Union)
+    Iterator, Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple)
 
 import lmdb
 import numpy as np
@@ -14,6 +14,10 @@ from .context import TxnRegister
 from .records import parsing
 from .records.queries import RecordQuery
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key
+
+
+CompatibleArray = NamedTuple(
+    'CompatibleArray', [('compatible', bool), ('reason', str)])
 
 
 class ArraysetDataReader(object):
@@ -514,6 +518,41 @@ class ArraysetDataWriter(ArraysetDataReader):
         """
         return self._dflt_backend
 
+    def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
+        """Determine if an array is compatible with the arraysets schema
+
+        Parameters
+        ----------
+        data : np.ndarray
+            array to check compatibility for
+
+        Returns
+        -------
+        CompatibleArray
+            compatible and reason field
+        """
+        reason = ''
+        if not isinstance(data, np.ndarray):
+            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
+        elif data.dtype.num != self._schema_dtype_num:
+            reason = f'dtype: {data.dtype} != aset: {np.typeDict[self._schema_dtype_num]}.'
+        elif not data.flags.c_contiguous:
+            reason = f'`data` must be "C" contiguous array.'
+
+        if self._schema_variable is True:
+            if data.ndim != len(self._schema_max_shape):
+                reason = f'`data` rank: {data.ndim} != aset rank: {len(self._schema_max_shape)}'
+            for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
+                if dDimSize > schDimSize:
+                    reason = f'dimensions of `data`: {data.shape} exceed variable max '\
+                             f'dims of aset: {self._asetn} specified max dimensions: '\
+                             f'{self._schema_max_shape}: SIZE: {dDimSize} > {schDimSize}'
+        elif data.shape != self._schema_max_shape:
+            reason = f'data shape: {data.shape} != fixed aset shape: {self._schema_max_shape}'
+
+        compatible = True if reason == '' else False
+        return CompatibleArray(compatible=compatible, reason=reason)
+
     def add(self, data: np.ndarray, name: Union[str, int] = None,
             **kwargs) -> Union[str, int]:
         """Store a piece of data in a arrayset
@@ -564,27 +603,9 @@ class ArraysetDataWriter(ArraysetDataReader):
             elif not self._samples_are_named:
                 name = kwargs['bulkn'] if 'bulkn' in kwargs else parsing.generate_sample_name()
 
-            if not isinstance(data, np.ndarray):
-                raise ValueError(f'`data` argument type: {type(data)} != `np.ndarray`')
-            elif data.dtype.num != self._schema_dtype_num:
-                raise ValueError(
-                    f'dtype: {data.dtype} != aset: {np.typeDict[self._schema_dtype_num]}.')
-            elif not data.flags.c_contiguous:
-                raise ValueError(f'`data` must be "C" contiguous array.')
-
-            if self._schema_variable is True:
-                if data.ndim != len(self._schema_max_shape):
-                    raise ValueError(
-                        f'`data` rank: {data.ndim} != aset rank: {len(self._schema_max_shape)}')
-                for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
-                    if dDimSize > schDimSize:
-                        raise ValueError(
-                            f'dimensions of `data`: {data.shape} exceed variable max '
-                            f'dims of aset: {self._asetn} specified max dimensions: '
-                            f'{self._schema_max_shape}: SIZE: {dDimSize} > {schDimSize}')
-            elif data.shape != self._schema_max_shape:
-                raise ValueError(
-                    f'`data` shape: {data.shape} != fixed aset shape: {self._schema_max_shape}')
+            isCompat = self._verify_array_compatible(data)
+            if not isCompat.compatible:
+                raise ValueError(isCompat.reason)
 
         except ValueError as e:
             raise e from None
