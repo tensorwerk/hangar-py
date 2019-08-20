@@ -5,6 +5,7 @@ import time
 from os.path import join as pjoin
 import shutil
 from contextlib import contextmanager
+from typing import Tuple
 
 import lmdb
 import yaml
@@ -382,7 +383,7 @@ def _commit_ancestors(branchenv: lmdb.Environment,
     return commitParentVal
 
 
-def _commit_spec(message: str, user: str, email: str) -> bytes:
+def _commit_spec(message: str, user: str, email: str) -> Tuple[bytes, str]:
     """Format the commit specification according to the supplied username and email.
 
     This method currently only acts as a pass through to the parsing options
@@ -402,15 +403,15 @@ def _commit_spec(message: str, user: str, email: str) -> bytes:
     bytes
         Formatted value for the specification field of the commit.
     """
-    commitSpecVal = parsing.commit_spec_db_val_from_raw_val(
+    commitSpecVal, cmtSpecDigest = parsing.commit_spec_db_val_from_raw_val(
         commit_time=time.time(),
         commit_message=message,
         commit_user=user,
         commit_email=email)
-    return commitSpecVal
+    return (commitSpecVal, cmtSpecDigest)
 
 
-def _commit_ref(stageenv: lmdb.Environment) -> bytes:
+def _commit_ref(stageenv: lmdb.Environment) -> Tuple[bytes, str]:
     """Query and format all staged data records, and format it for ref storage.
 
     Parameters
@@ -426,8 +427,8 @@ def _commit_ref(stageenv: lmdb.Environment) -> bytes:
     """
     querys = RecordQuery(dataenv=stageenv)
     allRecords = tuple(querys._traverse_all_records())
-    commitRefVal = parsing.commit_ref_db_val_from_raw_val(allRecords)
-    return commitRefVal
+    commitRefVal, cmtRefDigest = parsing.commit_ref_db_val_from_raw_val(allRecords)
+    return (commitRefVal, cmtRefDigest)
 
 
 # -------------------- Format ref k/v pairs and write the commit to disk ----------------
@@ -478,13 +479,14 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     if (USER_NAME is None) or (USER_EMAIL is None):
         raise RuntimeError(f'Username and Email are required. Please configure.')
 
-    commitSpecVal = _commit_spec(message=message, user=USER_NAME, email=USER_EMAIL)
-    commitRefVal = _commit_ref(stageenv=stageenv)
+    commitSpecVal, cmtSpecDigest = _commit_spec(message=message,
+                                                user=USER_NAME,
+                                                email=USER_EMAIL)
+    commitRefVal, cmtRefDigest = _commit_ref(stageenv=stageenv)
 
-    hasher = hashlib.blake2b(digest_size=20)
-    hasher.update(commitParentVal)
-    hasher.update(commitSpecVal)
-    hasher.update(commitRefVal)
+    digests = sorted([commitParentVal, cmtSpecDigest.encode(), cmtRefDigest.encode()])
+    joinedDigests = b''.join(digests)
+    hasher = hashlib.blake2b(joinedDigests, digest_size=20)
     commit_hash = hasher.hexdigest()
 
     commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
@@ -556,10 +558,10 @@ def replace_staging_area_with_refs(stageenv, sorted_content):
     stageenv : lmdb.Enviornment
         staging area db to replace all data in.
     sorted_content : iterable of tuple
-        iterable containing two-tuple of byte encoded record data to place in the
-        stageenv db. index 0 -> db key; index 1 -> db val, it is assumed that the
-        order of the tuples is lexigraphically sorted by index 0 values, if not,
-        this will result in unknown behavior.
+        iterable containing two-tuple of byte encoded record data to place in
+        the stageenv db. index 0 -> db key; index 1 -> db val, it is assumed
+        that the order of the tuples is lexigraphically sorted by index 0
+        values, if not, this will result in unknown behavior.
     """
     stagetxn = TxnRegister().begin_writer_txn(stageenv)
     with stagetxn.cursor() as cursor:
@@ -597,8 +599,8 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
         path to the repository on dir
     remote_operation : bool, optional
         If this operation is occuring from a remote fetch operation. (the
-        default is False, which means that all changes will occur in the staging
-        area)
+        default is False, which means that all changes will occur in the
+        staging area)
 
     """
     store_dir = pjoin(repo_path, c.DIR_DATA_STORE)

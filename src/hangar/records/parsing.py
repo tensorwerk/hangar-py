@@ -3,10 +3,11 @@ from itertools import cycle
 from time import sleep
 from time import perf_counter
 from random import randint
-from typing import Union, NamedTuple, Tuple, Iterable
+from typing import Union, NamedTuple, Tuple, Iterable, List
+from hashlib import blake2b
 
 import blosc
-import msgpack
+# import msgpack
 
 from .. import constants as c
 
@@ -437,7 +438,7 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         'schema_is_named': schema_is_named,
         'schema_default_backend': schema_default_backend,
     }
-    db_schema_val = json.dumps(schema_val, ensure_ascii=True).encode()
+    db_schema_val = json.dumps(schema_val, separators=(',', ':')).encode()
     return db_schema_val
 
 
@@ -759,7 +760,24 @@ def commit_ref_db_key_from_raw_key(commit_hash: str) -> bytes:
     return commit_ref_key
 
 
-def commit_ref_db_val_from_raw_val(commit_db_kbs: Iterable[Tuple[bytes, bytes]]) -> bytes:
+def _hash_func(recs: bytes) -> str:
+    """hash a tuple of db formatted k, v pairs.
+
+    Parameters
+    ----------
+    recs : bytes
+        tuple to calculate the joined digest of
+
+    Returns
+    -------
+    str
+        hexdigest of the joined tuple data
+    """
+    digest = blake2b(recs, digest_size=20).hexdigest()
+    return digest
+
+
+def commit_ref_db_val_from_raw_val(commit_db_kbs: Iterable[Tuple[bytes, bytes]]) -> Tuple[bytes, str]:
     """serialize and compress a list of db_key/db_value pairs for commit storage
 
     Parameters
@@ -771,10 +789,18 @@ def commit_ref_db_val_from_raw_val(commit_db_kbs: Iterable[Tuple[bytes, bytes]])
     -------
     bytes
         Serialized and compressed representation of the object.
+    str
+        digest of the joined db kvs
     """
-    pck = msgpack.packb(commit_db_kbs, use_bin_type=True)
+    joined = tuple(map(b' '.join, commit_db_kbs))
+
+    recDigests = sorted(map(_hash_func, joined))
+    joinedDigests = ''.join(recDigests).encode()
+    cmtDigest = _hash_func(joinedDigests)
+
+    pck = b'!'.join(joined)
     raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.BITSHUFFLE, cname='lz4')
-    return raw
+    return (raw, cmtDigest)
 
 
 def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> Tuple[Tuple[bytes, bytes]]:
@@ -792,8 +818,9 @@ def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> Tuple[Tuple[bytes, b
         the time of that commit. key/value pairs are already in sorted order.
     """
     uncompressed_db_list = blosc.decompress(commit_db_val)
-    bytes_db_key_val_list = msgpack.unpackb(uncompressed_db_list, use_list=False)
-    return bytes_db_key_val_list
+    joined = uncompressed_db_list.split(b'!')
+    bytes_db_kv_list = tuple(map(tuple, map(bytes.split, joined)))
+    return bytes_db_kv_list
 
 
 """
@@ -809,7 +836,7 @@ def commit_spec_db_key_from_raw_key(commit_hash: str) -> bytes:
 
 def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
                                     commit_user: str,
-                                    commit_email: str) -> bytes:
+                                    commit_email: str) -> Tuple[bytes, str]:
     """Serialize a commit specification from user values to a db store value
 
     Parameters
@@ -834,18 +861,22 @@ def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
         'commit_user': commit_user,
         'commit_email': commit_email,
     }
-    db_spec_val = msgpack.dumps(spec_dict)
+
+    # db_spec_val = msgpack.dumps(spec_dict)
+    db_spec_val = json.dumps(spec_dict, separators=(',', ':')).encode()
+    # print(db_spec_val)
+    specDigest = _hash_func(db_spec_val)
     compressed_db_val = blosc.compress(db_spec_val,
                                        cname='zlib',
                                        clevel=9,
                                        shuffle=blosc.BITSHUFFLE,
-                                       typesize=1)
-    return compressed_db_val
+                                       typesize=8)
+    return (compressed_db_val, specDigest)
 
 
 def commit_spec_raw_val_from_db_val(db_val: bytes) -> CommitSpec:
     uncompressed_db_val = blosc.decompress(db_val)
-    commit_spec = msgpack.loads(uncompressed_db_val, raw=False)
+    commit_spec = json.loads(uncompressed_db_val).decode()
     raw_val = CommitSpec(**commit_spec)
     return raw_val
 
