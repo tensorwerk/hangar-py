@@ -151,11 +151,9 @@ def _scan_plugins():
 
         for p in provides:
             if p not in plugin_store:
-                print("Plugin `%s` wants to provide non-existent `%s`."
-                      " Ignoring." % (name, p))
+                print(f"Plugin: {name} wants to provide non-existent: {p}. Ignoring.")
 
         plugin_provides[name] = valid_provides
-
         plugin_module_name[name] = os.path.basename(filename)[:-4]
 
 

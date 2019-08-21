@@ -17,76 +17,68 @@ import os
 import time
 
 import click
-from tqdm import tqdm
 
 from hangar import Repository
-from hangar import serve
-from hangar.records.commiting import expand_short_commit_digest
+from hangar import __version__
+
+
+pass_repo = click.make_pass_decorator(Repository, ensure=True)
 
 
 @click.group(no_args_is_help=True, add_help_option=True, invoke_without_command=True)
-@click.option('--version', '-v', is_flag=True, default=False, required=False,
-              help='display the Hangar version currently installed')
+@click.version_option(version=__version__, help='display current Hangar Version')
 @click.pass_context
-def main(ctx, version):
-    if version:
-        import hangar
-        click.echo(hangar.__version__)
-    pass
+def main(ctx):
+    P = os.getcwd()
+    ctx.obj = Repository(path=P, exists=False)
 
 
 @main.command()
 @click.option('--name', prompt='User Name', help='first and last name of user')
 @click.option('--email', prompt='User Email', help='email address of the user')
-@click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
-@click.pass_context
-def init(ctx, name, email, overwrite):
+@click.option('--overwrite', is_flag=True, default=False,
+              help='overwrite a repository if it exists at the current path')
+@pass_repo
+def init(repo: Repository, name, email, overwrite):
     """Initialize an empty repository at the current path
     """
-    P = os.getcwd()
-    repo = Repository(path=P, exists=False)
-    try:
+    if repo.initialized and (not overwrite):
+        click.echo(f'Repo already exists at: {repo.path}')
+    else:
         repo.init(user_name=name, user_email=email, remove_old=overwrite)
-        click.echo(f'Hangar repository initialized at {P}')
-    except OSError as e:
-        click.echo(e)
 
 
 @main.command()
+@click.argument('remote', nargs=1, required=True)
 @click.option('--name', prompt='User Name', help='first and last name of user')
 @click.option('--email', prompt='User Email', help='email address of the user')
-@click.option('--overwrite', is_flag=True, default=False, help='overwrite a repository if it exists at the current path')
-@click.argument('remote', nargs=1, required=True)
-@click.pass_context
-def clone(ctx, remote, name, email, overwrite):
+@click.option('--overwrite', is_flag=True, default=False,
+              help='overwrite a repository if it exists at the current path')
+@pass_repo
+def clone(repo: Repository, remote, name, email, overwrite):
     """Initialize a repository at the current path and fetch updated records from REMOTE.
 
     Note: This method does not actually download the data to disk. Please look
     into the ``fetch-data`` command.
     """
-    P = os.getcwd()
-    repo = Repository(path=P, exists=False)
-    repo.clone(user_name=name,
-               user_email=email,
-               remote_address=remote,
-               remove_old=overwrite)
-    click.echo(f'Hangar repository initialized at {P}')
+    if repo.initialized and (not overwrite):
+        click.echo(f'Repo already exists at: {repo.path}')
+    else:
+        repo.clone(name, email, remote, remove_old=overwrite)
 
 
 @main.command(name='fetch')
 @click.argument('remote', nargs=1, required=True)
 @click.argument('branch', nargs=1, required=True)
-@click.pass_context
-def fetch_records(ctx, remote, branch):
+@pass_repo
+def fetch_records(repo: Repository, remote, branch):
     """Retrieve the commit history from REMOTE for BRANCH.
 
     This method does not fetch the data associated with the commits. See
     `fetch-data` to download the tensor data corresponding to a commit.
     """
-    P = os.getcwd()
-    repo = Repository(path=P)
     bName = repo.remote.fetch(remote=remote, branch=branch)
-    click.echo(f'Fetch to Branch Name: {bName}')
+    click.echo(f'Fetched branch Name: {bName}')
 
 
 @main.command(name='fetch-data')
@@ -98,36 +90,31 @@ def fetch_records(ctx, remote, branch):
               help='total amount of data to retrieve in MB/GB.')
 @click.option('--all-history', '-a', 'all_', is_flag=True, default=False, required=False,
               help='Retrieve data referenced in every parent commit accessible to the STARTPOINT')
-@click.pass_context
-def fetch_data(ctx, remote, startpoint, aset, nbytes, all_):
+@pass_repo
+def fetch_data(repo: Repository, remote, startpoint, aset, nbytes, all_):
     """Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
     commit of a branch. Please review optional arguments for other behaviors
     """
-    from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
+    from hangar.records.commiting import expand_short_commit_digest
+    from hangar.records.heads import get_branch_head_commit
+    from hangar.records.heads import get_staging_branch_head
     from hangar.utils import parse_bytes
 
-    P = os.getcwd()
-    repo = Repository(path=P)
     if startpoint is None:
         branch = get_staging_branch_head(repo._env.branchenv)
         commit = get_branch_head_commit(repo._env.branchenv, branch)
-        click.echo(f'No startpoint supplied, fetching data of HEAD: {commit} for BRANCH: {branch}')
     elif startpoint in repo.list_branches():
         commit = get_branch_head_commit(repo._env.branchenv, startpoint)
-        click.echo(f'Fetching data for HEAD: {commit} of STARTPOINT BRANCH: {startpoint}')
     else:
         commit = expand_short_commit_digest(repo._env.refenv, startpoint)
-        click.echo(f'Fetching data for STARTPOINT HEAD: {commit}')
+    click.echo(f'Fetching data for commit: {commit}')
 
-    click.echo(f'aset argument: {aset}')
     try:
         max_nbytes = parse_bytes(nbytes)
-        click.echo(f'nbytes argument: {max_nbytes}')
     except AttributeError:
         max_nbytes = None
-
     if len(aset) == 0:
         aset = None
 
@@ -142,12 +129,10 @@ def fetch_data(ctx, remote, startpoint, aset, nbytes, all_):
 @main.command()
 @click.argument('remote', nargs=1, required=True)
 @click.argument('branch', nargs=1, required=True)
-@click.pass_context
-def push(ctx, remote, branch):
+@pass_repo
+def push(repo: Repository, remote, branch):
     """Upload local BRANCH commit history / data to REMOTE server.
     """
-    P = os.getcwd()
-    repo = Repository(path=P)
     commit_hash = repo.remote.push(remote=remote, branch=branch)
     click.echo(f'Push data for commit hash: {commit_hash}')
 
@@ -161,47 +146,41 @@ def remote(ctx):
 
 
 @remote.command(name='list')
-@click.pass_context
-def list_remotes(ctx):
+@pass_repo
+def list_remotes(repo: Repository):
     """List all remote repository records.
     """
-    P = os.getcwd()
-    repo = Repository(path=P)
     click.echo(repo.remote.list_all())
 
 
 @remote.command(name='add')
 @click.argument('name', nargs=1, required=True)
 @click.argument('address', nargs=1, required=True)
-@click.pass_context
-def add_remote(ctx, name, address):
+@pass_repo
+def add_remote(repo: Repository, name, address):
     """Add a new remote server NAME with url ADDRESS to the local client.
 
     This name must be unique. In order to update an old remote, please remove it
     and re-add the remote NAME / ADDRESS combination
     """
-    P = os.getcwd()
-    repo = Repository(path=P)
     click.echo(repo.remote.add(name=name, address=address))
 
 
 @remote.command(name='remove')
 @click.argument('name', nargs=1, required=True)
-@click.pass_context
-def remove_remote(ctx, name):
+@pass_repo
+def remove_remote(repo: Repository, name):
     """Remove the remote server NAME from the local client.
 
     This will not remove any tracked remote reference branches.
     """
-    P = os.getcwd()
-    repo = Repository(path=P)
     click.echo(repo.remote.remove(name=name))
 
 
 @main.command()
 @click.argument('startpoint', nargs=1, required=False)
-@click.pass_context
-def summary(ctx, startpoint):
+@pass_repo
+def summary(repo: Repository, startpoint):
     """Display content summary at STARTPOINT (short-digest or branch).
 
     If no argument is passed in, the staging area branch HEAD wil be used as the
@@ -209,8 +188,8 @@ def summary(ctx, startpoint):
     version of this information, please see the ``Repository.summary()`` method
     of the API.
     """
-    P = os.getcwd()
-    repo = Repository(path=P)
+    from hangar.records.commiting import expand_short_commit_digest
+
     if startpoint is None:
         click.echo(repo.summary())
     elif startpoint in repo.list_branches():
@@ -222,15 +201,15 @@ def summary(ctx, startpoint):
 
 @main.command()
 @click.argument('startpoint', required=False, default=None)
-@click.pass_context
-def log(ctx, startpoint):
+@pass_repo
+def log(repo: Repository, startpoint):
     """Display commit graph starting at STARTPOINT (short-digest or name)
 
     If no argument is passed in, the staging area branch HEAD will be used as the
     starting point.
     """
-    P = os.getcwd()
-    repo = Repository(path=P)
+    from hangar.records.commiting import expand_short_commit_digest
+
     if startpoint is None:
         click.echo(repo.log())
     elif startpoint in repo.list_branches():
@@ -249,31 +228,29 @@ def branch(ctx):
 
 
 @branch.command(name='list')
-@click.pass_context
-def branch_list(ctx):
+@pass_repo
+def branch_list(repo: Repository):
     """list all branch names
 
     Includes both remote branches as well as local branches.
     """
-    P = os.getcwd()
-    repo = Repository(path=P)
     click.echo(repo.list_branches())
 
 
 @branch.command(name='create')
 @click.argument('name', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
-@click.pass_context
-def branch_create(ctx, name, startpoint):
+@pass_repo
+def branch_create(repo: Repository, name, startpoint):
     """Create a branch with NAME at STARTPOINT (short-digest or branch)
 
     If no STARTPOINT is provided, the new branch is positioned at the HEAD of
     the staging area branch, automatically.
     """
-    from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
+    from hangar.records.commiting import expand_short_commit_digest
+    from hangar.records.heads import get_branch_head_commit
+    from hangar.records.heads import get_staging_branch_head
 
-    P = os.getcwd()
-    repo = Repository(path=P)
     branch_names = repo.list_branches()
     if name in branch_names:
         raise ValueError(f'branch name: {name} already exists')
@@ -317,6 +294,8 @@ def server(overwrite, ip, port, timeout):
     More simply put, we know more, so we can optimize access more; similar, but
     not identical.
     """
+    from hangar import serve
+
     P = os.getcwd()
     ip_port = f'{ip}:{port}'
     server, hangserver, channel_address = serve(P, overwrite, channel_address=ip_port)
@@ -354,6 +333,7 @@ def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
     from hangar.context import Environments
     from hangar.records.summarize import details
     from hangar import constants as c
+
     P = os.getcwd()
     if os.path.isdir(os.path.join(P, c.DIR_HANGAR_SERVER)):
         repo_path = os.path.join(P, c.DIR_HANGAR_SERVER)
@@ -381,89 +361,105 @@ def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
 
 
 @main.command(name='import')
-@click.option('-d', '--dataset', required=True,
-              help='An existing dataset to which the data will be stored')
-@click.option('-p', '--path', required=True, help='Path from data will be loaded')
-@click.option('--plugin', default=None, type=str, help='Plugin name to use instead of auto-inferred plugin')
-def import_data(dataset, path, plugin):
-    # TODO Common utility for doing these checks for all required commands
-    # TODO continues and keep
-    # @click.option('-c', '--continues', help='Continue from where it left')
-    # @click.option('-k', '--keep', help='keep the path information saved. Default to True')
-    P = os.getcwd()
-    repo = Repository(path=P)
-    if not repo.initialized:
-        print("Not a hangar repository. Create a repository and a dataset for `import` to work")
-        return
+@click.argument('arrayset', required=True)
+@click.argument('path', required=True)
+@click.option('--plugin', default=None, help='override auto-infered plugin')
+@pass_repo
+def import_data(repo: Repository, arrayset, path, plugin):
+    '''Import file(s) at PATH to ARRAYSET in the staging area.
+    '''
+    from hangar.plugins import imread
 
-    co = repo.checkout(write=True)
     try:
-        try:
-            dset = co.datasets[dataset]
-        except KeyError:
-            print(f"Could not find a dataset with name {dataset}. `import` requires an existing dataset")
-            return
-
-        from hangar.plugins import imread
-        from contextlib import suppress
-
+        co = repo.checkout(write=True)
+        aset = co.arraysets.get(arrayset)
         fnames = os.listdir(path)
-        with dset as ds:
-            for fname in tqdm(fnames, desc=f'adding images to dset: {ds.name}'):
-                with suppress(OSError):
-                    fpth = os.path.join(path, fname)
-                    arr = imread(fpth, plugin=plugin)
-                    try:
-                        ds[fname] = arr
-                    except ValueError as e:
-                        print(e)
+        with aset as a, click.progressbar(fnames) as fnamesBar:
+            for fname in fnamesBar:
+                fpth = os.path.join(path, fname)
+                arr = imread(fpth, plugin=plugin)
+                try:
+                    a[fname] = arr
+                except ValueError as e:
+                    click.echo(e)
     finally:
         co.close()
 
 
 @main.command(name='export')
-@click.argument('dataset', required=True)
-@click.option('-fmt', required=True, type=str, help='File extension format which will be used for exporting.')
-@click.option('-o', required=True, help='Path to which samples will be exported')
-@click.option('-s', default=False, help='Sample name to export')
-@click.option('--plugin', help='Plugin name to use instead of auto-inferred plugin')
-def export_data(dataset, fmt, o, s, plugin):
-    '''Dataset from which the samples will be exported
+@click.argument('startpoint', nargs=1, required=True)
+@click.argument('arrayset', required=True)
+@click.option('-o', '--out', required=True, help='Path to export the data to.')
+@click.option('-s', '--sample', default=False, help='Sample name to export')
+@click.option('-f', '--format', 'format_', required=False, help='File format used for exporting.')
+@click.option('--plugin', required=False, help='override auto-infered plugin')
+@pass_repo
+def export_data(repo: Repository, startpoint, arrayset, out, sample, format_, plugin):
+    '''export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
     '''
-    # @click.option('-i', required=True, type=int, help='Data index (integer) or index range in `[start:end]` format')
-    # @click.option('-k', help='Use the saved path while writing data back. Default to False')
-    # TODO: configure all options
-    # TODO Common utility for doing these checks for all required commands
+    from hangar.records.commiting import expand_short_commit_digest
+    from hangar.records.heads import get_branch_head_commit
     from hangar.plugins import imsave
 
-    cwdP = os.getcwd()
-    repo = Repository(cwdP)
-    if not repo.initialized:
-        print("Not a hangar repository. Create a repository and a dataset for `import` to work")
-        return
+    if startpoint in repo.list_branches():
+        base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
+    else:
+        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
 
-    co = repo.checkout()  # TODO handle first repo
     try:
-        outP = os.path.expanduser(os.path.normpath(o))
-        dset = co.datasets[dataset]
-
-        if s:
-            if s in dset:
-                sampleNames = [s]
-            else:
-                click.echo(f'No sample name: {s} in dataset')
-                return
+        co = repo.checkout(write=False, commit=base_commit)
+        arrayset = co.arraysets[arrayset]
+        if sample:
+            sampleNames = [sample]
         else:
-            sampleNames = list(dset.keys())
+            sampleNames = list(arrayset.keys())
 
-        with dset as ds:
-            for sampleN in tqdm(sampleNames, desc='saving files'):
-                if sampleN.endswith(fmt):
+        if format_:
+            format_ = format_.lstrip('.')
+        outP = os.path.expanduser(os.path.normpath(out))
+
+        with arrayset as aset, click.progressbar(sampleNames) as sNamesBar:
+            for sampleN in sNamesBar:
+                if sampleN.endswith(format_):
                     outFP = os.path.join(outP, f'{sampleN}')
                 else:
-                    outFP = os.path.join(outP, f'{sampleN}.{fmt}')
+                    outFP = os.path.join(outP, f'{sampleN}.{format_}')
+                try:
+                    data = aset[sampleN]
+                    imsave(outFP, data)
+                except KeyError as e:
+                    click.echo(e)
+    finally:
+        co.close()
 
-                data = ds[sampleN]
-                imsave(outFP, data)
+
+@main.command(name='view')
+@click.argument('startpoint', nargs=1, type=str, required=True)
+@click.argument('arrayset', type=str, required=True)
+@click.argument('sample', type=str, required=True)
+@click.option('--plugin', default=None,
+              help='Plugin name to use instead of auto-inferred plugin')
+@pass_repo
+def view_data(repo: Repository, startpoint, arrayset, sample, plugin):
+    '''Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
+    '''
+    from hangar.records.commiting import expand_short_commit_digest
+    from hangar.records.heads import get_branch_head_commit
+    from hangar.plugins import imshow, show
+
+    if startpoint in repo.list_branches():
+        base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
+    else:
+        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+
+    try:
+        co = repo.checkout(write=False, commit=base_commit)
+        arrayset = co.arraysets[arrayset]
+        try:
+            data = arrayset[sample]
+            imshow(data, plugin=plugin)
+            show()
+        except KeyError as e:
+            click.echo(e)
     finally:
         co.close()

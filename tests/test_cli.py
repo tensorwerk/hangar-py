@@ -7,28 +7,30 @@ from click.testing import CliRunner
 from hangar import Repository
 from hangar.cli import cli
 
+
 # -------------------------------- test data ----------------------------------
 
 
 help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '\n'\
            'Options:\n'\
-           '  -v, --version  display the Hangar version currently installed\n'\
-           '  --help         Show this message and exit.\n'\
+           '  --version  display current Hangar Version\n'\
+           '  --help     Show this message and exit.\n'\
            '\n'\
            'Commands:\n'\
            '  branch      operate on and list branch pointers.\n'\
            '  clone       Initialize a repository at the current path and fetch updated...\n'\
-           '  export      Dataset from which the samples will be exported\n'\
+           '  export      export ARRAYSET sample data as it existed a STARTPOINT to some...\n'\
            '  fetch       Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data  Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
-           '  import\n'\
+           '  import      Import file(s) at PATH to ARRAYSET in the staging area.\n'\
            '  init        Initialize an empty repository at the current path\n'\
            '  log         Display commit graph starting at STARTPOINT (short-digest or...\n'\
            '  push        Upload local BRANCH commit history / data to REMOTE server.\n'\
            '  remote      Operations for working with remote server references\n'\
            '  server      Start a hangar server, initializing one if does not exist.\n'\
-           '  summary     Display content summary at STARTPOINT (short-digest or branch).\n'
+           '  summary     Display content summary at STARTPOINT (short-digest or branch).\n'\
+           '  view        Use a plugin to view the data of some SAMPLE in ARRAYSET at...\n'
 
 
 # ------------------------------- begin tests ---------------------------------
@@ -36,34 +38,28 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
 
 def test_help():
     runner = CliRunner()
-    res = runner.invoke(cli.main, ['--help'])
-    assert res.exit_code == 0
-    assert res.stdout == help_res
+    with runner.isolated_filesystem():
+        res = runner.invoke(cli.main, ['--help'])
+        assert res.exit_code == 0
+        assert res.stdout == help_res
 
 
 def test_version_long_option():
     import hangar
     runner = CliRunner()
-    res = runner.invoke(cli.main, ['--version'])
-    assert res.exit_code == 0
-    assert res.stdout == f'{hangar.__version__}\n'
-
-
-def test_version_short_option():
-    import hangar
-    runner = CliRunner()
-    res = runner.invoke(cli.main, ['-v'])
-    assert res.exit_code == 0
-    assert res.stdout == f'{hangar.__version__}\n'
+    with runner.isolated_filesystem():
+        res = runner.invoke(cli.main, ['--version'])
+        assert res.exit_code == 0
+        assert res.stdout == f'main, version {hangar.__version__}\n'
 
 
 def test_init_repo():
     runner = CliRunner()
     with runner.isolated_filesystem():
-        res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'])
-        assert res.exit_code == 0
         P = getcwd()
-        repo = Repository(P)
+        repo = Repository(P, exists=False)
+        res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'], obj=repo)
+        assert res.exit_code == 0
         assert repo._Repository__verify_repo_initialized() is None
 
 
@@ -71,13 +67,13 @@ def test_clone(written_two_cmt_server_repo):
     server, base_repo = written_two_cmt_server_repo
     runner = CliRunner()
     with runner.isolated_filesystem():
+        P = getcwd()
+        new_repo = Repository(P, exists=False)
         res = runner.invoke(
             cli.clone,
-            ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'])
+            ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'], obj=new_repo)
 
         assert res.exit_code == 0
-        P = getcwd()
-        new_repo = Repository(P)
 
         newLog = new_repo.log(return_contents=True)
         baseLog = base_repo.log(return_contents=True)
@@ -115,9 +111,9 @@ def test_push_fetch_records(server_instance, backend):
 
         repo.remote.add('origin', server_instance)
 
-        res = runner.invoke(cli.push, ['origin', 'master'])
+        res = runner.invoke(cli.push, ['origin', 'master'], obj=repo)
         assert res.exit_code == 0
-        res = runner.invoke(cli.push, ['origin', 'testbranch'])
+        res = runner.invoke(cli.push, ['origin', 'testbranch'], obj=repo)
         assert res.exit_code == 0
 
 
@@ -164,22 +160,23 @@ def test_fetch_records_and_data(server_instance, backend, options):
 
         repo.remote.add('origin', server_instance)
 
-        res = runner.invoke(cli.push, ['origin', 'master'])
+        res = runner.invoke(cli.push, ['origin', 'master'], obj=repo)
         assert res.exit_code == 0
-        res = runner.invoke(cli.push, ['origin', 'testbranch'])
+        res = runner.invoke(cli.push, ['origin', 'testbranch'], obj=repo)
         assert res.exit_code == 0
 
     with runner.isolated_filesystem():
+        repo = Repository(getcwd(), exists=False)
         res = runner.invoke(
             cli.clone,
-            ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server_instance}'])
+            ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server_instance}'], obj=repo)
         assert res.exit_code == 0
 
-        res = runner.invoke(cli.fetch_records, ['origin', 'testbranch'])
+        res = runner.invoke(cli.fetch_records, ['origin', 'testbranch'], obj=repo)
         assert res.exit_code == 0
-        res = runner.invoke(cli.branch_create, ['testbranch', 'origin/testbranch'])
+        res = runner.invoke(cli.branch_create, ['testbranch', 'origin/testbranch'], obj=repo)
         assert res.exit_code == 0
-        res = runner.invoke(cli.fetch_data, options)
+        res = runner.invoke(cli.fetch_data, options, obj=repo)
         assert res.exit_code == 0
 
 
@@ -188,15 +185,15 @@ def test_add_remote():
 
     runner = CliRunner()
     with runner.isolated_filesystem():
-        res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'])
+        P = getcwd()
+        repo = Repository(P, exists=False)
+        res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'], obj=repo)
         assert res.exit_code == 0
 
-        res = runner.invoke(cli.add_remote, ['origin', 'localhost:50051'])
+        res = runner.invoke(cli.add_remote, ['origin', 'localhost:50051'], obj=repo)
         assert res.exit_code == 0
         assert res.stdout == "RemoteInfo(name='origin', address='localhost:50051')\n"
 
-        P = getcwd()
-        repo = Repository(P)
         remote_list = repo.remote.list_all()
         assert remote_list == [RemoteInfo(name='origin', address='localhost:50051')]
 
@@ -206,19 +203,19 @@ def test_remove_remote():
 
     runner = CliRunner()
     with runner.isolated_filesystem():
-        res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'])
+        P = getcwd()
+        repo = Repository(P, exists=False)
+        res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'], obj=repo)
         assert res.exit_code == 0
 
-        res = runner.invoke(cli.add_remote, ['origin', 'localhost:50051'])
+        res = runner.invoke(cli.add_remote, ['origin', 'localhost:50051'], obj=repo)
         assert res.exit_code == 0
         assert res.stdout == "RemoteInfo(name='origin', address='localhost:50051')\n"
 
-        P = getcwd()
-        repo = Repository(P)
         remote_list = repo.remote.list_all()
         assert remote_list == [RemoteInfo(name='origin', address='localhost:50051')]
 
-        res = runner.invoke(cli.remove_remote, ['origin'])
+        res = runner.invoke(cli.remove_remote, ['origin'], obj=repo)
         assert res.exit_code == 0
         assert res.stdout == "RemoteInfo(name='origin', address='localhost:50051')\n"
         assert repo.remote.list_all() == []
@@ -229,25 +226,25 @@ def test_list_all_remotes():
 
     runner = CliRunner()
     with runner.isolated_filesystem():
-        res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'])
+        P = getcwd()
+        repo = Repository(P, exists=False)
+        res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'], obj=repo)
         assert res.exit_code == 0
 
-        res = runner.invoke(cli.add_remote, ['origin', 'localhost:50051'])
+        res = runner.invoke(cli.add_remote, ['origin', 'localhost:50051'], obj=repo)
         assert res.exit_code == 0
         assert res.stdout == "RemoteInfo(name='origin', address='localhost:50051')\n"
-        res = runner.invoke(cli.add_remote, ['upstream', 'foo:ip'])
+        res = runner.invoke(cli.add_remote, ['upstream', 'foo:ip'], obj=repo)
         assert res.exit_code == 0
         assert res.stdout == "RemoteInfo(name='upstream', address='foo:ip')\n"
 
-        P = getcwd()
-        repo = Repository(P)
         remote_list = repo.remote.list_all()
         assert remote_list == [
             RemoteInfo(name='origin', address='localhost:50051'),
             RemoteInfo(name='upstream', address='foo:ip')
         ]
 
-        res = runner.invoke(cli.list_remotes)
+        res = runner.invoke(cli.list_remotes, obj=repo)
         assert res.exit_code == 0
         expected_stdout = "[RemoteInfo(name='origin', address='localhost:50051'), "\
                           "RemoteInfo(name='upstream', address='foo:ip')]\n"
@@ -259,19 +256,19 @@ def test_summary(written_two_cmt_server_repo, capsys):
     runner = CliRunner()
     with runner.isolated_filesystem():
         with capsys.disabled():
+            P = getcwd()
+            new_repo = Repository(P, exists=False)
             res = runner.invoke(
                 cli.clone,
-                ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'])
+                ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'], obj=new_repo)
 
             assert res.exit_code == 0
-            P = getcwd()
-            new_repo = Repository(P)
             assert new_repo.summary() == base_repo.summary()
 
         new_repo.summary()
 
         with capsys.disabled():
-            res = runner.invoke(cli.summary)
+            res = runner.invoke(cli.summary, obj=new_repo)
             assert res.stdout == f"{capsys.readouterr().out}\n"
 
 
@@ -280,19 +277,19 @@ def test_log(written_two_cmt_server_repo, capsys):
     runner = CliRunner()
     with runner.isolated_filesystem():
         with capsys.disabled():
+            P = getcwd()
+            new_repo = Repository(P, exists=False)
             res = runner.invoke(
                 cli.clone,
-                ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'])
+                ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'], obj=new_repo)
 
             assert res.exit_code == 0
-            P = getcwd()
-            new_repo = Repository(P)
             assert new_repo.log() == base_repo.log()
 
         new_repo.log()
 
         with capsys.disabled():
-            res = runner.invoke(cli.log, ['master'])
+            res = runner.invoke(cli.log, ['master'], obj=new_repo)
             assert res.stdout == f"{capsys.readouterr().out}\n"
 
 
@@ -305,21 +302,21 @@ def test_branch_create_and_list(written_two_cmt_server_repo):
 
     runner = CliRunner()
     with runner.isolated_filesystem():
+        P = getcwd()
+        new_repo = Repository(P, exists=False)
         res = runner.invoke(
             cli.clone,
-            ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'])
+            ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'], obj=new_repo)
         assert res.exit_code == 0
 
-        res = runner.invoke(cli.branch_create, ['testbranch'])
+        res = runner.invoke(cli.branch_create, ['testbranch'], obj=new_repo)
         assert res.exit_code == 0
         assert res.stdout == f"BRANCH: testbranch HEAD: {cmt}\n"
 
-        P = getcwd()
-        new_repo = Repository(P)
         branches = new_repo.list_branches()
         assert branches == ['master', 'origin/master', 'testbranch']
 
-        res = runner.invoke(cli.branch_list)
+        res = runner.invoke(cli.branch_list, obj=new_repo)
         assert res.exit_code == 0
         assert res.stdout == "['master', 'origin/master', 'testbranch']\n"
 

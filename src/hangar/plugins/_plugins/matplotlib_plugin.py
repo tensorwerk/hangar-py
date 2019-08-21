@@ -47,7 +47,6 @@ except ImportError:
         "Matplotlib could not be found. Please try pip install matplotlib "
         "or refer to http://matplotlib.org for further instructions.")
 
-from . import img_dtype as dtypes
 from warnings import warn
 
 
@@ -58,6 +57,31 @@ _diverging_colormap = 'RdBu'
 
 ImageProperties = namedtuple('ImageProperties',
                              ['signed', 'out_of_range_float', 'unsupported_dtype'])
+
+# For integers Numpy uses `_integer_types` basis internally, and builds a leaky
+# `np.XintYY` abstraction on top of it. This leads to situations when, for
+# example, there are two np.Xint64 dtypes with the same attributes but
+# different object references. In order to avoid any potential issues, we use
+# the basis dtypes here. For more information, see:
+# - https://github.com/scikit-image/scikit-image/issues/3043 For convenience,
+#   for these dtypes we indicate also the possible bit depths (some of them are
+#   platform specific). For the details, see:
+#   http://www.unix.org/whitepapers/64bit.html
+_integer_types = (np.byte, np.ubyte,          # 8 bits
+                  np.short, np.ushort,        # 16 bits
+                  np.intc, np.uintc,          # 16 or 32 or 64 bits
+                  np.int_, np.uint,           # 32 or 64 bits
+                  np.longlong, np.ulonglong)  # 64 bits
+_integer_ranges = {t: (np.iinfo(t).min, np.iinfo(t).max)
+                   for t in _integer_types}
+dtype_range = {np.bool_: (False, True),
+               np.bool8: (False, True),
+               np.float16: (-1, 1),
+               np.float32: (-1, 1),
+               np.float64: (-1, 1)}
+dtype_range.update(_integer_ranges)
+
+_supported_types = list(dtype_range.keys())
 
 
 def _get_image_properties(image):
@@ -82,14 +106,14 @@ def _get_image_properties(image):
     immin, immax = np.min(image), np.max(image)
     imtype = image.dtype.type
     try:
-        lo, hi = dtypes.dtype_range[imtype]
+        lo, hi = dtype_range[imtype]
     except KeyError:
         lo, hi = immin, immax
 
     signed = immin < 0
     out_of_range_float = (np.issubdtype(image.dtype, np.floating) and
                           (immin < lo or immax > hi))
-    unsupported_dtype = image.dtype not in dtypes._supported_types
+    unsupported_dtype = image.dtype not in _supported_types
 
     return ImageProperties(signed, out_of_range_float, unsupported_dtype)
 
@@ -139,7 +163,7 @@ def _get_display_range(image):
     else:
         lo = 0
         imtype = image.dtype.type
-        hi = dtypes.dtype_range[imtype][1]
+        hi = dtype_range[imtype][1]
         cmap = _default_colormap
     return lo, hi, cmap
 
