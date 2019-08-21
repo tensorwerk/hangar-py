@@ -1,15 +1,17 @@
-try:
-    import tensorflow as tf
-except (ImportError, ModuleNotFoundError):
-    raise ImportError(
-        'Could not import "tensorflow" library. Ensure library is '
-        'installed correctly to use tensorflow dataloader functions')
-
 from functools import partial
+import warnings
 from typing import Sequence
 import random
 
 from .common import GroupedAsets
+from ..utils import LazyImporter
+
+try:
+    tf = LazyImporter('tensorflow')
+except (ImportError, ModuleNotFoundError):
+    raise ImportError(
+        'Could not import "tensorflow" library. Ensure library is '
+        'installed correctly to use tensorflow dataloader functions')
 
 
 def yield_data(arraysets, sample_names, shuffle=False):
@@ -83,6 +85,7 @@ def make_tf_dataset(arraysets,
     -------
     :class:`tf.data.Dataset`
     """
+    warnings.warn("Dataloaders are experimental in the current release.", UserWarning)
     gasets = GroupedAsets(arraysets, keys, index_range)
     generator = partial(yield_data, gasets.arrayset_array, gasets.sample_names, shuffle)
     res = tf.data.Dataset.from_generator(

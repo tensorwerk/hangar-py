@@ -7,12 +7,34 @@ import weakref
 from io import StringIO
 from functools import partial
 from typing import Union, Any
+import importlib
+import types
 
 import blosc
 import wrapt
 
 from . import __version__
 from .constants import DIR_HANGAR
+
+
+class LazyImporter(types.ModuleType):
+    """Lazily import a module. `_load` adds the attributes of
+    importing module to `LazyLoader` instance. Hence `__getattr__` of `LazyLoader` will
+    be invoked only once. We might need to extend the `LazyLoader` class to have
+    functions like `__dir__` later.
+    """
+
+    def __init__(self, name: str):
+        super(LazyImporter, self).__init__(name)
+
+    def _import_module(self):
+        module = importlib.import_module(self.__name__)
+        self.__dict__.update(module.__dict__)
+        return module
+
+    def __getattr__(self, item):
+        module = self._import_module()  # this happens only once
+        return getattr(module, item)
 
 
 def set_blosc_nthreads() -> int:
