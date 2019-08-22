@@ -1,5 +1,8 @@
+from os.path import join as pjoin
+from os import mkdir
 import pytest
 import numpy as np
+from hangar import Repository
 
 
 try:
@@ -163,6 +166,21 @@ class TestTorchDataLoader(object):
             assert data.aset.shape == (1000, 5, 7)
         co.close()
 
+    @pytest.mark.filterwarnings()
+    def test_local_without_data(self, written_two_cmt_server_repo, managed_tmpdir):
+        new_tmpdir = pjoin(managed_tmpdir, 'new')
+        mkdir(new_tmpdir)
+        server, _ = written_two_cmt_server_repo
+        repo = Repository(path=new_tmpdir, exists=False)
+        repo.clone('name', 'a@b.c', server, remove_old=True)
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
+        torch_dset = make_torch_dataset(aset)
+        with pytest.raises(FileNotFoundError):
+            torch_dset[1]
+        co.close()
+        repo._env._close_environments()
+
 
 try:
     import tensorflow as tf
@@ -313,3 +331,19 @@ class TestTfDataLoader(object):
         for data in tf_dset:
             assert data[0].shape == (1000, 5, 7)
         co.close()
+
+    @pytest.mark.filterwarnings()
+    def test_local_without_data(self, written_two_cmt_server_repo, managed_tmpdir):
+        new_tmpdir = pjoin(managed_tmpdir, 'new')
+        mkdir(new_tmpdir)
+        server, _ = written_two_cmt_server_repo
+        repo = Repository(path=new_tmpdir, exists=False)
+        repo.clone('name', 'a@b.c', server, remove_old=True)
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
+        tf_dset = make_tf_dataset(aset)
+        tf_dset = tf_dset.batch(5)
+        with pytest.raises(tf.errors.UnknownError):  # tf raises custom exceptions
+            next(iter(tf_dset))
+        co.close()
+        repo._env._close_environments()
