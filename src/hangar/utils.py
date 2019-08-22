@@ -53,9 +53,9 @@ def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
 
     This is required because (for some unknown reason) `weakproxy`
     references will not actually pass through the `__enter__` attribute of
-    the reffered object's instance. As such, these are manual set to the
+    the referred object's instance. As such, these are manually set to the
     appropriate values on the `weakproxy` object. The final `weakproxy` is
-    in turn referenced by a object proxy so that all calls to the
+    in turn referenced by an object proxy so that all calls to the
     methods/attributes are passed through uniformly.
 
     Parameters
