@@ -60,6 +60,20 @@ def repo_with_20_samples(written_repo, array5by7):
     yield written_repo
 
 
+@pytest.fixture(params=['00', '10'])
+def repo_with_10000_samples(request, written_repo, array5by7):
+    co = written_repo.checkout(write=True)
+    aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend=request.param)
+    with aset:
+        for i in range(10000):
+            array5by7[:] = i
+            aset[i] = array5by7
+    co.commit('20000 samples')
+    co.close()
+    yield written_repo
+
+
+
 @pytest.fixture()
 def variable_shape_written_repo(repo):
     co = repo.checkout(write=True)

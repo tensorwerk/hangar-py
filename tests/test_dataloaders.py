@@ -152,6 +152,17 @@ class TestTorchDataLoader(object):
                 assert hasattr(sample, 'target')
         co.close()
 
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_lots_of_data_with_multiple_backend(self, repo_with_10000_samples):
+        repo = repo_with_10000_samples
+        co = repo.checkout()
+        aset = co.arraysets['aset']
+        torch_dset = make_torch_dataset([aset])
+        loader = DataLoader(torch_dset, batch_size=1000, drop_last=True)
+        for data in loader:
+            assert data.aset.shape == (1000, 5, 7)
+        co.close()
+
 
 try:
     import tensorflow as tf
@@ -290,4 +301,15 @@ class TestTfDataLoader(object):
             assert val[0].shape[0] == 5
             assert val[0].shape[1] == 2
             assert 11 > val[0].shape[2] > 4
+        co.close()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_lots_of_data_with_multiple_backend(self, repo_with_10000_samples):
+        repo = repo_with_10000_samples
+        co = repo.checkout()
+        aset = co.arraysets['aset']
+        tf_dset = make_tf_dataset([aset])
+        tf_dset = tf_dset.batch(1000)
+        for data in tf_dset:
+            assert data[0].shape == (1000, 5, 7)
         co.close()
