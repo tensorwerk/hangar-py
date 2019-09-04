@@ -134,7 +134,6 @@ class TestTorchDataLoader(object):
         assert total_batches == 6
         co.close()
 
-
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     def test_field_names(self, repo_with_20_samples):
         repo = repo_with_20_samples
@@ -286,7 +285,6 @@ class TestTfDataLoader(object):
                 assert not np.allclose(sample, bad_tensor1)
         assert total_batches == 6
         co.close()
-
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):

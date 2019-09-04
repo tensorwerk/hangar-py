@@ -246,12 +246,12 @@ class ArraysetDataReader(object):
         return bool(self._contains_partial_remote_data)
 
     @property
-    def remote_reference_sample_keys(self) -> List[str]:
+    def remote_reference_sample_keys(self) -> List[Union[str, int]]:
         """Returns sample names whose data is stored in a remote server reference.
 
         Returns
         -------
-        List[str]
+        List[Union[str, int]]
             list of sample keys in the arrayset.
         """
         remote_keys = []

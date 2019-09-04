@@ -1,14 +1,15 @@
+import warnings
+from collections import namedtuple
+from typing import Sequence
+from .common import GroupedAsets
+from ..utils import LazyImporter
+
 try:
-    from torch.utils.data import Dataset
+    torchdata = LazyImporter('torch.utils.data')
 except (ImportError, ModuleNotFoundError):
     raise ImportError(
         'Could not import "pytorch" library. Ensure library is '
         'installed correctly to use pytorch dataloader functions')
-
-from collections import namedtuple
-from typing import Sequence
-import warnings
-from .common import GroupedAsets
 
 
 def make_torch_dataset(arraysets,
@@ -73,7 +74,7 @@ def make_torch_dataset(arraysets,
     return TorchDataset(gasets.arrayset_array, gasets.sample_names, wrapper)
 
 
-class TorchDataset(Dataset):
+class TorchDataset(torchdata.Dataset):
     """A wrapper around torch Dataset
 
     TorchDataset inherits `torch.utils.data.Dataset` and accepts few convenient

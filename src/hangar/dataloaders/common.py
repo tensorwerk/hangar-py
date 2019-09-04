@@ -1,5 +1,5 @@
 import warnings
-from typing import Iterable, Optional, Union, Tuple, List
+from typing import Iterable, Optional, Union, Tuple
 
 
 ArraysetsRef = Union['ArraysetDataReader', Iterable['ArraysetDataReader']]
@@ -54,9 +54,9 @@ class GroupedAsets(object):
         elif index_range:
             if not isinstance(index_range, slice):
                 raise TypeError(f'type(index_range): {type(index_range)} != slice')
-            # need to sort before sliceing on index_range, but since sample
-            # keys can be mixed int and str type, convert to common format and
-            # sort on that first
+            # need to sort before slicing on index_range, but since sample keys
+            # can be mixed int and str type, convert to common format and sort
+            # on that first
             str_keys = [i if isinstance(i, str) else f'#{i}' for i in common_aset_keys]
             sorted_keys = sorted(str_keys)
             converted_keys = [int(i[1:]) if i.startswith('#') else i for i in sorted_keys]
@@ -76,16 +76,15 @@ class GroupedAsets(object):
 
         Returns
         -------
-        A tuple of types
+        Tuple[np.dtype]
         """
-        types = []
+        dtypes = []
         for aset in self.arrayset_array:
             if converter:
-                print(aset)
-                types.append(converter(aset.dtype))
+                dtypes.append(converter(aset.dtype))
             else:
-                types.append(aset.dtype)
-        return tuple(types)
+                dtypes.append(aset.dtype)
+        return tuple(dtypes)
 
     def get_shapes(self, converter=None):
         """

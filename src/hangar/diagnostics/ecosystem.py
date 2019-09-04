@@ -1,9 +1,4 @@
-import importlib
-import locale
-import os
-import platform
-import struct
-import sys
+from typing import Dict, List, Tuple, Union
 
 
 required_packages = [
@@ -21,18 +16,32 @@ required_packages = [
 ]
 
 
-def get_versions():
-    """
-    Return basic information on our software installation, and out installed versions of packages.
-    """
+def get_versions() -> dict:
+    """Return information on software, machine, installed versions of packages.
 
+    dict
+        host, package, and `optional` package info.
+    """
     d = {'host': get_system_info(),
          'packages': get_package_info(required_packages),
          'optional': get_optional_info()}
     return d
 
 
-def get_system_info():
+def get_system_info() -> List[Tuple[str, str]]:
+    """Return local computer python, OS, and Machine info
+
+    Returns
+    -------
+    List[Tuple[str, str]]
+        field collected and value of the system parameter.
+    """
+    import locale
+    import os
+    import platform
+    import struct
+    import sys
+
     (sysname, nodename, release,
      version, machine, processor) = platform.uname()
 
@@ -58,7 +67,14 @@ def get_system_info():
     return host
 
 
-def get_optional_info() -> dict:
+def get_optional_info() -> Dict[str, Union[str, bool]]:
+    """Get optional package info (tensorflow, pytorch, hdf5_bloscfilter, etc.)
+
+    Returns
+    -------
+    Dict[str, Union[str, False]]
+        package name, package version (if installed, otherwise False)
+    """
     res = {}
     try:
         import h5py
@@ -73,11 +89,23 @@ def get_optional_info() -> dict:
     except ImportError:
         torchVersion = False
     res['pytorch'] = torchVersion
+
+    try:
+        import tensorflow
+        tensorflowVersion = tensorflow.__version__
+    except ImportError:
+        tensorflowVersion = False
+    res['tensorflow'] = tensorflowVersion
+
     return res
 
 
 def get_package_info(pkgs):
-    """ get package versions for the passed required & optional packages """
+    """ get package versions for the passed required & optional packages.
+
+    Using local imports to avoid import overhead on interpreter startup.
+    """
+    import importlib
 
     pversions = []
     for modname, ver_f in pkgs:
