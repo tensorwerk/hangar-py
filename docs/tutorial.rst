@@ -8,6 +8,7 @@ Hangar Tutorial
    :maxdepth: 2
    :titlesonly:
 
-   Hangar-Tutorial-001
-   Hangar-Tutorial-002
-   Hangar-Tutorial-003
+   Tutorial-001
+   Tutorial-002
+   Tutorial-003
+   Tutorial-Dataloader
