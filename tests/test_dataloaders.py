@@ -39,7 +39,7 @@ class TestTorchDataLoader(object):
         co = repo.checkout()
         first_aset = co.arraysets['_aset']
         second_aset = co.arraysets['second_aset']
-        with pytest.warns(UserWarning, match='Arraysets do not contain equal num samples'):
+        with pytest.warns(UserWarning, match='Arraysets do not contain equal number of samples'):
             make_torch_dataset([first_aset, second_aset])
         co.close()
 
@@ -62,7 +62,7 @@ class TestTorchDataLoader(object):
             # if more than one dataset, those should be in a list/tuple
             make_torch_dataset(first_aset, first_aset)
 
-        with pytest.warns(UserWarning, match='Arraysets do not contain equal num samples'):
+        with pytest.warns(UserWarning, match='Arraysets do not contain equal number of samples'):
             torch_dset = make_torch_dataset([first_aset, second_aset])
         loader = DataLoader(torch_dset, batch_size=6, drop_last=True)
         total_samples = 0
@@ -165,8 +165,8 @@ class TestTorchDataLoader(object):
             assert data.aset.shape == (1000, 5, 7)
         co.close()
 
-    @pytest.mark.filterwarnings()
-    def test_local_without_data(self, written_two_cmt_server_repo, managed_tmpdir):
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
         server, _ = written_two_cmt_server_repo
@@ -174,9 +174,36 @@ class TestTorchDataLoader(object):
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
         aset = co.arraysets['_aset']
-        torch_dset = make_torch_dataset(aset)
+        with pytest.raises(ValueError):
+            torch_dset = make_torch_dataset(aset)
+        co.close()
+        repo._env._close_environments()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
+        new_tmpdir = pjoin(managed_tmpdir, 'new')
+        mkdir(new_tmpdir)
+        server, _ = written_two_cmt_server_repo
+        repo = Repository(path=new_tmpdir, exists=False)
+        repo.clone('name', 'a@b.c', server, remove_old=True)
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
+        with pytest.raises(KeyError):
+            torch_dset = make_torch_dataset(aset, keys=['1', -1])
+        co.close()
+        repo._env._close_environments()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
+        new_tmpdir = pjoin(managed_tmpdir, 'new')
+        mkdir(new_tmpdir)
+        server, _ = written_two_cmt_server_repo
+        repo = Repository(path=new_tmpdir, exists=False)
+        repo.clone('name', 'a@b.c', server, remove_old=True)
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
         with pytest.raises(FileNotFoundError):
-            torch_dset[1]
+            torch_dset = make_torch_dataset(aset, keys=['1', '2'])
         co.close()
         repo._env._close_environments()
 
@@ -216,7 +243,7 @@ class TestTfDataLoader(object):
         co = repo.checkout()
         first_aset = co.arraysets['_aset']
         second_aset = co.arraysets['second_aset']
-        with pytest.warns(UserWarning, match='Arraysets do not contain equal num samples'):
+        with pytest.warns(UserWarning, match='Arraysets do not contain equal number of samples'):
             make_tf_dataset([first_aset, second_aset])
         co.close()
 
@@ -330,8 +357,8 @@ class TestTfDataLoader(object):
             assert data[0].shape == (1000, 5, 7)
         co.close()
 
-    @pytest.mark.filterwarnings()
-    def test_local_without_data(self, written_two_cmt_server_repo, managed_tmpdir):
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
         server, _ = written_two_cmt_server_repo
@@ -339,9 +366,35 @@ class TestTfDataLoader(object):
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
         aset = co.arraysets['_aset']
-        tf_dset = make_tf_dataset(aset)
-        tf_dset = tf_dset.batch(5)
-        with pytest.raises(tf.errors.UnknownError):  # tf raises custom exceptions
-            next(iter(tf_dset))
+        with pytest.raises(ValueError):
+            tf_dset = make_tf_dataset(aset)
+        co.close()
+        repo._env._close_environments()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
+        new_tmpdir = pjoin(managed_tmpdir, 'new')
+        mkdir(new_tmpdir)
+        server, _ = written_two_cmt_server_repo
+        repo = Repository(path=new_tmpdir, exists=False)
+        repo.clone('name', 'a@b.c', server, remove_old=True)
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
+        with pytest.raises(KeyError):
+            tf_dset = make_tf_dataset(aset, keys=['1', -1])
+        co.close()
+        repo._env._close_environments()
+
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
+        new_tmpdir = pjoin(managed_tmpdir, 'new')
+        mkdir(new_tmpdir)
+        server, _ = written_two_cmt_server_repo
+        repo = Repository(path=new_tmpdir, exists=False)
+        repo.clone('name', 'a@b.c', server, remove_old=True)
+        co = repo.checkout()
+        aset = co.arraysets['_aset']
+        with pytest.raises(FileNotFoundError):
+            tf_dset = make_tf_dataset(aset, keys=['1', '2'])
         co.close()
         repo._env._close_environments()
