@@ -55,8 +55,6 @@ can be multiple states for a given plugin:
         either because it's one of the default plugins, or because it's
         loaded explicitly by the user.
 """
-import sys
-
 from configparser import ConfigParser
 import os.path
 from glob import glob
@@ -213,9 +211,9 @@ def call_plugin(kind, *args, **kwargs):
     plugin_funcs = plugin_store[kind]
     if len(plugin_funcs) == 0:
         msg = ("No suitable plugin registered for %s.\n\n"
-               "You may load I/O plugins with the `hangar.plugins.use_plugin` "
+               "You may load I/O plugins with the `hangar.cli.io.use_plugin` "
                "command.  A list of all available plugins are shown in the "
-               "`hangar.plugins` docstring.")
+               "`hangar.cli.io.plugins` docstring.")
         raise RuntimeError(msg % kind)
 
     plugin = kwargs.pop('plugin', None)
@@ -253,17 +251,16 @@ def use_plugin(name, kind=None):
 
     To use Matplotlib as the default image reader, you would write:
 
-    To see a list of available plugins run ``plugins.available_plugins``. Note that
-    this lists plugins that are defined, but the full list may not be usable
-    if your system does not have the required libraries installed.
+    To see a list of available plugins run ``plugins.available_plugins``. Note
+    that this lists plugins that are defined, but the full list may not be
+    usable if your system does not have the required libraries installed.
 
     """
     if kind is None:
         kind = plugin_store.keys()
     else:
         if kind not in plugin_provides[name]:
-            raise RuntimeError("Plugin %s does not support `%s`." %
-                               (name, kind))
+            raise RuntimeError(f"Plugin {name} does not support `{kind}`.")
 
         if kind == 'imshow':
             kind = [kind, '_app_show']
@@ -274,7 +271,7 @@ def use_plugin(name, kind=None):
 
     for k in kind:
         if k not in plugin_store:
-            raise RuntimeError("'%s' is not a known plugin function." % k)
+            raise RuntimeError(f"'{k}' is not a known plugin function.")
 
         funcs = plugin_store[k]
 
@@ -305,8 +302,7 @@ def _load(plugin):
         raise ValueError("Plugin %s not found." % plugin)
     else:
         modname = plugin_module_name[plugin]
-        plugin_module = __import__('hangar.plugins._plugins.' + modname,
-                                   fromlist=[modname])
+        plugin_module = __import__('hangar.cli.io._plugins.' + modname, fromlist=[modname])
 
     provides = plugin_provides[plugin]
     for p in provides:

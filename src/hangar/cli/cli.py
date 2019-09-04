@@ -364,22 +364,35 @@ def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
 @click.argument('arrayset', required=True)
 @click.argument('path', required=True)
 @click.option('--plugin', default=None, help='override auto-infered plugin')
+@click.option('--overwrite', is_flag=True,
+              help='overwrite data samples with the same name as the imported data file ')
 @pass_repo
-def import_data(repo: Repository, arrayset, path, plugin):
+def import_data(repo: Repository, arrayset, path, plugin, overwrite):
     '''Import file(s) at PATH to ARRAYSET in the staging area.
     '''
-    from hangar.plugins import imread
+    from hangar.cli.io import imread
 
     try:
         co = repo.checkout(write=True)
         aset = co.arraysets.get(arrayset)
-        fnames = os.listdir(path)
-        with aset as a, click.progressbar(fnames) as fnamesBar:
-            for fname in fnamesBar:
-                fpth = os.path.join(path, fname)
+
+        if os.path.isfile(path):
+            fname = os.path.basename(path)
+            if not overwrite:
+                if fname in aset:
+                    return None
+            fNamePth = [(fname, path)]
+        else:
+            fnames = os.listdir(path)
+            if not overwrite:
+                fnames = [fname for fname in fnames if fname not in aset]
+            fNamePth = [(fname, os.path.join(path, fname)) for fname in fnames]
+
+        with aset as a, click.progressbar(fNamePth) as fnamesBar:
+            for fn, fpth in fnamesBar:
                 arr = imread(fpth, plugin=plugin)
                 try:
-                    a[fname] = arr
+                    a[fn] = arr
                 except ValueError as e:
                     click.echo(e)
     finally:
@@ -391,7 +404,7 @@ def import_data(repo: Repository, arrayset, path, plugin):
 @click.argument('arrayset', required=True)
 @click.option('-o', '--out', required=True, help='Path to export the data to.')
 @click.option('-s', '--sample', default=False, help='Sample name to export')
-@click.option('-f', '--format', 'format_', required=False, help='File format used for exporting.')
+@click.option('-f', '--format', 'format_', required=True, help='File format used for exporting.')
 @click.option('--plugin', required=False, help='override auto-infered plugin')
 @pass_repo
 def export_data(repo: Repository, startpoint, arrayset, out, sample, format_, plugin):
@@ -399,7 +412,7 @@ def export_data(repo: Repository, startpoint, arrayset, out, sample, format_, pl
     '''
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit
-    from hangar.plugins import imsave
+    from hangar.cli.io import imsave
 
     if startpoint in repo.list_branches():
         base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
@@ -445,7 +458,7 @@ def view_data(repo: Repository, startpoint, arrayset, sample, plugin):
     '''
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit
-    from hangar.plugins import imshow, show
+    from hangar.cli.io import imshow, show
 
     if startpoint in repo.list_branches():
         base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
