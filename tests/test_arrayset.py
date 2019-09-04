@@ -411,8 +411,8 @@ class TestDataWithFixedSizedArrayset(object):
             aset.add(randomsizedarray)
 
         aset_no_name = co.arraysets.init_arrayset('aset_no_name',
-                                                prototype=randomsizedarray,
-                                                named_samples=False)
+                                                  prototype=randomsizedarray,
+                                                  named_samples=False)
         aset_no_name.add(randomsizedarray)
         assert np.allclose(next(aset_no_name.values()), randomsizedarray)
         co.close()
