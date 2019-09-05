@@ -380,7 +380,6 @@ class ReaderCheckout(object):
             if tmpconman:
                 self.__exit__()
 
-
     @property
     def arraysets(self) -> Arraysets:
         """Provides access to arrayset interaction object.
