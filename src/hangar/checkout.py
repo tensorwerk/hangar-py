@@ -19,9 +19,26 @@ from .utils import cm_weakref_obj_proxy
 class ReaderCheckout(object):
     """Checkout the repository as it exists at a particular branch.
 
+    This class is instantiated automatically from a repository checkout
+    operation. This object will govern all access to data and interaction methods
+    the user requests.
+
+        >>> co = repo.checkout()
+        >>> isinstance(co, ReaderCheckout)
+        True
+
     If a commit hash is provided, it will take precedent over the branch name
     parameter. If neither a branch not commit is specified, the staging
     environment's base branch ``HEAD`` commit hash will be read.
+
+        >>> co = repo.checkout(commit='foocommit')
+        >>> co.commit_hash
+        'foocommit'
+        >>> co.close()
+        >>> co = repo.checkout(branch='testbranch')
+        >>> co.commit_hash
+        'someothercommithashhere'
+        >>> co.close()
 
     Unlike :class:`WriterCheckout`, any number of :class:`ReaderCheckout`
     objects can exist on the repository independently. Like the
@@ -315,7 +332,7 @@ class ReaderCheckout(object):
                 self.__enter__()
 
             # Arrayset Parsing
-            if (arraysets is (Ellipsis, slice)):
+            if (arraysets is Ellipsis) or isinstance(arraysets, slice):
                 arraysets = list(self._arraysets._arraysets.values())
             elif isinstance(arraysets, str):
                 arraysets = [self._arraysets._arraysets[arraysets]]
@@ -367,6 +384,25 @@ class ReaderCheckout(object):
     @property
     def arraysets(self) -> Arraysets:
         """Provides access to arrayset interaction object.
+
+        Can be used to either return the arraysets accessor for all elements or
+        a single arrayset instance by using dictionary style indexing.
+
+            >>> co = repo.checkout(write=False)
+            >>> len(co.arraysets)
+            1
+            >>> print(co.arraysets.keys())
+            ['foo']
+
+            >>> fooAset = co.arraysets['foo']
+            >>> fooAset.dtype
+            np.fooDtype
+
+            >>> asets = co.arraysets
+            >>> fooAset = asets['foo']
+            >>> fooAset = asets.get('foo')
+            >>> fooAset.dtype
+            np.fooDtype
 
         .. seealso::
 
@@ -427,6 +463,9 @@ class ReaderCheckout(object):
     @property
     def commit_hash(self) -> str:
         """Commit hash this read-only checkout's data is read from.
+
+            >>> co.commit_hash
+            foohashdigesthere
 
         Returns
         -------
@@ -492,6 +531,13 @@ class WriterCheckout(object):
     writer class records all interactions in a special ``"staging"`` area,
     which is based off the state of the repository as it existed at the
     ``HEAD`` commit of a branch.
+
+        >>> co = repo.checkout(write=True)
+        >>> co.branch_name
+        'master'
+        >>> co.commit_hash
+        'masterheadcommithash'
+        >>> co.close()
 
     At the moment, only one instance of this class can write data to the
     staging area at a time. After the desired operations have been completed,
@@ -871,7 +917,7 @@ class WriterCheckout(object):
                 self.__enter__()
 
             # Arrayset Parsing
-            if (arraysets is (Ellipsis, slice)):
+            if (arraysets is Ellipsis) or isinstance(arraysets, slice):
                 arraysets = list(self._arraysets._arraysets.values())
             elif isinstance(arraysets, str):
                 arraysets = [self._arraysets._arraysets[arraysets]]
@@ -1053,6 +1099,25 @@ class WriterCheckout(object):
     @property
     def arraysets(self) -> Arraysets:
         """Provides access to arrayset interaction object.
+
+        Can be used to either return the arraysets accessor for all elements or
+        a single arrayset instance by using dictionary style indexing.
+
+            >>> co = repo.checkout(write=True)
+            >>> asets = co.arraysets
+            >>> len(asets)
+            0
+            >>> fooAset = asets.init_arrayset('foo', shape=(10, 10), dtype=np.uint8)
+            >>> len(co.arraysets)
+            1
+            >>> print(co.arraysets.keys())
+            ['foo']
+            >>> fooAset = co.arraysets['foo']
+            >>> fooAset.dtype
+            np.fooDtype
+            >>> fooAset = asets.get('foo')
+            >>> fooAset.dtype
+            np.fooDtype
 
         .. seealso::
 

@@ -2,6 +2,9 @@ import pytest
 import numpy as np
 
 
+# -------------------------- Reader Checkout ----------------------------------
+
+
 @pytest.mark.parametrize("samplename", ['0', '-1', 1, 0, 1000, 'alkea'])
 def test_write_single_arrayset_single_sample(written_repo, array5by7, samplename):
     wco = written_repo.checkout(write=True)
@@ -301,6 +304,7 @@ def test_writer_co_read_multtiple_aset_multiple_samples(written_repo, array5by7)
     assert np.allclose(s1.newaset, array10 + 1)
     wco.close()
 
+
 def test_writer_co_read_fails_nonexistant_aset_name(written_repo, array5by7):
     wco = written_repo.checkout(write=True)
 
@@ -321,7 +325,17 @@ def test_writer_co_read_fails_nonexistant_sample_name(written_repo, array5by7):
     wco.close()
 
 
-def test_writeer_co_read_in_context_manager_no_loop(written_repo, array5by7):
+def test_writer_co_get_returns_none_on_nonexistant_sample_name(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    out = wco.get('writtenaset', 124)
+    assert out is None
+    wco.close()
+
+
+def test_writer_co_read_in_context_manager_no_loop(written_repo, array5by7):
     wco = written_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
@@ -360,3 +374,427 @@ def test_writer_co_read_in_context_manager_many_samples_looping(written_repo, ar
             assert np.allclose(writtenasetOut[idx], array5by7)
             assert np.allclose(newasetOut[idx], array10)
     wco.close()
+
+
+def test_writer_co_read_ellipses_select_aset_single_sample(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+
+    o = wco[..., 0]
+    assert 'writtenaset' in o._fields
+    assert 'newaset' in o._fields
+    assert np.allclose(o.writtenaset, array5by7)
+    assert np.allclose(o.newaset, array10)
+    wco.close()
+
+
+def test_writer_co_read_slice_select_aset_single_sample(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+
+    o = wco[:, 0]
+    assert 'writtenaset' in o._fields
+    assert 'newaset' in o._fields
+    assert np.allclose(o.writtenaset, array5by7)
+    assert np.allclose(o.newaset, array10)
+    wco.close()
+
+
+def test_writer_co_read_ellipses_select_aset_multiple_samples(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+
+    out = wco[..., [0, 1]]
+    assert len(out) == 2
+
+    o1 = out[0]
+    assert 'writtenaset' in o1._fields
+    assert 'newaset' in o1._fields
+    assert np.allclose(o1.writtenaset, array5by7)
+    assert np.allclose(o1.newaset, array10)
+
+    o2 = out[1]
+    assert 'writtenaset' in o2._fields
+    assert 'newaset' in o2._fields
+    assert np.allclose(o2.writtenaset, array5by7 + 1)
+    assert np.allclose(o2.newaset, array10 + 1)
+    wco.close()
+
+
+def test_writer_co_read_slice_select_aset_multiple_samples(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+
+    out = wco[:, [0, 1]]
+    assert len(out) == 2
+
+    o1 = out[0]
+    assert 'writtenaset' in o1._fields
+    assert 'newaset' in o1._fields
+    assert np.allclose(o1.writtenaset, array5by7)
+    assert np.allclose(o1.newaset, array10)
+
+    o2 = out[1]
+    assert 'writtenaset' in o2._fields
+    assert 'newaset' in o2._fields
+    assert np.allclose(o2.writtenaset, array5by7 + 1)
+    assert np.allclose(o2.newaset, array10 + 1)
+    wco.close()
+
+
+# -------------------------- Reader Checkout ----------------------------------
+
+
+def test_reader_co_read_single_aset_single_sample(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    assert np.allclose(rco['writtenaset', 0], array5by7)
+    assert np.allclose(rco['writtenaset', 1], array5by7 + 1)
+    assert np.allclose(rco['writtenaset', 2], array5by7 + 2)
+    rco.close()
+
+
+def test_reader_co_read_single_aset_multiple_samples(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    res = rco['writtenaset', [0, 1, 2]]
+    assert np.allclose(res[0], array5by7)
+    assert np.allclose(res[1], array5by7 + 1)
+    assert np.allclose(res[2], array5by7 + 2)
+    rco.close()
+
+
+def test_reader_co_read_multiple_aset_single_samples(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    res = rco[['writtenaset', 'newaset'], 0]
+    assert 'writtenaset' in res._fields
+    assert 'newaset' in res._fields
+    assert np.allclose(res[0], array5by7)
+    assert np.array_equal(res[0], res.writtenaset)
+    assert np.allclose(res[1], array10)
+    assert np.array_equal(res[1], res.newaset)
+
+    res = rco[['writtenaset', 'newaset'], 1]
+    assert 'writtenaset' in res._fields
+    assert 'newaset' in res._fields
+    assert np.allclose(res[0], array5by7 + 1)
+    assert np.array_equal(res[0], res.writtenaset)
+    assert np.allclose(res[1], array10 + 1)
+    assert np.array_equal(res[1], res.newaset)
+    rco.close()
+
+
+def test_reader_co_read_multtiple_aset_multiple_samples(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    res = rco[['writtenaset', 'newaset'], [0, 1]]
+    assert isinstance(res, list)
+    assert len(res) == 2
+
+    s0 = res[0]
+    assert isinstance(s0, tuple)
+    assert s0._fields == ('writtenaset', 'newaset')
+    assert np.allclose(s0.writtenaset, array5by7)
+    assert np.allclose(s0.newaset, array10)
+
+    s1 = res[1]
+    assert isinstance(s1, tuple)
+    assert s1._fields == ('writtenaset', 'newaset')
+    assert np.allclose(s1.writtenaset, array5by7 + 1)
+    assert np.allclose(s1.newaset, array10 + 1)
+    rco.close()
+
+
+def test_reader_co_read_fails_nonexistant_aset_name(written_repo, array5by7):
+    rco = written_repo.checkout()
+
+    with pytest.raises(KeyError):
+        _ = rco['doesnotexist', 0]
+    rco.close()
+
+
+def test_reader_co_read_fails_nonexistant_sample_name(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    with pytest.raises(KeyError):
+        _ = rco['doesnotexist', 124]
+    rco.close()
+
+
+def test_reader_co_get_read_returns_none_nonexistant_sample_name(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    out = rco.get('writtenaset', 124)
+    assert out is None
+    rco.close()
+
+
+def test_reader_co_read_in_context_manager_no_loop(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    with rco:
+        assert rco._is_conman is True
+        assert np.allclose(rco['writtenaset', '0'], array5by7)
+    rco.close()
+
+
+def test_reader_co_read_in_context_manager_many_samples_looping(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    with wco:
+        for idx in range(100):
+            array10[:] = idx
+            array5by7[:] = idx
+            wco[['writtenaset', 'newaset'], idx] = [array5by7, array10]
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    with rco:
+        writtenasetOut = rco['writtenaset', [i for i in range(100)]]
+        newasetOut = rco['newaset', [i for i in range(100)]]
+        for idx in range(100):
+            array10[:] = idx
+            array5by7[:] = idx
+            assert np.allclose(array5by7, rco['writtenaset', idx])
+            assert np.allclose(array10, rco['newaset', idx])
+
+            o = rco[['writtenaset', 'newaset'], idx]
+            assert np.allclose(o.writtenaset, array5by7)
+            assert np.allclose(o.newaset, array10)
+
+            assert np.allclose(writtenasetOut[idx], array5by7)
+            assert np.allclose(newasetOut[idx], array10)
+    rco.close()
+
+
+def test_reader_co_read_ellipses_select_aset_single_sample(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    o = rco[..., 0]
+    assert 'writtenaset' in o._fields
+    assert 'newaset' in o._fields
+    assert np.allclose(o.writtenaset, array5by7)
+    assert np.allclose(o.newaset, array10)
+    rco.close()
+
+
+def test_reader_co_read_slice_select_aset_single_sample(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    o = rco[:, 0]
+    assert 'writtenaset' in o._fields
+    assert 'newaset' in o._fields
+    assert np.allclose(o.writtenaset, array5by7)
+    assert np.allclose(o.newaset, array10)
+    rco.close()
+
+
+def test_reader_co_read_ellipses_select_aset_multiple_samples(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    out = rco[..., [0, 1]]
+    assert len(out) == 2
+
+    o1 = out[0]
+    assert 'writtenaset' in o1._fields
+    assert 'newaset' in o1._fields
+    assert np.allclose(o1.writtenaset, array5by7)
+    assert np.allclose(o1.newaset, array10)
+
+    o2 = out[1]
+    assert 'writtenaset' in o2._fields
+    assert 'newaset' in o2._fields
+    assert np.allclose(o2.writtenaset, array5by7 + 1)
+    assert np.allclose(o2.newaset, array10 + 1)
+    rco.close()
+
+
+def test_reader_co_read_slice_select_aset_multiple_samples(written_repo, array5by7):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    array10[:] = 0
+    wco.arraysets['newaset'][0] = array10
+    wco.arraysets['newaset'][1] = array10 + 1
+    wco.arraysets['newaset'][2] = array10 + 2
+    wco.commit('first')
+    wco.close()
+
+    rco = written_repo.checkout()
+    out = rco[:, [0, 1]]
+    assert len(out) == 2
+
+    o1 = out[0]
+    assert 'writtenaset' in o1._fields
+    assert 'newaset' in o1._fields
+    assert np.allclose(o1.writtenaset, array5by7)
+    assert np.allclose(o1.newaset, array10)
+
+    o2 = out[1]
+    assert 'writtenaset' in o2._fields
+    assert 'newaset' in o2._fields
+    assert np.allclose(o2.writtenaset, array5by7 + 1)
+    assert np.allclose(o2.newaset, array10 + 1)
+    rco.close()
