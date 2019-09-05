@@ -40,7 +40,7 @@ def repo(managed_tmpdir) -> Repository:
 @pytest.fixture()
 def written_repo(repo):
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='_aset', shape=(5, 7), dtype=np.float64)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -50,7 +50,7 @@ def written_repo(repo):
 def repo_with_20_samples(written_repo, array5by7):
     co = written_repo.checkout(write=True)
     second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7)
-    first_aset = co.arraysets['_aset']
+    first_aset = co.arraysets['writtenaset']
     for i in range(20):
         array5by7[:] = i
         first_aset[str(i)] = array5by7
@@ -77,7 +77,7 @@ def repo_with_10000_samples(request, written_repo, array5by7):
 @pytest.fixture()
 def variable_shape_written_repo(repo):
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='_aset', shape=(10, 10), dtype=np.float64, variable_shape=True)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -105,12 +105,12 @@ def randomsizedarray():
 @pytest.fixture()
 def written_two_cmt_repo(repo, array5by7):
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='_aset', shape=(5, 7), dtype=np.float32)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(2):
         if cIdx != 0:
             co = repo.checkout(write=True)
 
-        with co.arraysets['_aset'] as d:
+        with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range((cIdx + 1) * 5):

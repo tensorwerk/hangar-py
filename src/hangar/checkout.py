@@ -3,12 +3,12 @@ import os
 import weakref
 from contextlib import suppress
 from functools import partial
+from collections import namedtuple
 from uuid import uuid4
 
 import lmdb
 
 from .arrayset import Arraysets
-from .indexing import CheckoutIndexer
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
@@ -16,7 +16,7 @@ from .records import commiting, hashs, heads
 from .utils import cm_weakref_obj_proxy
 
 
-class ReaderCheckout(CheckoutIndexer):
+class ReaderCheckout(object):
     """Checkout the repository as it exists at a particular branch.
 
     If a commit hash is provided, it will take precedent over the branch name
@@ -67,7 +67,6 @@ class ReaderCheckout(CheckoutIndexer):
         commit : str
             specific commit hash to checkout
         """
-        super().__init__()
         self._commit_hash = commit
         self._repo_path = base_path
         self._labelenv = labelenv
@@ -75,6 +74,7 @@ class ReaderCheckout(CheckoutIndexer):
         self._hashenv = hashenv
         self._branchenv = branchenv
         self._refenv = refenv
+        self._is_conman = False
 
         self._metadata = MetadataReader(
             mode='r',
@@ -112,6 +112,13 @@ class ReaderCheckout(CheckoutIndexer):
               f'commit={self._commit_hash})'
         return res
 
+    def __enter__(self):
+        self._is_conman = True
+        return self
+
+    def __exit__(self, *exc):
+        self._is_conman = False
+
     def __verify_checkout_alive(self):
         """Validates that the checkout object has not been closed
 
@@ -127,8 +134,235 @@ class ReaderCheckout(CheckoutIndexer):
                 f'closed. No operation occurred. Please use a new checkout.')
             raise e from None
 
-    def __setitem__(self, index, value):
-        raise PermissionError('Read only checkout cannot set values')
+    def __getitem__(self, index):
+        """Dictionary style access to arraysets and samples
+
+        Checkout object can be thought of as a "dataset" ("dset") mapping a
+        view of samples across arraysets.
+
+            >>> dset = repo.checkout(branch='master')
+
+        Get an arrayset contained in the checkout.
+
+            >>> dset['foo']
+            ArraysetDataReader
+
+        Get a specific sample from ``'foo'`` (returns a single array)
+
+            >>> dset['foo', '1']
+            np.array([1])
+
+        Get multiple samples from ``'foo'`` (retuns a list of arrays, in order
+        of input keys)
+
+            >>> dset['foo', ['1', '2', '324']]
+            [np.array([1]), np.ndarray([2]), np.ndarray([324])]
+
+        Get sample from multiple arraysets (returns namedtuple of arrays, field
+        names = arrayset names)
+
+            >>> dset[('foo', 'bar', 'baz'), '1']
+            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
+
+        Get multiple samples from multiple arraysets(returns list of namedtuple
+        of array sorted in input key order, field names = arrayset names)
+
+            >>> dset[('foo', 'bar'), ('1', '2')]
+            [ArraysetData(foo=array([1]), bar=array([11])),
+             ArraysetData(foo=array([2]), bar=array([22]))]
+
+        Get samples from all arraysets (shortcut syntax)
+
+            >>> out = dset[:, ('1', '2')]
+            >>> out = dset[..., ('1', '2')]
+            >>> out
+            [ArraysetData(foo=array([1]), bar=array([11]), baz=array([111])),
+             ArraysetData(foo=array([2]), bar=array([22]), baz=array([222]))]
+
+            >>> out = dset[:, '1']
+            >>> out = dset[..., '1']
+            >>> out
+            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
+
+        Parameters
+        ----------
+        index
+            Please see detailed explanation above for full options. Hard coded
+            options are the order to specification.
+
+            The first element (or collection) specified must be ``str`` type and
+            correspond to an arrayset name(s). Alternativly the Ellipsis operator
+            (``...``) or unbounded slice operator (``:`` <==> ``slice(None)``) can
+            be used to indicate "select all" behavior.
+
+            If a second element (or collection) is present, the keys correspond to
+            sample names present within (all) the specified arraysets. If a key is
+            not present in even on arrayset, the entire ``get`` operation will
+            abort with ``KeyError``. If desired, the same selection syntax can be
+            used with the :meth:`~hangar.checkout.ReaderCheckout.get` method, which
+            will not Error in these situations, but simply return ``None`` values
+            in the appropriate position for keys which do not exist.
+
+        Returns
+        -------
+        Arrayset
+            single arrayset parameter, no samples specified
+
+        np.ndarray
+            Single arrayset specified, single sample key specified
+
+        List[np.ndarray]
+            Single arrayset, multiple samples array data for each sample is
+            returned in same order sample keys are recieved.
+
+        List[NamedTuple[*np.ndarray]]
+            Multiple arraysets, multiple samples. Each arrayset's name is used
+            as a field in the NamedTuple elements, each NamedTuple contains
+            arrays stored in each arrayset via a common sample key. Each sample
+            key is returned values as an individual element in the
+            List. The sample order is returned in the same order it wasw recieved.
+
+
+        Notes
+        -----
+
+        *  All specified arraysets must exist
+
+        *  All specified sample `keys` must exist in all specified arraysets,
+           otherwise standard exception thrown
+
+        *  Slice syntax cannot be used in sample `keys` field
+
+        *  Slice syntax for arrayset field cannot specify `start`, `stop`, or
+           `step` fields, it is soley a shortcut syntax for 'get all arraysets' in
+           the ``:`` or ``slice(None)`` form
+
+        .. seealso:
+
+            :meth:`~hangar.checkout.ReaderCheckout.get`
+
+        """
+        try:
+            tmpconman = not self._is_conman
+            if tmpconman:
+                self.__verify_checkout_alive()
+                self.__enter__()
+
+            if isinstance(index, str):
+                return self.arraysets[index]
+            elif not isinstance(index, (tuple, list)):
+                raise TypeError(f'Unknown index: {index} type: {type(index)}')
+            if len(index) > 2:
+                raise ValueError(f'index of len > 2 not allowed: {index}')
+
+            arraysets, samples = index
+            return self.get(arraysets, samples, except_missing=True)
+
+        finally:
+            if tmpconman:
+                self.__exit__()
+
+    def get(self, arraysets, samples, *, except_missing=False):
+        """View of sample data across arraysets gracefully handeling missing sample keys.
+
+        Please see :meth:`__getitem__` for full description. This method is
+        identical with a single exception: if a sample key is not present in an
+        arrayset, this method will plane a null ``None`` value in it's return
+        slot rather than throwing a ``KeyError`` like the dict style access
+        does.
+
+        Parameters
+        ----------
+        arraysets: Union[str, Iterable[str], Ellipses, slice(None)]
+
+            Name(s) of the arraysets to query. The Ellipsis operator (``...``)
+            or unbounded slice operator (``:`` <==> ``slice(None)``) can be
+            used to indicate "select all" behavior.
+
+        samples: Union[str, int, Iterable[Union[str, int]]]
+
+            Names(s) of the samples to query
+
+        except_missing: bool, **KWARG ONLY
+
+            If False, will not throw exceptions on missing sample key value.
+            Will raise KeyError if True and missing key found.
+
+        Returns
+        -------
+        Arrayset
+            single arrayset parameter, no samples specified
+
+        np.ndarray
+            Single arrayset specified, single sample key specified
+
+        List[np.ndarray]
+            Single arrayset, multiple samples array data for each sample is
+            returned in same order sample keys are recieved.
+
+        List[NamedTuple[*np.ndarray]]
+            Multiple arraysets, multiple samples. Each arrayset's name is used
+            as a field in the NamedTuple elements, each NamedTuple contains
+            arrays stored in each arrayset via a common sample key. Each sample
+            key is returned values as an individual element in the
+            List. The sample order is returned in the same order it wasw recieved.
+
+        """
+        try:
+            tmpconman = not self._is_conman
+            if tmpconman:
+                self.__verify_checkout_alive()
+                self.__enter__()
+
+            # Arrayset Parsing
+            if (arraysets is (Ellipsis, slice)):
+                arraysets = list(self._arraysets._arraysets.values())
+            elif isinstance(arraysets, str):
+                arraysets = [self._arraysets._arraysets[arraysets]]
+            elif isinstance(arraysets, (tuple, list)):
+                arraysets = [self._arraysets._arraysets[aname] for aname in arraysets]
+            else:
+                raise TypeError(f'Arraysets: {arraysets} type: {type(arraysets)}')
+            nAsets = len(arraysets)
+            ArraysetData = namedtuple('ArraysetData', [aset.name for aset in arraysets])
+
+            # Sample Parsing
+            if isinstance(samples, (str, int)):
+                samples = [samples]
+            elif not isinstance(samples, (tuple, list)):
+                raise TypeError(f'Samples idx: {samples} type: {type(samples)}')
+            nSamples = len(samples)
+
+            # Data Retrieval
+            asetsSamplesData = []
+            for aset in arraysets:
+                aset_samples = []
+                for sample in samples:
+                    try:
+                        arr = aset.get(sample)
+                    except KeyError as e:
+                        if except_missing:
+                            raise e
+                        arr = None
+                    aset_samples.append(arr)
+                if nAsets == 1:
+                    asetsSamplesData = aset_samples
+                    if nSamples == 1:
+                        asetsSamplesData = asetsSamplesData[0]
+                    break
+                asetsSamplesData.append(aset_samples)
+            else:  # N.B. for-else conditional (ie. 'no break')
+                tmp = map(ArraysetData._make, zip(*asetsSamplesData))
+                asetsSamplesData = list(tmp)
+                if len(asetsSamplesData) == 1:
+                    asetsSamplesData = asetsSamplesData[0]
+
+            return asetsSamplesData
+
+        finally:
+            if tmpconman:
+                self.__exit__()
+
 
     @property
     def arraysets(self) -> Arraysets:
@@ -229,9 +463,13 @@ class ReaderCheckout(CheckoutIndexer):
                 # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
                 delattr(self._metadata, f'_self_{attr}')
 
-        del self._arraysets
-        del self._metadata
-        del self._differ
+        with suppress(AttributeError):
+            del self._arraysets
+        with suppress(AttributeError):
+            del self._metadata
+        with suppress(AttributeError):
+            del self._differ
+
         del self._commit_hash
         del self._repo_path
         del self._labelenv
@@ -247,7 +485,7 @@ class ReaderCheckout(CheckoutIndexer):
 # --------------- Write enabled checkout ---------------------------------------
 
 
-class WriterCheckout(CheckoutIndexer):
+class WriterCheckout(object):
     """Checkout the repository at the head of a given branch for writing.
 
     This is the entry point for all writing operations to the repository, the
@@ -312,7 +550,7 @@ class WriterCheckout(CheckoutIndexer):
         mode : str, optional
             open in write or read only mode, default is 'a' which is write-enabled.
         """
-        super().__init__()
+        self._is_conman = False
         self._repo_path = repo_pth
         self._branch_name = branch_name
         self._writer_lock = str(uuid4())
@@ -352,6 +590,465 @@ class WriterCheckout(CheckoutIndexer):
               f'stageenv={self._stageenv} '\
               f'branchenv={self._branchenv})\n'
         return res
+
+    def __enter__(self):
+        self.__acquire_writer_lock()
+        self._is_conman = True
+        self.arraysets.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        self._is_conman = False
+        self.arraysets.__exit__(*exc)
+
+    def __acquire_writer_lock(self):
+        """Ensures that this class instance holds the writer lock in the database.
+
+        Raises
+        ------
+        PermissionError
+            If the checkout was previously closed (no :attr:``_writer_lock``) or if
+            the writer lock value does not match that recorded in the branch db
+        """
+        try:
+            self._writer_lock
+        except AttributeError:
+            with suppress(AttributeError):
+                del self._arraysets
+            with suppress(AttributeError):
+                del self._metadata
+            with suppress(AttributeError):
+                del self._differ
+            err = f'Unable to operate on past checkout objects which have been '\
+                  f'closed. No operation occurred. Please use a new checkout.'
+            raise PermissionError(err) from None
+
+        try:
+            heads.acquire_writer_lock(self._branchenv, self._writer_lock)
+        except PermissionError as e:
+            with suppress(AttributeError):
+                del self._arraysets
+            with suppress(AttributeError):
+                del self._metadata
+            with suppress(AttributeError):
+                del self._differ
+            raise e from None
+
+    def __setup(self):
+        """setup the staging area appropriately for a write enabled checkout.
+
+        On setup, we cannot be sure what branch the staging area was previously
+        checked out on, and we cannot be sure if there are any 'uncommitted
+        changes' in the staging area (ie. the staging area is ``DIRTY``). The
+        setup methods here ensure that we can safety make any changes to the
+        staging area without overwriting uncommitted changes, and then perform
+        the setup steps to checkout staging area state at that point in time.
+
+        Raises
+        ------
+        ValueError
+            if there are changes previously made in the staging area which were
+            based on one branch's ``HEAD``, but a different branch was specified to
+            be used for the base of this checkout.
+        """
+        self.__acquire_writer_lock()
+        current_head = heads.get_staging_branch_head(self._branchenv)
+        currentDiff = WriterUserDiff(stageenv=self._stageenv,
+                                     refenv=self._refenv,
+                                     branchenv=self._branchenv,
+                                     branch_name=current_head)
+        if currentDiff.status() == 'DIRTY':
+            if current_head != self._branch_name:
+                e = ValueError(
+                    f'Unable to check out branch: {self._branch_name} for writing '
+                    f'as the staging area has uncommitted changes on branch: '
+                    f'{current_head}. Please commit or stash uncommitted changes '
+                    f'before checking out a different branch for writing.')
+                self.close()
+                raise e
+        else:
+            if current_head != self._branch_name:
+                cmt = heads.get_branch_head_commit(
+                    branchenv=self._branchenv, branch_name=self._branch_name)
+                commiting.replace_staging_area_with_commit(
+                    refenv=self._refenv, stageenv=self._stageenv, commit_hash=cmt)
+                heads.set_staging_branch_head(
+                    branchenv=self._branchenv, branch_name=self._branch_name)
+
+        self._metadata = MetadataWriter(
+            mode='a',
+            repo_pth=self._repo_path,
+            dataenv=self._stageenv,
+            labelenv=self._labelenv)
+        self._arraysets = Arraysets._from_staging_area(
+            repo_pth=self._repo_path,
+            hashenv=self._hashenv,
+            stageenv=self._stageenv,
+            stagehashenv=self._stagehashenv)
+        self._differ = WriterUserDiff(
+            stageenv=self._stageenv,
+            refenv=self._refenv,
+            branchenv=self._branchenv,
+            branch_name=self._branch_name)
+
+    def __getitem__(self, index):
+        """Dictionary style access to arraysets and samples
+
+        Checkout object can be thought of as a "dataset" ("dset") mapping a
+        view of samples across arraysets.
+
+            >>> dset = repo.checkout(branch='master')
+
+        Get an arrayset contained in the checkout.
+
+            >>> dset['foo']
+            ArraysetDataReader
+
+        Get a specific sample from ``'foo'`` (returns a single array)
+
+            >>> dset['foo', '1']
+            np.array([1])
+
+        Get multiple samples from ``'foo'`` (retuns a list of arrays, in order
+        of input keys)
+
+            >>> dset['foo', ['1', '2', '324']]
+            [np.array([1]), np.ndarray([2]), np.ndarray([324])]
+
+        Get sample from multiple arraysets (returns namedtuple of arrays, field
+        names = arrayset names)
+
+            >>> dset[('foo', 'bar', 'baz'), '1']
+            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
+
+        Get multiple samples from multiple arraysets(returns list of namedtuple
+        of array sorted in input key order, field names = arrayset names)
+
+            >>> dset[('foo', 'bar'), ('1', '2')]
+            [ArraysetData(foo=array([1]), bar=array([11])),
+             ArraysetData(foo=array([2]), bar=array([22]))]
+
+        Get samples from all arraysets (shortcut syntax)
+
+            >>> out = dset[:, ('1', '2')]
+            >>> out = dset[..., ('1', '2')]
+            >>> out
+            [ArraysetData(foo=array([1]), bar=array([11]), baz=array([111])),
+             ArraysetData(foo=array([2]), bar=array([22]), baz=array([222]))]
+
+            >>> out = dset[:, '1']
+            >>> out = dset[..., '1']
+            >>> out
+            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
+
+        Parameters
+        ----------
+        index
+            Please see detailed explanation above for full options.
+
+            The first element (or collection) specified must be ``str`` type and
+            correspond to an arrayset name(s). Alternativly the Ellipsis operator
+            (``...``) or unbounded slice operator (``:`` <==> ``slice(None)``) can
+            be used to indicate "select all" behavior.
+
+            If a second element (or collection) is present, the keys correspond to
+            sample names present within (all) the specified arraysets. If a key is
+            not present in even on arrayset, the entire ``get`` operation will
+            abort with ``KeyError``. If desired, the same selection syntax can be
+            used with the :meth:`~hangar.checkout.WriterCheckout.get` method, which
+            will not Error in these situations, but simply return ``None`` values
+            in the appropriate position for keys which do not exist.
+
+        Returns
+        -------
+        Arrayset
+            single arrayset parameter, no samples specified
+
+        np.ndarray
+            Single arrayset specified, single sample key specified
+
+        List[np.ndarray]
+            Single arrayset, multiple samples array data for each sample is
+            returned in same order sample keys are recieved.
+
+        List[NamedTuple[*np.ndarray]]
+            Multiple arraysets, multiple samples. Each arrayset's name is used
+            as a field in the NamedTuple elements, each NamedTuple contains
+            arrays stored in each arrayset via a common sample key. Each sample
+            key is returned values as an individual element in the
+            List. The sample order is returned in the same order it wasw recieved.
+
+
+        Notes
+        -----
+
+        *  All specified arraysets must exist
+
+        *  All specified sample `keys` must exist in all specified arraysets,
+           otherwise standard exception thrown
+
+        *  Slice syntax cannot be used in sample `keys` field
+
+        *  Slice syntax for arrayset field cannot specify `start`, `stop`, or
+           `step` fields, it is soley a shortcut syntax for 'get all arraysets' in
+           the ``:`` or ``slice(None)`` form
+
+        .. seealso:
+
+            :meth:`~hangar.checkout.WriterCheckout.get`
+
+        """
+        try:
+            tmpconman = not self._is_conman
+            if tmpconman:
+                self.__acquire_writer_lock()
+                self.__enter__()
+
+            if isinstance(index, str):
+                return self.arraysets[index]
+            elif not isinstance(index, (tuple, list)):
+                raise TypeError(f'Unknown index: {index} type: {type(index)}')
+            if len(index) > 2:
+                raise ValueError(f'index of len > 2 not allowed: {index}')
+
+            arraysets, samples = index
+            return self.get(arraysets, samples, except_missing=True)
+
+        finally:
+            if tmpconman:
+                self.__exit__()
+
+    def get(self, arraysets, samples, *, except_missing=False):
+        """View of samples across arraysets which handles missing sample keys.
+
+        Please see :meth:`__getitem__` for full description. This method is
+        identical with a single exception: if a sample key is not present in an
+        arrayset, this method will plane a null ``None`` value in it's return
+        slot rather than throwing a ``KeyError`` like the dict style access
+        does.
+
+        Parameters
+        ----------
+        arraysets: Union[str, Iterable[str], Ellipses, slice(None)]
+
+            Name(s) of the arraysets to query. The Ellipsis operator (``...``)
+            or unbounded slice operator (``:`` <==> ``slice(None)``) can be
+            used to indicate "select all" behavior.
+
+        samples: Union[str, int, Iterable[Union[str, int]]]
+
+            Names(s) of the samples to query
+
+        except_missing: bool, **KWARG ONLY
+
+            If False, will not throw exceptions on missing sample key value.
+            Will raise KeyError if True and missing key found.
+
+        Returns
+        -------
+        Arrayset
+            single arrayset parameter, no samples specified
+
+        np.ndarray
+            Single arrayset specified, single sample key specified
+
+        List[np.ndarray]
+            Single arrayset, multiple samples array data for each sample is
+            returned in same order sample keys are recieved.
+
+        List[NamedTuple[*np.ndarray]]
+            Multiple arraysets, multiple samples. Each arrayset's name is used
+            as a field in the NamedTuple elements, each NamedTuple contains
+            arrays stored in each arrayset via a common sample key. Each sample
+            key is returned values as an individual element in the
+            List. The sample order is returned in the same order it wasw recieved.
+
+        """
+        try:
+            tmpconman = not self._is_conman
+            if tmpconman:
+                self.__acquire_writer_lock()
+                self.__enter__()
+
+            # Arrayset Parsing
+            if (arraysets is (Ellipsis, slice)):
+                arraysets = list(self._arraysets._arraysets.values())
+            elif isinstance(arraysets, str):
+                arraysets = [self._arraysets._arraysets[arraysets]]
+            elif isinstance(arraysets, (tuple, list)):
+                arraysets = [self._arraysets._arraysets[aname] for aname in arraysets]
+            else:
+                raise TypeError(f'Arraysets: {arraysets} type: {type(arraysets)}')
+            nAsets = len(arraysets)
+            ArraysetData = namedtuple('ArraysetData', [aset.name for aset in arraysets])
+
+            # Sample Parsing
+            if isinstance(samples, (str, int)):
+                samples = [samples]
+            elif not isinstance(samples, (tuple, list)):
+                raise TypeError(f'Samples idx: {samples} type: {type(samples)}')
+            nSamples = len(samples)
+
+            # Data Retrieval
+            asetsSamplesData = []
+            for aset in arraysets:
+                aset_samples = []
+                for sample in samples:
+                    try:
+                        arr = aset.get(sample)
+                    except KeyError as e:
+                        if except_missing:
+                            raise e
+                        arr = None
+                    aset_samples.append(arr)
+                if nAsets == 1:
+                    asetsSamplesData = aset_samples
+                    if nSamples == 1:
+                        asetsSamplesData = asetsSamplesData[0]
+                    break
+                asetsSamplesData.append(aset_samples)
+            else:  # N.B. for-else conditional (ie. 'no break')
+                tmp = map(ArraysetData._make, zip(*asetsSamplesData))
+                asetsSamplesData = list(tmp)
+                if len(asetsSamplesData) == 1:
+                    asetsSamplesData = asetsSamplesData[0]
+
+            return asetsSamplesData
+
+        finally:
+            if tmpconman:
+                self.__exit__()
+
+    def __setitem__(self, index, value):
+        """Syntax for setting items.
+
+        Checkout object can be thought of as a "dataset" ("dset") mapping a view
+        of samples across arraysets:
+
+            >>> dset = repo.checkout(branch='master', write=True)
+
+        Add single sample to single arrayset
+
+            >>> dset['foo', 1] = np.array([1])
+            >>> dset['foo', 1]
+            array([1])
+
+        Add multiple samples to single arrayset
+
+            >>> dset['foo', [1, 2, 3]] = [np.array([1]), np.array([2]), np.array([3])]
+            >>> dset['foo', [1, 2, 3]]
+            [array([1]), array([2]), array([3])]
+
+        Add single sample to multiple arraysets
+
+            >>> dset[['foo', 'bar'], 1] = [np.array([1]), np.array([11])]
+            >>> dset[:, 1]
+            ArraysetData(foo=array([1]), bar=array([11]))
+
+        Parameters
+        ----------
+        index: Union[Iterable[str], Iterable[str, int]]
+            Please see detailed explanation above for full options.The first
+            element (or collection) specified must be ``str`` type and correspond
+            to an arrayset name(s). The second element (or collection) are keys
+            corresponding to sample names which the data should be written to.
+
+            Unlike the :meth:`__getitem__` method, only ONE of the ``arrayset``
+            name(s) or ``sample`` key(s) can specify multiple elements at the same
+            time. Ie. If multiple ``arraysets`` are specified, only one sample key
+            can be set, likewise if multiple ``samples`` are specified, only one
+            ``arrayset`` can be specified. When specifying multiple ``arraysets``
+            or ``samples``, each data piece to be stored must reside as individual
+            elements (``np.ndarray``) in a List or Tuple. The number of keys and
+            the number of values must match exactally.
+
+        values: Union[np.ndarray, Iterable[np.ndarray]]
+            Data to store in the specified arraysets/sample keys. When
+            specifying multiple ``arraysets`` or ``samples``, each data piece
+            to be stored must reside as individual elements (``np.ndarray``) in
+            a List or Tuple. The number of keys and the number of values must
+            match exactally.
+
+
+        Notes
+        -----
+
+        *  No slicing syntax is supported for either arraysets or samples. This
+           is in order to ensure explicit setting of values in the desired
+           fields/keys
+
+        *  Add multiple samples to multiple arraysets not yet supported.
+
+        """
+        try:
+            tmpconman = not self._is_conman
+            if tmpconman:
+                self.__acquire_writer_lock()
+                self.__enter__()
+
+            if not isinstance(index, (tuple, list)):
+                raise ValueError(f'Idx: {index} does not specify arrayset(s) AND sample(s)')
+            elif len(index) > 2:
+                raise ValueError(f'Index of len > 2 invalid. To multi-set, pass in lists')
+            asetsIdx, sampleNames = index
+
+            # Parse Arraysets
+            if isinstance(asetsIdx, str):
+                asets = [self._arraysets._arraysets[asetsIdx]]
+            elif isinstance(asetsIdx, (tuple, list)):
+                asets = [self._arraysets._arraysets[aidx] for aidx in asetsIdx]
+            else:
+                raise TypeError(f'Arrayset idx: {asetsIdx} of type: {type(asetsIdx)}')
+            nAsets = len(asets)
+
+            # Parse sample names
+            if isinstance(sampleNames, (str, int)):
+                sampleNames = [sampleNames]
+            elif not isinstance(sampleNames, (list, tuple)):
+                raise TypeError(f'Sample names: {sampleNames} type: {type(sampleNames)}')
+            nSamples = len(sampleNames)
+
+            # Verify asets
+            if (nAsets > 1) and (nSamples > 1):
+                raise SyntaxError(
+                    'Not allowed to specify BOTH multiple samples AND multiple'
+                    'arraysets in `set` operation in current Hangar implementation')
+
+            elif (nAsets == 1) and (nSamples == 1):
+                for aset in asets:
+                    for sampleName in sampleNames:
+                        aset[sampleName] = value
+
+            elif nAsets >= 2:
+                if not isinstance(value, (list, tuple)):
+                    raise TypeError(f'Value: {value} not list/tuple of np.ndarray')
+                elif not (len(value) == nAsets):
+                    raise ValueError(f'Num values: {len(value)} != num arraysets {nAsets}')
+                for aset, val in zip(asets, value):
+                    isCompat = aset._verify_array_compatible(val)
+                    if not isCompat.compatible:
+                        raise ValueError(isCompat.reason)
+                for sampleName in sampleNames:
+                    for aset, val in zip(asets, value):
+                        aset[sampleName] = val
+
+            else:  # nSamples >= 2
+                if not isinstance(value, (list, tuple)):
+                    raise TypeError(f'Value: {value} not list/tuple of np.ndarray')
+                elif not (len(value) == nSamples):
+                    raise ValueError(f'Num values: {len(value)} != num samples {nSamples}')
+                for aset in asets:
+                    for val in value:
+                        isCompat = aset._verify_array_compatible(val)
+                        if not isCompat.compatible:
+                            raise ValueError(isCompat.reason)
+                for aset in asets:
+                    for sampleName, val in zip(sampleNames, value):
+                        aset[sampleName] = val
+                return None
+        finally:
+            if tmpconman:
+                self.__exit__()
 
     @property
     def arraysets(self) -> Arraysets:
@@ -491,96 +1188,6 @@ class WriterCheckout(CheckoutIndexer):
             branch_name=self._branch_name)
 
         return commit_hash
-
-    def __acquire_writer_lock(self):
-        """Ensures that this class instance holds the writer lock in the database.
-
-        Raises
-        ------
-        PermissionError
-            If the checkout was previously closed (no :attr:``_writer_lock``) or if
-            the writer lock value does not match that recorded in the branch db
-        """
-        try:
-            self._writer_lock
-        except AttributeError:
-            with suppress(AttributeError):
-                del self._arraysets
-            with suppress(AttributeError):
-                del self._metadata
-            with suppress(AttributeError):
-                del self._differ
-            err = f'Unable to operate on past checkout objects which have been '\
-                  f'closed. No operation occurred. Please use a new checkout.'
-            raise PermissionError(err) from None
-
-        try:
-            heads.acquire_writer_lock(self._branchenv, self._writer_lock)
-        except PermissionError as e:
-            with suppress(AttributeError):
-                del self._arraysets
-            with suppress(AttributeError):
-                del self._metadata
-            with suppress(AttributeError):
-                del self._differ
-            raise e from None
-
-    def __setup(self):
-        """setup the staging area appropriately for a write enabled checkout.
-
-        On setup, we cannot be sure what branch the staging area was previously
-        checked out on, and we cannot be sure if there are any `uncommitted
-        changes` in the staging area (ie. the staging area is `DIRTY`). The
-        setup methods here ensure that we can safety make any changes to the
-        staging area without overwriting uncommitted changes, and then perform
-        the setup steps to checkout staging area state at that point in time.
-
-        Raises
-        ------
-        ValueError
-            if there are changes previously made in the staging area which were
-            based on one branch's ``HEAD``, but a different branch was specified to
-            be used for the base of this checkout.
-        """
-        self.__acquire_writer_lock()
-        current_head = heads.get_staging_branch_head(self._branchenv)
-        currentDiff = WriterUserDiff(stageenv=self._stageenv,
-                                     refenv=self._refenv,
-                                     branchenv=self._branchenv,
-                                     branch_name=current_head)
-        if currentDiff.status() == 'DIRTY':
-            if current_head != self._branch_name:
-                e = ValueError(
-                    f'Unable to check out branch: {self._branch_name} for writing '
-                    f'as the staging area has uncommitted changes on branch: '
-                    f'{current_head}. Please commit or stash uncommitted changes '
-                    f'before checking out a different branch for writing.')
-                self.close()
-                raise e
-        else:
-            if current_head != self._branch_name:
-                cmt = heads.get_branch_head_commit(
-                    branchenv=self._branchenv, branch_name=self._branch_name)
-                commiting.replace_staging_area_with_commit(
-                    refenv=self._refenv, stageenv=self._stageenv, commit_hash=cmt)
-                heads.set_staging_branch_head(
-                    branchenv=self._branchenv, branch_name=self._branch_name)
-
-        self._metadata = MetadataWriter(
-            mode='a',
-            repo_pth=self._repo_path,
-            dataenv=self._stageenv,
-            labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_staging_area(
-            repo_pth=self._repo_path,
-            hashenv=self._hashenv,
-            stageenv=self._stageenv,
-            stagehashenv=self._stagehashenv)
-        self._differ = WriterUserDiff(
-            stageenv=self._stageenv,
-            refenv=self._refenv,
-            branchenv=self._branchenv,
-            branch_name=self._branch_name)
 
     def commit(self, commit_message: str) -> str:
         """Commit the changes made in the staging area on the checkout branch.

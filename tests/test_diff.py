@@ -326,7 +326,7 @@ class TestReaderDiff(object):
         repo = written_repo
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='testbranch')
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         aset2 = co.arraysets.init_arrayset('aset2', prototype=array5by7)
         aset2[1] = array5by7
         with aset, co.metadata:
@@ -337,13 +337,13 @@ class TestReaderDiff(object):
             co.commit('another commit inside cm')
         co.close()
         co = repo.checkout(branch='testbranch')
-        assert np.allclose(co.arraysets['_aset'][101], array5by7)
+        assert np.allclose(co.arraysets['writtenaset'][101], array5by7)
         diff = co.diff.branch('master').diff
         assert create_meta_nt('crazykey') in diff.added.metadata.keys()
         assert 'aset2' in diff.added.schema.keys()
         calledWithAset = False
         for record in diff.added.samples:
-            if record.aset_name == '_aset':
+            if record.aset_name == 'writtenaset':
                 calledWithAset = True
                 assert record.data_name in [100, 101]
         assert calledWithAset is True
@@ -371,12 +371,12 @@ class TestWriterDiff(object):
             co.diff.status()  # Read checkout doesn't have status()
 
         co = repo.checkout(write=True)
-        co.arraysets['_aset']['45'] = dummyData
+        co.arraysets['writtenaset']['45'] = dummyData
         assert co.diff.status() == 'DIRTY'
         diff = co.diff.staged().diff
         calledWithAset = False
         for record in diff.added.samples:
-            if record.aset_name == '_aset':
+            if record.aset_name == 'writtenaset':
                 calledWithAset = True
                 assert record.data_name in '45'
         assert calledWithAset is True

@@ -16,14 +16,14 @@ class TestArrayset(object):
         assert isinstance(co, hangar.checkout.ReaderCheckout)
         assert co.arraysets.init_arrayset is None
         assert co.arraysets.remove_aset is None
-        assert len(co.arraysets['_aset']) == 0
+        assert len(co.arraysets['writtenaset']) == 0
         co.close()
 
     def test_get_arrayset(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
 
         # getting the arrayset with `get`
-        asetOld = co.arraysets.get('_aset')
+        asetOld = co.arraysets.get('writtenaset')
         asetOldPath = asetOld._path
         asetOldAsetn = asetOld._asetn
         asetOldDefaultSchemaHash = asetOld._default_schema_hash
@@ -32,10 +32,10 @@ class TestArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        print(co.arraysets['_aset'].__dict__)
+        print(co.arraysets['writtenaset'].__dict__)
 
         # getting arrayset with dictionary like style method
-        asetNew = co.arraysets['_aset']
+        asetNew = co.arraysets['writtenaset']
 
         assert np.allclose(asetNew['1'], array5by7)
         assert asetOldPath == asetNew._path
@@ -46,25 +46,25 @@ class TestArrayset(object):
     @pytest.mark.parametrize("aset_backend", ['00', '10'])
     def test_remove_arrayset(self, aset_backend, written_repo):
         co = written_repo.checkout(write=True)
-        co.arraysets.remove_aset('_aset')
+        co.arraysets.remove_aset('writtenaset')
         with pytest.raises(KeyError):
-            co.arraysets.remove_aset('_aset')
+            co.arraysets.remove_aset('writtenaset')
 
-        co.arraysets.init_arrayset(name='_aset', shape=(5, 7), dtype=np.float64, backend=aset_backend)
+        co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64, backend=aset_backend)
         assert len(co.arraysets) == 1
-        co.arraysets.remove_aset('_aset')
+        co.arraysets.remove_aset('writtenaset')
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout(write=True)
         assert len(co.arraysets) == 0
 
-        co.arraysets.init_arrayset(name='_aset', shape=(5, 7), dtype=np.float64, backend=aset_backend)
+        co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64, backend=aset_backend)
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout(write=True)
         assert len(co.arraysets) == 1
-        del co.arraysets['_aset']
+        del co.arraysets['writtenaset']
         assert len(co.arraysets) == 0
         co.commit('this is a commit message')
         co.close()
@@ -185,17 +185,17 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_get_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset']['1'] = array5by7
+        co.arraysets['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        print(list(co.arraysets['_aset'].keys()))
-        assert np.allclose(co.arraysets['_aset']['1'], co.arraysets.get('_aset').get('1'), array5by7)
+        print(list(co.arraysets['writtenaset'].keys()))
+        assert np.allclose(co.arraysets['writtenaset']['1'], co.arraysets.get('writtenaset').get('1'), array5by7)
         co.close()
 
     def test_add_data_str_keys(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(KeyError):
             aset['somerandomkey']
 
@@ -204,13 +204,13 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        assert np.allclose(co.arraysets['_aset']['1'], array5by7)
-        assert np.allclose(co.arraysets['_aset']['2'], array5by7)
+        assert np.allclose(co.arraysets['writtenaset']['1'], array5by7)
+        assert np.allclose(co.arraysets['writtenaset']['2'], array5by7)
         co.close()
 
     def test_add_data_int_keys(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
 
         aset[1] = array5by7
         secondArray = array5by7 + 1
@@ -218,31 +218,31 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        assert np.allclose(co.arraysets['_aset'][1], array5by7)
-        assert np.allclose(co.arraysets['_aset'][2], secondArray)
+        assert np.allclose(co.arraysets['writtenaset'][1], array5by7)
+        assert np.allclose(co.arraysets['writtenaset'][2], secondArray)
         co.close()
 
     def test_cannot_add_data_negative_int_key(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(ValueError):
             aset[-1] = array5by7
-        assert len(co.arraysets['_aset']) == 0
+        assert len(co.arraysets['writtenaset']) == 0
         co.close()
 
     def test_cannot_add_data_float_key(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(ValueError):
             aset[2.1] = array5by7
         with pytest.raises(ValueError):
             aset[0.0] = array5by7
-        assert len(co.arraysets['_aset']) == 0
+        assert len(co.arraysets['writtenaset']) == 0
         co.close()
 
     def test_add_data_mixed_int_str_keys(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
 
         aset[1] = array5by7
         newFirstArray = array5by7 + 1
@@ -254,27 +254,27 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        assert np.allclose(co.arraysets['_aset'][1], array5by7)
-        assert np.allclose(co.arraysets['_aset']['1'], newFirstArray)
-        assert np.allclose(co.arraysets['_aset'][2], secondArray)
-        assert np.allclose(co.arraysets['_aset']['2'], thirdArray)
+        assert np.allclose(co.arraysets['writtenaset'][1], array5by7)
+        assert np.allclose(co.arraysets['writtenaset']['1'], newFirstArray)
+        assert np.allclose(co.arraysets['writtenaset'][2], secondArray)
+        assert np.allclose(co.arraysets['writtenaset']['2'], thirdArray)
         co.close()
 
     def test_add_with_wrong_argument_order(self, w_checkout, array5by7):
-        aset = w_checkout.arraysets['_aset']
+        aset = w_checkout.arraysets['writtenaset']
         with pytest.raises(ValueError):
             aset.add('1', array5by7)
 
     def test_multiple_data_single_commit(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset'].add(array5by7, '1')
+        co.arraysets['writtenaset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
-        co.arraysets['_aset']['2'] = new_array
+        co.arraysets['writtenaset']['2'] = new_array
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         assert len(aset) == 2
         assert list(aset.keys()) == ['1', '2']
         assert np.allclose(aset['1'], array5by7)
@@ -282,20 +282,20 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_multiple_data_multiple_commit(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset'].add(array5by7, '1')
+        co.arraysets['writtenaset'].add(array5by7, '1')
         co.commit('this is a commit message')
         new_array = np.zeros_like(array5by7)
-        co.arraysets['_aset']['2'] = new_array
+        co.arraysets['writtenaset']['2'] = new_array
         co.close()
 
         new_new_array = new_array + 5
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset']['3'] = new_new_array
+        co.arraysets['writtenaset']['3'] = new_new_array
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         assert np.allclose(aset['1'], array5by7)
         assert np.allclose(aset['2'], new_array)
         assert np.allclose(aset['3'], new_new_array)
@@ -303,70 +303,70 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_added_but_not_commited(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset'].add(array5by7, '1')
+        co.arraysets['writtenaset'].add(array5by7, '1')
         co.close()
 
         with pytest.raises(PermissionError):
             co.commit('this is a commit message')
 
         co = written_repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(KeyError):
             aset['1']
         co.close()
 
     def test_remove_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset'].add(array5by7, '1')
+        co.arraysets['writtenaset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
-        co.arraysets['_aset']['2'] = new_array
-        co.arraysets['_aset']['3'] = new_array + 5
+        co.arraysets['writtenaset']['2'] = new_array
+        co.arraysets['writtenaset']['3'] = new_array + 5
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset'].remove('1')
-        del co.arraysets['_aset']['3']
+        co.arraysets['writtenaset'].remove('1')
+        del co.arraysets['writtenaset']['3']
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout()
         with pytest.raises(KeyError):
-            co.arraysets['_aset']['1']
+            co.arraysets['writtenaset']['1']
         with pytest.raises(KeyError):
-            co.arraysets['_aset']['3']
-        assert len(co.arraysets['_aset']) == 1
-        assert np.allclose(co.arraysets['_aset']['2'], new_array)
+            co.arraysets['writtenaset']['3']
+        assert len(co.arraysets['writtenaset']) == 1
+        assert np.allclose(co.arraysets['writtenaset']['2'], new_array)
         co.close()
 
     def test_remove_all_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset'].add(array5by7, '1')
+        co.arraysets['writtenaset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
-        co.arraysets['_aset']['2'] = new_array
+        co.arraysets['writtenaset']['2'] = new_array
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout(write=True)
-        co.arraysets['_aset'].remove('1')
-        co.arraysets['_aset'].remove('2')
+        co.arraysets['writtenaset'].remove('1')
+        co.arraysets['writtenaset'].remove('2')
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout()
         with pytest.raises(KeyError):
             # removal of all data removes the arrayset
-            co.arraysets['_aset']
+            co.arraysets['writtenaset']
         co.close()
 
         # recreating same and verifying
         co = written_repo.checkout(write=True)
-        co.arraysets.init_arrayset('_aset', prototype=array5by7)
-        co.arraysets['_aset']['1'] = array5by7
+        co.arraysets.init_arrayset('writtenaset', prototype=array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        assert np.allclose(co.arraysets['_aset']['1'], array5by7)
+        assert np.allclose(co.arraysets['writtenaset']['1'], array5by7)
         co.close()
 
     @pytest.mark.parametrize("aset1_backend", ['00', '10'])
@@ -524,8 +524,8 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_writer_arrayset_properties_are_correct(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
-        d = co.arraysets['_aset']
-        assert d.name == '_aset'
+        d = co.arraysets['writtenaset']
+        assert d.name == 'writtenaset'
         assert d.dtype == array5by7.dtype
         assert np.allclose(d.shape, array5by7.shape) is True
         assert d.variable_shape is False
@@ -535,8 +535,8 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_reader_arrayset_properties_are_correct(self, written_repo, array5by7):
         co = written_repo.checkout(write=False)
-        d = co.arraysets['_aset']
-        assert d.name == '_aset'
+        d = co.arraysets['writtenaset']
+        assert d.name == 'writtenaset'
         assert d.dtype == array5by7.dtype
         assert np.allclose(d.shape, array5by7.shape) is True
         assert d.variable_shape is False
@@ -668,8 +668,8 @@ class TestVariableSizedArrayset(object):
 
     def test_writer_arrayset_properties_are_correct(self, variable_shape_written_repo):
         co = variable_shape_written_repo.checkout(write=True)
-        d = co.arraysets['_aset']
-        assert d.name == '_aset'
+        d = co.arraysets['writtenaset']
+        assert d.name == 'writtenaset'
         assert d.dtype == np.float64
         assert np.allclose(d.shape, (10, 10))
         assert d.variable_shape is True
@@ -679,8 +679,8 @@ class TestVariableSizedArrayset(object):
 
     def test_reader_arrayset_properties_are_correct(self, variable_shape_written_repo):
         co = variable_shape_written_repo.checkout(write=False)
-        d = co.arraysets['_aset']
-        assert d.name == '_aset'
+        d = co.arraysets['writtenaset']
+        assert d.name == 'writtenaset'
         assert d.dtype == np.float64
         assert np.allclose(d.shape, (10, 10))
         assert d.variable_shape is True
@@ -697,12 +697,12 @@ class TestMultiprocessArraysetReads(object):
 
         masterCmtList = []
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset(name='_aset', shape=(20, 20), dtype=np.float32, backend=backend)
+        co.arraysets.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
         for cIdx in range(2):
             if cIdx != 0:
                 co = repo.checkout(write=True)
-            with co.arraysets['_aset'] as d:
+            with co.arraysets['writtenaset'] as d:
                 kstart = 20 * cIdx
                 for sIdx in range(20):
                     arr = np.random.randn(20, 20).astype(np.float32) * 100
@@ -717,7 +717,7 @@ class TestMultiprocessArraysetReads(object):
         cmtIdx = 0
         for cmt, sampList in masterCmtList:
             nco = repo.checkout(write=False, commit=cmt)
-            ds = nco.arraysets['_aset']
+            ds = nco.arraysets['writtenaset']
             keys = [str(i) for i in range(20 + (20*cmtIdx))]
             with get_context('spawn').Pool(2) as P:
                 cmtData = P.map(ds.get, keys)
@@ -730,12 +730,12 @@ class TestMultiprocessArraysetReads(object):
     def test_batch_get_multi_process_pool(self, repo, backend):
         masterCmtList = []
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset(name='_aset', shape=(20, 20), dtype=np.float32, backend=backend)
+        co.arraysets.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
         for cIdx in range(2):
             if cIdx != 0:
                 co = repo.checkout(write=True)
-            with co.arraysets['_aset'] as d:
+            with co.arraysets['writtenaset'] as d:
                 kstart = 20 * cIdx
                 for sIdx in range(20):
                     arr = np.random.randn(20, 20).astype(np.float32) * 100
@@ -750,7 +750,7 @@ class TestMultiprocessArraysetReads(object):
         cmtIdx = 0
         for cmt, sampList in masterCmtList:
             nco = repo.checkout(write=False, commit=cmt)
-            ds = nco.arraysets['_aset']
+            ds = nco.arraysets['writtenaset']
             keys = [str(i) for i in range(20 + (20*cmtIdx))]
             cmtData = ds.get_batch(keys, n_cpus=2)
             for data, sampData in zip(cmtData, sampList):
@@ -761,9 +761,9 @@ class TestMultiprocessArraysetReads(object):
     @pytest.mark.parametrize('backend', ['00', '10'])
     def test_batch_get_fails_on_superset_of_keys_and_succeeds_on_subset(self, repo, backend):
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset(name='_aset', shape=(20, 20), dtype=np.float32, backend=backend)
+        co.arraysets.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
-        with co.arraysets['_aset'] as d:
+        with co.arraysets['writtenaset'] as d:
             for sIdx in range(20):
                 arr = np.random.randn(20, 20).astype(np.float32) * 100
                 sName = str(sIdx)
@@ -774,7 +774,7 @@ class TestMultiprocessArraysetReads(object):
         co.close()
 
         nco = repo.checkout(write=False, commit=cmt)
-        ds = nco.arraysets['_aset']
+        ds = nco.arraysets['writtenaset']
 
         # superset of keys fails
         with pytest.raises(KeyError):
@@ -793,7 +793,7 @@ class TestMultiprocessArraysetReads(object):
 
         repo = written_two_cmt_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         klist = []
         with aset as ds:
             for idx, k in enumerate(ds.keys()):
@@ -813,7 +813,7 @@ class TestMultiprocessArraysetReads(object):
 
         repo = written_two_cmt_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         vlist = []
         mysample = np.random.randn(5, 7).astype(np.float32)
         with aset as ds:
@@ -836,7 +836,7 @@ class TestMultiprocessArraysetReads(object):
 
         repo = written_two_cmt_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         vlist, klist = [], []
         mysample = np.random.randn(5, 7).astype(np.float32)
         with aset as ds:
@@ -866,7 +866,7 @@ class TestMultiprocessArraysetReads(object):
 
         repo = written_two_cmt_repo
         co = repo.checkout(write=False)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         vlist, klist = [], []
         mysample = np.random.randn(5, 7).astype(np.float32)
         with aset as ds:

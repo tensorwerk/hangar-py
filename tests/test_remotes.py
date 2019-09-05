@@ -73,12 +73,12 @@ def test_push_and_clone_master_linear_history_multiple_commits(
 
     cmtList = []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='_aset', shape=(5, 7), dtype=np.float32)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         sampList = []
-        with co.arraysets['_aset'] as d:
+        with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nSamples):
@@ -103,17 +103,17 @@ def test_push_and_clone_master_linear_history_multiple_commits(
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
         assert len(nco.arraysets) == 1
-        assert '_aset' in nco.arraysets
-        assert len(nco.arraysets['_aset']) == len(sampList)
+        assert 'writtenaset' in nco.arraysets
+        assert len(nco.arraysets['writtenaset']) == len(sampList)
 
-        assert nco.arraysets['_aset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['_aset'].remote_reference_sample_keys
+        assert nco.arraysets['writtenaset'].contains_remote_references is True
+        remoteKeys = nco.arraysets['writtenaset'].remote_reference_sample_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.arraysets['_aset']
+            assert sIdx in nco.arraysets['writtenaset']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.arraysets['_aset'][sIdx]
+                shouldNotExist = nco.arraysets['writtenaset'][sIdx]
         nco.close()
     cloneMasterHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name='master')
     assert cloneMasterHist == masterHist
@@ -130,12 +130,12 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
 
     masterCmtList, devCmtList = [], []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='_aset', shape=(5, 7), dtype=np.float32)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.arraysets['_aset'] as d:
+        with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nMasterSamples):
@@ -154,7 +154,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
     for cIdx in range(nDevCommits):
         co = repo.checkout(write=True, branch=branch)
         devSampList = []
-        with co.arraysets['_aset'] as d:
+        with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nDevSamples):
@@ -180,12 +180,12 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='_aset', shape=(5, 7), dtype=np.float32)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.arraysets['_aset'] as d:
+        with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nMasterSamples):
@@ -207,7 +207,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     for cIdx in range(nDevCommits):
         co = repo.checkout(write=True, branch=branch)
         devSampList = []
-        with co.arraysets['_aset'] as d:
+        with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
             for sIdx in range(nDevSamples):
@@ -232,17 +232,17 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
         assert len(nco.arraysets) == 1
-        assert '_aset' in nco.arraysets
-        assert len(nco.arraysets['_aset']) == nMasterSamples
+        assert 'writtenaset' in nco.arraysets
+        assert len(nco.arraysets['writtenaset']) == nMasterSamples
 
-        assert nco.arraysets['_aset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['_aset'].remote_reference_sample_keys
+        assert nco.arraysets['writtenaset'].contains_remote_references is True
+        remoteKeys = nco.arraysets['writtenaset'].remote_reference_sample_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.arraysets['_aset']
+            assert sIdx in nco.arraysets['writtenaset']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.arraysets['_aset'][sIdx]
+                shouldNotExist = nco.arraysets['writtenaset'][sIdx]
         nco.close()
     cloneMasterHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name='master')
     assert cloneMasterHist == masterHist
@@ -256,18 +256,18 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
         assert len(nco.arraysets) == 1
-        assert '_aset' in nco.arraysets
-        assert len(nco.arraysets['_aset']) == nDevSamples
+        assert 'writtenaset' in nco.arraysets
+        assert len(nco.arraysets['writtenaset']) == nDevSamples
 
-        assert nco.arraysets['_aset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['_aset'].remote_reference_sample_keys
+        assert nco.arraysets['writtenaset'].contains_remote_references is True
+        remoteKeys = nco.arraysets['writtenaset'].remote_reference_sample_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.arraysets['_aset']
+            assert sIdx in nco.arraysets['writtenaset']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.arraysets['_aset'][sIdx]
-            # assert np.allclose(nco.arraysets['_aset'][str(sIdx)], samp)
+                shouldNotExist = nco.arraysets['writtenaset'][sIdx]
+            # assert np.allclose(nco.arraysets['writtenaset'][str(sIdx)], samp)
         nco.close()
     cloneBranchHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name=f'origin/{branch}')
     assert cloneBranchHist == branchHist
@@ -282,33 +282,33 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     ['testbranch',  None,  None,        None,  False],
     [None,          'ma',  None,        None,  False],
     [None,          'br',  None,        None,  False],
-    ['master',      None,  ('_aset',),  None,  False],
+    ['master',      None,  ('writtenaset',),  None,  False],
     ['testbranch',  None,  ('_two',),   None,  False],
-    [None,          'ma',  ('_aset',),  None,  False],
+    [None,          'ma',  ('writtenaset',),  None,  False],
     [None,          'br',  ('_two',),   None,  False],
     ['master',      None,  None,        None,  False],
     ['testbranch',  None,  None,        None,  False],
     [None,          'ma',  None,        None,  False],
     [None,          'br',  None,        None,  False],
-    ['master',      None,  ('_aset',),  None,  False],
+    ['master',      None,  ('writtenaset',),  None,  False],
     ['testbranch',  None,  ('_two',),   None,  False],
-    [None,          'ma',  ('_aset',),  None,  False],
+    [None,          'ma',  ('writtenaset',),  None,  False],
     [None,          'br',  ('_two',),   None,  False],
     ['master',      None,  None,        None,  True],
     ['testbranch',  None,  None,        None,  True],
     [None,          'ma',  None,        None,  True],
     [None,          'br',  None,        None,  True],
-    ['master',      None,  ('_aset',),  None,  True],
+    ['master',      None,  ('writtenaset',),  None,  True],
     ['testbranch',  None,  ('_two',),   None,  True],
-    [None,          'ma',  ('_aset',),  None,  True],
+    [None,          'ma',  ('writtenaset',),  None,  True],
     [None,          'br',  ('_two',),   None,  True],
     ['master',      None,  None,        1000,  False],
     ['testbranch',  None,  None,        1000,  False],
     [None,          'ma',  None,        1000,  False],
     [None,          'br',  None,        1000,  False],
-    ['master',      None,  ('_aset',),  1000,  False],
+    ['master',      None,  ('writtenaset',),  1000,  False],
     ['testbranch',  None,  ('_two',),   1000,  False],
-    [None,          'ma',  ('_aset',),  1000,  False],
+    [None,          'ma',  ('writtenaset',),  1000,  False],
     [None,          'br',  ('_two',),   1000,  False],
     [None,          'br',  ('_two',),   1000,  True],  # will raise error
 ])
@@ -322,14 +322,14 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     # Push master branch test
     masterCmts = {}
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='_aset', shape=(5, 7), dtype=np.float32)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
     co.arraysets.init_arrayset(name='_two', shape=(20), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList1 = []
         masterSampList2 = []
-        with co.arraysets['_aset'] as d, co.arraysets['_two'] as dd:
+        with co.arraysets['writtenaset'] as d, co.arraysets['_two'] as dd:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
                 dd.remove(prevKey)
@@ -357,7 +357,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         co = repo.checkout(write=True, branch=branch)
         devSampList1 = []
         devSampList2 = []
-        with co.arraysets['_aset'] as d, co.arraysets['_two'] as dd:
+        with co.arraysets['writtenaset'] as d, co.arraysets['_two'] as dd:
             for prevKey in list(d.keys())[1:]:
                 d.remove(prevKey)
                 dd.remove(prevKey)
@@ -435,7 +435,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
             # ensure we didn't fetch the other data simultaneously
 
             ds1SampList, ds2SampList = devCmts[fCmt]
-            if fetchAsetns[0] == '_aset':
+            if fetchAsetns[0] == 'writtenaset':
                 compare = ds1SampList
             else:
                 compare = ds2SampList
@@ -455,7 +455,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
 
         # compare both asets at the same time
         else:
-            d = co.arraysets['_aset']
+            d = co.arraysets['writtenaset']
             dd = co.arraysets['_two']
             ds1List, ds2List = devCmts[fCmt]
             totalSeen = 0
