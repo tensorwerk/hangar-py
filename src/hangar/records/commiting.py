@@ -13,6 +13,7 @@ import yaml
 from . import heads, parsing
 from .. import constants as c
 from ..context import TxnRegister
+from .parsing import DigestAndDbRefs, DigestAndBytes, DigestAndUserSpec
 from .queries import RecordQuery
 from ..utils import symlink_rel
 
@@ -266,6 +267,9 @@ def get_commit_ref(refenv, commit_hash):
 def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
     """unpack a commit record ref into a new key/val db for reader checkouts.
 
+    This method also validates that the record data (parent, spec, and refs)
+    have not been corrupted on disk (ie)
+
     Parameters
     ----------
     refenv : lmdb.Environment
@@ -341,7 +345,7 @@ def _commit_ancestors(branchenv: lmdb.Environment,
                       *,
                       is_merge_commit: bool = False,
                       master_branch: str = '',
-                      dev_branch: str = '') -> bytes:
+                      dev_branch: str = '') -> DigestAndBytes:
     """Format the commit parent db value, finding HEAD commits automatically.
 
     This method handles formating for both regular & merge commits through the
@@ -363,9 +367,9 @@ def _commit_ancestors(branchenv: lmdb.Environment,
 
     Returns
     -------
-    bytes
-        Commit parent db value formatted appropriately based on the repo state and
-        any specified arguments.
+    DigestAndBytes
+        Commit parent db value and digest of commit parent val formatted
+        appropriately based on the repo state and any specified arguments.
     """
     if not is_merge_commit:
         masterBranch = heads.get_staging_branch_head(branchenv)
@@ -383,7 +387,7 @@ def _commit_ancestors(branchenv: lmdb.Environment,
     return commitParentVal
 
 
-def _commit_spec(message: str, user: str, email: str) -> Tuple[bytes, str]:
+def _commit_spec(message: str, user: str, email: str) -> DigestAndBytes:
     """Format the commit specification according to the supplied username and email.
 
     This method currently only acts as a pass through to the parsing options
@@ -400,18 +404,18 @@ def _commit_spec(message: str, user: str, email: str) -> Tuple[bytes, str]:
 
     Returns
     -------
-    bytes
-        Formatted value for the specification field of the commit.
+    DigestAndBytes
+        Formatted value for the specification field of the commit and digest of
+        spec.
     """
-    commitSpecVal, cmtSpecDigest = parsing.commit_spec_db_val_from_raw_val(
-        commit_time=time.time(),
-        commit_message=message,
-        commit_user=user,
-        commit_email=email)
-    return (commitSpecVal, cmtSpecDigest)
+    spec_db = parsing.commit_spec_db_val_from_raw_val(commit_time=time.time(),
+                                                      commit_message=message,
+                                                      commit_user=user,
+                                                      commit_email=email)
+    return spec_db
 
 
-def _commit_ref(stageenv: lmdb.Environment) -> Tuple[bytes, str]:
+def _commit_ref(stageenv: lmdb.Environment) -> DigestAndBytes:
     """Query and format all staged data records, and format it for ref storage.
 
     Parameters
@@ -421,14 +425,14 @@ def _commit_ref(stageenv: lmdb.Environment) -> Tuple[bytes, str]:
 
     Returns
     -------
-    bytes
-        Serialized and compressed version of all staged record data.
-
+    DigestAndBytes
+        Serialized and compressed version of all staged record data along with
+        digest of commit refs.
     """
     querys = RecordQuery(dataenv=stageenv)
     allRecords = tuple(querys._traverse_all_records())
-    commitRefVal, cmtRefDigest = parsing.commit_ref_db_val_from_raw_val(allRecords)
-    return (commitRefVal, cmtRefDigest)
+    res = parsing.commit_ref_db_val_from_raw_val(allRecords)
+    return res
 
 
 # -------------------- Format ref k/v pairs and write the commit to disk ----------------
@@ -465,10 +469,10 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     string
         Commit hash of the newly added commit
     """
-    commitParentVal = _commit_ancestors(branchenv=branchenv,
-                                        is_merge_commit=is_merge_commit,
-                                        master_branch=merge_master,
-                                        dev_branch=merge_dev)
+    cmtParent = _commit_ancestors(branchenv=branchenv,
+                                  is_merge_commit=is_merge_commit,
+                                  master_branch=merge_master,
+                                  dev_branch=merge_dev)
 
     user_info_pth = pjoin(repo_path, 'config_user.yml')
     with open(user_info_pth) as f:
@@ -479,15 +483,17 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     if (USER_NAME is None) or (USER_EMAIL is None):
         raise RuntimeError(f'Username and Email are required. Please configure.')
 
-    commitSpecVal, cmtSpecDigest = _commit_spec(message=message,
-                                                user=USER_NAME,
-                                                email=USER_EMAIL)
-    commitRefVal, cmtRefDigest = _commit_ref(stageenv=stageenv)
+    cmtSpec = _commit_spec(message=message, user=USER_NAME, email=USER_EMAIL)
+    cmtRefs = _commit_ref(stageenv=stageenv)
 
-    digests = sorted([commitParentVal, cmtSpecDigest.encode(), cmtRefDigest.encode()])
-    joinedDigests = b''.join(digests)
-    hasher = hashlib.blake2b(joinedDigests, digest_size=20)
-    commit_hash = hasher.hexdigest()
+    commit_hash = parsing.cmt_final_digest(parent_digest=cmtParent.digest,
+                                           spec_digest=cmtSpec.digest,
+                                           refs_digest=cmtRefs.digest)
+
+    # digests = sorted([commitParentVal, cmtSpecDigest.encode(), cmtRefDigest.encode()])
+    # joinedDigests = b''.join(digests)
+    # hasher = hashlib.blake2b(joinedDigests, digest_size=20)
+    # commit_hash = hasher.hexdigest()
 
     commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
     commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
@@ -495,9 +501,9 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
 
     reftxn = TxnRegister().begin_writer_txn(refenv)
     try:
-        reftxn.put(commitSpecKey, commitSpecVal, overwrite=False)
-        reftxn.put(commitParentKey, commitParentVal, overwrite=False)
-        reftxn.put(commitRefKey, commitRefVal, overwrite=False)
+        reftxn.put(commitSpecKey, cmtSpec.raw, overwrite=False)
+        reftxn.put(commitParentKey, cmtParent.raw, overwrite=False)
+        reftxn.put(commitRefKey, cmtRefs.raw, overwrite=False)
     finally:
         TxnRegister().commit_writer_txn(refenv)
 
