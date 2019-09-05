@@ -25,6 +25,8 @@ extra_require = {
         'grpcio_tools',
         'mypy>=0.701',
         'mypy-protobuf',
+        'pillow',
+        'matplotlib',
     ],
     'all': [],
 }
@@ -77,6 +79,7 @@ setup(
         'blosc',
         'click',
         'grpcio',
+        'protobuf',
         'h5py==2.9.0',
         'lmdb>=0.94,<=0.96',
         'msgpack==0.6.1',
@@ -84,7 +87,6 @@ setup(
         'pyyaml',
         'tqdm',
         'wrapt',
-        'pillow',
     ],
     extras_require=extra_require,
     entry_points={

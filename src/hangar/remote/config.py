@@ -263,7 +263,7 @@ def refresh(config=config, defaults=defaults, **kwargs):
 
 
 @lru_cache(maxsize=128)
-def get(key, default=no_default, config=config):
+def get(key, default=no_default, config=config):  # pragma: no cover
     """
     Get elements from global config
 

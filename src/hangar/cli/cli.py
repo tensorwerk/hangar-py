@@ -33,6 +33,9 @@ def main(ctx):
     ctx.obj = Repository(path=P, exists=False)
 
 
+# -------------------------------- Init ---------------------------------------
+
+
 @main.command()
 @click.option('--name', prompt='User Name', help='first and last name of user')
 @click.option('--email', prompt='User Email', help='email address of the user')
@@ -46,6 +49,9 @@ def init(repo: Repository, name, email, overwrite):
         click.echo(f'Repo already exists at: {repo.path}')
     else:
         repo.init(user_name=name, user_email=email, remove_old=overwrite)
+
+
+# ---------------------------- Remote Interaction -----------------------------
 
 
 @main.command()
@@ -137,6 +143,9 @@ def push(repo: Repository, remote, branch):
     click.echo(f'Push data for commit hash: {commit_hash}')
 
 
+# ----------------------- Remote Server References ----------------------------
+
+
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
 def remote(ctx):
@@ -175,6 +184,9 @@ def remove_remote(repo: Repository, name):
     This will not remove any tracked remote reference branches.
     """
     click.echo(repo.remote.remove(name=name))
+
+
+# ---------------------------- User Visualizations ----------------------------
 
 
 @main.command()
@@ -217,6 +229,9 @@ def log(repo: Repository, startpoint):
     else:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
         click.echo(repo.log(commit=base_commit))
+
+
+# ------------------------------- Branching -----------------------------------
 
 
 @main.group(no_args_is_help=True, add_help_option=True)
@@ -268,6 +283,9 @@ def branch_create(repo: Repository, name, startpoint):
                f' HEAD: {base_commit}')
 
 
+# ---------------------------- Server Commands --------------------------------
+
+
 @main.command()
 @click.option('--overwrite', is_flag=True, default=False,
               help='overwrite the hangar server instance if it exists at the current path.')
@@ -316,6 +334,134 @@ def server(overwrite, ip, port, timeout):
         server.stop(0)
 
 
+# ---------------------------- Import Exporters -------------------------------
+
+
+@main.command(name='import')
+@click.argument('arrayset', required=True)
+@click.argument('path', required=True)
+@click.option('--plugin', default=None, help='override auto-infered plugin')
+@click.option('--overwrite', is_flag=True,
+              help='overwrite data samples with the same name as the imported data file ')
+@pass_repo
+def import_data(repo: Repository, arrayset, path, plugin, overwrite):
+    """Import file(s) at PATH to ARRAYSET in the staging area.
+    """
+    from hangar.cli.io import imread
+
+    try:
+        co = repo.checkout(write=True)
+        aset = co.arraysets.get(arrayset)
+
+        if os.path.isfile(path):
+            fname = os.path.basename(path)
+            if not overwrite:
+                if fname in aset:
+                    click.echo(f'skipping existing name: {fname} as overwrite flag not set')
+                    return None
+            fNamePth = [(fname, path)]
+        else:
+            fnames = os.listdir(path)
+            if not overwrite:
+                fnames = [fname for fname in fnames if fname not in aset]
+            fNamePth = [(fname, os.path.join(path, fname)) for fname in fnames]
+
+        with aset as a, click.progressbar(fNamePth) as fnamesBar:
+            for fn, fpth in fnamesBar:
+                arr = imread(fpth, plugin=plugin)
+                try:
+                    a[fn] = arr
+                except ValueError as e:
+                    click.echo(e)
+    finally:
+        co.close()
+
+
+@main.command(name='export')
+@click.argument('startpoint', nargs=1, required=True)
+@click.argument('arrayset', required=True)
+@click.option('-o', '--out', required=True, help='Path to export the data to.')
+@click.option('-s', '--sample', default=False, help='Sample name to export')
+@click.option('-f', '--format', 'format_', required=False, help='File format used for exporting.')
+@click.option('--plugin', required=False, help='override auto-infered plugin')
+@pass_repo
+def export_data(repo: Repository, startpoint, arrayset, out, sample, format_, plugin):
+    """export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
+    """
+    from hangar.records.commiting import expand_short_commit_digest
+    from hangar.records.heads import get_branch_head_commit
+    from hangar.cli.io import imsave
+
+    if startpoint in repo.list_branches():
+        base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
+    else:
+        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+
+    try:
+        co = repo.checkout(write=False, commit=base_commit)
+        arrayset = co.arraysets[arrayset]
+        if sample:
+            sampleNames = [sample]
+        else:
+            sampleNames = list(arrayset.keys())
+
+        if format_:
+            format_ = format_.lstrip('.')
+        outP = os.path.expanduser(os.path.normpath(out))
+
+        with arrayset as aset, click.progressbar(sampleNames) as sNamesBar:
+            for sampleN in sNamesBar:
+                if format_:
+                    if sampleN.endswith(format_):
+                        outFP = os.path.join(outP, f'{sampleN}')
+                    else:
+                        outFP = os.path.join(outP, f'{sampleN}.{format_}')
+                else:
+                    outFP = os.path.join(outP, f'{sampleN}')
+                try:
+                    data = aset[sampleN]
+                    imsave(outFP, data)
+                except KeyError as e:
+                    click.echo(e)
+    finally:
+        co.close()
+
+
+@main.command(name='view')
+@click.argument('startpoint', nargs=1, type=str, required=True)
+@click.argument('arrayset', type=str, required=True)
+@click.argument('sample', type=str, required=True)
+@click.option('--plugin', default=None,
+              help='Plugin name to use instead of auto-inferred plugin')
+@pass_repo
+def view_data(repo: Repository, startpoint, arrayset, sample, plugin):
+    """Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
+    """
+    from hangar.records.commiting import expand_short_commit_digest
+    from hangar.records.heads import get_branch_head_commit
+    from hangar.cli.io import imshow, show
+
+    if startpoint in repo.list_branches():
+        base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
+    else:
+        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+
+    try:
+        co = repo.checkout(write=False, commit=base_commit)
+        arrayset = co.arraysets[arrayset]
+        try:
+            data = arrayset[sample]
+            imshow(data, plugin=plugin)
+            show()
+        except KeyError as e:
+            click.echo(e)
+    finally:
+        co.close()
+
+
+# ---------------------------- Developer Utils --------------------------------
+
+
 @main.command(name='db-view', hidden=True)
 @click.option('-a', is_flag=True, help='display all dbs in the repository')
 @click.option('-b', is_flag=True, help='display the branch/heads db')
@@ -358,121 +504,3 @@ def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
         click.echo(details(envs.stageenv, line_limit=limit).getvalue())
     if z:
         click.echo(details(envs.stagehashenv, line_limit=limit).getvalue())
-
-
-@main.command(name='import')
-@click.argument('arrayset', required=True)
-@click.argument('path', required=True)
-@click.option('--plugin', default=None, help='override auto-infered plugin')
-@click.option('--overwrite', is_flag=True,
-              help='overwrite data samples with the same name as the imported data file ')
-@pass_repo
-def import_data(repo: Repository, arrayset, path, plugin, overwrite):
-    '''Import file(s) at PATH to ARRAYSET in the staging area.
-    '''
-    from hangar.cli.io import imread
-
-    try:
-        co = repo.checkout(write=True)
-        aset = co.arraysets.get(arrayset)
-
-        if os.path.isfile(path):
-            fname = os.path.basename(path)
-            if not overwrite:
-                if fname in aset:
-                    return None
-            fNamePth = [(fname, path)]
-        else:
-            fnames = os.listdir(path)
-            if not overwrite:
-                fnames = [fname for fname in fnames if fname not in aset]
-            fNamePth = [(fname, os.path.join(path, fname)) for fname in fnames]
-
-        with aset as a, click.progressbar(fNamePth) as fnamesBar:
-            for fn, fpth in fnamesBar:
-                arr = imread(fpth, plugin=plugin)
-                try:
-                    a[fn] = arr
-                except ValueError as e:
-                    click.echo(e)
-    finally:
-        co.close()
-
-
-@main.command(name='export')
-@click.argument('startpoint', nargs=1, required=True)
-@click.argument('arrayset', required=True)
-@click.option('-o', '--out', required=True, help='Path to export the data to.')
-@click.option('-s', '--sample', default=False, help='Sample name to export')
-@click.option('-f', '--format', 'format_', required=True, help='File format used for exporting.')
-@click.option('--plugin', required=False, help='override auto-infered plugin')
-@pass_repo
-def export_data(repo: Repository, startpoint, arrayset, out, sample, format_, plugin):
-    '''export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
-    '''
-    from hangar.records.commiting import expand_short_commit_digest
-    from hangar.records.heads import get_branch_head_commit
-    from hangar.cli.io import imsave
-
-    if startpoint in repo.list_branches():
-        base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
-    else:
-        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
-
-    try:
-        co = repo.checkout(write=False, commit=base_commit)
-        arrayset = co.arraysets[arrayset]
-        if sample:
-            sampleNames = [sample]
-        else:
-            sampleNames = list(arrayset.keys())
-
-        if format_:
-            format_ = format_.lstrip('.')
-        outP = os.path.expanduser(os.path.normpath(out))
-
-        with arrayset as aset, click.progressbar(sampleNames) as sNamesBar:
-            for sampleN in sNamesBar:
-                if sampleN.endswith(format_):
-                    outFP = os.path.join(outP, f'{sampleN}')
-                else:
-                    outFP = os.path.join(outP, f'{sampleN}.{format_}')
-                try:
-                    data = aset[sampleN]
-                    imsave(outFP, data)
-                except KeyError as e:
-                    click.echo(e)
-    finally:
-        co.close()
-
-
-@main.command(name='view')
-@click.argument('startpoint', nargs=1, type=str, required=True)
-@click.argument('arrayset', type=str, required=True)
-@click.argument('sample', type=str, required=True)
-@click.option('--plugin', default=None,
-              help='Plugin name to use instead of auto-inferred plugin')
-@pass_repo
-def view_data(repo: Repository, startpoint, arrayset, sample, plugin):
-    '''Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
-    '''
-    from hangar.records.commiting import expand_short_commit_digest
-    from hangar.records.heads import get_branch_head_commit
-    from hangar.cli.io import imshow, show
-
-    if startpoint in repo.list_branches():
-        base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
-    else:
-        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
-
-    try:
-        co = repo.checkout(write=False, commit=base_commit)
-        arrayset = co.arraysets[arrayset]
-        try:
-            data = arrayset[sample]
-            imshow(data, plugin=plugin)
-            show()
-        except KeyError as e:
-            click.echo(e)
-    finally:
-        co.close()

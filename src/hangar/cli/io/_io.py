@@ -116,7 +116,7 @@ def imsave(fname, arr, plugin=None, check_contrast=True, **plugin_args):
     return call_plugin('imsave', fname, arr, plugin=plugin, **plugin_args)
 
 
-def imshow(arr, plugin=None, **plugin_args):
+def imshow(arr, plugin=None, **plugin_args):  # pragma: no cover
     """Display an image.
 
     Parameters
@@ -139,8 +139,8 @@ def imshow(arr, plugin=None, **plugin_args):
     return call_plugin('imshow', arr, plugin=plugin, **plugin_args)
 
 
-def show():
-    '''Display pending images.
+def show():  # pragma: no cover
+    """Display pending images.
 
     Launch the event loop of the current gui plugin, and display all
     pending images, queued via `imshow`. This is required when using
@@ -148,5 +148,5 @@ def show():
 
     A call to `show` will block execution of code until all windows
     have been closed.
-    '''
+    """
     return call_plugin('_app_show')

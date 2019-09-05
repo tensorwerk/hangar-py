@@ -224,8 +224,7 @@ def call_plugin(kind, *args, **kwargs):
         try:
             func = [f for (p, f) in plugin_funcs if p == plugin][0]
         except IndexError:
-            raise RuntimeError('Could not find the plugin "%s" for %s.' %
-                               (plugin, kind))
+            raise RuntimeError(f'Could not find the plugin "{plugin}" for {kind}.')
 
     return func(*args, **kwargs)
 
@@ -250,6 +249,9 @@ def use_plugin(name, kind=None):
     --------
 
     To use Matplotlib as the default image reader, you would write:
+
+        >>> from hangar.cli import io
+        >>> io.use_plugin('matplotlib', 'imread')
 
     To see a list of available plugins run ``plugins.available_plugins``. Note
     that this lists plugins that are defined, but the full list may not be
@@ -299,7 +301,7 @@ def _load(plugin):
     if plugin in find_available_plugins(loaded=True):
         return
     if plugin not in plugin_module_name:
-        raise ValueError("Plugin %s not found." % plugin)
+        raise ValueError(f"Plugin {plugin} not found.")
     else:
         modname = plugin_module_name[plugin]
         plugin_module = __import__('hangar.cli.io._plugins.' + modname, fromlist=[modname])
@@ -307,8 +309,7 @@ def _load(plugin):
     provides = plugin_provides[plugin]
     for p in provides:
         if not hasattr(plugin_module, p):
-            print("Plugin %s does not provide %s as advertised.  Ignoring." %
-                  (plugin, p))
+            print(f"Plugin {plugin} does not provide {p} as advertised.  Ignoring.")
             continue
 
         store = plugin_store[p]

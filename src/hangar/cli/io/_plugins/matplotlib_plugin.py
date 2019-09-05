@@ -118,7 +118,7 @@ def _get_image_properties(image):
     return ImageProperties(signed, out_of_range_float, unsupported_dtype)
 
 
-def _raise_warnings(image_properties):
+def _raise_warnings(image_properties):  # pragma: no cover
     """Raise the appropriate warning for each nonstandard image type.
 
     Parameters
@@ -135,7 +135,7 @@ def _raise_warnings(image_properties):
              "image with stretched contrast.")
 
 
-def _get_display_range(image):
+def _get_display_range(image):  # pragma: no cover
     """Return the display range for a given set of image properties.
 
     Parameters
@@ -224,6 +224,6 @@ def imshow(image, ax=None, show_cbar=None, **kwargs):
 imread = matplotlib.image.imread
 
 
-def _app_show():
+def _app_show():  # pragma: no cover
     from matplotlib.pyplot import show
     show()
