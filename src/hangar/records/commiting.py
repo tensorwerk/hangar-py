@@ -1,11 +1,9 @@
-import hashlib
 import os
 import tempfile
 import time
 from os.path import join as pjoin
 import shutil
 from contextlib import contextmanager
-from typing import Tuple
 
 import lmdb
 import yaml
@@ -13,7 +11,7 @@ import yaml
 from . import heads, parsing
 from .. import constants as c
 from ..context import TxnRegister
-from .parsing import DigestAndDbRefs, DigestAndBytes, DigestAndUserSpec
+from .parsing import DigestAndBytes
 from .queries import RecordQuery
 from ..utils import symlink_rel
 
@@ -126,7 +124,7 @@ def get_commit_spec(refenv, commit_hash):
         raise ValueError(f'No commit exists with the hash: {commit_hash}')
 
     parentCommitSpec = parsing.commit_spec_raw_val_from_db_val(parentCommitSpecVal)
-    return parentCommitSpec
+    return parentCommitSpec.user_spec
 
 
 def get_commit_ancestors(refenv, commit_hash):
@@ -162,7 +160,7 @@ def get_commit_ancestors(refenv, commit_hash):
         raise ValueError(f'No commit exists with the hash: {commit_hash}')
 
     parentCommitAncestors = parsing.commit_parent_raw_val_from_db_val(parentCommitVal)
-    return parentCommitAncestors
+    return parentCommitAncestors.ancestor_spec
 
 
 def get_commit_ancestors_graph(refenv, starting_commit):
@@ -253,15 +251,37 @@ def get_commit_ref(refenv, commit_hash):
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
         commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit_hash)
+        commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
+        commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+
         commitRefVal = reftxn.get(commitRefKey, default=False)
+        commitSpecVal = reftxn.get(commitSpecKey, default=False)
+        commitParentVal = reftxn.get(commitParentKey, default=False)
     finally:
         TxnRegister().abort_reader_txn(refenv)
 
-    if commitRefVal is False:
+    if (commitRefVal is False) or (
+            commitSpecVal is False) or (commitParentVal is False):
         raise ValueError(f'No commit exists with the hash: {commit_hash}')
 
     commitRefs = parsing.commit_ref_raw_val_from_db_val(commitRefVal)
-    return commitRefs
+    commitSpecs = parsing.commit_spec_raw_val_from_db_val(commitSpecVal)
+    commitParent = parsing.commit_parent_raw_val_from_db_val(commitParentVal)
+
+    calculatedDigest = parsing.cmt_final_digest(
+        parent_digest=commitParent.digest,
+        spec_digest=commitSpecs.digest,
+        refs_digest=commitRefs.digest)
+
+    if calculatedDigest != commit_hash:
+        raise IOError(
+            f'DATA CORRUPTION ERROR: on retrieval of stored references for '
+            f'commit_hash: {commit_hash} validation of commit record/contents '
+            f'integrity failed. Calculated digest: {calculatedDigest} != '
+            f'expected: {commit_hash}. Please alert the Hangar development team to '
+            f'this error if possible.')
+
+    return commitRefs.db_kvs
 
 
 def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
@@ -489,11 +509,6 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     commit_hash = parsing.cmt_final_digest(parent_digest=cmtParent.digest,
                                            spec_digest=cmtSpec.digest,
                                            refs_digest=cmtRefs.digest)
-
-    # digests = sorted([commitParentVal, cmtSpecDigest.encode(), cmtRefDigest.encode()])
-    # joinedDigests = b''.join(digests)
-    # hasher = hashlib.blake2b(joinedDigests, digest_size=20)
-    # commit_hash = hasher.hexdigest()
 
     commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
     commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)

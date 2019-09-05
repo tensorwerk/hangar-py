@@ -741,5 +741,5 @@ class WriterUserDiff(BaseUserDiff):
             base_refs = commiting.get_commit_ref(self._refenv, head_commit)
 
         stage_refs = tuple(RecordQuery(self._stageenv)._traverse_all_records())
-        status = 'DIRTY' if (base_refs.db_kvs != stage_refs) else 'CLEAN'
+        status = 'DIRTY' if (base_refs != stage_refs) else 'CLEAN'
         return status

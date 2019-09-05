@@ -3,11 +3,10 @@ from itertools import cycle
 from time import sleep
 from time import perf_counter
 from random import randint
-from typing import Union, NamedTuple, Tuple, Iterable, List
+from typing import Union, NamedTuple, Tuple, Iterable
 from hashlib import blake2b
 
 import blosc
-# import msgpack
 
 from .. import constants as c
 
@@ -768,6 +767,11 @@ DigestAndUserSpec = NamedTuple('DigestAndUserSpec', [
     ('user_spec', CommitUserSpec)
 ])
 
+DigestAndAncestorSpec = NamedTuple('DigestAndAncestorSpec', [
+    ('digest', str),
+    ('ancestor_spec', CommitAncestorSpec)
+])
+
 DigestAndBytes = NamedTuple('DigestAndBytes', [
     ('digest', str),
     ('raw', bytes),
@@ -803,9 +807,6 @@ def cmt_final_digest(parent_digest: str, spec_digest: str,
     digest = _hash_func(joined_bytes)
     return digest
 
-
-
-
 """
 Commit Parent (ancestor) Lookup methods
 ---------------------------------------
@@ -840,7 +841,7 @@ def commit_parent_raw_key_from_db_key(db_key: bytes) -> str:
     return commit_hash
 
 
-def commit_parent_raw_val_from_db_val(db_val: bytes) -> CommitAncestorSpec:
+def commit_parent_raw_val_from_db_val(db_val: bytes) -> DigestAndAncestorSpec:
     """Parse the value of a commit's parent value to find it's ancestors
 
     Parameters
@@ -850,10 +851,13 @@ def commit_parent_raw_val_from_db_val(db_val: bytes) -> CommitAncestorSpec:
 
     Returns
     -------
-    namedtuple
-        Namedtuple containing fields for `is_merge_commit`, `master_ancestor`, and
+    DigestAndAncestorSpec
+        `digest` of data writen to disk and `ancestor_spec`, Namedtuple
+        containing fields for `is_merge_commit`, `master_ancestor`, and
         `dev_ancestor`
     """
+    parentValDigest = _hash_func(db_val)
+
     commit_str = db_val.decode()
     commit_ancestors = commit_str.split(c.SEP_CMT)
     if len(commit_ancestors) == 1:
@@ -865,7 +869,9 @@ def commit_parent_raw_val_from_db_val(db_val: bytes) -> CommitAncestorSpec:
         master_ancestor = commit_ancestors[0]
         dev_ancestor = commit_ancestors[1]
 
-    return CommitAncestorSpec(is_merge_commit, master_ancestor, dev_ancestor)
+    ancestorSpec = CommitAncestorSpec(is_merge_commit, master_ancestor, dev_ancestor)
+    res = DigestAndAncestorSpec(digest=parentValDigest, ancestor_spec=ancestorSpec)
+    return res
 
 
 """
@@ -989,7 +995,7 @@ def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
 def commit_spec_raw_val_from_db_val(db_val: bytes) -> DigestAndUserSpec:
     uncompressed_db_val = blosc.decompress(db_val)
     digest = _hash_func(uncompressed_db_val)
-    commit_spec = json.loads(uncompressed_db_val).decode()
+    commit_spec = json.loads(uncompressed_db_val)
     user_spec = CommitUserSpec(**commit_spec)
     res = DigestAndUserSpec(digest=digest, user_spec=user_spec)
     return res

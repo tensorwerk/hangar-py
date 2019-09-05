@@ -353,6 +353,7 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
 
+        print(written_repo.log())
         co = written_repo.checkout()
         with pytest.raises(KeyError):
             # removal of all data removes the arrayset
