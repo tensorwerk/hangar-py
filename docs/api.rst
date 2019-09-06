@@ -22,6 +22,7 @@ Write Enabled Checkout
 
 .. autoclass:: hangar.checkout.WriterCheckout()
    :members:
+   :special-members: __getitem__, __setitem__
    :exclude-members: __init__
 
 Arraysets
@@ -63,6 +64,7 @@ Read Only Checkout
 
 .. autoclass:: hangar.checkout.ReaderCheckout()
    :members:
+   :special-members: __getitem__
    :exclude-members: __init__
 
 Arraysets

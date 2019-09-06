@@ -23,6 +23,9 @@ class Repository(object):
     repository, or to a directory one should be initialized, and all required
     data for starting your work on the repo will automatically be populated.
 
+        >>> from hangar import Repository
+        >>> repo = Repository('foo/path/to/dir')
+
     Parameters
     ----------
     path : str

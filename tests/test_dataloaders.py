@@ -21,7 +21,7 @@ class TestTorchDataLoader(object):
     def test_warns_experimental(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
         with pytest.warns(UserWarning, match='Dataloaders are experimental'):
             make_torch_dataset([first_aset, second_aset])
@@ -37,7 +37,7 @@ class TestTorchDataLoader(object):
         co.close()
 
         co = repo.checkout()
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
         with pytest.warns(UserWarning, match='Arraysets do not contain equal number of samples'):
             make_torch_dataset([first_aset, second_aset])
@@ -53,7 +53,7 @@ class TestTorchDataLoader(object):
         co.close()
 
         co = repo.checkout()
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
         with pytest.raises(ValueError):
             # emtpy list
@@ -77,7 +77,7 @@ class TestTorchDataLoader(object):
     def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout(write=True)
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
         with pytest.raises(TypeError):
             make_torch_dataset([first_aset, second_aset])
@@ -87,7 +87,7 @@ class TestTorchDataLoader(object):
     def test_with_keys(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
 
         # with keys
         keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
@@ -114,7 +114,7 @@ class TestTorchDataLoader(object):
     def test_with_index_range(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
 
         # with keys
         bad_tensor0 = aset['0']
@@ -138,7 +138,7 @@ class TestTorchDataLoader(object):
     def test_field_names(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
         with pytest.raises(ValueError):  # number of dsets and field_names are different
             make_torch_dataset([first_aset, second_aset], field_names=('input',))
@@ -173,7 +173,7 @@ class TestTorchDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(ValueError):
             torch_dset = make_torch_dataset(aset)
         co.close()
@@ -187,7 +187,7 @@ class TestTorchDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(KeyError):
             torch_dset = make_torch_dataset(aset, keys=['1', -1])
         co.close()
@@ -201,7 +201,7 @@ class TestTorchDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(FileNotFoundError):
             torch_dset = make_torch_dataset(aset, keys=['1', '2'])
         co.close()
@@ -225,7 +225,7 @@ class TestTfDataLoader(object):
     def test_warns_experimental(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
         with pytest.warns(UserWarning, match='Dataloaders are experimental'):
             make_tf_dataset([first_aset, second_aset])
@@ -241,7 +241,7 @@ class TestTfDataLoader(object):
         co.close()
 
         co = repo.checkout()
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
         with pytest.warns(UserWarning, match='Arraysets do not contain equal number of samples'):
             make_tf_dataset([first_aset, second_aset])
@@ -251,7 +251,7 @@ class TestTfDataLoader(object):
     def test_dataset_loader(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
 
         # multiple datasets
@@ -266,7 +266,7 @@ class TestTfDataLoader(object):
     def test_with_keys(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
 
         # with keys
         keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
@@ -293,7 +293,7 @@ class TestTfDataLoader(object):
     def test_with_index_range(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
 
         # with keys
         bad_tensor0 = aset['0']
@@ -317,7 +317,7 @@ class TestTfDataLoader(object):
     def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):
         repo = repo_with_20_samples
         co = repo.checkout(write=True)
-        first_aset = co.arraysets['_aset']
+        first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
         with pytest.raises(TypeError):
             make_tf_dataset([first_aset, second_aset])
@@ -329,14 +329,14 @@ class TestTfDataLoader(object):
         # the way we return the data from generator
         repo = variable_shape_written_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         for i in range(5, 10):
             aset[i] = np.random.random((2, i))
         co.commit('added data')
         co.close()
 
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         tf_dset = make_tf_dataset(aset)
         shape_obj = tf.TensorShape((2, None))
         tf_dset = tf_dset.padded_batch(5, padded_shapes=(shape_obj,))
@@ -365,7 +365,7 @@ class TestTfDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(ValueError):
             tf_dset = make_tf_dataset(aset)
         co.close()
@@ -379,7 +379,7 @@ class TestTfDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(KeyError):
             tf_dset = make_tf_dataset(aset, keys=['1', -1])
         co.close()
@@ -393,7 +393,7 @@ class TestTfDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['_aset']
+        aset = co.arraysets['writtenaset']
         with pytest.raises(FileNotFoundError):
             tf_dset = make_tf_dataset(aset, keys=['1', '2'])
         co.close()
