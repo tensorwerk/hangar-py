@@ -250,23 +250,24 @@ def get_commit_ref(refenv, commit_hash):
     """
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
-        commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit_hash)
-        commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
-        commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+        cmtRefKey = parsing.commit_ref_db_key_from_raw_key(commit_hash)
+        cmtSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
+        cmtParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
 
-        commitRefVal = reftxn.get(commitRefKey, default=False)
-        commitSpecVal = reftxn.get(commitSpecKey, default=False)
-        commitParentVal = reftxn.get(commitParentKey, default=False)
+        cmtRefVal = reftxn.get(cmtRefKey, default=False)
+        cmtSpecVal = reftxn.get(cmtSpecKey, default=False)
+        cmtParentVal = reftxn.get(cmtParentKey, default=False)
+    except lmdb.BadValsizeError:
+        raise ValueError(f'No commit exists with the hash: {commit_hash}')
     finally:
         TxnRegister().abort_reader_txn(refenv)
 
-    if (commitRefVal is False) or (
-            commitSpecVal is False) or (commitParentVal is False):
+    if (cmtRefVal is False) or (cmtSpecVal is False) or (cmtParentVal is False):
         raise ValueError(f'No commit exists with the hash: {commit_hash}')
 
-    commitRefs = parsing.commit_ref_raw_val_from_db_val(commitRefVal)
-    commitSpecs = parsing.commit_spec_raw_val_from_db_val(commitSpecVal)
-    commitParent = parsing.commit_parent_raw_val_from_db_val(commitParentVal)
+    commitRefs = parsing.commit_ref_raw_val_from_db_val(cmtRefVal)
+    commitSpecs = parsing.commit_spec_raw_val_from_db_val(cmtSpecVal)
+    commitParent = parsing.commit_parent_raw_val_from_db_val(cmtParentVal)
 
     calculatedDigest = parsing.cmt_final_digest(
         parent_digest=commitParent.digest,

@@ -913,8 +913,7 @@ def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> Dig
     refDigest = _commit_ref_joined_kv_db_diget(joined)
 
     pck = c.CMT_REC_JOIN_KEY.join(joined)
-    raw = blosc.compress(
-        pck, typesize=1, clevel=9, shuffle=blosc.BITSHUFFLE, cname='lz4')
+    raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.BITSHUFFLE, cname='lz4')
     res = DigestAndBytes(digest=refDigest, raw=raw)
     return res
 
@@ -935,10 +934,16 @@ def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> DigestAndDbRefs:
         time of that commit. key/value pairs are already in sorted order.
     """
     uncomp_db_raw = blosc.decompress(commit_db_val)
-    raw_joined_kvs_list = uncomp_db_raw.split(c.CMT_REC_JOIN_KEY)
-
-    refsDigest = _commit_ref_joined_kv_db_diget(raw_joined_kvs_list)
-    raw_db_kv_list = tuple(map(tuple, map(bytes.split, raw_joined_kvs_list)))
+    # if a commit has nothing in it (completly empty), the return from query == ()
+    # the stored data is b'' from which the hash is calculated. We manually set these
+    # values as the expected unpacking routine will not work correctly.
+    if uncomp_db_raw == b'':
+        refsDigest = _hash_func(b'')
+        raw_db_kv_list = ()
+    else:
+        raw_joined_kvs_list = uncomp_db_raw.split(c.CMT_REC_JOIN_KEY)
+        refsDigest = _commit_ref_joined_kv_db_diget(raw_joined_kvs_list)
+        raw_db_kv_list = tuple(map(tuple, map(bytes.split, raw_joined_kvs_list)))
 
     res = DigestAndDbRefs(digest=refsDigest, db_kvs=raw_db_kv_list)
     return res
