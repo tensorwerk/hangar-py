@@ -800,8 +800,23 @@ def _hash_func(recs: bytes) -> str:
     return digest
 
 
-def cmt_final_digest(parent_digest: str, spec_digest: str,
-                     refs_digest: str) -> str:
+def cmt_final_digest(parent_digest: str, spec_digest: str, refs_digest: str) -> str:
+    """Determine digest of commit based on digests of its parent, specs, and refs.
+
+    Parameters
+    ----------
+    parent_digest : str
+        digest of the parent value
+    spec_digest : str
+        digest of the user spec value
+    refs_digest : str
+        digest of the data record values
+
+    Returns
+    -------
+    str
+        digest of the commit
+    """
     sorted_digests = sorted([parent_digest, spec_digest, refs_digest])
     joined_bytes = c.CMT_DIGEST_JOIN_KEY.join(sorted_digests).encode()
     digest = _hash_func(joined_bytes)
@@ -885,9 +900,31 @@ def commit_ref_db_key_from_raw_key(commit_hash: str) -> bytes:
     return commit_ref_key
 
 
-def _commit_ref_joined_kv_db_diget(joined_db_kvs: Iterable[bytes]) -> str:
-    # Tuple[bytes] -> List[str] (hashs) -> sorted List[str] (hashs)
-    # -> str (joined) -> bytes -> str (digest)
+def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
+    """reproducibly calculate digest from iterable of joined record k/v pairs.
+
+    First calculate the digest of each element in the input iterable. As these
+    elements contain the record type (meta key, arrayset name, sample key) as
+    well as the data hash digest, any modification of any reference record will
+    result in a different digest for that element.
+
+    Then sort the resulting digests (so that there is no dependency on the
+    order of elements in input) and join all elements into single serialized
+    bytestring.
+
+    The output of this method is the hash digest of the serialized bytestring.
+
+    Parameters
+    ----------
+    joined_db_kvs : Iterable[bytes]
+        list or tuple of bytes where each element is the joining of kv pairs
+        from the full commit references
+
+    Returns
+    -------
+    str
+        calculated digest of the commit ref record component
+    """
     joined_db_kvs = sorted(map(_hash_func, joined_db_kvs))
     joined_digests = c.CMT_DIGEST_JOIN_KEY.join(joined_db_kvs).encode()
     ref_digest = _hash_func(joined_digests)
@@ -908,12 +945,11 @@ def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> Dig
         `raw` serialized and compressed representation of the object. `digest`
         digest of the joined db kvs.
     """
-    # Tuple[Tuple[bytes, bytes]] -> Tuple[bytes]
     joined = tuple(map(c.CMT_KV_JOIN_KEY.join, db_kvs))
-    refDigest = _commit_ref_joined_kv_db_diget(joined)
+    refDigest = _commit_ref_joined_kv_digest(joined)
 
     pck = c.CMT_REC_JOIN_KEY.join(joined)
-    raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.BITSHUFFLE, cname='lz4')
+    raw = blosc.compress(pck, typesize=1, clevel=6, shuffle=blosc.BITSHUFFLE, cname='lz4')
     res = DigestAndBytes(digest=refDigest, raw=raw)
     return res
 
@@ -942,7 +978,7 @@ def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> DigestAndDbRefs:
         raw_db_kv_list = ()
     else:
         raw_joined_kvs_list = uncomp_db_raw.split(c.CMT_REC_JOIN_KEY)
-        refsDigest = _commit_ref_joined_kv_db_diget(raw_joined_kvs_list)
+        refsDigest = _commit_ref_joined_kv_digest(raw_joined_kvs_list)
         raw_db_kv_list = tuple(map(tuple, map(bytes.split, raw_joined_kvs_list)))
 
     res = DigestAndDbRefs(digest=refsDigest, db_kvs=raw_db_kv_list)
@@ -992,7 +1028,7 @@ def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
     db_spec_val = json.dumps(spec_dict, separators=(',', ':')).encode()
     digest = _hash_func(db_spec_val)
     comp_raw = blosc.compress(
-        db_spec_val, typesize=8, clevel=9, shuffle=blosc.BITSHUFFLE, cname='zlib')
+        db_spec_val, typesize=8, clevel=6, shuffle=blosc.BITSHUFFLE, cname='zlib')
     res = DigestAndBytes(digest=digest, raw=comp_raw)
     return res
 
