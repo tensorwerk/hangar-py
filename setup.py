@@ -25,6 +25,8 @@ extra_require = {
         'grpcio_tools',
         'mypy>=0.701',
         'mypy-protobuf',
+        'pillow',
+        'matplotlib',
     ],
     'all': [],
 }
@@ -37,7 +39,8 @@ setup(
     name='hangar',
     version='0.2.0',
     license='Apache 2.0',
-    description='Hangar is version control for tensor data. Commit, branch, merge, revert, and collaborate in the data-defined software era.',
+    description=
+    'Hangar is version control for tensor data. Commit, branch, merge, revert, and collaborate in the data-defined software era.',
     long_description=read('README.rst'),
     author='Richard Izzo',
     author_email='rick@tensorwerk.com',
@@ -76,6 +79,7 @@ setup(
         'blosc',
         'click',
         'grpcio',
+        'protobuf',
         'h5py==2.9.0',
         'lmdb>=0.94,<=0.96',
         'msgpack==0.6.1',
@@ -85,7 +89,7 @@ setup(
         'wrapt',
     ],
     extras_require=extra_require,
-    entry_points={'console_scripts': [
-        'hangar = hangar.cli:main',
-    ]},
+    entry_points={
+        'console_scripts': ['hangar = hangar.cli:main']
+    },
 )

@@ -166,6 +166,18 @@ class Repository(object):
         res = vcompat.get_repository_software_version_str(self._env.branchenv)
         return res
 
+    @property
+    def initialized(self) -> bool:
+        """
+        Check if the repository has been initialized or not
+
+        Returns
+        -------
+        bool
+            True if repository has been initialized.
+        """
+        return self._env.repo_is_initialized
+
     def checkout(self,
                  write: bool = False,
                  *,
@@ -382,7 +394,7 @@ class Repository(object):
         print(ppbuf.getvalue())
         return None
 
-    def _details(self) -> None:  # pragma: noqa
+    def _details(self) -> None:  # pragma: no cover
         """DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
         """
         print(summarize.details(self._env.branchenv).getvalue())
@@ -467,7 +479,7 @@ class Repository(object):
             base_commit=base_commit)
         return didCreateBranch
 
-    def remove_branch(self, name):
+    def remove_branch(self, name):  # pragma: no cover
         """Not Implemented
         """
         self.__verify_repo_initialized()

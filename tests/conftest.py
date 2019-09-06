@@ -30,6 +30,32 @@ def managed_tmpdir(tmp_path):
 
 
 @pytest.fixture()
+def generate_3_images(managed_tmpdir):
+    from PIL import Image
+
+    arr1 = np.random.randint(0, 120, size=(10, 10, 3), dtype=np.uint8)
+    arr2 = np.random.randint(0, 120, size=(10, 10, 3), dtype=np.uint8)
+    arr3 = np.random.randint(0, 120, size=(10, 10, 3), dtype=np.uint8)
+
+    im1 = Image.fromarray(arr1)
+    im2 = Image.fromarray(arr2)
+    im3 = Image.fromarray(arr3)
+
+    fpth1 = pjoin(managed_tmpdir, 'arr1.jpg')
+    fpth2 = pjoin(managed_tmpdir, 'arr2.jpg')
+    fpth3 = pjoin(managed_tmpdir, 'arr3.jpg')
+    im1.save(fpth1)
+    im2.save(fpth2)
+    im3.save(fpth3)
+
+    arr1 = np.array(Image.open(fpth1))
+    arr2 = np.array(Image.open(fpth2))
+    arr3 = np.array(Image.open(fpth3))
+
+    return ((fpth1, arr1), (fpth2, arr2), (fpth3, arr3))
+
+
+@pytest.fixture()
 def repo(managed_tmpdir) -> Repository:
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
@@ -199,10 +225,11 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
     yield address
 
     hangserver.env._close_environments()
-    server.stop(0.0)
+    server.stop(0.1)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.5)
+        time.sleep(0.4)
 
 
 @pytest.fixture()

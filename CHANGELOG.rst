@@ -5,13 +5,33 @@ Change Log
 `In-Progress`_
 ==============
 
+New Features
+------------
+
+* API addition allowing reading and writing arrayset data from a checkout object directly.
+  (`#115 <https://github.com/tensorwerk/hangar-py/pull/115>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Data importer, exporters, and viewers via CLI for common file formats. Includes plugin system
+  for easy extensibility in the future.
+  (`#103 <https://github.com/tensorwerk/hangar-py/pull/103>`__)
+  (`@rlizzo <https://github.com/rlizzo>`__, `@hhsecond <https://github.com/hhsecond>`__)
+
 Improvements
 ------------
 
 * Added tutorial on working with remote data.
   (`#113 <https://github.com/tensorwerk/hangar-py/pull/113>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added Tutorial on Tensorflow and PyTorch Dataloaders.
+  (`#117 <https://github.com/tensorwerk/hangar-py/pull/117>`__) `@hhsecond <https://github.com/hhsecond>`__
 * Large performance improvement to diff/merge algorithm (~30x previous).
   (`#112 <https://github.com/tensorwerk/hangar-py/pull/112>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+Bug Fixes
+---------
+
+* Fixed ML Dataloaders errors for a number of edge cases surrounding partial-remote data and non-common keys.
+  (`#110 <https://github.com/tensorwerk/hangar-py/pull/110>`__)
+  ( `@hhsecond <https://github.com/hhsecond>`__, `@rlizzo <https://github.com/rlizzo>`__)
+
 
 `v0.2.0`_ (2019-08-09)
 ======================
