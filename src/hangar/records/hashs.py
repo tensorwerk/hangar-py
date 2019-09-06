@@ -3,7 +3,7 @@ import lmdb
 from . import parsing
 from .. import constants as c
 from ..context import TxnRegister
-from ..backends.selection import backend_decoder, BACKEND_ACCESSOR_MAP
+from ..backends.selection import BACKEND_ACCESSOR_MAP
 
 
 class HashQuery(object):

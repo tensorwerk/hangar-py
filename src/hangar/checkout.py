@@ -1060,9 +1060,9 @@ class WriterCheckout(object):
                     'arraysets in `set` operation in current Hangar implementation')
 
             elif (nAsets == 1) and (nSamples == 1):
-                for aset in asets:
-                    for sampleName in sampleNames:
-                        aset[sampleName] = value
+                aset = asets[0]
+                sampleName = sampleNames[0]
+                aset[sampleName] = value
 
             elif nAsets >= 2:
                 if not isinstance(value, (list, tuple)):

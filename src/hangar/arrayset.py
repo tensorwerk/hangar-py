@@ -8,12 +8,19 @@ from typing import (
 import lmdb
 import numpy as np
 
-from .backends import BACKEND_ACCESSOR_MAP
-from .backends import backend_decoder, backend_from_heuristics
+from .backends import BACKEND_ACCESSOR_MAP, backend_decoder, backend_from_heuristics
 from .context import TxnRegister
-from .records import parsing
-from .records.queries import RecordQuery
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key
+from .records.queries import RecordQuery
+from .records.parsing import hash_data_db_key_from_raw_key
+from .records.parsing import generate_sample_name
+from .records.parsing import hash_schema_db_key_from_raw_key
+from .records.parsing import data_record_db_key_from_raw_key
+from .records.parsing import data_record_raw_val_from_db_val
+from .records.parsing import data_record_db_val_from_raw_val
+from .records.parsing import arrayset_record_count_range_key
+from .records.parsing import arrayset_record_schema_db_key_from_raw_key
+from .records.parsing import arrayset_record_schema_db_val_from_raw_val
 
 
 CompatibleArray = NamedTuple(
@@ -108,16 +115,18 @@ class ArraysetDataReader(object):
         try:
             asetNamesSpec = RecordQuery(dataenv).arrayset_data_records(self._asetn)
             for asetNames, dataSpec in asetNamesSpec:
-                hashKey = parsing.hash_data_db_key_from_raw_key(dataSpec.data_hash)
+                hashKey = hash_data_db_key_from_raw_key(dataSpec.data_hash)
                 hash_ref = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hash_ref)
                 self._sspecs[asetNames.data_name] = be_loc
-                if (be_loc.backend == '50') and (not self._contains_partial_remote_data):
-                    warnings.warn(
-                        f'Arrayset: {self._asetn} contains `reference-only` samples, with '
-                        f'actual data residing on a remote server. A `fetch-data` '
-                        f'operation is required to access these samples.', UserWarning)
+                if be_loc.backend == '50':
                     self._contains_partial_remote_data = True
+
+            if self._contains_partial_remote_data is True:
+                warnings.warn(
+                    f'Arrayset: {self._asetn} contains `reference-only` samples, with '
+                    f'actual data residing on a remote server. A `fetch-data` '
+                    f'operation is required to access these samples.', UserWarning)
         finally:
             _TxnRegister.abort_reader_txn(hashenv)
 
@@ -551,7 +560,8 @@ class ArraysetDataWriter(ArraysetDataReader):
             reason = f'data shape: {data.shape} != fixed aset shape: {self._schema_max_shape}'
 
         compatible = True if reason == '' else False
-        return CompatibleArray(compatible=compatible, reason=reason)
+        res = CompatibleArray(compatible=compatible, reason=reason)
+        return res
 
     def add(self, data: np.ndarray, name: Union[str, int] = None,
             **kwargs) -> Union[str, int]:
@@ -601,7 +611,7 @@ class ArraysetDataWriter(ArraysetDataReader):
                     f'Name provided: `{name}` type: {type(name)} is invalid. Can only contain '
                     f'alpha-numeric or "." "_" "-" ascii characters (no whitespace) or int >= 0')
             elif not self._samples_are_named:
-                name = kwargs['bulkn'] if 'bulkn' in kwargs else parsing.generate_sample_name()
+                name = kwargs['bulkn'] if 'bulkn' in kwargs else generate_sample_name()
 
             isCompat = self._verify_array_compatible(data)
             if not isCompat.compatible:
@@ -618,14 +628,14 @@ class ArraysetDataWriter(ArraysetDataReader):
                 self.__enter__()
 
             full_hash = hashlib.blake2b(data.tobytes(), digest_size=20).hexdigest()
-            hashKey = parsing.hash_data_db_key_from_raw_key(full_hash)
+            hashKey = hash_data_db_key_from_raw_key(full_hash)
 
             # check if data record already exists with given key
-            dataRecKey = parsing.data_record_db_key_from_raw_key(self._asetn, name)
+            dataRecKey = data_record_db_key_from_raw_key(self._asetn, name)
             existingDataRecVal = self._dataTxn.get(dataRecKey, default=False)
             if existingDataRecVal:
                 # check if data record already with same key & hash value
-                existingDataRec = parsing.data_record_raw_val_from_db_val(existingDataRecVal)
+                existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
                 if full_hash == existingDataRec.data_hash:
                     return name
 
@@ -640,7 +650,7 @@ class ArraysetDataWriter(ArraysetDataReader):
                 self._sspecs[name] = backend_decoder(existingHashVal)
 
             # add the record to the db
-            dataRecVal = parsing.data_record_db_val_from_raw_val(full_hash)
+            dataRecVal = data_record_db_val_from_raw_val(full_hash)
             self._dataTxn.put(dataRecKey, dataRecVal)
 
         finally:
@@ -688,7 +698,7 @@ class ArraysetDataWriter(ArraysetDataReader):
         if not self._is_conman:
             self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
 
-        dataKey = parsing.data_record_db_key_from_raw_key(self._asetn, name)
+        dataKey = data_record_db_key_from_raw_key(self._asetn, name)
         try:
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
@@ -697,7 +707,7 @@ class ArraysetDataWriter(ArraysetDataReader):
 
             if len(self._sspecs) == 0:
                 # if this is the last data piece existing in a arrayset, remove the schema
-                asetSchemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(self._asetn)
+                asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self._asetn)
                 self._dataTxn.delete(asetSchemaKey)
 
         except KeyError as e:
@@ -1058,7 +1068,7 @@ class Arraysets(object):
             if not all([k in self._arraysets for k in mapping.keys()]):
                 raise KeyError(
                     f'some key(s): {mapping.keys()} not in aset(s): {self._arraysets.keys()}')
-            data_name = parsing.generate_sample_name()
+            data_name = generate_sample_name()
             for k, v in mapping.items():
                 self._arraysets[k].add(v, bulkn=data_name)
 
@@ -1148,7 +1158,6 @@ class Arraysets(object):
         # ------------- Checks for argument validity --------------------------
 
         try:
-
             if not is_suitable_user_key(name):
                 raise ValueError(
                     f'Arrayset name provided: `{name}` is invalid. Can only contain '
@@ -1189,10 +1198,8 @@ class Arraysets(object):
             (*prototype.shape, prototype.size, prototype.dtype.num), dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
 
-        # asetCountKey = parsing.arrayset_record_count_db_key_from_raw_key(name)
-        # asetCountVal = parsing.arrayset_record_count_db_val_from_raw_val(0)
-        asetSchemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(name)
-        asetSchemaVal = parsing.arrayset_record_schema_db_val_from_raw_val(
+        asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(name)
+        asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
             schema_is_var=variable_shape,
             schema_max_shape=prototype.shape,
@@ -1204,7 +1211,7 @@ class Arraysets(object):
 
         dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
         hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
-        hashSchemaKey = parsing.hash_schema_db_key_from_raw_key(schema_hash)
+        hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         hashSchemaVal = asetSchemaVal
 
         dataTxn.put(asetSchemaKey, asetSchemaVal)
@@ -1257,7 +1264,7 @@ class Arraysets(object):
 
             with datatxn.cursor() as cursor:
                 cursor.first()
-                asetRangeKey = parsing.arrayset_record_count_range_key(aset_name)
+                asetRangeKey = arrayset_record_count_range_key(aset_name)
                 recordsExist = cursor.set_range(asetRangeKey)
                 while recordsExist:
                     k = cursor.key()
@@ -1266,7 +1273,7 @@ class Arraysets(object):
                     else:
                         recordsExist = False
 
-            asetSchemaKey = parsing.arrayset_record_schema_db_key_from_raw_key(aset_name)
+            asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(aset_name)
             datatxn.delete(asetSchemaKey)
         finally:
             TxnRegister().commit_writer_txn(self._dataenv)
