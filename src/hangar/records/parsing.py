@@ -949,7 +949,7 @@ def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> Dig
     refDigest = _commit_ref_joined_kv_digest(joined)
 
     pck = c.CMT_REC_JOIN_KEY.join(joined)
-    raw = blosc.compress(pck, typesize=1, clevel=6, shuffle=blosc.BITSHUFFLE, cname='lz4')
+    raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.SHUFFLE, cname='zlib')
     res = DigestAndBytes(digest=refDigest, raw=raw)
     return res
 
@@ -1028,7 +1028,7 @@ def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
     db_spec_val = json.dumps(spec_dict, separators=(',', ':')).encode()
     digest = _hash_func(db_spec_val)
     comp_raw = blosc.compress(
-        db_spec_val, typesize=8, clevel=6, shuffle=blosc.BITSHUFFLE, cname='zlib')
+        db_spec_val, typesize=8, clevel=9, shuffle=blosc.SHUFFLE, cname='zlib')
     res = DigestAndBytes(digest=digest, raw=comp_raw)
     return res
 

@@ -125,7 +125,7 @@ CHUNK_RDCC_W0 = 0.75
 # filter definition and backup selection if not available.
 filter_opts = {
     'default': {
-        'shuffle': 'bit',
+        'shuffle': True,
         'complib': 'blosc:blosclz',
         'complevel': 4,
         'fletcher32': True},
