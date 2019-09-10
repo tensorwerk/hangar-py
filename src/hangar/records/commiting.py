@@ -635,7 +635,15 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
     dirs_to_make, symlinks_to_make = [], []
     for root, dirs, files in os.walk(process_dir):
         for d in dirs:
-            dirs_to_make.append(os.path.relpath(pjoin(root, d), process_dir))
+            if root == process_dir:
+                # top level backend codes
+                dirs_to_make.append(os.path.relpath(pjoin(root, d), process_dir))
+            else:
+                # directory symlinks to create
+                store_dir_pth = pjoin(store_dir, os.path.relpath(pjoin(root, d), process_dir))
+                link_dir_pth = os.path.normpath(pjoin(root, os.readlink(pjoin(root, d))))
+                symlinks_to_make.append((link_dir_pth, store_dir_pth))
+
         for f in files:
             store_file_pth = pjoin(store_dir, os.path.relpath(pjoin(root, f), process_dir))
             link_file_pth = os.path.normpath(pjoin(root, os.readlink(pjoin(root, f))))
@@ -646,7 +654,11 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
         if not os.path.isdir(dpth):
             os.makedirs(dpth)
     for src, dest in symlinks_to_make:
-        symlink_rel(src, dest)
+        if os.path.isdir(src):
+            is_dir_link = True
+        else:
+            is_dir_link = False
+        symlink_rel(src, dest, is_dir=is_dir_link)
 
     # reset before releasing control.
     shutil.rmtree(process_dir)

@@ -98,7 +98,7 @@ def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
     return obj_proxy
 
 
-def symlink_rel(src: os.PathLike, dst: os.PathLike):
+def symlink_rel(src: os.PathLike, dst: os.PathLike, *, is_dir=False):
     """Create symbolic links which actually work like they should
 
     Parameters
@@ -107,9 +107,11 @@ def symlink_rel(src: os.PathLike, dst: os.PathLike):
         create a symbolic link pointic to src
     dst : os.PathLike
         create a link named dst
+    is_dir : bool, kwarg-only, optional
+        if pointing to a directory, set to true. Default = False
     """
     rel_path_src = os.path.relpath(src, os.path.dirname(dst))
-    os.symlink(rel_path_src, dst)
+    os.symlink(rel_path_src, dst, target_is_directory=is_dir)
 
 
 _SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)

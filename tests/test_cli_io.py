@@ -9,7 +9,10 @@ from hangar.cli import cli
 import numpy as np
 from click.testing import CliRunner
 
-@pytest.mark.parametrize("backend", ['00', '10'])
+from conftest import backend_params
+
+
+@pytest.mark.parametrize("backend", backend_params)
 @pytest.mark.parametrize("plug", ['pil', 'matplotlib'])
 def test_import_images(backend, plug, generate_3_images):
 
@@ -48,7 +51,7 @@ def test_import_images(backend, plug, generate_3_images):
         co1c.close()
 
 
-@pytest.mark.parametrize("backend", ['00', '10'])
+@pytest.mark.parametrize("backend", backend_params)
 @pytest.mark.parametrize("in_commands,expected_fnames", [
     (['-o', '.', '-s', 'lol.jpg', 'master', 'dummy'], ['lol.jpg']),
     (['-o', '.', '-f', '.png', 'master', 'dummy'], ['lol.jpg.png', 'arr1.jpg.png', 'arr2.jpg.png', 'arr3.jpg.png']),
@@ -82,7 +85,7 @@ def test_export_images(backend, in_commands, expected_fnames, generate_3_images)
         co1b.close()
 
 
-@pytest.mark.parametrize("backend", ['00', '10'])
+@pytest.mark.parametrize("backend", backend_params)
 def test_view_images(monkeypatch, backend, generate_3_images):
 
     im1, im2, im3 = generate_3_images

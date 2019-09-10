@@ -95,7 +95,11 @@ from .remote_50 import REMOTE_50_Handler, remote_50_decode, REMOTE_50_DataHashSp
 # -------------------------- Parser Types and Mapping -------------------------
 
 
-_DataHashSpecs = Union[HDF5_00_DataHashSpec, NUMPY_10_DataHashSpec, REMOTE_50_DataHashSpec]
+_DataHashSpecs = Union[
+    HDF5_00_DataHashSpec,
+    NUMPY_10_DataHashSpec,
+    REMOTE_50_DataHashSpec]
+
 _ParserMap = Mapping[bytes, Callable[[bytes], _DataHashSpecs]]
 
 BACKEND_DECODER_MAP: _ParserMap = {

@@ -1,5 +1,7 @@
 import pytest
 import numpy as np
+from conftest import backend_params
+from itertools import permutations
 
 
 class TestArrayset(object):
@@ -43,7 +45,7 @@ class TestArrayset(object):
         assert asetOldDefaultSchemaHash == asetNew._default_schema_hash
         co.close()
 
-    @pytest.mark.parametrize("aset_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset_backend", backend_params)
     def test_remove_arrayset(self, aset_backend, written_repo):
         co = written_repo.checkout(write=True)
         co.arraysets.remove_aset('writtenaset')
@@ -69,7 +71,7 @@ class TestArrayset(object):
         co.commit('this is a commit message')
         co.close()
 
-    @pytest.mark.parametrize("aset_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset_backend", backend_params)
     def test_init_again(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend=aset_backend)
@@ -77,7 +79,7 @@ class TestArrayset(object):
             co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend=aset_backend)
         co.close()
 
-    @pytest.mark.parametrize("aset_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset_backend", backend_params)
     def test_arrayset_with_more_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
@@ -92,7 +94,7 @@ class TestArrayset(object):
             co.arraysets.init_arrayset('aset2', shape=shape, dtype=np.int, backend=aset_backend)
         co.close()
 
-    @pytest.mark.parametrize("aset_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset_backend", backend_params)
     def test_arrayset_with_empty_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.array(1, dtype=np.int64)
@@ -110,7 +112,7 @@ class TestArrayset(object):
         assert np.allclose(aset2['1'], arr)
         co.close()
 
-    @pytest.mark.parametrize("aset_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset_backend", backend_params)
     def test_arrayset_with_int_specifier_as_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.arange(10, dtype=np.int64)
@@ -132,9 +134,9 @@ class TestArrayset(object):
 
 class TestDataWithFixedSizedArrayset(object):
 
-    @pytest.mark.parametrize("aset1_backend", ['00', '10'])
-    @pytest.mark.parametrize("aset2_backend", ['00', '10'])
-    @pytest.mark.parametrize("aset3_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset1_backend", backend_params)
+    @pytest.mark.parametrize("aset2_backend", backend_params)
+    @pytest.mark.parametrize("aset3_backend", backend_params)
     def test_iterating_over(self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
@@ -370,8 +372,8 @@ class TestDataWithFixedSizedArrayset(object):
         assert np.allclose(co.arraysets['writtenaset']['1'], array5by7)
         co.close()
 
-    @pytest.mark.parametrize("aset1_backend", ['00', '10'])
-    @pytest.mark.parametrize("aset2_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset1_backend", backend_params)
+    @pytest.mark.parametrize("aset2_backend", backend_params)
     def test_multiple_arraysets_single_commit(self, aset1_backend, aset2_backend, written_repo, randomsizedarray):
         co = written_repo.checkout(write=True)
         aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend=aset1_backend)
@@ -385,8 +387,8 @@ class TestDataWithFixedSizedArrayset(object):
         assert np.allclose(co.arraysets['aset2']['arr'], randomsizedarray)
         co.close()
 
-    @pytest.mark.parametrize("aset1_backend", ['00', '10'])
-    @pytest.mark.parametrize("aset2_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset1_backend", backend_params)
+    @pytest.mark.parametrize("aset2_backend", backend_params)
     def test_prototype_and_shape(self, aset1_backend, aset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         aset1 = co.arraysets.init_arrayset(
@@ -437,7 +439,7 @@ class TestDataWithFixedSizedArrayset(object):
             aset['3'] = newarr
         co.close()
 
-    @pytest.mark.parametrize("aset_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset_backend", backend_params)
     def test_writer_context_manager_arrayset_add_sample(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend=aset_backend)
@@ -459,7 +461,7 @@ class TestDataWithFixedSizedArrayset(object):
         assert co.metadata['key'] == 'val'
         co.close()
 
-    @pytest.mark.parametrize("aset_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset_backend", backend_params)
     def test_arrayset_context_manager_aset_sample_and_metadata_add(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend=aset_backend)
@@ -480,8 +482,8 @@ class TestDataWithFixedSizedArrayset(object):
         assert co.metadata.get('hello') == 'world'
         co.close()
 
-    @pytest.mark.parametrize("aset1_backend", ['00', '10'])
-    @pytest.mark.parametrize("aset2_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset1_backend", backend_params)
+    @pytest.mark.parametrize("aset2_backend", backend_params)
     def test_bulk_add(self, aset1_backend, aset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.arraysets.init_arrayset(
@@ -553,7 +555,7 @@ class TestVariableSizedArrayset(object):
          [[(10,), (1,), (5,)], (10,)],
          [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]])
     @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
-    @pytest.mark.parametrize('backend', ['00', '10'])
+    @pytest.mark.parametrize('backend', backend_params)
     def test_writer_can_create_variable_size_arrayset(self, written_repo, dtype, test_shapes, shape, backend):
         repo = written_repo
         wco = repo.checkout(write=True)
@@ -583,7 +585,7 @@ class TestVariableSizedArrayset(object):
         [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]
     ])
     @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
-    @pytest.mark.parametrize('backend', ['00', '10'])
+    @pytest.mark.parametrize('backend', backend_params)
     def test_reader_recieves_expected_values_for_variable_size_arrayset(self, written_repo, dtype, test_shapes, shape, backend):
         repo = written_repo
         wco = repo.checkout(write=True)
@@ -613,36 +615,18 @@ class TestVariableSizedArrayset(object):
 
 
     @pytest.mark.parametrize('aset_specs', [
-        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
-         ['aset2', [(10,), (1,), (5,)], (10,), '00', np.uint8]
-         ],
-        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.uint8],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
-         ],
-        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.uint8],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
-         ],
-        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.uint8],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.uint8]
-         ],
-        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
-         ['aset2', [(10,), (1,), (5,)], (10,), '00', np.float32]
-         ],
-        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '00', np.float32],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
-         ],
-        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.float32],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
-         ],
-        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10), '10', np.float32],
-         ['aset2', [(10,), (1,), (5,)], (10,), '10', np.float32]
-         ]])
-    def test_writer_reader_can_create_read_multiple_variable_size_arrayset(self, written_repo, aset_specs):
+        [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10)],
+         ['aset2', [(10,), (1,), (5,)], (10,)]],
+        [['aset1', [(100, 100), (1, 100), (20, 20), (30, 50), (1, 10), (10, 1)], (100, 100)],
+         ['aset2', [(100,), (1,), (50,)], (100,)]]])
+    @pytest.mark.parametrize('backends', permutations(backend_params, 2))
+    @pytest.mark.parametrize('dtype', [np.float32, np.uint8])
+    def test_writer_reader_can_create_read_multiple_variable_size_arrayset(self, written_repo, aset_specs, backends, dtype):
         repo = written_repo
         wco = repo.checkout(write=True)
         arrdict = {}
-        for aset_spec in aset_specs:
-            aset_name, test_shapes, max_shape, backend, dtype = aset_spec
+        for backend, aset_spec in zip(backends, aset_specs):
+            aset_name, test_shapes, max_shape = aset_spec
             wco.arraysets.init_arrayset(aset_name, shape=max_shape, dtype=dtype, variable_shape=True, backend=backend)
 
             arrdict[aset_name] = {}
@@ -692,7 +676,7 @@ class TestVariableSizedArrayset(object):
 
 class TestMultiprocessArraysetReads(object):
 
-    @pytest.mark.parametrize('backend', ['00', '10'])
+    @pytest.mark.parametrize('backend', backend_params)
     def test_external_multi_process_pool(self, repo, backend):
         from multiprocessing import get_context
 
@@ -727,7 +711,7 @@ class TestMultiprocessArraysetReads(object):
             cmtIdx += 1
             nco.close()
 
-    @pytest.mark.parametrize('backend', ['00', '10'])
+    @pytest.mark.parametrize('backend', backend_params)
     def test_batch_get_multi_process_pool(self, repo, backend):
         masterCmtList = []
         co = repo.checkout(write=True)
@@ -759,7 +743,7 @@ class TestMultiprocessArraysetReads(object):
             cmtIdx += 1
             nco.close()
 
-    @pytest.mark.parametrize('backend', ['00', '10'])
+    @pytest.mark.parametrize('backend', backend_params)
     def test_batch_get_fails_on_superset_of_keys_and_succeeds_on_subset(self, repo, backend):
         co = repo.checkout(write=True)
         co.arraysets.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)

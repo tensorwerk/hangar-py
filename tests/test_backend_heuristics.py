@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+from conftest import backend_params
 
 
 @pytest.mark.parametrize('prototype,expected_backend', [
@@ -26,14 +27,8 @@ def test_heuristics_select_backend(repo, prototype, expected_backend):
     nwco.close()
 
 
-@pytest.mark.parametrize('prototype,backend', [
-    [np.random.randn(10), '00'],
-    [np.random.randn(10), '10'],
-    [np.random.randn(1000), '00'],
-    [np.random.randn(1000), '10'],
-    [np.random.randn(2, 2), '00'],
-    [np.random.randn(2, 2), '10'],
-])
+@pytest.mark.parametrize('prototype', [np.random.randn(10), np.random.randn(1000), np.random.randn(2, 2)])
+@pytest.mark.parametrize('backend', backend_params)
 def test_manual_override_heuristics_select_backend(repo, prototype, backend):
 
     wco = repo.checkout(write=True)
