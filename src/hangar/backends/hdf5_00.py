@@ -21,9 +21,10 @@ Storage Method
 
    *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
 
-   *  ``shape: (COLLECTION_SIZE, *{schema_shape})``; ie ``(500, 10)`` or ``(500,
-      4, 3)``. The first index in the dataset is referred to as a ``collection
-      index``.
+   *  ``shape: (COLLECTION_SIZE, *{schema_shape.size})``; ie ``(500, 10)`` or
+      ``(500, 300)``. The first index in the dataset is referred to as a
+      ``collection index``. See technical note below for detailed explanation
+      on why the flatten operaiton is performed.
 
 *  Compression Filters, Chunking Configuration/Options are applied globally for
    all ``datasets`` in a file at dataset creation time.
@@ -89,6 +90,27 @@ Technical Notes
    via custom python ``pickle`` serialization/reduction logic which is
    implemented by the high level ``pickle`` reduction ``__set_state__()``,
    ``__get_state__()`` class methods.
+
+*  An optimization is performed in order to increase the read / write
+   performance of variable shaped datasets. Due to the way that we initialize
+   an entire HDF5 file with all datasets pre-created (to the size of the max
+   subarray shape), we need to ensure that storing smaller sized arrays (in a
+   variable sized Hangar Arrayset) would be effective. Because we use chunked
+   storage, certain dimensions which are incomplete could have potentially
+   required writes to chunks which do are primarily empty (worst case "C" index
+   ordering), increasing read / write speeds significantly.
+
+   To overcome this, we create HDF5 datasets which have ``COLLECTION_SIZE``
+   first dimension size, and only ONE second dimension of size
+   ``schema_shape.size()`` (ie. product of all dimensions). For example an
+   array schema with shape (10, 10, 3) would be stored in a HDF5 dataset of
+   shape (COLLECTION_SIZE, 300). Chunk sizes are chosen to align on the first
+   dimension with a second dimension of size which fits the total data into L2
+   CPU Cache (< 256 KB). On write, we use the ``np.ravel`` function to
+   construct a "view" (not copy) of the array as a 1D array, and then on read
+   we reshape the array to the recorded size (a copyless "view-only"
+   operation). This is part of the reason that we only accept C ordered arrays
+   as input to Hangar.
 """
 import math
 import os
