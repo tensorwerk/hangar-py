@@ -161,6 +161,9 @@ have as we move to compatible changes in the future.
 """
 
 
+incompatible_changes_after = [VersionSpec(major=0, minor=2, micro=0)]
+
+
 def is_repo_software_version_compatible(repo_v: VersionSpec, curr_v: VersionSpec) -> bool:
     """Determine if the repo on disk and the current Hangar versions iscompatible.
 
@@ -176,4 +179,12 @@ def is_repo_software_version_compatible(repo_v: VersionSpec, curr_v: VersionSpec
     bool
         True if compatible, False if not.
     """
+    if repo_v in incompatible_changes_after:
+        if curr_v.major > repo_v.major:
+            return False
+        elif curr_v.minor > repo_v.minor:
+            return False
+        elif curr_v.micro > repo_v.micro:
+            return False
+
     return True

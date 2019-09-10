@@ -99,7 +99,6 @@ def repo_with_10000_samples(request, written_repo, array5by7):
     yield written_repo
 
 
-
 @pytest.fixture()
 def variable_shape_written_repo(repo):
     co = repo.checkout(write=True)

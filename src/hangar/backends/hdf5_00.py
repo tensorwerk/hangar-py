@@ -21,9 +21,10 @@ Storage Method
 
    *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
 
-   *  ``shape: (COLLECTION_SIZE, *{schema_shape})``; ie ``(500, 10)`` or ``(500,
-      4, 3)``. The first index in the dataset is referred to as a ``collection
-      index``.
+   *  ``shape: (COLLECTION_SIZE, *{schema_shape.size})``; ie ``(500, 10)`` or
+      ``(500, 300)``. The first index in the dataset is referred to as a
+      ``collection index``. See technical note below for detailed explanation
+      on why the flatten operaiton is performed.
 
 *  Compression Filters, Chunking Configuration/Options are applied globally for
    all ``datasets`` in a file at dataset creation time.
@@ -89,6 +90,27 @@ Technical Notes
    via custom python ``pickle`` serialization/reduction logic which is
    implemented by the high level ``pickle`` reduction ``__set_state__()``,
    ``__get_state__()`` class methods.
+
+*  An optimization is performed in order to increase the read / write
+   performance of variable shaped datasets. Due to the way that we initialize
+   an entire HDF5 file with all datasets pre-created (to the size of the max
+   subarray shape), we need to ensure that storing smaller sized arrays (in a
+   variable sized Hangar Arrayset) would be effective. Because we use chunked
+   storage, certain dimensions which are incomplete could have potentially
+   required writes to chunks which do are primarily empty (worst case "C" index
+   ordering), increasing read / write speeds significantly.
+
+   To overcome this, we create HDF5 datasets which have ``COLLECTION_SIZE``
+   first dimension size, and only ONE second dimension of size
+   ``schema_shape.size()`` (ie. product of all dimensions). For example an
+   array schema with shape (10, 10, 3) would be stored in a HDF5 dataset of
+   shape (COLLECTION_SIZE, 300). Chunk sizes are chosen to align on the first
+   dimension with a second dimension of size which fits the total data into L2
+   CPU Cache (< 256 KB). On write, we use the ``np.ravel`` function to
+   construct a "view" (not copy) of the array as a 1D array, and then on read
+   we reshape the array to the recorded size (a copyless "view-only"
+   operation). This is part of the reason that we only accept C ordered arrays
+   as input to Hangar.
 """
 import math
 import os
@@ -118,16 +140,16 @@ COLLECTION_SIZE = 250
 COLLECTION_COUNT = 100
 
 # chunking options for compression schemes
-CHUNK_MAX_NBYTES = 200_000  # < 256 KB to fit in L2 CPU Cache
+CHUNK_MAX_NBYTES = 255_000  # < 256 KB to fit in L2 CPU Cache
 CHUNK_MAX_RDCC_NBYTES = 100_000_000
 CHUNK_RDCC_W0 = 0.75
 
 # filter definition and backup selection if not available.
 filter_opts = {
     'default': {
-        'shuffle': 'bit',
-        'complib': 'blosc:lz4',
-        'complevel': 7,
+        'shuffle': True,
+        'complib': 'blosc:blosclz',
+        'complevel': 4,
         'fletcher32': True},
     'backup': {
         'shuffle': True,
@@ -449,21 +471,11 @@ class HDF5_00_FileHandles(object):
         int
             nbytes which the chunk will fit in. Will be <= `HDF5_MAX_CHUNK_NBYTES`
         """
-        chunk_nbytes = sample_array.nbytes
-        chunk_shape = list(sample_array.shape)
-        shape_rank = len(chunk_shape)
-        chunk_idx = 0
-
-        while chunk_nbytes > max_chunk_nbytes:
-            if chunk_idx >= shape_rank:
-                chunk_idx = 0
-            rank_dim = chunk_shape[chunk_idx]
-            if rank_dim <= 2:
-                chunk_idx += 1
-                continue
-            chunk_shape[chunk_idx] = math.floor(rank_dim / 2)
-            chunk_nbytes = np.zeros(shape=chunk_shape, dtype=sample_array.dtype).nbytes
-            chunk_idx += 1
+        chunk_size = int(np.floor(max_chunk_nbytes / sample_array.itemsize))
+        if chunk_size > sample_array.size:
+            chunk_size = sample_array.size
+        chunk_shape = [chunk_size]
+        chunk_nbytes = np.zeros(shape=chunk_shape, dtype=sample_array.dtype).nbytes
 
         return (chunk_shape, chunk_nbytes)
 
@@ -546,9 +558,9 @@ class HDF5_00_FileHandles(object):
         for dset_num in range(COLLECTION_COUNT):
             self.wFp[uid].create_dataset(
                 f'/{dset_num}',
-                shape=(COLLECTION_SIZE, *sample_array.shape),
+                shape=(COLLECTION_SIZE, sample_array.size),
                 dtype=sample_array.dtype,
-                maxshape=(COLLECTION_SIZE, *sample_array.shape),
+                maxshape=(COLLECTION_SIZE, sample_array.size),
                 chunks=(1, *chunk_shape),
                 **optKwargs)
 
@@ -592,14 +604,15 @@ class HDF5_00_FileHandles(object):
         np.array
             requested data.
         """
+        arrSize = int(np.prod(hashVal.shape))
         dsetIdx = int(hashVal.dataset_idx)
         dsetCol = f'/{hashVal.dataset}'
 
-        srcSlc = (self.slcExpr[dsetIdx], *(self.slcExpr[0:x] for x in hashVal.shape))
+        srcSlc = (self.slcExpr[dsetIdx], self.slcExpr[0:arrSize])
         destSlc = None
 
         if self.schema_dtype is not None:
-            destArr = np.empty((hashVal.shape), self.schema_dtype)
+            destArr = np.empty((arrSize,), self.schema_dtype)
             try:
                 self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
             except TypeError:
@@ -627,7 +640,8 @@ class HDF5_00_FileHandles(object):
                     destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
                 else:
                     raise
-        return destArr
+        out = destArr.reshape(hashVal.shape)
+        return out
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
         """verifies correctness of array data and performs write operation.
@@ -663,8 +677,9 @@ class HDF5_00_FileHandles(object):
             self._create_schema(remote_operation=remote_operation)
 
         srcSlc = None
-        destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
-        self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(array, srcSlc, destSlc)
+        destSlc = (self.slcExpr[self.hIdx], self.slcExpr[0:array.size])
+        flat_arr = np.ravel(array)
+        self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(flat_arr, srcSlc, destSlc)
 
         hashVal = hdf5_00_encode(uid=self.w_uid,
                                  dataset=self.hNextPath,

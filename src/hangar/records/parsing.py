@@ -4,9 +4,9 @@ from time import sleep
 from time import perf_counter
 from random import randint
 from typing import Union, NamedTuple, Tuple, Iterable
+from hashlib import blake2b
 
 import blosc
-import msgpack
 
 from .. import constants as c
 
@@ -437,7 +437,7 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         'schema_is_named': schema_is_named,
         'schema_default_backend': schema_default_backend,
     }
-    db_schema_val = json.dumps(schema_val, ensure_ascii=True).encode()
+    db_schema_val = json.dumps(schema_val, separators=(',', ':')).encode()
     return db_schema_val
 
 
@@ -667,190 +667,8 @@ def hash_meta_raw_val_from_db_val(db_val: bytes) -> str:
     return meta_val
 
 
-"""
-Commit Parsing Methods
------------------------
-
-The parsers defined in this section handle commit (ref) records
-"""
-
-CommitAncestorSpec = NamedTuple('CommitAncestorSpec', [
-    ('is_merge_commit', bool),
-    ('master_ancestor', str),
-    ('dev_ancestor', str),
-])
-
-CommitSpec = NamedTuple('CommitSpec', [
-    ('commit_time', float),
-    ('commit_message', str),
-    ('commit_user', str),
-    ('commit_email', str),
-])
-
-
-"""
-Commit Parent (ancestor) Lookup methods
----------------------------------------
-"""
-
-# ------------------------- raw -> db -----------------------------------------
-
-
-def commit_parent_db_key_from_raw_key(commit_hash: str) -> bytes:
-    db_key = f'{commit_hash}'.encode()
-    return db_key
-
-
-def commit_parent_db_val_from_raw_val(master_ancestor: str,
-                                      dev_ancestor: str = '',
-                                      is_merge_commit: bool = False) -> bytes:
-    if is_merge_commit:
-        str_val = f'{master_ancestor}{c.SEP_CMT}{dev_ancestor}'
-    else:
-        str_val = f'{master_ancestor}'
-    db_val = str_val.encode()
-    return db_val
-
-
-# ------------------------------- db -> raw -----------------------------------
-
-
-def commit_parent_raw_key_from_db_key(db_key: bytes) -> str:
-    commit_hash = db_key.decode()
-    return commit_hash
-
-
-def commit_parent_raw_val_from_db_val(db_val: bytes) -> CommitAncestorSpec:
-    """Parse the value of a commit's parent value to find it's ancestors
-
-    Parameters
-    ----------
-    db_val : bytes
-        Lmdb value of the commit parent field.
-
-    Returns
-    -------
-    namedtuple
-        Namedtuple containing fields for `is_merge_commit`, `master_ancestor`, and
-        `dev_ancestor`
-    """
-    commit_str = db_val.decode()
-    commit_ancestors = commit_str.split(c.SEP_CMT)
-    if len(commit_ancestors) == 1:
-        is_merge_commit = False
-        master_ancestor = commit_ancestors[0]
-        dev_ancestor = ''
-    else:
-        is_merge_commit = True
-        master_ancestor = commit_ancestors[0]
-        dev_ancestor = commit_ancestors[1]
-
-    return CommitAncestorSpec(is_merge_commit, master_ancestor, dev_ancestor)
-
-
-"""
-Commit reference key and values.
---------------------------------
-"""
-
-
-def commit_ref_db_key_from_raw_key(commit_hash: str) -> bytes:
-    commit_ref_key = f'{commit_hash}{c.SEP_KEY}ref'.encode()
-    return commit_ref_key
-
-
-def commit_ref_db_val_from_raw_val(commit_db_kbs: Iterable[Tuple[bytes, bytes]]) -> bytes:
-    """serialize and compress a list of db_key/db_value pairs for commit storage
-
-    Parameters
-    ----------
-    commit_db_key_val_list : iterable of 2-tuples
-        Iterable collection binary encoded db_key/db_val pairs.
-
-    Returns
-    -------
-    bytes
-        Serialized and compressed representation of the object.
-    """
-    pck = msgpack.packb(commit_db_kbs, use_bin_type=True)
-    raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.BITSHUFFLE, cname='lz4')
-    return raw
-
-
-def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> Tuple[Tuple[bytes, bytes]]:
-    """Load and decompress a commit ref db_val into python object memory.
-
-    Parameters
-    ----------
-    commit_db_val : bytes
-        Serialized and compressed representation of commit refs.
-
-    Returns
-    -------
-    Tuple[Tuple[bytes, bytes]]
-        Iterable of binary encoded key/value pairs making up the repo state at
-        the time of that commit. key/value pairs are already in sorted order.
-    """
-    uncompressed_db_list = blosc.decompress(commit_db_val)
-    bytes_db_key_val_list = msgpack.unpackb(uncompressed_db_list, use_list=False)
-    return bytes_db_key_val_list
-
-
-"""
-Commit spec reference keys and values
--------------------------------------
-"""
-
-
-def commit_spec_db_key_from_raw_key(commit_hash: str) -> bytes:
-    commit_spec_key = f'{commit_hash}{c.SEP_KEY}spec'.encode()
-    return commit_spec_key
-
-
-def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
-                                    commit_user: str,
-                                    commit_email: str) -> bytes:
-    """Serialize a commit specification from user values to a db store value
-
-    Parameters
-    ----------
-    commit_time : float
-        time since unix epoch that the commit was made
-    commit_message : str
-        user specified commit message to attach to the record
-    commit_user : str
-        globally configured user name of the repository committer
-    commit_email : str
-        globally configured user email of the repository committer
-
-    Returns
-    -------
-    bytes
-        binary encoded serialization of the commit spec.
-    """
-    spec_dict = {
-        'commit_time': commit_time,
-        'commit_message': commit_message,
-        'commit_user': commit_user,
-        'commit_email': commit_email,
-    }
-    db_spec_val = msgpack.dumps(spec_dict)
-    compressed_db_val = blosc.compress(db_spec_val,
-                                       cname='zlib',
-                                       clevel=9,
-                                       shuffle=blosc.BITSHUFFLE,
-                                       typesize=1)
-    return compressed_db_val
-
-
-def commit_spec_raw_val_from_db_val(db_val: bytes) -> CommitSpec:
-    uncompressed_db_val = blosc.decompress(db_val)
-    commit_spec = msgpack.loads(uncompressed_db_val, raw=False)
-    raw_val = CommitSpec(**commit_spec)
-    return raw_val
-
-
 # -------------------- Remote Work --------------------------------------------
+
 
 def remote_db_key_from_raw_key(remote_name: str) -> bytes:
     """Get the remote db key val for a remote name
@@ -921,3 +739,304 @@ def remote_raw_val_from_db_val(db_val: bytes) -> str:
     """
     raw_val = db_val.decode()
     return raw_val
+
+
+"""
+Commit Parsing Methods
+-----------------------
+
+The parsers defined in this section handle commit (ref) records
+"""
+
+
+CommitAncestorSpec = NamedTuple('CommitAncestorSpec', [
+    ('is_merge_commit', bool),
+    ('master_ancestor', str),
+    ('dev_ancestor', str),
+])
+
+CommitUserSpec = NamedTuple('CommitUserSpec', [
+    ('commit_time', float),
+    ('commit_message', str),
+    ('commit_user', str),
+    ('commit_email', str),
+])
+
+DigestAndUserSpec = NamedTuple('DigestAndUserSpec', [
+    ('digest', str),
+    ('user_spec', CommitUserSpec)
+])
+
+DigestAndAncestorSpec = NamedTuple('DigestAndAncestorSpec', [
+    ('digest', str),
+    ('ancestor_spec', CommitAncestorSpec)
+])
+
+DigestAndBytes = NamedTuple('DigestAndBytes', [
+    ('digest', str),
+    ('raw', bytes),
+])
+
+DigestAndDbRefs = NamedTuple('DigestAndDbRefs', [
+    ('digest', str),
+    ('db_kvs', Tuple[Tuple[bytes, bytes]])
+])
+
+
+def _hash_func(recs: bytes) -> str:
+    """hash a tuple of db formatted k, v pairs.
+
+    Parameters
+    ----------
+    recs : bytes
+        tuple to calculate the joined digest of
+
+    Returns
+    -------
+    str
+        hexdigest of the joined tuple data
+    """
+    digest = blake2b(recs, digest_size=20).hexdigest()
+    return digest
+
+
+def cmt_final_digest(parent_digest: str, spec_digest: str, refs_digest: str) -> str:
+    """Determine digest of commit based on digests of its parent, specs, and refs.
+
+    Parameters
+    ----------
+    parent_digest : str
+        digest of the parent value
+    spec_digest : str
+        digest of the user spec value
+    refs_digest : str
+        digest of the data record values
+
+    Returns
+    -------
+    str
+        digest of the commit
+    """
+    sorted_digests = sorted([parent_digest, spec_digest, refs_digest])
+    joined_bytes = c.CMT_DIGEST_JOIN_KEY.join(sorted_digests).encode()
+    digest = _hash_func(joined_bytes)
+    return digest
+
+"""
+Commit Parent (ancestor) Lookup methods
+---------------------------------------
+"""
+
+# ------------------------- raw -> db -----------------------------------------
+
+
+def commit_parent_db_key_from_raw_key(commit_hash: str) -> bytes:
+    db_key = f'{commit_hash}'.encode()
+    return db_key
+
+
+def commit_parent_db_val_from_raw_val(master_ancestor: str,
+                                      dev_ancestor: str = '',
+                                      is_merge_commit: bool = False) -> DigestAndBytes:
+    if is_merge_commit:
+        str_val = f'{master_ancestor}{c.SEP_CMT}{dev_ancestor}'
+    else:
+        str_val = f'{master_ancestor}'
+    db_val = str_val.encode()
+    digest = _hash_func(db_val)
+    res = DigestAndBytes(digest=digest, raw=db_val)
+    return res
+
+
+# ------------------------------- db -> raw -----------------------------------
+
+
+def commit_parent_raw_key_from_db_key(db_key: bytes) -> str:
+    commit_hash = db_key.decode()
+    return commit_hash
+
+
+def commit_parent_raw_val_from_db_val(db_val: bytes) -> DigestAndAncestorSpec:
+    """Parse the value of a commit's parent value to find it's ancestors
+
+    Parameters
+    ----------
+    db_val : bytes
+        Lmdb value of the commit parent field.
+
+    Returns
+    -------
+    DigestAndAncestorSpec
+        `digest` of data writen to disk and `ancestor_spec`, Namedtuple
+        containing fields for `is_merge_commit`, `master_ancestor`, and
+        `dev_ancestor`
+    """
+    parentValDigest = _hash_func(db_val)
+
+    commit_str = db_val.decode()
+    commit_ancestors = commit_str.split(c.SEP_CMT)
+    if len(commit_ancestors) == 1:
+        is_merge_commit = False
+        master_ancestor = commit_ancestors[0]
+        dev_ancestor = ''
+    else:
+        is_merge_commit = True
+        master_ancestor = commit_ancestors[0]
+        dev_ancestor = commit_ancestors[1]
+
+    ancestorSpec = CommitAncestorSpec(is_merge_commit, master_ancestor, dev_ancestor)
+    res = DigestAndAncestorSpec(digest=parentValDigest, ancestor_spec=ancestorSpec)
+    return res
+
+
+"""
+Commit reference key and values.
+--------------------------------
+"""
+
+
+def commit_ref_db_key_from_raw_key(commit_hash: str) -> bytes:
+    commit_ref_key = f'{commit_hash}{c.SEP_KEY}ref'.encode()
+    return commit_ref_key
+
+
+def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
+    """reproducibly calculate digest from iterable of joined record k/v pairs.
+
+    First calculate the digest of each element in the input iterable. As these
+    elements contain the record type (meta key, arrayset name, sample key) as
+    well as the data hash digest, any modification of any reference record will
+    result in a different digest for that element.
+
+    Then sort the resulting digests (so that there is no dependency on the
+    order of elements in input) and join all elements into single serialized
+    bytestring.
+
+    The output of this method is the hash digest of the serialized bytestring.
+
+    Parameters
+    ----------
+    joined_db_kvs : Iterable[bytes]
+        list or tuple of bytes where each element is the joining of kv pairs
+        from the full commit references
+
+    Returns
+    -------
+    str
+        calculated digest of the commit ref record component
+    """
+    joined_db_kvs = sorted(map(_hash_func, joined_db_kvs))
+    joined_digests = c.CMT_DIGEST_JOIN_KEY.join(joined_db_kvs).encode()
+    ref_digest = _hash_func(joined_digests)
+    return ref_digest
+
+
+def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> DigestAndBytes:
+    """serialize and compress a list of db_key/db_value pairs for commit storage
+
+    Parameters
+    ----------
+    db_kvs : Iterable[Tuple[bytes, bytes]]
+        Iterable collection binary encoded db_key/db_val pairs.
+
+    Returns
+    -------
+    DigestAndBytes
+        `raw` serialized and compressed representation of the object. `digest`
+        digest of the joined db kvs.
+    """
+    joined = tuple(map(c.CMT_KV_JOIN_KEY.join, db_kvs))
+    refDigest = _commit_ref_joined_kv_digest(joined)
+
+    pck = c.CMT_REC_JOIN_KEY.join(joined)
+    raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.SHUFFLE, cname='zlib')
+    res = DigestAndBytes(digest=refDigest, raw=raw)
+    return res
+
+
+def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> DigestAndDbRefs:
+    """Load and decompress a commit ref db_val into python object memory.
+
+    Parameters
+    ----------
+    commit_db_val : bytes
+        Serialized and compressed representation of commit refs.
+
+    Returns
+    -------
+    DigestAndDbRefs
+        `digest` of the unpacked commit refs if desired for verification. `db_kvs`
+        Iterable of binary encoded key/value pairs making up the repo state at the
+        time of that commit. key/value pairs are already in sorted order.
+    """
+    uncomp_db_raw = blosc.decompress(commit_db_val)
+    # if a commit has nothing in it (completly empty), the return from query == ()
+    # the stored data is b'' from which the hash is calculated. We manually set these
+    # values as the expected unpacking routine will not work correctly.
+    if uncomp_db_raw == b'':
+        refsDigest = _hash_func(b'')
+        raw_db_kv_list = ()
+    else:
+        raw_joined_kvs_list = uncomp_db_raw.split(c.CMT_REC_JOIN_KEY)
+        refsDigest = _commit_ref_joined_kv_digest(raw_joined_kvs_list)
+        raw_db_kv_list = tuple(map(tuple, map(bytes.split, raw_joined_kvs_list)))
+
+    res = DigestAndDbRefs(digest=refsDigest, db_kvs=raw_db_kv_list)
+    return res
+
+
+"""
+Commit spec reference keys and values
+-------------------------------------
+"""
+
+
+def commit_spec_db_key_from_raw_key(commit_hash: str) -> bytes:
+    commit_spec_key = f'{commit_hash}{c.SEP_KEY}spec'.encode()
+    return commit_spec_key
+
+
+def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
+                                    commit_user: str,
+                                    commit_email: str) -> DigestAndBytes:
+    """Serialize a commit specification from user values to a db store value
+
+    Parameters
+    ----------
+    commit_time : float
+        time since unix epoch that the commit was made
+    commit_message : str
+        user specified commit message to attach to the record
+    commit_user : str
+        globally configured user name of the repository committer
+    commit_email : str
+        globally configured user email of the repository committer
+
+    Returns
+    -------
+    DigestAndBytes
+        Two tuple containing ``digest`` and ``raw`` compressed binary encoded
+        serialization of commit spec
+    """
+    spec_dict = {
+        'commit_time': commit_time,
+        'commit_message': commit_message,
+        'commit_user': commit_user,
+        'commit_email': commit_email,
+    }
+
+    db_spec_val = json.dumps(spec_dict, separators=(',', ':')).encode()
+    digest = _hash_func(db_spec_val)
+    comp_raw = blosc.compress(
+        db_spec_val, typesize=8, clevel=9, shuffle=blosc.SHUFFLE, cname='zlib')
+    res = DigestAndBytes(digest=digest, raw=comp_raw)
+    return res
+
+
+def commit_spec_raw_val_from_db_val(db_val: bytes) -> DigestAndUserSpec:
+    uncompressed_db_val = blosc.decompress(db_val)
+    digest = _hash_func(uncompressed_db_val)
+    commit_spec = json.loads(uncompressed_db_val)
+    user_spec = CommitUserSpec(**commit_spec)
+    res = DigestAndUserSpec(digest=digest, user_spec=user_spec)
+    return res
