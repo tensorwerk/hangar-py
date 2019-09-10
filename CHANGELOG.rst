@@ -5,6 +5,12 @@ Change Log
 `In-Progress`_
 ==============
 
+TBD
+
+
+`v0.3.0`_ (2019-09-10)
+======================
+
 New Features
 ------------
 
@@ -24,6 +30,10 @@ Improvements
   (`#117 <https://github.com/tensorwerk/hangar-py/pull/117>`__) `@hhsecond <https://github.com/hhsecond>`__
 * Large performance improvement to diff/merge algorithm (~30x previous).
   (`#112 <https://github.com/tensorwerk/hangar-py/pull/112>`__) `@rlizzo <https://github.com/rlizzo>`__
+* New commit hash algorithm which is much more reproducible in the long term.
+  (`#120 <https://github.com/tensorwerk/hangar-py/pull/120>`__) `@rlizzo <https://github.com/rlizzo>`__
+* HDF5 backend updated to increase speed of reading/writing variable sized dataset compressed chunks
+  (`#120 <https://github.com/tensorwerk/hangar-py/pull/120>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 Bug Fixes
 ---------
@@ -31,6 +41,11 @@ Bug Fixes
 * Fixed ML Dataloaders errors for a number of edge cases surrounding partial-remote data and non-common keys.
   (`#110 <https://github.com/tensorwerk/hangar-py/pull/110>`__)
   ( `@hhsecond <https://github.com/hhsecond>`__, `@rlizzo <https://github.com/rlizzo>`__)
+
+Breaking changes
+----------------
+
+* New commit hash algorithm is incompatible with repositories written in version 0.2.0 or earlier
 
 
 `v0.2.0`_ (2019-08-09)
@@ -156,4 +171,5 @@ Breaking changes
 .. _v0.1.0: https://github.com/tensorwerk/hangar-py/compare/v0.0.0...v0.1.0
 .. _v0.1.1: https://github.com/tensorwerk/hangar-py/compare/v0.1.0...v0.1.1
 .. _v0.2.0: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...v0.2.0
-.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.2.0...master
+.. _v0.3.0: https://github.com/tensorwerk/hangar-py/compare/v0.2.0...v0.3.0
+.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.3.0...master
