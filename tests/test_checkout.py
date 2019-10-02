@@ -1,6 +1,7 @@
 import atexit
 import numpy as np
 import pytest
+from conftest import backend_params
 
 
 class TestCheckout(object):
@@ -261,7 +262,7 @@ class TestCheckout(object):
         with pytest.raises(PermissionError):
             co.metadata.add('a', 'b')
 
-    @pytest.mark.parametrize("aset_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset_backend", backend_params)
     def test_operate_on_arrayset_samples_after_commiting_but_not_closing_checkout(self, aset_backend, repo, array5by7):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend=aset_backend)
@@ -293,8 +294,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             md['hello']
 
-    @pytest.mark.parametrize("aset1_backend", ['00', '10'])
-    @pytest.mark.parametrize("aset2_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset1_backend", backend_params)
+    @pytest.mark.parametrize("aset2_backend", backend_params)
     def test_operate_on_arraysets_after_commiting_but_not_closing_checkout(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         asets = co.arraysets
@@ -328,8 +329,8 @@ class TestCheckout(object):
         # unregister close operation as conftest will close env before this is called.
         atexit.unregister(co.close)
 
-    @pytest.mark.parametrize("aset1_backend", ['00', '10'])
-    @pytest.mark.parametrize("aset2_backend", ['00', '10'])
+    @pytest.mark.parametrize("aset1_backend", backend_params)
+    @pytest.mark.parametrize("aset2_backend", backend_params)
     def test_reset_staging_area_clears_arraysets(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend=aset1_backend)

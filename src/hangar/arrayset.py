@@ -96,39 +96,42 @@ class ArraysetDataReader(object):
         self._index_expr_factory.maketuple = False
         self._contains_partial_remote_data: bool = False
 
-        # ------------------------ backend setup ------------------------------
-
-        self._fs = {}
-        for backend, accessor in BACKEND_ACCESSOR_MAP.items():
-            if accessor is not None:
-                self._fs[backend] = accessor(
-                    repo_path=self._path,
-                    schema_shape=self._schema_max_shape,
-                    schema_dtype=np.typeDict[self._schema_dtype_num])
-                self._fs[backend].open(self._mode)
-
         # -------------- Sample backend specification parsing -----------------
 
         self._sspecs = {}
         _TxnRegister = TxnRegister()
         hashTxn = _TxnRegister.begin_reader_txn(hashenv)
         try:
+            used_bes = set()
             asetNamesSpec = RecordQuery(dataenv).arrayset_data_records(self._asetn)
             for asetNames, dataSpec in asetNamesSpec:
                 hashKey = hash_data_db_key_from_raw_key(dataSpec.data_hash)
                 hash_ref = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hash_ref)
                 self._sspecs[asetNames.data_name] = be_loc
-                if be_loc.backend == '50':
-                    self._contains_partial_remote_data = True
+                used_bes.add(be_loc.backend)
 
-            if self._contains_partial_remote_data is True:
+            if '50' in used_bes:
+                self._contains_partial_remote_data = True
                 warnings.warn(
                     f'Arrayset: {self._asetn} contains `reference-only` samples, with '
                     f'actual data residing on a remote server. A `fetch-data` '
                     f'operation is required to access these samples.', UserWarning)
         finally:
             _TxnRegister.abort_reader_txn(hashenv)
+
+        # ------------------------ backend setup ------------------------------
+
+        self._fs = {}
+        for be, accessor in BACKEND_ACCESSOR_MAP.items():
+            if (self._mode == 'a') or (be in used_bes):
+                if accessor is None:
+                    continue
+                self._fs[be] = accessor(
+                    repo_path=self._path,
+                    schema_shape=self._schema_max_shape,
+                    schema_dtype=np.typeDict[self._schema_dtype_num])
+                self._fs[be].open(self._mode)
 
     def __enter__(self):
         self._is_conman = True

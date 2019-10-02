@@ -15,6 +15,7 @@ Why does this file exist, and why not put this in __main__?
 """
 import os
 import time
+import warnings
 
 import click
 
@@ -340,18 +341,32 @@ def server(overwrite, ip, port, timeout):
 @main.command(name='import')
 @click.argument('arrayset', required=True)
 @click.argument('path', required=True)
+@click.option('--branch', default=None, help='branch to import data to')
 @click.option('--plugin', default=None, help='override auto-infered plugin')
 @click.option('--overwrite', is_flag=True,
               help='overwrite data samples with the same name as the imported data file ')
 @pass_repo
-def import_data(repo: Repository, arrayset, path, plugin, overwrite):
+def import_data(repo: Repository, arrayset, path, branch, plugin, overwrite):
     """Import file(s) at PATH to ARRAYSET in the staging area.
     """
     from hangar.cli.io import imread
+    from hangar.records.heads import get_staging_branch_head
 
     try:
-        co = repo.checkout(write=True)
-        aset = co.arraysets.get(arrayset)
+        if branch is not None:
+            if branch in repo.list_branches():
+                branch_name = branch
+            else:
+                click.echo(f'Branch name: {branch} does not exist, Exiting.')
+                return None
+        else:
+            branch_name = get_staging_branch_head(repo._env.branchenv)
+        click.echo(f'Writing to branch: {branch_name}')
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            co = repo.checkout(write=True, branch=branch_name)
+            aset = co.arraysets.get(arrayset)
 
         if os.path.isfile(path):
             fname = os.path.basename(path)

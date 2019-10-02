@@ -13,6 +13,9 @@ from hangar import Repository
 import hangar
 
 
+backend_params = ['00', '10']
+
+
 @pytest.fixture(autouse=True)
 def reset_singletons(monkeypatch):
     """
@@ -127,10 +130,10 @@ def randomsizedarray():
     return np.random.random((a, b))
 
 
-@pytest.fixture()
-def written_two_cmt_repo(repo, array5by7):
+@pytest.fixture(params=backend_params)
+def written_two_cmt_repo(request, repo, array5by7):
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32, backend=request.param)
     for cIdx in range(2):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -146,7 +149,7 @@ def written_two_cmt_repo(repo, array5by7):
     yield repo
 
 
-@pytest.fixture(params=['00', '10'])
+@pytest.fixture(params=backend_params)
 def repo_1_br_no_conf(request, repo):
 
     dummyData = np.arange(50)
