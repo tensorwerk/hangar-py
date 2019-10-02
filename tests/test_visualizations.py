@@ -361,3 +361,123 @@ def test_octopus_large_merge_graph(capfd):
            '* 63ac654df43bd149a1ca5f919e714bc57e69af99 (05Jul2019 21:47:44)(test user): initial commit on master with training images\n'
 
     verify_out(capfd, real)
+
+
+def test_repo_log_return_contents_correct_default_args(repo):
+
+    co = repo.checkout(write=True)
+    co.metadata['foo'] = 'bar'
+    ancestor_digest = co.commit('first')
+    co.metadata['hello'] = 'world'
+    master_head = co.commit('second')
+    co.close()
+
+    ancestor_branch = repo.create_branch('ancestor', base_commit=ancestor_digest)
+    dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
+
+    co = repo.checkout(write=True, branch=dev_branch)
+    co.metadata['zen'] = 'of python'
+    dev_head = co.commit('third on test')
+    co.close()
+
+    log = repo.log(return_contents=True)
+
+    assert log['head'] == dev_head
+
+    expected_ancestors = {
+        dev_head: [ancestor_digest],
+        ancestor_digest: [''],
+    }
+    assert log['ancestors'] == expected_ancestors
+
+    assert len(log['specs']) == 2
+    assert len(log['specs'][ancestor_digest]) == 4
+    assert len(log['specs'][dev_head]) == 4
+    assert log['specs'][ancestor_digest]['commit_message'] == 'first'
+    assert log['specs'][dev_head]['commit_message'] == 'third on test'
+
+    assert log['order'] == [dev_head, ancestor_digest]
+
+    assert len(log['branch_heads']) == 2
+    assert log['branch_heads'][ancestor_digest] == [ancestor_branch]
+    assert log['branch_heads'][dev_head] == [dev_branch]
+
+
+def test_repo_log_return_contents_correct_when_specify_branch_name(repo):
+
+    co = repo.checkout(write=True)
+    co.metadata['foo'] = 'bar'
+    ancestor_digest = co.commit('first')
+    co.metadata['hello'] = 'world'
+    master_head = co.commit('second')
+    co.close()
+
+    ancestor_branch = repo.create_branch('ancestor', base_commit=ancestor_digest)
+    dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
+
+    co = repo.checkout(write=True, branch=dev_branch)
+    co.metadata['zen'] = 'of python'
+    dev_head = co.commit('third on test')
+    co.close()
+
+    log = repo.log(branch='master', return_contents=True)
+
+    assert log['head'] == master_head
+
+    expected_ancestors = {
+        master_head: [ancestor_digest],
+        ancestor_digest: [''],
+    }
+    assert log['ancestors'] == expected_ancestors
+
+    assert len(log['specs']) == 2
+    assert len(log['specs'][ancestor_digest]) == 4
+    assert len(log['specs'][master_head]) == 4
+    assert log['specs'][ancestor_digest]['commit_message'] == 'first'
+    assert log['specs'][master_head]['commit_message'] == 'second'
+
+    assert log['order'] == [master_head, ancestor_digest]
+
+    assert len(log['branch_heads']) == 2
+    assert log['branch_heads'][ancestor_digest] == [ancestor_branch]
+    assert log['branch_heads'][master_head] == ['master']
+
+
+def test_repo_log_return_contents_correct_when_specify_digest(repo):
+
+    co = repo.checkout(write=True)
+    co.metadata['foo'] = 'bar'
+    ancestor_digest = co.commit('first')
+    co.metadata['hello'] = 'world'
+    master_head = co.commit('second')
+    co.close()
+
+    ancestor_branch = repo.create_branch('ancestor', base_commit=ancestor_digest)
+    dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
+
+    co = repo.checkout(write=True, branch=dev_branch)
+    co.metadata['zen'] = 'of python'
+    dev_head = co.commit('third on test')
+    co.close()
+
+    log = repo.log(commit=master_head, return_contents=True)
+
+    assert log['head'] == master_head
+
+    expected_ancestors = {
+        master_head: [ancestor_digest],
+        ancestor_digest: [''],
+    }
+    assert log['ancestors'] == expected_ancestors
+
+    assert len(log['specs']) == 2
+    assert len(log['specs'][ancestor_digest]) == 4
+    assert len(log['specs'][master_head]) == 4
+    assert log['specs'][ancestor_digest]['commit_message'] == 'first'
+    assert log['specs'][master_head]['commit_message'] == 'second'
+
+    assert log['order'] == [master_head, ancestor_digest]
+
+    assert len(log['branch_heads']) == 2
+    assert log['branch_heads'][ancestor_digest] == [ancestor_branch]
+    assert log['branch_heads'][master_head] == ['master']

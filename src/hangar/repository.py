@@ -363,11 +363,15 @@ class Repository(object):
             branchenv=self._env.branchenv,
             branch_name=branch,
             commit_hash=commit)
+        branchMap = dict(heads.commit_hash_to_branch_name_map(branchenv=self._env.branchenv))
 
         if return_contents:
+            for digest in list(branchMap.keys()):
+                if digest not in res['order']:
+                    del branchMap[digest]
+            res['branch_heads'] = branchMap
             return res
         else:
-            branchMap = heads.commit_hash_to_branch_name_map(branchenv=self._env.branchenv)
             g = graphing.Graph()
             g.show_nodes(dag=res['ancestors'],
                          spec=res['specs'],
