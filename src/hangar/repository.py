@@ -457,6 +457,23 @@ class Repository(object):
         checkout method to properly initialize a read (or write) enabled
         checkout object.
 
+            >>> from hangar import Repository
+            >>> repo = Repository('foo/path/to/dir')
+
+            >>> repo.create_branch('testbranch')
+                BranchHead(name='testbranch', digest='b66b...a8cc')
+            >>> repo.list_branches()
+                ['master', 'testbranch']
+            >>> co = repo.checkout(write=True, branch='testbranch')
+            >>> co.metadata['foo'] = 'bar'
+            >>> # add data ...
+            >>> newDigest = co.commit('added some stuff')
+
+            >>> repo.create_branch('new-changes', base_commit=newDigest)
+                BranchHead(name='new-changes', digest='35kd...3254')
+            >>> repo.list_branches()
+                ['master', 'new-changes', 'testbranch']
+
         Parameters
         ----------
         name : str
@@ -471,6 +488,17 @@ class Repository(object):
         heads.BranchHead
             NamedTuple[str, str] with fields for `name` and `digest` of the branch
             created (if the operation was successful)
+
+        Raises
+        ------
+        ValueError
+            If the branch name provided contains characters outside of alpha-numeric
+            ascii characters and ".", "_", "-" (no whitespace).
+        ValueError
+            If the branch already exists.
+        RuntimeError
+            If the repository does not have at-least one commit on the `default`
+            (ie. `master`) branch.
         """
         self.__verify_repo_initialized()
         if (not is_ascii(name)) or (not is_suitable_user_key(name)):
@@ -484,27 +512,61 @@ class Repository(object):
         return createdBranch
 
     def remove_branch(self, name: str, *, force_delete: bool = False) -> heads.BranchHead:
-        """Permenantly delte a branch pointer from the repository history.
+        """Permanently delete a branch pointer from the repository history.
 
-        Since a branch (by definition) is the name assosicated with the HEAD commit
-        of a historical path, the default behavior of this method is to throw an
-        exception (no-op) should the ``HEAD`` not be referenced as an ancestor (or
-        atleast as a twin) of a seperate branch which is currently *ALIVE*. If
-        referenced in another branch's history, we are assured that all changes
-        have been merged and recorded, and that this pointer can be safetly deleted
-        without risk of damage to historical provenance or (eventual) loss to
-        garbage collection.
+        Since a branch (by definition) is the name associated with the HEAD
+        commit of a historical path, the default behavior of this method is to
+        throw an exception (no-op) should the ``HEAD`` not be referenced as an
+        ancestor (or at least as a twin) of a separate branch which is
+        currently *ALIVE*. If referenced in another branch's history, we are
+        assured that all changes have been merged and recorded, and that this
+        pointer can be safely deleted without risk of damage to historical
+        provenance or (eventual) loss to garbage collection.
 
-        A user may manually specify to delete an unmerged branch, in which case the
-        ``force_delete`` keyword-only argument should be set to ``True``.
+            >>> from hangar import Repository
+            >>> repo = Repository('foo/path/to/dir')
+
+            >>> repo.create_branch('first-testbranch')
+            BranchHead(name='first-testbranch', digest='9785...56da')
+            >>> repo.create_branch('second-testbranch')
+            BranchHead(name='second-testbranch', digest='9785...56da')
+            >>> repo.list_branches()
+            ['master', 'first-testbranch', 'second-testbranch']
+            >>> # Make a commit to advance a branch
+            >>> co = repo.checkout(write=True, branch='first-testbranch')
+            >>> co.metadata['foo'] = 'bar'
+            >>> co.commit('added some stuff')
+            '3l253la5hna3k3a553256nak35hq5q534kq35532'
+            >>> co.close()
+
+            >>> repo.remove_branch('second-testbranch')
+            BranchHead(name='second-testbranch', digest='9785...56da')
+
+        A user may manually specify to delete an un-merged branch, in which
+        case the ``force_delete`` keyword-only argument should be set to
+        ``True``.
+
+            >>> # check out master and try to remove 'first-testbranch'
+            >>> co = repo.checkout(write=True, branch='master')
+            >>> co.close()
+
+            >>> repo.remove_branch('first-testbranch')
+            Traceback (most recent call last):
+                ...
+            RuntimeError: ("The branch first-testbranch is not fully merged. "
+            "If you are sure you want to delete it, re-run with "
+            "force-remove parameter set.")
+            >>> # Now set the `force_delete` parameter
+            >>> repo.remove_branch('first-testbranch', force_delete=True)
+            BranchHead(name='first-testbranch', digest='9785...56da')
 
         It is important to note that *while this method will handle all safety
-        checks, argument validation, and performs the operation to permenantly
+        checks, argument validation, and performs the operation to permanently
         delete a branch name/digest pointer, **no commit refs along the history
-        will be deleted from the Hangar database.*** Most of the history contains
-        commit refs which must be safe in other branch histories, and even recent
+        will be deleted from the Hangar database**.* Most of the history contains
+        commit refs which must be safe in other branch histories, and recent
         commits may have been used as the base for some new history. As such, even
-        if some of the latest commits leading up to a deleted branch HEAD are
+        if some of the latest commits leading up to a deleted branch ``HEAD`` are
         orphaned (unreachable), the records (and all data added in those commits)
         will remain on the disk.
 
@@ -514,18 +576,18 @@ class Repository(object):
         moment.
 
         Should an accidental forced branch deletion occur, *it is possible to
-        recover* and create a new branch head pointing to the same commit. If the
-        commit digest of the removed branch HEAD is known, its as simple as
+        recover* and create a new branch head pointing to the same commit. If
+        the commit digest of the removed branch ``HEAD`` is known, its as simple as
         specifying a name and the ``base_digest`` in the normal
-        :meth:`create_branch` method. If the digest is
-        unknown, it will be a bit more work, but some of the developer facing
-        introspection tools / routines could be used to either manually or (with
-        minimal effort) programatically find the orphan commit candidates. If you
-        find yourself having accidentially deleted a branch, and must get it back,
+        :meth:`create_branch` method. If the digest is unknown, it will be a
+        bit more work, but some of the developer facing introspection tools /
+        routines could be used to either manually or (with minimal effort)
+        programmatically find the orphan commit candidates. If you find
+        yourself having accidentally deleted a branch, and must get it back,
         please reach out on the `Github Issues
         <https://github.com/tensorwerk/hangar-py/issues>`__ page. We'll gladly
-        explain more in depth and walk you through the process in any way we can
-        help!
+        explain more in depth and walk you through the process in any way we
+        can help!
 
         Parameters
         ----------
@@ -535,13 +597,13 @@ class Repository(object):
             see exception descriptions for other parameters determining validity of
             argument
         force_delete : bool, optional
-            If True, remove the branch pointer even if the changes are unmerged in
+            If True, remove the branch pointer even if the changes are un-merged in
             other branch histories. May result in orphaned commits which may be
             time-consuming to recover if needed, by default False
 
         Returns
         -------
-        heads.BranchHead
+        :class:`~heads.BranchHead`
             NamedTuple[str, str] with fields for `name` and `digest` of the branch
             pointer deleted.
 

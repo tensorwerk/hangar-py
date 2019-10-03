@@ -19,13 +19,13 @@ Write operation enabled lock methods
 ------------------------------------
 
 Any operation which wants to interact with the main storage services in a
-write-enabled way must aquire a lock to perform the operation. See docstrings
+write-enabled way must acquire a lock to perform the operation. See docstrings
 below for more info
 """
 
 
 def writer_lock_held(branchenv):
-    """Check to see if the writer lock is free before attempting to aquire it.
+    """Check to see if the writer lock is free before attempting to acquire it.
 
     Parameters
     ----------
@@ -74,7 +74,7 @@ def acquire_writer_lock(branchenv, writer_uuid):
     -------
     bool
         success of the operation, which will be validated by the writer class as
-        a safety net incase the upstream in the event some user code trys to
+        a safety net incase the upstream in the event some user code tries to
         catch the exception.Z
 
     Raises
@@ -101,9 +101,9 @@ def acquire_writer_lock(branchenv, writer_uuid):
             success = True
         else:
             success = False
-            err = f'Cannot aquire the writer lock. Only one instance of a writer checkout '\
+            err = f'Cannot acquire the writer lock. Only one instance of a writer checkout '\
                 'can be active at a time. If the last checkout of this repository did '\
-                'not properly close, or a crash occured, the lock must be manually freed '\
+                'not properly close, or a crash occurred, the lock must be manually freed '\
                 'before another writer can be instantiated.'
             raise PermissionError(err)
     finally:
@@ -115,9 +115,9 @@ def acquire_writer_lock(branchenv, writer_uuid):
 def release_writer_lock(branchenv, writer_uuid):
     """Internal method to release a writer lock held by a specified uuid.
 
-    This method also accept the force-release sentinal by a caller in the
+    This method also accept the force-release sentinel by a caller in the
     writer_uuid field. If the writer_uuid does not match the lock value (and the
-    force sentinal is not used), then a runtime error will be thrown and no-op
+    force sentinel is not used), then a runtime error will be thrown and no-op
     performed
 
     Parameters
@@ -201,14 +201,14 @@ def create_branch(branchenv, name, base_commit) -> BranchHead:
     ValueError
         If the branch already exists, no-op and raise this.
     RuntimeError
-        If the repository does not have atleast one commit on the `default`
+        If the repository does not have at-least one commit on the `default`
         (ie. `master`) branch.
     """
     if base_commit is None:
         headBranch = get_staging_branch_head(branchenv)
         base_commit = get_branch_head_commit(branchenv, headBranch)
         if (headBranch == 'master') and (base_commit == ''):
-            msg = 'Atleast one commit must be made in the repository on the `default` '\
+            msg = 'At least one commit must be made in the repository on the `default` '\
                   '(`master`) branch before new branches can be created'
             raise RuntimeError(msg)
 
@@ -244,7 +244,7 @@ def remove_branch(branchenv: lmdb.Environment,
     name : str
         name of the branch which should be deleted.
     force_delete : bool, optional
-        If True, remove the branch pointer even if the changes are unmerged in
+        If True, remove the branch pointer even if the changes are un-merged in
         other branch histories. by default False
 
     Returns
@@ -279,7 +279,7 @@ def remove_branch(branchenv: lmdb.Environment,
 
     alive_branches.remove(name)
     if len(alive_branches) == 0:
-        msg = f'Not allowed to remove all branchs from a repository! '\
+        msg = f'Not allowed to remove all branches from a repository! '\
               f'Operation aborted without completing removal of branch: {name}'
         raise PermissionError(msg)
 
@@ -563,7 +563,7 @@ def add_remote(branchenv: lmdb.Environment, name: str, address: str) -> bool:
 
 
 def get_remote_address(branchenv: lmdb.Environment, name: str) -> str:
-    """Retieve the IO:PORT of the remote server for a given name
+    """Retrieve the IO:PORT of the remote server for a given name
 
     Parameters
     ----------

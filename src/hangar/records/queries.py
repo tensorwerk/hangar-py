@@ -164,7 +164,7 @@ class RecordQuery(object):
         """Find all data hashes contained within all arraysets
 
         Note: this method does not remove any duplicates which may be present,
-        if dedup is required, process it downstream
+        if de-dup is required, process it downstream
 
         Returns
         -------
@@ -179,7 +179,7 @@ class RecordQuery(object):
             all_hashes.update(data_val_rec)
         return all_hashes
 
-# ------------------------ processs arrayset data records -------------------------------
+# ------------------------ process arrayset data records ----------------------
 
     def arrayset_data_records(self, arrayset_name: str) -> Iterable[RawDataTuple]:
         """Returns the raw data record key and record values for a specific arrayset.
@@ -317,7 +317,7 @@ class RecordQuery(object):
         return all_schema_hashes
 
     def data_hash_to_schema_hash(self) -> Dict[str, str]:
-        """For all hashs in the commit, map sample hash to schema hash.
+        """For all hashes in the commit, map sample hash to schema hash.
 
         Returns
         -------

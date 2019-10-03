@@ -17,7 +17,7 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
     refenv : lmdb.Environment
         environment containing all repository commit data.
     branchenv : lmdb.Environment
-        environment contianing the current staging head branch and branch head
+        environment containing the current staging head branch and branch head
         commit hashes
     branch_name : string, optional
         if specified, get the history starting at the head commit of this named

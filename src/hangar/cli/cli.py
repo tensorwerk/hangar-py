@@ -269,18 +269,40 @@ def branch_create(repo: Repository, name, startpoint):
 
     branch_names = repo.list_branches()
     if name in branch_names:
-        raise ValueError(f'branch name: {name} already exists')
+        e = ValueError(f'branch name: {name} already exists')
+        raise click.ClickException(e)
 
-    if startpoint is None:
-        branch = get_staging_branch_head(repo._env.branchenv)
-        base_commit = get_branch_head_commit(repo._env.branchenv, branch)
-    elif startpoint in branch_names:
-        base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
-    else:
-        base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+    try:
+        if startpoint is None:
+            branch = get_staging_branch_head(repo._env.branchenv)
+            base_commit = get_branch_head_commit(repo._env.branchenv, branch)
+        elif startpoint in branch_names:
+            base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
+        else:
+            base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
 
-    res = repo.create_branch(name, base_commit=base_commit)
-    click.echo(f'BRANCH: {res.name} HEAD: {res.digest}')
+        res = repo.create_branch(name, base_commit=base_commit)
+    except (KeyError, ValueError, RuntimeError) as e:
+        raise click.ClickException(e)
+
+    click.echo(f'Created BRANCH: {res.name} HEAD: {res.digest}')
+
+
+@branch.command(name='delete')
+@click.argument('name', nargs=1, required=True)
+@click.option('--force', '-f', is_flag=True, default=False, help='flag to force delete branch which has un-merged history.')
+@pass_repo
+def branch_remove(repo: Repository, name, force):
+    """Remove a branch pointer with the provided NAME
+
+    The NAME must be a branch present on the local machine.
+    """
+    try:
+        res = repo.remove_branch(name, force_delete=force)
+    except (ValueError, PermissionError, RuntimeError) as e:
+        raise click.ClickException(e)
+
+    click.echo(f'Deleted BRANCH: {res.name} HEAD: {res.digest}')
 
 
 # ---------------------------- Server Commands --------------------------------
@@ -397,7 +419,7 @@ def import_data(repo: Repository, arrayset, path, branch, plugin, overwrite):
 @click.option('-o', '--out', required=True, help='Path to export the data to.')
 @click.option('-s', '--sample', default=False, help='Sample name to export')
 @click.option('-f', '--format', 'format_', required=False, help='File format used for exporting.')
-@click.option('--plugin', required=False, help='override auto-infered plugin')
+@click.option('--plugin', required=False, help='override auto-inferred plugin')
 @pass_repo
 def export_data(repo: Repository, startpoint, arrayset, out, sample, format_, plugin):
     """export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
