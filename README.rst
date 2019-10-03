@@ -13,15 +13,16 @@ Overview
       - | |travis| |appveyor|
         | |codecov|
     * - package
-      - | |version| |wheel| |supported-versions| |supported-implementations|
+      - | |version| |wheel| |conda-forge|
+        | |supported-versions| |supported-implementations|
         | |commits-since|
 .. |docs| image:: https://readthedocs.org/projects/hangar-py/badge/?style=flat
     :target: https://readthedocs.org/projects/hangar-py
     :alt: Documentation Status
 
-.. |travis| image:: https://travis-ci.org/tensorwerk/hangar-py.svg?branch=master
+.. |travis| image:: https://travis-ci.com/tensorwerk/hangar-py.svg?branch=master
     :alt: Travis-CI Build Status
-    :target: https://travis-ci.org/tensorwerk/hangar-py
+    :target: https://travis-ci.com/tensorwerk/hangar-py
 
 .. |appveyor| image:: https://ci.appveyor.com/api/projects/status/github/tensorwerk/hangar-py?branch=master&svg=true
     :alt: AppVeyor Build Status
@@ -38,6 +39,10 @@ Overview
 .. |commits-since| image:: https://img.shields.io/github/commits-since/tensorwerk/hangar-py/v0.3.0.svg
     :alt: Commits since latest release
     :target: https://github.com/tensorwerk/hangar-py/compare/v0.3.0...master
+
+.. |conda-forge| image:: https://img.shields.io/conda/vn/conda-forge/hangar.svg
+   :alt: Conda-Forge Latest Version
+   :target: https://anaconda.org/conda-forge/hangar
 
 .. |wheel| image:: https://img.shields.io/pypi/wheel/hangar.svg
     :alt: PyPI Wheel
