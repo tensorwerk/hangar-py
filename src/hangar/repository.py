@@ -10,7 +10,7 @@ from .context import Environments
 from .diagnostics import graphing, ecosystem
 from .records import heads, parsing, summarize, vcompat
 from .checkout import ReaderCheckout, WriterCheckout
-from .utils import is_valid_directory_path, is_suitable_user_key
+from .utils import is_valid_directory_path, is_suitable_user_key, is_ascii
 
 
 class Repository(object):
@@ -447,7 +447,7 @@ class Repository(object):
 
         return commit_hash
 
-    def create_branch(self, name: str, base_commit: str = None) -> str:
+    def create_branch(self, name: str, base_commit: str = None) -> heads.BranchHead:
         """create a branch with the provided name from a certain commit.
 
         If no base commit hash is specified, the current writer branch ``HEAD``
@@ -468,20 +468,20 @@ class Repository(object):
 
         Returns
         -------
-        str
-            name of the branch which was created
+        heads.BranchHead
+            NamedTuple[str, str] with fields for `name` and `digest` of the branch
+            created (if the operation was successful)
         """
         self.__verify_repo_initialized()
-        if not is_suitable_user_key(name):
-            e = ValueError(
-                f'Branch name provided: `{name}` invalid. Must only contain '
-                f'alpha-numeric or "." "_" "-" ascii characters.')
+        if (not is_ascii(name)) or (not is_suitable_user_key(name)):
+            e = ValueError(f'Branch name provided: {name} invalid. Must contain '
+                           f'only alpha-numeric or "." "_" "-" ascii characters.')
             raise e from None
-        didCreateBranch = heads.create_branch(
+        createdBranch = heads.create_branch(
             branchenv=self._env.branchenv,
             name=name,
             base_commit=base_commit)
-        return didCreateBranch
+        return createdBranch
 
     def remove_branch(self, name: str, *, force_delete: bool = False) -> heads.BranchHead:
         """Permenantly delte a branch pointer from the repository history.
@@ -517,7 +517,7 @@ class Repository(object):
         recover* and create a new branch head pointing to the same commit. If the
         commit digest of the removed branch HEAD is known, its as simple as
         specifying a name and the ``base_digest`` in the normal
-        :meth:`~..repository.Repository.create_branch` method. If the digest is
+        :meth:`create_branch` method. If the digest is
         unknown, it will be a bit more work, but some of the developer facing
         introspection tools / routines could be used to either manually or (with
         minimal effort) programatically find the orphan commit candidates. If you

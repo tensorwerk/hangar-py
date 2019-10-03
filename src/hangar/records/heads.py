@@ -177,7 +177,7 @@ Methods to interact with the branch head records
 # ---------------- branch creation and deletion operations ------------------------------
 
 
-def create_branch(branchenv, name, base_commit):
+def create_branch(branchenv, name, base_commit) -> BranchHead:
     """Internal operations used to create a branch.
 
     Parameters
@@ -192,8 +192,9 @@ def create_branch(branchenv, name, base_commit):
 
     Returns
     -------
-    str
-        Name of the branch which was created (if the operation was successful)
+    BranchHead
+        NamedTuple[str, str] with fields for `name` and `digest` of the branch
+        created (if the operation was successful)
 
     Raises
     ------
@@ -224,7 +225,7 @@ def create_branch(branchenv, name, base_commit):
     finally:
         TxnRegister().commit_writer_txn(branchenv)
 
-    return name
+    return BranchHead(name=name, digest=base_commit)
 
 
 def remove_branch(branchenv: lmdb.Environment,

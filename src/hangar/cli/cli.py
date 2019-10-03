@@ -279,9 +279,8 @@ def branch_create(repo: Repository, name, startpoint):
     else:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
 
-    click.echo(f'BRANCH: ' +
-               repo.create_branch(name, base_commit=base_commit) +
-               f' HEAD: {base_commit}')
+    res = repo.create_branch(name, base_commit=base_commit)
+    click.echo(f'BRANCH: {res.name} HEAD: {res.digest}')
 
 
 # ---------------------------- Server Commands --------------------------------
