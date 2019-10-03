@@ -451,7 +451,7 @@ class Repository(object):
         """create a branch with the provided name from a certain commit.
 
         If no base commit hash is specified, the current writer branch ``HEAD``
-        commit is used as the base_commit hash for the branch. Note that
+        commit is used as the ``base_commit`` hash for the branch. Note that
         creating a branch does not actually create a checkout object for
         interaction with the data. to interact you must use the repository
         checkout method to properly initialize a read (or write) enabled
@@ -483,18 +483,98 @@ class Repository(object):
             base_commit=base_commit)
         return didCreateBranch
 
-    def remove_branch(self, name):  # pragma: no cover
-        """Not Implemented
+    def remove_branch(self, name: str, *, force_delete: bool = False) -> heads.BranchHead:
+        """Permenantly delte a branch pointer from the repository history.
+
+        Since a branch (by definition) is the name assosicated with the HEAD commit
+        of a historical path, the default behavior of this method is to throw an
+        exception (no-op) should the ``HEAD`` not be referenced as an ancestor (or
+        atleast as a twin) of a seperate branch which is currently *ALIVE*. If
+        referenced in another branch's history, we are assured that all changes
+        have been merged and recorded, and that this pointer can be safetly deleted
+        without risk of damage to historical provenance or (eventual) loss to
+        garbage collection.
+
+        A user may manually specify to delete an unmerged branch, in which case the
+        ``force_delete`` keyword-only argument should be set to ``True``.
+
+        It is important to note that *while this method will handle all safety
+        checks, argument validation, and performs the operation to permenantly
+        delete a branch name/digest pointer, **no commit refs along the history
+        will be deleted from the Hangar database.*** Most of the history contains
+        commit refs which must be safe in other branch histories, and even recent
+        commits may have been used as the base for some new history. As such, even
+        if some of the latest commits leading up to a deleted branch HEAD are
+        orphaned (unreachable), the records (and all data added in those commits)
+        will remain on the disk.
+
+        In the future, we intend to implement a garbage collector which will remove
+        orphan commits which have not been modified for some set amount of time
+        (probably on the order of a few months), but this is not implemented at the
+        moment.
+
+        Should an accidental forced branch deletion occur, *it is possible to
+        recover* and create a new branch head pointing to the same commit. If the
+        commit digest of the removed branch HEAD is known, its as simple as
+        specifying a name and the ``base_digest`` in the normal
+        :meth:`~..repository.Repository.create_branch` method. If the digest is
+        unknown, it will be a bit more work, but some of the developer facing
+        introspection tools / routines could be used to either manually or (with
+        minimal effort) programatically find the orphan commit candidates. If you
+        find yourself having accidentially deleted a branch, and must get it back,
+        please reach out on the `Github Issues
+        <https://github.com/tensorwerk/hangar-py/issues>`__ page. We'll gladly
+        explain more in depth and walk you through the process in any way we can
+        help!
+
+        Parameters
+        ----------
+        name : str
+            name of the branch which should be deleted. This branch must exist, and
+            cannot refer to a remote tracked branch (ie. origin/devbranch), please
+            see exception descriptions for other parameters determining validity of
+            argument
+        force_delete : bool, optional
+            If True, remove the branch pointer even if the changes are unmerged in
+            other branch histories. May result in orphaned commits which may be
+            time-consuming to recover if needed, by default False
+
+        Returns
+        -------
+        heads.BranchHead
+            NamedTuple[str, str] with fields for `name` and `digest` of the branch
+            pointer deleted.
+
+        Raises
+        ------
+        ValueError
+            If a branch with the provided name does not exist locally
+        PermissionError
+            If removal of the branch would result in a repository with zero local
+            branches.
+        PermissionError
+            If a write enabled checkout is holding the writer-lock at time of this
+            call.
+        PermissionError
+            If the branch to be removed was the last used in a write-enabled
+            checkout, and whose contents form the base of the staging area.
+        RuntimeError
+            If the branch has not been fully merged into other branch histories,
+            and ``force_delete`` option is not ``True``.
         """
         self.__verify_repo_initialized()
-        raise NotImplementedError()
+        res = heads.remove_branch(branchenv=self._env.branchenv,
+                                  refenv=self._env.refenv,
+                                  name=name,
+                                  force_delete=force_delete)
+        return res
 
     def list_branches(self) -> List[str]:
         """list all branch names created in the repository.
 
         Returns
         -------
-        list of str
+        List[str]
             the branch names recorded in the repository
         """
         self.__verify_repo_initialized()

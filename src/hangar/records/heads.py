@@ -1,10 +1,17 @@
 from collections import defaultdict
 import warnings
+from typing import NamedTuple
 
 import lmdb
 
 from . import parsing
 from ..context import TxnRegister
+
+
+BranchHead = NamedTuple('BranchHead', [
+    ('name', str),
+    ('digest', str)
+])
 
 
 """
@@ -218,6 +225,95 @@ def create_branch(branchenv, name, base_commit):
         TxnRegister().commit_writer_txn(branchenv)
 
     return name
+
+
+def remove_branch(branchenv: lmdb.Environment,
+                  refenv: lmdb.Environment,
+                  name: str,
+                  *,
+                  force_delete: bool = False) -> BranchHead:
+    """Remove a branch head pointer after verifying validity and safety
+
+    Parameters
+    ----------
+    branchenv : lmdb.Environment
+        db containing the branch head specs
+    refenv : lmdb.Environment
+        db containing the commit refs
+    name : str
+        name of the branch which should be deleted.
+    force_delete : bool, optional
+        If True, remove the branch pointer even if the changes are unmerged in
+        other branch histories. by default False
+
+    Returns
+    -------
+    BranchHead
+        NamedTuple[str, str] with fields for `name` and `digest` of the branch
+        pointer deleted.
+
+    Raises
+    ------
+    ValueError
+        If a branch with the provided name does not exist locally
+    PermissionError
+        If removal of the branch would result in a repository with zero local
+        branches.
+    PermissionError
+        If a write enabled checkout is holding the writer-lock at time of this
+        call.
+    PermissionError
+        If the branch to be removed was the last used in a write-enabled
+        checkout, and whose contents form the base of the staging area.
+    RuntimeError
+        If the branch has not been fully merged into other branch histories,
+        and ``force_delete`` option is not ``True``.
+    """
+    from .commiting import get_commit_ancestors_graph
+
+    all_branches = get_branch_names(branchenv)
+    alive_branches = [x for x in all_branches if '/' not in x]  # exclude remotes
+    if name not in alive_branches:
+        raise ValueError(f'Branch: {name} does not exist')
+
+    alive_branches.remove(name)
+    if len(alive_branches) == 0:
+        msg = f'Not allowed to remove all branchs from a repository! '\
+              f'Operation aborted without completing removal of branch: {name}'
+        raise PermissionError(msg)
+
+    if writer_lock_held(branchenv) is False:
+        msg = f'Cannot remove branch when a `write-enabled` checkout is active. '\
+              f're-run after committing/closing the writer.'
+        raise PermissionError(msg)
+
+    staging_branch = get_staging_branch_head(branchenv)
+    if staging_branch == name:
+        msg = f'Branch: {name} cannot be deleted while acting as the base for '\
+              f'contents of the staging area. re-run after checking out a '\
+              f'different branch in `write` mode.'
+        raise PermissionError(msg)
+
+    HEAD = get_branch_head_commit(branchenv, name)
+    if not force_delete:
+        for branch in alive_branches:
+            b_head = get_branch_head_commit(branchenv, branch)
+            b_ancestors = get_commit_ancestors_graph(refenv, starting_commit=b_head)
+            if HEAD in b_ancestors:
+                break
+        else:  # N.B. for-else conditional (ie. "no break")
+            msg = f'The branch {name} is not fully merged. If you are sure '\
+                  f'you want to delete it, re-run with force-remove parameter set'
+            raise RuntimeError(msg)
+
+    branchtxn = TxnRegister().begin_writer_txn(branchenv)
+    try:
+        branchHeadKey = parsing.repo_branch_head_db_key_from_raw_key(name)
+        branchtxn.delete(branchHeadKey)
+    finally:
+        TxnRegister().commit_writer_txn(branchenv)
+
+    return BranchHead(name=name, digest=HEAD)
 
 
 # ------------- set and get with staging area HEAD branch name --------------------------
