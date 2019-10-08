@@ -5,7 +5,11 @@ Change Log
 `In-Progress`_
 ==============
 
-TBD
+Bug Fixes
+---------
+
+* Programatic access to repository log contents now returns branch heads alongside other log info.
+  (`#125 <https://github.com/tensorwerk/hangar-py/pull/125>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 `v0.3.0`_ (2019-09-10)

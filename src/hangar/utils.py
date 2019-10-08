@@ -246,7 +246,7 @@ def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
     for entry in os.scandir(p):
         if entry.is_file(follow_symlinks=False):
             total += entry.stat().st_size
-        elif (recurse is True) and (entry.is_dir() is True):
+        elif (recurse is True) and (entry.is_dir(follow_symlinks=False) is True):
             total += folder_size(entry.path, recurse=True)
     return total
 
