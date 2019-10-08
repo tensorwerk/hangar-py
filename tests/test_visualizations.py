@@ -375,7 +375,7 @@ def test_repo_log_return_contents_correct_default_args(repo):
     ancestor_branch = repo.create_branch('ancestor', base_commit=ancestor_digest)
     dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
 
-    co = repo.checkout(write=True, branch=dev_branch)
+    co = repo.checkout(write=True, branch=dev_branch.name)
     co.metadata['zen'] = 'of python'
     dev_head = co.commit('third on test')
     co.close()
@@ -399,8 +399,8 @@ def test_repo_log_return_contents_correct_default_args(repo):
     assert log['order'] == [dev_head, ancestor_digest]
 
     assert len(log['branch_heads']) == 2
-    assert log['branch_heads'][ancestor_digest] == [ancestor_branch]
-    assert log['branch_heads'][dev_head] == [dev_branch]
+    assert log['branch_heads'][ancestor_digest] == [ancestor_branch.name]
+    assert log['branch_heads'][dev_head] == [dev_branch.name]
 
 
 def test_repo_log_return_contents_correct_when_specify_branch_name(repo):
@@ -415,7 +415,7 @@ def test_repo_log_return_contents_correct_when_specify_branch_name(repo):
     ancestor_branch = repo.create_branch('ancestor', base_commit=ancestor_digest)
     dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
 
-    co = repo.checkout(write=True, branch=dev_branch)
+    co = repo.checkout(write=True, branch=dev_branch.name)
     co.metadata['zen'] = 'of python'
     dev_head = co.commit('third on test')
     co.close()
@@ -439,7 +439,7 @@ def test_repo_log_return_contents_correct_when_specify_branch_name(repo):
     assert log['order'] == [master_head, ancestor_digest]
 
     assert len(log['branch_heads']) == 2
-    assert log['branch_heads'][ancestor_digest] == [ancestor_branch]
+    assert log['branch_heads'][ancestor_digest] == [ancestor_branch.name]
     assert log['branch_heads'][master_head] == ['master']
 
 
@@ -455,7 +455,7 @@ def test_repo_log_return_contents_correct_when_specify_digest(repo):
     ancestor_branch = repo.create_branch('ancestor', base_commit=ancestor_digest)
     dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
 
-    co = repo.checkout(write=True, branch=dev_branch)
+    co = repo.checkout(write=True, branch=dev_branch.name)
     co.metadata['zen'] = 'of python'
     dev_head = co.commit('third on test')
     co.close()
@@ -479,5 +479,5 @@ def test_repo_log_return_contents_correct_when_specify_digest(repo):
     assert log['order'] == [master_head, ancestor_digest]
 
     assert len(log['branch_heads']) == 2
-    assert log['branch_heads'][ancestor_digest] == [ancestor_branch]
+    assert log['branch_heads'][ancestor_digest] == [ancestor_branch.name]
     assert log['branch_heads'][master_head] == ['master']

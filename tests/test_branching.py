@@ -210,7 +210,20 @@ def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_he
     thirdDigest = co.commit('third')
     co.close()
 
-    # checkout master so staging area is not on branch
     with pytest.raises(PermissionError):
         repo.remove_branch('testdelete')
     assert repo.list_branches() == ['master', 'testdelete']
+
+
+def test_delete_branch_raises_permission_error_if_only_one_branch_left(written_repo):
+    repo = written_repo
+    co = repo.checkout(write=True)
+    co.metadata['foo'] = 'bar'
+    masterHEAD = co.commit('second')
+    co.close()
+
+
+    assert repo.list_branches() == ['master']
+    with pytest.raises(PermissionError):
+        repo.remove_branch('master')
+    assert repo.list_branches() == ['master']
