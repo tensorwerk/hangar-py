@@ -75,10 +75,10 @@ def written_repo(repo):
     yield repo
 
 
-@pytest.fixture()
-def repo_with_20_samples(written_repo, array5by7):
+@pytest.fixture(params=backend_params)
+def repo_with_20_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
-    second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7)
+    second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7, backend=request.param)
     first_aset = co.arraysets['writtenaset']
     for i in range(20):
         array5by7[:] = i
@@ -89,7 +89,7 @@ def repo_with_20_samples(written_repo, array5by7):
     yield written_repo
 
 
-@pytest.fixture(params=['00', '10'])
+@pytest.fixture(params=backend_params)
 def repo_with_10000_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
     aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend=request.param)
@@ -102,10 +102,11 @@ def repo_with_10000_samples(request, written_repo, array5by7):
     yield written_repo
 
 
-@pytest.fixture()
-def variable_shape_written_repo(repo):
+@pytest.fixture(params=backend_params)
+def variable_shape_written_repo(request, repo):
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True)
+    co.arraysets.init_arrayset(
+        name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend=request.param)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -133,7 +134,8 @@ def randomsizedarray():
 @pytest.fixture(params=backend_params)
 def written_two_cmt_repo(request, repo, array5by7):
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32, backend=request.param)
+    co.arraysets.init_arrayset(
+        name='writtenaset', shape=(5, 7), dtype=np.float32, backend=request.param)
     for cIdx in range(2):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -149,13 +151,13 @@ def written_two_cmt_repo(request, repo, array5by7):
     yield repo
 
 
-@pytest.fixture(params=backend_params)
-def repo_1_br_no_conf(request, repo):
+@pytest.fixture()
+def repo_1_br_no_conf(repo):
 
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch='master')
     co1.arraysets.init_arrayset(
-        name='dummy', prototype=dummyData, named_samples=True, backend=request.param)
+        name='dummy', prototype=dummyData, named_samples=True)
     for idx in range(10):
         dummyData[:] = idx
         co1.arraysets['dummy'][str(idx)] = dummyData
@@ -203,7 +205,7 @@ def server_instance(managed_tmpdir, worker_id):
     yield address
 
     hangserver.env._close_environments()
-    server.stop(0.0)
+    server.stop(0.1)
     time.sleep(0.2)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
@@ -228,10 +230,10 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
 
     hangserver.env._close_environments()
     server.stop(0.1)
-    time.sleep(0.1)
+    time.sleep(0.2)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.4)
+        time.sleep(0.3)
 
 
 @pytest.fixture()
