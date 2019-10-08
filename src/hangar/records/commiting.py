@@ -140,7 +140,7 @@ def get_commit_ancestors(refenv, commit_hash):
     Returns
     -------
     namedtuple
-        Namedtuple describing is_merge_commit, master_ancester, &
+        Namedtuple describing is_merge_commit, master_ancestor, &
         child_ancestor (in the even of merge commit)
 
     Raises
@@ -232,7 +232,7 @@ def get_commit_ref(refenv, commit_hash):
 
     Parameters
     ----------
-    refenv : lmdb.Envirionment`
+    refenv : lmdb.Environment`
         lmdb environment where the references are stored
     commit_hash : string
         hash of the commit to retrieve.
@@ -351,15 +351,15 @@ Methods to write new commits
 ----------------------------
 
 The functions below act to:
-    - Reading and formating all record data from the staging area.
+    - Reading and formatting all record data from the staging area.
     - Determining the ancestor(s) of the new commit
-    - Specify commit details (message, time, commiter-info, etc.)
+    - Specify commit details (message, time, committer-info, etc.)
     - Coordinate record hashing
     - Write the commit record
     - Update the branch head to point to the new commit hash
 """
 
-# ---------------- Functions to format the writen values of a commit --------------------
+# ---------------- Functions to format the written values of a commit --------------------
 
 
 def _commit_ancestors(branchenv: lmdb.Environment,
@@ -369,13 +369,13 @@ def _commit_ancestors(branchenv: lmdb.Environment,
                       dev_branch: str = '') -> DigestAndBytes:
     """Format the commit parent db value, finding HEAD commits automatically.
 
-    This method handles formating for both regular & merge commits through the
+    This method handles formatting for both regular & merge commits through the
     the keyword only arguments.
 
     Parameters
     ----------
     branchenv : lmdb.Environment
-        Lmdb envrionment where branch data is located. If not merge commit, head
+        Lmdb environment where branch data is located. If not merge commit, head
         branch and commit will be found.
     is_merge_commit : bool, optional
         If this is a merge commit or now, defaults to False
@@ -419,7 +419,7 @@ def _commit_spec(message: str, user: str, email: str) -> DigestAndBytes:
     message : string
         Commit message sent in by the user.
     user : str, optional
-        Name of the commiter
+        Name of the committer
     email : str, optional
         Email of the committer
 
@@ -469,7 +469,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     Parameters
     ----------
     message : string
-        Message the user accociates with what has been added, removed, or
+        Message the user associates with what has been added, removed, or
         changed in this commit. Must not be empty.
     branchenv : lmdb.Environment
         lmdb environment where branch records are stored.
@@ -523,7 +523,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     finally:
         TxnRegister().commit_writer_txn(refenv)
 
-    # possible seperate function
+    # possible separate function
     move_process_data_to_store(repo_path)
     if is_merge_commit is False:
         headBranchName = heads.get_staging_branch_head(branchenv)
@@ -539,7 +539,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
 
 
 def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
-    """DANGER ZONE: Delete the stage db and replace it with a copy of a commit environent.
+    """DANGER ZONE: Delete the stage db and replace it with a copy of a commit environment.
 
     .. warning::
 
@@ -577,12 +577,12 @@ def replace_staging_area_with_refs(stageenv, sorted_content):
 
     Parameters
     ----------
-    stageenv : lmdb.Enviornment
+    stageenv : lmdb.Environment
         staging area db to replace all data in.
     sorted_content : iterable of tuple
         iterable containing two-tuple of byte encoded record data to place in
         the stageenv db. index 0 -> db key; index 1 -> db val, it is assumed
-        that the order of the tuples is lexigraphically sorted by index 0
+        that the order of the tuples is lexicographically sorted by index 0
         values, if not, this will result in unknown behavior.
     """
     stagetxn = TxnRegister().begin_writer_txn(stageenv)
@@ -609,18 +609,18 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
     In process writes never directly access files in the data directory.
     Instead, when the file is created is is symlinked to either the remote data
     or stage data directory. All access is handled through this intermediate
-    symlink in order to prevent any ability to overwpackedeven if
-    there are major errors in the hash records). Once the write operation
-    packedor staging, or completion of fetch for remote), this
-    method is called to move the symlinks from the write enabled directory to
-    the (read only, fully-committed) storage dir.
+    symlink in order to prevent any ability to overwrite (even if there are
+    major errors in the hash records). Once the write operation is packed in
+    the staging or remote area, this method is called to move the symlinks from
+    the write enabled directory to the (read only, fully-committed) storage
+    dir.
 
     Parameters
     ----------
     repo_path : str
         path to the repository on dir
     remote_operation : bool, optional
-        If this operation is occuring from a remote fetch operation. (the
+        If this operation is occurring from a remote fetch operation. (the
         default is False, which means that all changes will occur in the
         staging area)
 
@@ -666,7 +666,7 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
 
 
 def list_all_commits(refenv):
-    """returns a list of all commits stored in the repostiory
+    """returns a list of all commits stored in the repository
 
     Parameters
     ----------

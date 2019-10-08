@@ -1,5 +1,6 @@
 from collections import defaultdict
 import warnings
+from typing import NamedTuple
 
 import lmdb
 
@@ -7,18 +8,24 @@ from . import parsing
 from ..context import TxnRegister
 
 
+BranchHead = NamedTuple('BranchHead', [
+    ('name', str),
+    ('digest', str)
+])
+
+
 """
 Write operation enabled lock methods
 ------------------------------------
 
 Any operation which wants to interact with the main storage services in a
-write-enabled way must aquire a lock to perform the operation. See docstrings
+write-enabled way must acquire a lock to perform the operation. See docstrings
 below for more info
 """
 
 
 def writer_lock_held(branchenv):
-    """Check to see if the writer lock is free before attempting to aquire it.
+    """Check to see if the writer lock is free before attempting to acquire it.
 
     Parameters
     ----------
@@ -67,7 +74,7 @@ def acquire_writer_lock(branchenv, writer_uuid):
     -------
     bool
         success of the operation, which will be validated by the writer class as
-        a safety net incase the upstream in the event some user code trys to
+        a safety net incase the upstream in the event some user code tries to
         catch the exception.Z
 
     Raises
@@ -94,9 +101,9 @@ def acquire_writer_lock(branchenv, writer_uuid):
             success = True
         else:
             success = False
-            err = f'Cannot aquire the writer lock. Only one instance of a writer checkout '\
+            err = f'Cannot acquire the writer lock. Only one instance of a writer checkout '\
                 'can be active at a time. If the last checkout of this repository did '\
-                'not properly close, or a crash occured, the lock must be manually freed '\
+                'not properly close, or a crash occurred, the lock must be manually freed '\
                 'before another writer can be instantiated.'
             raise PermissionError(err)
     finally:
@@ -108,9 +115,9 @@ def acquire_writer_lock(branchenv, writer_uuid):
 def release_writer_lock(branchenv, writer_uuid):
     """Internal method to release a writer lock held by a specified uuid.
 
-    This method also accept the force-release sentinal by a caller in the
+    This method also accept the force-release sentinel by a caller in the
     writer_uuid field. If the writer_uuid does not match the lock value (and the
-    force sentinal is not used), then a runtime error will be thrown and no-op
+    force sentinel is not used), then a runtime error will be thrown and no-op
     performed
 
     Parameters
@@ -170,7 +177,7 @@ Methods to interact with the branch head records
 # ---------------- branch creation and deletion operations ------------------------------
 
 
-def create_branch(branchenv, name, base_commit):
+def create_branch(branchenv, name, base_commit) -> BranchHead:
     """Internal operations used to create a branch.
 
     Parameters
@@ -185,22 +192,23 @@ def create_branch(branchenv, name, base_commit):
 
     Returns
     -------
-    str
-        Name of the branch which was created (if the operation was successful)
+    BranchHead
+        NamedTuple[str, str] with fields for `name` and `digest` of the branch
+        created (if the operation was successful)
 
     Raises
     ------
     ValueError
         If the branch already exists, no-op and raise this.
     RuntimeError
-        If the repository does not have atleast one commit on the `default`
+        If the repository does not have at-least one commit on the `default`
         (ie. `master`) branch.
     """
     if base_commit is None:
         headBranch = get_staging_branch_head(branchenv)
         base_commit = get_branch_head_commit(branchenv, headBranch)
         if (headBranch == 'master') and (base_commit == ''):
-            msg = 'Atleast one commit must be made in the repository on the `default` '\
+            msg = 'At least one commit must be made in the repository on the `default` '\
                   '(`master`) branch before new branches can be created'
             raise RuntimeError(msg)
 
@@ -217,7 +225,96 @@ def create_branch(branchenv, name, base_commit):
     finally:
         TxnRegister().commit_writer_txn(branchenv)
 
-    return name
+    return BranchHead(name=name, digest=base_commit)
+
+
+def remove_branch(branchenv: lmdb.Environment,
+                  refenv: lmdb.Environment,
+                  name: str,
+                  *,
+                  force_delete: bool = False) -> BranchHead:
+    """Remove a branch head pointer after verifying validity and safety
+
+    Parameters
+    ----------
+    branchenv : lmdb.Environment
+        db containing the branch head specs
+    refenv : lmdb.Environment
+        db containing the commit refs
+    name : str
+        name of the branch which should be deleted.
+    force_delete : bool, optional
+        If True, remove the branch pointer even if the changes are un-merged in
+        other branch histories. by default False
+
+    Returns
+    -------
+    BranchHead
+        NamedTuple[str, str] with fields for `name` and `digest` of the branch
+        pointer deleted.
+
+    Raises
+    ------
+    ValueError
+        If a branch with the provided name does not exist locally
+    PermissionError
+        If removal of the branch would result in a repository with zero local
+        branches.
+    PermissionError
+        If a write enabled checkout is holding the writer-lock at time of this
+        call.
+    PermissionError
+        If the branch to be removed was the last used in a write-enabled
+        checkout, and whose contents form the base of the staging area.
+    RuntimeError
+        If the branch has not been fully merged into other branch histories,
+        and ``force_delete`` option is not ``True``.
+    """
+    from .commiting import get_commit_ancestors_graph
+
+    all_branches = get_branch_names(branchenv)
+    alive_branches = [x for x in all_branches if '/' not in x]  # exclude remotes
+    if name not in alive_branches:
+        raise ValueError(f'Branch: {name} does not exist')
+
+    alive_branches.remove(name)
+    if len(alive_branches) == 0:
+        msg = f'Not allowed to remove all branches from a repository! '\
+              f'Operation aborted without completing removal of branch: {name}'
+        raise PermissionError(msg)
+
+    if writer_lock_held(branchenv) is False:
+        msg = f'Cannot remove branch when a `write-enabled` checkout is active. '\
+              f're-run after committing/closing the writer.'
+        raise PermissionError(msg)
+
+    staging_branch = get_staging_branch_head(branchenv)
+    if staging_branch == name:
+        msg = f'Branch: {name} cannot be deleted while acting as the base for '\
+              f'contents of the staging area. re-run after checking out a '\
+              f'different branch in `write` mode.'
+        raise PermissionError(msg)
+
+    HEAD = get_branch_head_commit(branchenv, name)
+    if not force_delete:
+        for branch in alive_branches:
+            b_head = get_branch_head_commit(branchenv, branch)
+            b_ancestors = get_commit_ancestors_graph(refenv, starting_commit=b_head)
+            if HEAD in b_ancestors:
+                break
+        else:  # N.B. for-else conditional (ie. "no break")
+            msg = f'The branch {name} is not fully merged. If you are sure '\
+                  f'you want to delete it, re-run with force-remove parameter set'
+            raise RuntimeError(msg)
+
+    branchtxn = TxnRegister().begin_writer_txn(branchenv)
+    try:
+        branchHeadKey = parsing.repo_branch_head_db_key_from_raw_key(name)
+        branchtxn.delete(branchHeadKey)
+    finally:
+        TxnRegister().commit_writer_txn(branchenv)
+
+    return BranchHead(name=name, digest=HEAD)
 
 
 # ------------- set and get with staging area HEAD branch name --------------------------
@@ -466,7 +563,7 @@ def add_remote(branchenv: lmdb.Environment, name: str, address: str) -> bool:
 
 
 def get_remote_address(branchenv: lmdb.Environment, name: str) -> str:
-    """Retieve the IO:PORT of the remote server for a given name
+    """Retrieve the IO:PORT of the remote server for a given name
 
     Parameters
     ----------

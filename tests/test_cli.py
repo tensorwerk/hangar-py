@@ -312,7 +312,7 @@ def test_branch_create_and_list(written_two_cmt_server_repo):
 
         res = runner.invoke(cli.branch_create, ['testbranch'], obj=new_repo)
         assert res.exit_code == 0
-        assert res.stdout == f"BRANCH: testbranch HEAD: {cmt}\n"
+        assert res.stdout == f"Created BRANCH: testbranch HEAD: {cmt}\n"
 
         branches = new_repo.list_branches()
         assert branches == ['master', 'origin/master', 'testbranch']
@@ -320,6 +320,58 @@ def test_branch_create_and_list(written_two_cmt_server_repo):
         res = runner.invoke(cli.branch_list, obj=new_repo)
         assert res.exit_code == 0
         assert res.stdout == "['master', 'origin/master', 'testbranch']\n"
+
+
+def test_branch_create_and_delete(written_two_cmt_server_repo):
+    server, base_repo = written_two_cmt_server_repo
+
+    co = base_repo.checkout(write=True)
+    cmt = co.commit_hash
+    co.close()
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        P = getcwd()
+        new_repo = Repository(P, exists=False)
+        res = runner.invoke(
+            cli.clone,
+            ['--name', 'Foo Tester', '--email', 'foo@email.com', f'{server}'], obj=new_repo)
+        assert res.exit_code == 0
+
+        res = runner.invoke(cli.branch_create, ['testbranch'], obj=new_repo)
+        assert res.exit_code == 0
+        assert res.stdout == f"Created BRANCH: testbranch HEAD: {cmt}\n"
+
+        branches = new_repo.list_branches()
+        assert branches == ['master', 'origin/master', 'testbranch']
+
+        res = runner.invoke(cli.branch_remove, ['testbranch'], obj=new_repo)
+        assert res.exit_code == 0
+        assert res.stdout == f"Deleted BRANCH: testbranch HEAD: {cmt}\n"
+
+        branches = new_repo.list_branches()
+        assert branches == ['master', 'origin/master']
+
+        new_repo.create_branch('secondtest')
+        co = new_repo.checkout(write=True, branch='secondtest')
+        co.metadata['foodadaa'] = '34a345'
+        newDigest = co.commit('dummy commit')
+        co.close()
+
+        # re-open with staging set to master so we can try to delete secondtest
+        co = new_repo.checkout(write=True, branch='master')
+        co.close()
+
+        res = runner.invoke(cli.branch_remove, ['secondtest'], obj=new_repo)
+        assert res.exit_code == 1
+
+        res = runner.invoke(cli.branch_remove, ['secondtest', '-f'], obj=new_repo)
+        assert res.exit_code == 0
+        assert res.stdout == f"Deleted BRANCH: secondtest HEAD: {newDigest}\n"
+
+        res = runner.invoke(cli.branch_list, obj=new_repo)
+        assert res.exit_code == 0
+        assert res.stdout == "['master', 'origin/master']\n"
 
 
 def test_start_server():

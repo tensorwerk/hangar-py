@@ -5,6 +5,12 @@ Change Log
 `In-Progress`_
 ==============
 
+New Features
+------------
+
+* Added ability to delete branch names/pointers from a local repository via both API and CLI.
+  (`#128 <https://github.com/tensorwerk/hangar-py/pull/128>`__) `@rlizzo <https://github.com/rlizzo>`__
+
 Bug Fixes
 ---------
 

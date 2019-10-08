@@ -120,7 +120,7 @@ def repo_version_db_val_from_raw_val(v_spec: VersionSpec) -> bytes:
 
 
 def repo_version_raw_val_from_db_val(db_val: bytes) -> VersionSpec:
-    """determine software version of hangar repository is writter for.
+    """determine software version of hangar repository is written for.
 
     Parameters
     ----------

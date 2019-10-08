@@ -152,7 +152,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
 
     branch = repo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
-        co = repo.checkout(write=True, branch=branch)
+        co = repo.checkout(write=True, branch=branch.name)
         devSampList = []
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
@@ -165,8 +165,8 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
         devCmtList.append((cmt, devSampList))
         co.close()
 
-    push2 = repo.remote.push('origin', branch)
-    assert push2 == branch
+    push2 = repo.remote.push('origin', branch.name)
+    assert push2 == branch.name
 
 
 @pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [10, 10]])
@@ -205,7 +205,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     devCmtList = []
     branch = repo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
-        co = repo.checkout(write=True, branch=branch)
+        co = repo.checkout(write=True, branch=branch.name)
         devSampList = []
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
@@ -218,9 +218,9 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         devCmtList.append((cmt, devSampList))
         co.close()
 
-    push2 = repo.remote.push('origin', branch)
-    assert push2 == branch
-    branchHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name=branch)
+    push2 = repo.remote.push('origin', branch.name)
+    assert push2 == branch.name
+    branchHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name=branch.name)
 
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
@@ -248,9 +248,9 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     assert cloneMasterHist == masterHist
 
     # Fetch test
-    fetch = newRepo.remote.fetch('origin', branch=branch)
-    assert fetch == f'origin/{branch}'
-    assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch}']
+    fetch = newRepo.remote.fetch('origin', branch=branch.name)
+    assert fetch == f'origin/{branch.name}'
+    assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch.name}']
     for cmt, sampList in devCmtList:
         # newRepo.remote.fetch_data('origin', commit=cmt)
         with pytest.warns(UserWarning):
@@ -269,7 +269,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
                 shouldNotExist = nco.arraysets['writtenaset'][sIdx]
             # assert np.allclose(nco.arraysets['writtenaset'][str(sIdx)], samp)
         nco.close()
-    cloneBranchHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name=f'origin/{branch}')
+    cloneBranchHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name=f'origin/{branch.name}')
     assert cloneBranchHist == branchHist
     newRepo._env._close_environments()
 
@@ -354,7 +354,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     devCmts = masterCmts.copy()
     branch = repo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
-        co = repo.checkout(write=True, branch=branch)
+        co = repo.checkout(write=True, branch=branch.name)
         devSampList1 = []
         devSampList2 = []
         with co.arraysets['writtenaset'] as d, co.arraysets['_two'] as dd:
@@ -373,9 +373,9 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         devCmts[cmt] = (devSampList1, devSampList2)
         co.close()
 
-    push2 = repo.remote.push('origin', branch)
-    assert push2 == branch
-    branchHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name=branch)
+    push2 = repo.remote.push('origin', branch.name)
+    assert push2 == branch.name
+    branchHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name=branch.name)
 
     # -------------------------- end setup ------------------------------------
 
@@ -384,9 +384,9 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir, exists=False)
     newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
-    newRepo.remote.fetch('origin', branch=branch)
+    newRepo.remote.fetch('origin', branch=branch.name)
     newRepo.create_branch('testbranch', base_commit=branchHist['head'])
-    assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch}', branch]
+    assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch.name}', branch.name]
 
     # ------------------ format arguments dependingon options -----------------
 
