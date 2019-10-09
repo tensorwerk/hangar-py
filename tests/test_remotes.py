@@ -556,12 +556,9 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
     newRepo._env._close_environments()
 
 
-def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, managed_tmpdir):
-    from hangar.remote import config
+def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance_nbytes_limit, repo, managed_tmpdir):
     from hangar import Repository
-
-    config.config['server']['grpc']['fetch_max_nbytes'] = 100_000
-    config.config['client']['grpc']['push_max_nbytes'] = 100_000
+    from hangar.remote import chunks, client
 
     # Push master branch test
     masterCmtList = []
@@ -582,16 +579,24 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
         masterCmtList.append((cmt, masterSampList))
         co.close()
 
-    repo.remote.add('origin', server_instance)
+    repo.remote.add('origin', server_instance_nbytes_limit)
+
+    spy = mocker.spy(chunks, 'tensorChunkedIterator')
     push1 = repo.remote.push('origin', 'master')
+    assert chunks.tensorChunkedIterator.call_count == 12
+    for call in spy.call_args_list:
+        assert call[1]['uncomp_nbytes'] <= 101_575 # maximum amount over 100_000 observed in test development
+
     assert push1 == 'master'
 
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir, exists=False)
-    newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+    newRepo.clone('Test User', 'tester@foo.com', server_instance_nbytes_limit, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
+
+    spy = mocker.spy(client.HangarClient, 'fetch_data')
     for cmt, sampList in masterCmtList:
         newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
@@ -601,6 +606,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
         for sIdx, samp in enumerate(sampList):
             assert np.allclose(nco.arraysets['aset'][str(sIdx)], samp)
         nco.close()
+    assert client.HangarClient.fetch_data.call_count == 12
     newRepo._env._close_environments()
 
 

@@ -133,11 +133,12 @@ class ContentWriter(object):
         saved_digests = []
         hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
         try:
-            for hdigest, tensor in received_data:
-                hashVal = backend.write_data(tensor, remote_operation=True)
-                hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
-                hashTxn.put(hashKey, hashVal)
-                saved_digests.append(hdigest)
+            with backend as back:
+                for hdigest, tensor in received_data:
+                    hashVal = back.write_data(tensor, remote_operation=True)
+                    hashKey = parsing.hash_data_db_key_from_raw_key(hdigest)
+                    hashTxn.put(hashKey, hashVal)
+                    saved_digests.append(hdigest)
         finally:
             backend.close()
             TxnRegister().commit_writer_txn(self.env.hashenv)

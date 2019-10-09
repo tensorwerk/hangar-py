@@ -84,7 +84,6 @@ setup(
         'lmdb>=0.94,<=0.96',
         'msgpack==0.6.1',
         'numpy',
-        'pyyaml',
         'tqdm',
         'wrapt',
     ],

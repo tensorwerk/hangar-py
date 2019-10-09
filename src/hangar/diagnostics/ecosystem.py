@@ -9,7 +9,6 @@ required_packages = [
     ('h5py', lambda p: p.__version__),
     ('numpy', lambda p: p.__version__),
     ('blosc', lambda p: p.__version__),
-    ('yaml', lambda p: p.__version__),
     ('tqdm', lambda p: p.__version__),
     ('wrapt', lambda p: p.__version__),
     ('grpc', lambda p: p.__version__),

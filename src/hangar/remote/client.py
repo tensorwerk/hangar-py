@@ -99,8 +99,19 @@ class HangarClient(object):
                 request = hangar_service_pb2.GetClientConfigRequest()
                 response = tmp_stub.GetClientConfig(request)
                 self.cfg['push_max_nbytes'] = int(response.config['push_max_nbytes'])
-                self.cfg['enable_compression'] = bool(int(response.config['enable_compression']))
                 self.cfg['optimization_target'] = response.config['optimization_target']
+
+                enable_compression = response.config['enable_compression']
+                if enable_compression == 'NoCompression':
+                    compression_val = grpc.Compression.NoCompression
+                elif enable_compression == 'Deflate':
+                    compression_val = grpc.Compression.Deflate
+                elif enable_compression == 'Gzip':
+                    compression_val = grpc.Compression.Gzip
+                else:
+                    compression_val = grpc.Compression.NoCompression
+                self.cfg['enable_compression'] = compression_val
+
             except grpc.RpcError as err:
                 if not (err.code() == grpc.StatusCode.UNAVAILABLE) and (self.wait_ready is True):
                     logger.error(err)
@@ -118,8 +129,8 @@ class HangarClient(object):
         tmp_insec_channel.close()
         configured_channel = grpc.insecure_channel(
             self.address,
-            options=[('grpc.default_compression_algorithm', self.cfg['enable_compression']),
-                     ('grpc.optimization_target', self.cfg['optimization_target'])])
+            options=[('grpc.optimization_target', self.cfg['optimization_target'])],
+            compression=self.cfg['enable_compression'])
         self.channel = grpc.intercept_channel(configured_channel, self.header_adder_int)
         self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
 
@@ -323,7 +334,9 @@ class HangarClient(object):
 
         try:
             cIter = chunks.tensorChunkedIterator(
-                buf=buf, uncomp_nbytes=totalSize, itemsize=1,
+                buf=buf,
+                uncomp_nbytes=totalSize,
+                itemsize=1,
                 pb2_request=hangar_service_pb2.FetchDataRequest)
             replies = self.stub.FetchData(cIter)
             for idx, reply in enumerate(replies):
@@ -332,8 +345,9 @@ class HangarClient(object):
                     dBytes, offset = bytearray(comp_nbytes), 0
                 size = len(reply.raw_data)
                 if size > 0:
-                    dBytes[offset: offset + size] = reply.raw_data
+                    dBytes[offset:offset + size] = reply.raw_data
                     offset += size
+
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
                 logger.info(rpc_error.details())

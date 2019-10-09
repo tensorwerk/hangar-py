@@ -213,6 +213,27 @@ def server_instance(managed_tmpdir, worker_id):
 
 
 @pytest.fixture()
+def server_instance_nbytes_limit(managed_tmpdir, worker_id):
+    from hangar import serve
+
+    address = f'localhost:{randint(50000, 59999)}'
+    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
+    mkdir(base_tmpdir)
+    server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
+    hangserver.CFG['SERVER_GRPC']['fetch_max_nbytes'] = '100000'
+    hangserver.CFG['CLIENT_GRPC']['push_max_nbytes'] = '100000'
+    server.start()
+    yield address
+
+    hangserver.env._close_environments()
+    server.stop(0.1)
+    time.sleep(0.2)
+    if platform.system() == 'Windows':
+        # time for open file handles to close before tmp dir can be removed.
+        time.sleep(0.3)
+
+
+@pytest.fixture()
 def server_instance_push_restricted(managed_tmpdir, worker_id):
     from hangar import serve
 

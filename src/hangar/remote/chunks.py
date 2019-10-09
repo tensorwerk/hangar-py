@@ -59,12 +59,16 @@ def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
     hangar_service_pb2.PushCommitRequest
         Chunked generator of the PushCommitRequest protobuf.
     """
-    commit_proto = hangar_service_pb2.CommitRecord()
-    commit_proto.parent = parentVal
-    commit_proto.spec = specVal
+    commit_proto = hangar_service_pb2.CommitRecord(
+        parent=parentVal,
+        spec=specVal)
+    # commit_proto.parent = parentVal
+    # commit_proto.spec = specVal
     byteSize = len(refVal)
+    request = hangar_service_pb2.PushCommitRequest(
+        commit=commit,
+        total_byte_size=byteSize)
     chunkIterator = chunk_bytes(refVal)
-    request = hangar_service_pb2.PushCommitRequest(commit=commit, total_byte_size=byteSize)
     for refChunk in chunkIterator:
         commit_proto.ref = refChunk
         request.record.CopyFrom(commit_proto)
@@ -75,7 +79,7 @@ def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None
 
     buf.seek(0)
     compBytes = blosc.compress(
-        buf.getbuffer(), clevel=5, cname='blosclz', typesize=itemsize, shuffle=blosc.SHUFFLE)
+        buf.getbuffer(), clevel=3, cname='blosclz', typesize=itemsize, shuffle=blosc.SHUFFLE)
 
     request = pb2_request(
         comp_nbytes=len(compBytes),

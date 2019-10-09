@@ -4,9 +4,9 @@ import time
 from os.path import join as pjoin
 import shutil
 from contextlib import contextmanager
+import configparser
 
 import lmdb
-import yaml
 
 from . import heads, parsing
 from .. import constants as c
@@ -495,12 +495,12 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
                                   master_branch=merge_master,
                                   dev_branch=merge_dev)
 
-    user_info_pth = pjoin(repo_path, 'config_user.yml')
-    with open(user_info_pth) as f:
-        user_info = yaml.safe_load(f.read()) or {}
+    user_info_pth = pjoin(repo_path, c.CONFIG_USER_NAME)
+    CFG = configparser.ConfigParser()
+    CFG.read(user_info_pth)
 
-    USER_NAME = user_info['name']
-    USER_EMAIL = user_info['email']
+    USER_NAME = CFG['USER']['name']
+    USER_EMAIL = CFG['USER']['email']
     if (USER_NAME is None) or (USER_EMAIL is None):
         raise RuntimeError(f'Username and Email are required. Please configure.')
 

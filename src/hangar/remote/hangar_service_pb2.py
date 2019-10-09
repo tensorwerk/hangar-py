@@ -1606,278 +1606,278 @@ DESCRIPTOR.message_types_by_name['FindMissingSchemasRequest'] = _FINDMISSINGSCHE
 DESCRIPTOR.message_types_by_name['FindMissingSchemasReply'] = _FINDMISSINGSCHEMASREPLY
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
-ErrorProto = _reflection.GeneratedProtocolMessageType('ErrorProto', (_message.Message,), dict(
-  DESCRIPTOR = _ERRORPROTO,
-  __module__ = 'hangar_service_pb2'
+ErrorProto = _reflection.GeneratedProtocolMessageType('ErrorProto', (_message.Message,), {
+  'DESCRIPTOR' : _ERRORPROTO,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.ErrorProto)
-  ))
+  })
 _sym_db.RegisterMessage(ErrorProto)
 
-BranchRecord = _reflection.GeneratedProtocolMessageType('BranchRecord', (_message.Message,), dict(
-  DESCRIPTOR = _BRANCHRECORD,
-  __module__ = 'hangar_service_pb2'
+BranchRecord = _reflection.GeneratedProtocolMessageType('BranchRecord', (_message.Message,), {
+  'DESCRIPTOR' : _BRANCHRECORD,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.BranchRecord)
-  ))
+  })
 _sym_db.RegisterMessage(BranchRecord)
 
-HashRecord = _reflection.GeneratedProtocolMessageType('HashRecord', (_message.Message,), dict(
-  DESCRIPTOR = _HASHRECORD,
-  __module__ = 'hangar_service_pb2'
+HashRecord = _reflection.GeneratedProtocolMessageType('HashRecord', (_message.Message,), {
+  'DESCRIPTOR' : _HASHRECORD,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.HashRecord)
-  ))
+  })
 _sym_db.RegisterMessage(HashRecord)
 
-CommitRecord = _reflection.GeneratedProtocolMessageType('CommitRecord', (_message.Message,), dict(
-  DESCRIPTOR = _COMMITRECORD,
-  __module__ = 'hangar_service_pb2'
+CommitRecord = _reflection.GeneratedProtocolMessageType('CommitRecord', (_message.Message,), {
+  'DESCRIPTOR' : _COMMITRECORD,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.CommitRecord)
-  ))
+  })
 _sym_db.RegisterMessage(CommitRecord)
 
-LabelData = _reflection.GeneratedProtocolMessageType('LabelData', (_message.Message,), dict(
-  DESCRIPTOR = _LABELDATA,
-  __module__ = 'hangar_service_pb2'
+LabelData = _reflection.GeneratedProtocolMessageType('LabelData', (_message.Message,), {
+  'DESCRIPTOR' : _LABELDATA,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.LabelData)
-  ))
+  })
 _sym_db.RegisterMessage(LabelData)
 
-SchemaRecord = _reflection.GeneratedProtocolMessageType('SchemaRecord', (_message.Message,), dict(
-  DESCRIPTOR = _SCHEMARECORD,
-  __module__ = 'hangar_service_pb2'
+SchemaRecord = _reflection.GeneratedProtocolMessageType('SchemaRecord', (_message.Message,), {
+  'DESCRIPTOR' : _SCHEMARECORD,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.SchemaRecord)
-  ))
+  })
 _sym_db.RegisterMessage(SchemaRecord)
 
-PingRequest = _reflection.GeneratedProtocolMessageType('PingRequest', (_message.Message,), dict(
-  DESCRIPTOR = _PINGREQUEST,
-  __module__ = 'hangar_service_pb2'
+PingRequest = _reflection.GeneratedProtocolMessageType('PingRequest', (_message.Message,), {
+  'DESCRIPTOR' : _PINGREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PingRequest)
-  ))
+  })
 _sym_db.RegisterMessage(PingRequest)
 
-PingReply = _reflection.GeneratedProtocolMessageType('PingReply', (_message.Message,), dict(
-  DESCRIPTOR = _PINGREPLY,
-  __module__ = 'hangar_service_pb2'
+PingReply = _reflection.GeneratedProtocolMessageType('PingReply', (_message.Message,), {
+  'DESCRIPTOR' : _PINGREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PingReply)
-  ))
+  })
 _sym_db.RegisterMessage(PingReply)
 
-GetClientConfigRequest = _reflection.GeneratedProtocolMessageType('GetClientConfigRequest', (_message.Message,), dict(
-  DESCRIPTOR = _GETCLIENTCONFIGREQUEST,
-  __module__ = 'hangar_service_pb2'
+GetClientConfigRequest = _reflection.GeneratedProtocolMessageType('GetClientConfigRequest', (_message.Message,), {
+  'DESCRIPTOR' : _GETCLIENTCONFIGREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.GetClientConfigRequest)
-  ))
+  })
 _sym_db.RegisterMessage(GetClientConfigRequest)
 
-GetClientConfigReply = _reflection.GeneratedProtocolMessageType('GetClientConfigReply', (_message.Message,), dict(
+GetClientConfigReply = _reflection.GeneratedProtocolMessageType('GetClientConfigReply', (_message.Message,), {
 
-  ConfigEntry = _reflection.GeneratedProtocolMessageType('ConfigEntry', (_message.Message,), dict(
-    DESCRIPTOR = _GETCLIENTCONFIGREPLY_CONFIGENTRY,
-    __module__ = 'hangar_service_pb2'
+  'ConfigEntry' : _reflection.GeneratedProtocolMessageType('ConfigEntry', (_message.Message,), {
+    'DESCRIPTOR' : _GETCLIENTCONFIGREPLY_CONFIGENTRY,
+    '__module__' : 'hangar_service_pb2'
     # @@protoc_insertion_point(class_scope:hangar.GetClientConfigReply.ConfigEntry)
-    ))
+    })
   ,
-  DESCRIPTOR = _GETCLIENTCONFIGREPLY,
-  __module__ = 'hangar_service_pb2'
+  'DESCRIPTOR' : _GETCLIENTCONFIGREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.GetClientConfigReply)
-  ))
+  })
 _sym_db.RegisterMessage(GetClientConfigReply)
 _sym_db.RegisterMessage(GetClientConfigReply.ConfigEntry)
 
-FetchBranchRecordRequest = _reflection.GeneratedProtocolMessageType('FetchBranchRecordRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHBRANCHRECORDREQUEST,
-  __module__ = 'hangar_service_pb2'
+FetchBranchRecordRequest = _reflection.GeneratedProtocolMessageType('FetchBranchRecordRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHBRANCHRECORDREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchBranchRecordRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FetchBranchRecordRequest)
 
-FetchBranchRecordReply = _reflection.GeneratedProtocolMessageType('FetchBranchRecordReply', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHBRANCHRECORDREPLY,
-  __module__ = 'hangar_service_pb2'
+FetchBranchRecordReply = _reflection.GeneratedProtocolMessageType('FetchBranchRecordReply', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHBRANCHRECORDREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchBranchRecordReply)
-  ))
+  })
 _sym_db.RegisterMessage(FetchBranchRecordReply)
 
-FetchDataRequest = _reflection.GeneratedProtocolMessageType('FetchDataRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHDATAREQUEST,
-  __module__ = 'hangar_service_pb2'
+FetchDataRequest = _reflection.GeneratedProtocolMessageType('FetchDataRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHDATAREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchDataRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FetchDataRequest)
 
-FetchDataReply = _reflection.GeneratedProtocolMessageType('FetchDataReply', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHDATAREPLY,
-  __module__ = 'hangar_service_pb2'
+FetchDataReply = _reflection.GeneratedProtocolMessageType('FetchDataReply', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHDATAREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchDataReply)
-  ))
+  })
 _sym_db.RegisterMessage(FetchDataReply)
 
-FetchLabelRequest = _reflection.GeneratedProtocolMessageType('FetchLabelRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHLABELREQUEST,
-  __module__ = 'hangar_service_pb2'
+FetchLabelRequest = _reflection.GeneratedProtocolMessageType('FetchLabelRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHLABELREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchLabelRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FetchLabelRequest)
 
-FetchLabelReply = _reflection.GeneratedProtocolMessageType('FetchLabelReply', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHLABELREPLY,
-  __module__ = 'hangar_service_pb2'
+FetchLabelReply = _reflection.GeneratedProtocolMessageType('FetchLabelReply', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHLABELREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchLabelReply)
-  ))
+  })
 _sym_db.RegisterMessage(FetchLabelReply)
 
-FetchCommitRequest = _reflection.GeneratedProtocolMessageType('FetchCommitRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHCOMMITREQUEST,
-  __module__ = 'hangar_service_pb2'
+FetchCommitRequest = _reflection.GeneratedProtocolMessageType('FetchCommitRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHCOMMITREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchCommitRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FetchCommitRequest)
 
-FetchCommitReply = _reflection.GeneratedProtocolMessageType('FetchCommitReply', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHCOMMITREPLY,
-  __module__ = 'hangar_service_pb2'
+FetchCommitReply = _reflection.GeneratedProtocolMessageType('FetchCommitReply', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHCOMMITREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchCommitReply)
-  ))
+  })
 _sym_db.RegisterMessage(FetchCommitReply)
 
-FetchSchemaRequest = _reflection.GeneratedProtocolMessageType('FetchSchemaRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHSCHEMAREQUEST,
-  __module__ = 'hangar_service_pb2'
+FetchSchemaRequest = _reflection.GeneratedProtocolMessageType('FetchSchemaRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHSCHEMAREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchSchemaRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FetchSchemaRequest)
 
-FetchSchemaReply = _reflection.GeneratedProtocolMessageType('FetchSchemaReply', (_message.Message,), dict(
-  DESCRIPTOR = _FETCHSCHEMAREPLY,
-  __module__ = 'hangar_service_pb2'
+FetchSchemaReply = _reflection.GeneratedProtocolMessageType('FetchSchemaReply', (_message.Message,), {
+  'DESCRIPTOR' : _FETCHSCHEMAREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FetchSchemaReply)
-  ))
+  })
 _sym_db.RegisterMessage(FetchSchemaReply)
 
-PushBranchRecordRequest = _reflection.GeneratedProtocolMessageType('PushBranchRecordRequest', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHBRANCHRECORDREQUEST,
-  __module__ = 'hangar_service_pb2'
+PushBranchRecordRequest = _reflection.GeneratedProtocolMessageType('PushBranchRecordRequest', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHBRANCHRECORDREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushBranchRecordRequest)
-  ))
+  })
 _sym_db.RegisterMessage(PushBranchRecordRequest)
 
-PushBranchRecordReply = _reflection.GeneratedProtocolMessageType('PushBranchRecordReply', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHBRANCHRECORDREPLY,
-  __module__ = 'hangar_service_pb2'
+PushBranchRecordReply = _reflection.GeneratedProtocolMessageType('PushBranchRecordReply', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHBRANCHRECORDREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushBranchRecordReply)
-  ))
+  })
 _sym_db.RegisterMessage(PushBranchRecordReply)
 
-PushDataRequest = _reflection.GeneratedProtocolMessageType('PushDataRequest', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHDATAREQUEST,
-  __module__ = 'hangar_service_pb2'
+PushDataRequest = _reflection.GeneratedProtocolMessageType('PushDataRequest', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHDATAREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushDataRequest)
-  ))
+  })
 _sym_db.RegisterMessage(PushDataRequest)
 
-PushDataReply = _reflection.GeneratedProtocolMessageType('PushDataReply', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHDATAREPLY,
-  __module__ = 'hangar_service_pb2'
+PushDataReply = _reflection.GeneratedProtocolMessageType('PushDataReply', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHDATAREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushDataReply)
-  ))
+  })
 _sym_db.RegisterMessage(PushDataReply)
 
-PushLabelRequest = _reflection.GeneratedProtocolMessageType('PushLabelRequest', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHLABELREQUEST,
-  __module__ = 'hangar_service_pb2'
+PushLabelRequest = _reflection.GeneratedProtocolMessageType('PushLabelRequest', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHLABELREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushLabelRequest)
-  ))
+  })
 _sym_db.RegisterMessage(PushLabelRequest)
 
-PushLabelReply = _reflection.GeneratedProtocolMessageType('PushLabelReply', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHLABELREPLY,
-  __module__ = 'hangar_service_pb2'
+PushLabelReply = _reflection.GeneratedProtocolMessageType('PushLabelReply', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHLABELREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushLabelReply)
-  ))
+  })
 _sym_db.RegisterMessage(PushLabelReply)
 
-PushCommitRequest = _reflection.GeneratedProtocolMessageType('PushCommitRequest', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHCOMMITREQUEST,
-  __module__ = 'hangar_service_pb2'
+PushCommitRequest = _reflection.GeneratedProtocolMessageType('PushCommitRequest', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHCOMMITREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushCommitRequest)
-  ))
+  })
 _sym_db.RegisterMessage(PushCommitRequest)
 
-PushCommitReply = _reflection.GeneratedProtocolMessageType('PushCommitReply', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHCOMMITREPLY,
-  __module__ = 'hangar_service_pb2'
+PushCommitReply = _reflection.GeneratedProtocolMessageType('PushCommitReply', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHCOMMITREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushCommitReply)
-  ))
+  })
 _sym_db.RegisterMessage(PushCommitReply)
 
-PushSchemaRequest = _reflection.GeneratedProtocolMessageType('PushSchemaRequest', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHSCHEMAREQUEST,
-  __module__ = 'hangar_service_pb2'
+PushSchemaRequest = _reflection.GeneratedProtocolMessageType('PushSchemaRequest', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHSCHEMAREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushSchemaRequest)
-  ))
+  })
 _sym_db.RegisterMessage(PushSchemaRequest)
 
-PushSchemaReply = _reflection.GeneratedProtocolMessageType('PushSchemaReply', (_message.Message,), dict(
-  DESCRIPTOR = _PUSHSCHEMAREPLY,
-  __module__ = 'hangar_service_pb2'
+PushSchemaReply = _reflection.GeneratedProtocolMessageType('PushSchemaReply', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHSCHEMAREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.PushSchemaReply)
-  ))
+  })
 _sym_db.RegisterMessage(PushSchemaReply)
 
-FindMissingCommitsRequest = _reflection.GeneratedProtocolMessageType('FindMissingCommitsRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FINDMISSINGCOMMITSREQUEST,
-  __module__ = 'hangar_service_pb2'
+FindMissingCommitsRequest = _reflection.GeneratedProtocolMessageType('FindMissingCommitsRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FINDMISSINGCOMMITSREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FindMissingCommitsRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FindMissingCommitsRequest)
 
-FindMissingCommitsReply = _reflection.GeneratedProtocolMessageType('FindMissingCommitsReply', (_message.Message,), dict(
-  DESCRIPTOR = _FINDMISSINGCOMMITSREPLY,
-  __module__ = 'hangar_service_pb2'
+FindMissingCommitsReply = _reflection.GeneratedProtocolMessageType('FindMissingCommitsReply', (_message.Message,), {
+  'DESCRIPTOR' : _FINDMISSINGCOMMITSREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FindMissingCommitsReply)
-  ))
+  })
 _sym_db.RegisterMessage(FindMissingCommitsReply)
 
-FindMissingHashRecordsRequest = _reflection.GeneratedProtocolMessageType('FindMissingHashRecordsRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FINDMISSINGHASHRECORDSREQUEST,
-  __module__ = 'hangar_service_pb2'
+FindMissingHashRecordsRequest = _reflection.GeneratedProtocolMessageType('FindMissingHashRecordsRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FINDMISSINGHASHRECORDSREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FindMissingHashRecordsRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FindMissingHashRecordsRequest)
 
-FindMissingHashRecordsReply = _reflection.GeneratedProtocolMessageType('FindMissingHashRecordsReply', (_message.Message,), dict(
-  DESCRIPTOR = _FINDMISSINGHASHRECORDSREPLY,
-  __module__ = 'hangar_service_pb2'
+FindMissingHashRecordsReply = _reflection.GeneratedProtocolMessageType('FindMissingHashRecordsReply', (_message.Message,), {
+  'DESCRIPTOR' : _FINDMISSINGHASHRECORDSREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FindMissingHashRecordsReply)
-  ))
+  })
 _sym_db.RegisterMessage(FindMissingHashRecordsReply)
 
-FindMissingLabelsRequest = _reflection.GeneratedProtocolMessageType('FindMissingLabelsRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FINDMISSINGLABELSREQUEST,
-  __module__ = 'hangar_service_pb2'
+FindMissingLabelsRequest = _reflection.GeneratedProtocolMessageType('FindMissingLabelsRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FINDMISSINGLABELSREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FindMissingLabelsRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FindMissingLabelsRequest)
 
-FindMissingLabelsReply = _reflection.GeneratedProtocolMessageType('FindMissingLabelsReply', (_message.Message,), dict(
-  DESCRIPTOR = _FINDMISSINGLABELSREPLY,
-  __module__ = 'hangar_service_pb2'
+FindMissingLabelsReply = _reflection.GeneratedProtocolMessageType('FindMissingLabelsReply', (_message.Message,), {
+  'DESCRIPTOR' : _FINDMISSINGLABELSREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FindMissingLabelsReply)
-  ))
+  })
 _sym_db.RegisterMessage(FindMissingLabelsReply)
 
-FindMissingSchemasRequest = _reflection.GeneratedProtocolMessageType('FindMissingSchemasRequest', (_message.Message,), dict(
-  DESCRIPTOR = _FINDMISSINGSCHEMASREQUEST,
-  __module__ = 'hangar_service_pb2'
+FindMissingSchemasRequest = _reflection.GeneratedProtocolMessageType('FindMissingSchemasRequest', (_message.Message,), {
+  'DESCRIPTOR' : _FINDMISSINGSCHEMASREQUEST,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FindMissingSchemasRequest)
-  ))
+  })
 _sym_db.RegisterMessage(FindMissingSchemasRequest)
 
-FindMissingSchemasReply = _reflection.GeneratedProtocolMessageType('FindMissingSchemasReply', (_message.Message,), dict(
-  DESCRIPTOR = _FINDMISSINGSCHEMASREPLY,
-  __module__ = 'hangar_service_pb2'
+FindMissingSchemasReply = _reflection.GeneratedProtocolMessageType('FindMissingSchemasReply', (_message.Message,), {
+  'DESCRIPTOR' : _FINDMISSINGSCHEMASREPLY,
+  '__module__' : 'hangar_service_pb2'
   # @@protoc_insertion_point(class_scope:hangar.FindMissingSchemasReply)
-  ))
+  })
 _sym_db.RegisterMessage(FindMissingSchemasReply)
 
 

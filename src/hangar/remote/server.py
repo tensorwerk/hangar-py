@@ -7,6 +7,8 @@ import threading
 import time
 from concurrent import futures
 from os.path import join as pjoin
+import shutil
+import configparser
 
 import blosc
 import grpc
@@ -14,7 +16,6 @@ import lmdb
 import msgpack
 import numpy as np
 
-from . import config
 from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
@@ -56,8 +57,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 self._rFs[backend].open('r')
 
         src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
-        config.ensure_file(src_path, destination=repo_path, comment=False)
-        config.refresh(paths=[repo_path])
+        dst_path = pjoin(repo_path, c.CONFIG_SERVER_NAME)
+        if not os.path.isfile(dst_path):
+            shutil.copyfile(src_path, dst_path)
+        self.CFG = configparser.ConfigParser()
+        self.CFG.read(dst_path)
 
         self.txnregister = TxnRegister()
         self.repo_path = self.env.repo_path
@@ -75,10 +79,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     def GetClientConfig(self, request, context):
         """Return parameters to the client to set up channel options as desired by the server.
         """
-        push_max_nbytes = str(config.get('client.grpc.push_max_nbytes'))
-        enable_compression = config.get('client.grpc.enable_compression')
-        enable_compression = str(1) if enable_compression is True else str(0)
-        optimization_target = config.get('client.grpc.optimization_target')
+        clientCFG = self.CFG['CLIENT_GRPC']
+        push_max_nbytes = clientCFG['push_max_nbytes']
+        enable_compression = clientCFG['enable_compression']
+        optimization_target = clientCFG['optimization_target']
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.GetClientConfigReply(error=err)
@@ -291,7 +295,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         buf = io.BytesIO()
         packer = msgpack.Packer(use_bin_type=True)
         hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
-        fetch_max_nbytes = config.get('server.grpc.fetch_max_nbytes')
+        fetch_max_nbytes = int(self.CFG['SERVER_GRPC']['fetch_max_nbytes'])
         try:
             for digest in unpacker:
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
@@ -655,22 +659,36 @@ def serve(hangar_path: os.PathLike,
 
     # ------------------- Configure Server ------------------------------------
 
-    src_path = pjoin(os.path.dirname(__file__), 'config_server.yml')
-    dest_path = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
-    config.ensure_file(src_path, destination=dest_path, comment=False)
-    config.refresh(paths=[dest_path])
+    dst_path = pjoin(hangar_path, c.DIR_HANGAR_SERVER, c.CONFIG_SERVER_NAME)
+    CFG = configparser.ConfigParser()
+    if os.path.isfile(dst_path):
+        CFG.read(dst_path)
+    else:
+        src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
+        CFG.read(src_path)
 
-    enable_compression = config.get('server.grpc.enable_compression')
-    optimization_target = config.get('server.grpc.optimization_target')
+    serverCFG = CFG['SERVER_GRPC']
+    enable_compression = serverCFG['enable_compression']
+    if enable_compression == 'NoCompression':
+        compression_val = grpc.Compression.NoCompression
+    elif enable_compression == 'Deflate':
+        compression_val = grpc.Compression.Deflate
+    elif enable_compression == 'Gzip':
+        compression_val = grpc.Compression.Gzip
+    else:
+        compression_val = grpc.Compression.NoCompression
+
+    optimization_target = serverCFG['optimization_target']
     if channel_address is None:
-        channel_address = config.get('server.grpc.channel_address')
-    max_thread_pool_workers = config.get('server.grpc.max_thread_pool_workers')
-    max_concurrent_rpcs = config.get('server.grpc.max_concurrent_rpcs')
+        channel_address = serverCFG['channel_address']
+    max_thread_pool_workers = int(serverCFG['max_thread_pool_workers'])
+    max_concurrent_rpcs = int(serverCFG['max_concurrent_rpcs'])
 
+    adminCFG = CFG['SERVER_ADMIN']
     if (restrict_push is None) and (username is None) and (password is None):
-        admin_restrict_push = config.get('server.admin.restrict_push')
-        admin_username = config.get('server.admin.username')
-        admin_password = config.get('server.admin.password')
+        admin_restrict_push = bool(int(adminCFG['restrict_push']))
+        admin_username = adminCFG['username']
+        admin_password = adminCFG['password']
     else:
         admin_restrict_push = restrict_push
         admin_username = username
@@ -688,13 +706,14 @@ def serve(hangar_path: os.PathLike,
     server = grpc.server(
         thread_pool=grpc_thread_pool,
         maximum_concurrent_rpcs=max_concurrent_rpcs,
-        options=[('grpc.default_compression_algorithm', enable_compression),
-                 ('grpc.optimization_target', optimization_target)],
+        options=[('grpc.optimization_target', optimization_target)],
+        compression=compression_val,
         interceptors=(interc,))
 
     # ------------------- Start the GRPC server -------------------------------
 
-    hangserv = HangarServer(dest_path, overwrite)
+    server_dir = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
+    hangserv = HangarServer(server_dir, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
     server.add_insecure_port(channel_address)
     return (server, hangserv, channel_address)
