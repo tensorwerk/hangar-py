@@ -1,5 +1,4 @@
 import hashlib
-import io
 import os
 import tempfile
 import warnings
@@ -13,7 +12,6 @@ import configparser
 import blosc
 import grpc
 import lmdb
-import numpy as np
 
 from . import chunks
 from . import hangar_service_pb2

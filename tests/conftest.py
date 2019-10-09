@@ -198,7 +198,7 @@ def server_instance(managed_tmpdir, worker_id):
 
     hangserver.env._close_environments()
     server.stop(0.1)
-    time.sleep(0.2)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
         time.sleep(0.3)
@@ -219,7 +219,7 @@ def server_instance_nbytes_limit(managed_tmpdir, worker_id):
 
     hangserver.env._close_environments()
     server.stop(0.1)
-    time.sleep(0.2)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
         time.sleep(0.3)
@@ -243,7 +243,7 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
 
     hangserver.env._close_environments()
     server.stop(0.1)
-    time.sleep(0.2)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
         time.sleep(0.3)
