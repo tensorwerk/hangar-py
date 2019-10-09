@@ -314,7 +314,6 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                         buf=pack, uncomp_nbytes=len(pack), itemsize=tensor.itemsize,
                         pb2_request=hangar_service_pb2.FetchDataReply, err=err)
                     yield from cIter
-                    time.sleep(0.1)
                     msg = 'HANGAR REQUESTED RETRY: developer enforced limit on returned '\
                           'raw data size to prevent memory overload of user system.'
                     context.set_details(msg)

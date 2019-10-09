@@ -386,7 +386,6 @@ class HangarClient(object):
             specs = []
             hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
             for digest in digests:
-                pbar.update(1)
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
                 hashVal = hashTxn.get(hashKey, default=False)
                 if not hashVal:
@@ -400,19 +399,21 @@ class HangarClient(object):
             totalSize, records = 0, []
             for k in self._rFs.keys():
                 self._rFs[k].__enter__()
-
+            responses = []
             for digest, spec in specs:
                 arr = self._rFs[spec.backend].read_data(spec)
                 record = chunks.serialize_record(arr, digest, schema_hash)
                 records.append(record)
                 totalSize += len(record)
-                if totalSize >= self.cfg['push_max_nbytes']:
+                if (totalSize >= self.cfg['push_max_nbytes']) or (len(records) > 2000):
                     # send tensor pack when >= configured max nbytes occupied in memory
+                    pbar.update(2000)
                     pack = chunks.serialize_record_pack(records)
                     cIter = chunks.tensorChunkedIterator(
                         buf=pack, uncomp_nbytes=len(pack), itemsize=1,
                         pb2_request=hangar_service_pb2.PushDataRequest)
-                    response = self.stub.PushData(cIter)
+                    response = self.stub.PushData.future(cIter)
+                    responses.append(response)
                     totalSize = 0
                     records = []
         except grpc.RpcError as rpc_error:
@@ -427,9 +428,11 @@ class HangarClient(object):
                 cIter = chunks.tensorChunkedIterator(
                     buf=pack, uncomp_nbytes=len(pack), itemsize=arr.itemsize,
                     pb2_request=hangar_service_pb2.PushDataRequest)
-                response = self.stub.PushData(cIter)
-
-        return response
+                response = self.stub.PushData.future(cIter)
+                responses.append(response)
+        for fut in responses:
+            last = fut.result()
+        return last
 
     def fetch_label(self, digest: str) -> Tuple[str, bytes]:
         """get a the raw bytes for a metadata/label digest
