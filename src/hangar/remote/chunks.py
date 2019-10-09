@@ -71,7 +71,7 @@ def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
 def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None):
 
     compBytes = blosc.compress(
-        buf, clevel=3, cname='zstd', typesize=1, shuffle=blosc.SHUFFLE)
+        buf, clevel=3, cname='zlib', typesize=1, shuffle=blosc.SHUFFLE)
 
     request = pb2_request(
         comp_nbytes=len(compBytes),
@@ -85,7 +85,7 @@ def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None
 
 def missingHashIterator(commit, hash_bytes, err, pb2_func):
     comp_bytes = blosc.compress(
-        hash_bytes, cname='blosclz', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
+        hash_bytes, cname='zlib', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
 
     rpc_method = pb2_func(
         commit=commit,
@@ -100,7 +100,7 @@ def missingHashIterator(commit, hash_bytes, err, pb2_func):
 
 def missingHashRequestIterator(commit, hash_bytes, pb2_func):
     comp_bytes = blosc.compress(
-        hash_bytes, cname='blosclz', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
+        hash_bytes, cname='zlib', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
 
     rpc_method = pb2_func(
         commit=commit,
@@ -132,9 +132,8 @@ def serialize_arr(arr: np.ndarray) -> bytes:
     dtype_num ndim dim1_size dim2_size ... dimN_size array_bytes
     """
     domain = struct.pack(f'<II', arr.dtype.num, arr.ndim)
-    for dim in arr.shape:
-        domain += struct.pack(f'<I', dim)
-    return domain + arr.tobytes()
+    dims = [struct.pack(f'<I', dim) for dim in arr.shape]
+    return b''.join([domain, *dims, arr.tobytes()])
 
 
 def deserialize_arr(raw: bytes) -> np.ndarray:
@@ -152,19 +151,16 @@ def serialize_ident(digest: str, schema: str) -> bytes:
     """
     ident_digest = struct.pack(f'<I{len(digest)}s', len(digest), digest.encode())
     ident_schema = struct.pack(f'<I{len(schema)}s', len(schema), schema.encode())
-    return ident_digest + ident_schema
+    return b''.join([ident_digest, ident_schema])
 
 
 def deserialize_ident(raw: bytes) -> ArrayIdent:
     digestLen = struct.unpack('<I', raw[:4])[0]
     digestEnd = 4 + (digestLen * 1)
-
     schemaStart = 4 + digestEnd
     schemaLen = struct.unpack('<I', raw[digestEnd:schemaStart])[0]
-
     digest = struct.unpack(f'<{digestLen}s', raw[4:digestEnd])[0].decode()
     schema = struct.unpack(f'<{schemaLen}s', raw[schemaStart:])[0].decode()
-
     return ArrayIdent(digest, schema)
 
 
@@ -175,7 +171,7 @@ def serialize_record(arr: np.ndarray, digest: str, schema: str) -> bytes:
     raw_arr = serialize_arr(arr)
     raw_ident = serialize_ident(digest, schema)
     record = struct.pack(f'<2Q', len(raw_ident), len(raw_arr))
-    return record + raw_ident + raw_arr
+    return b''.join([record, raw_ident, raw_arr])
 
 
 def deserialize_record(raw: bytes) -> ArrayRecord:
@@ -186,7 +182,6 @@ def deserialize_record(raw: bytes) -> ArrayRecord:
 
     arr = deserialize_arr(raw[identEnd:arrEnd])
     ident = deserialize_ident(raw[identStart:identEnd])
-
     return ArrayRecord(arr, ident.digest, ident.schema)
 
 
@@ -194,21 +189,16 @@ def serialize_record_pack(records: List[bytes]) -> bytes:
     """
     num_records len_rec1 raw_rec1 len_rec2 raw_rec2 ... len_recN raw_recN
     """
-    raw_pack = struct.pack(f'<I', len(records))
-    raw_packs = []
-    for rec in records:
-        raw_packs.append(b''.join([struct.pack(f'<Q', len(rec)), rec]))
-    pack = b''.join([raw_pack, *raw_packs])
-    return pack
+    raw_num_records = struct.pack(f'<I', len(records))
+    raw_records = [b''.join([struct.pack(f'<Q', len(rec)), rec]) for rec in records]
+    return b''.join([raw_num_records, *raw_records])
 
 
 def deserialize_record_pack(raw: bytes) -> List[bytes]:
     numRecords = struct.unpack(f'<I', raw[:4])[0]
-    cursorPos = 4
-    recs = []
+    cursorPos, recs = 4, []
     for i in range(numRecords):
         lenRec = struct.unpack(f'<Q', raw[cursorPos:cursorPos+8])[0]
-        rec = raw[cursorPos+8:cursorPos+8+lenRec]
-        recs.append(rec)
+        recs.append(raw[cursorPos+8:cursorPos+8+lenRec])
         cursorPos += (8 + lenRec)
     return recs
