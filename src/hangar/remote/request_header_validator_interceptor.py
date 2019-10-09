@@ -77,6 +77,7 @@ def _stream_stream_rpc_terminator(code, details):
 
 def _select_rpc_terminator(intercepted_method):
     method_type = SERVICE_METHOD_TYPES[intercepted_method]
+
     if method_type == 'uu':
         return _unary_unary_rpc_terminator
     elif method_type == 'su':

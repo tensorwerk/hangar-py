@@ -7,6 +7,7 @@ def create_meta_nt(name):
     res = MetadataRecordKey(name)
     return res
 
+
 class TestReaderDiff(object):
 
     def test_diff_by_commit_and_branch(self, repo_2_br_no_conf):

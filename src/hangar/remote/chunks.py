@@ -1,7 +1,9 @@
 import math
+import struct
+from typing import NamedTuple, List
 
 import blosc
-import msgpack
+import numpy as np
 
 from . import hangar_service_pb2
 from ..utils import set_blosc_nthreads
@@ -27,16 +29,9 @@ def chunk_bytes(bytesData):
     currentStart = 0
     currentEnd = chunkSize
     for i in range(numIters):
-        if numIters == 1:
-            yield bytesData
-        elif i == 0:
-            yield bytesData[:currentEnd]
-        elif i == int(numIters - 1):
-            yield bytesData[currentStart:]
-        else:
-            yield bytesData[currentStart:currentEnd]
-        currentStart = currentStart + chunkSize
-        currentEnd = currentEnd + chunkSize
+        yield bytesData[currentStart:currentEnd]
+        currentStart += chunkSize
+        currentEnd += chunkSize
 
 
 def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
@@ -62,24 +57,21 @@ def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
     commit_proto = hangar_service_pb2.CommitRecord(
         parent=parentVal,
         spec=specVal)
-    # commit_proto.parent = parentVal
-    # commit_proto.spec = specVal
     byteSize = len(refVal)
-    request = hangar_service_pb2.PushCommitRequest(
-        commit=commit,
-        total_byte_size=byteSize)
     chunkIterator = chunk_bytes(refVal)
     for refChunk in chunkIterator:
         commit_proto.ref = refChunk
-        request.record.CopyFrom(commit_proto)
+        request = hangar_service_pb2.PushCommitRequest(
+            commit=commit,
+            total_byte_size=byteSize,
+            record=commit_proto)
         yield request
 
 
 def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None):
 
-    buf.seek(0)
     compBytes = blosc.compress(
-        buf.getbuffer(), clevel=3, cname='blosclz', typesize=itemsize, shuffle=blosc.SHUFFLE)
+        buf, clevel=3, cname='zstd', typesize=1, shuffle=blosc.SHUFFLE)
 
     request = pb2_request(
         comp_nbytes=len(compBytes),
@@ -91,8 +83,7 @@ def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None
         yield request
 
 
-def missingHashIterator(commit, hashes, err, pb2_func):
-    hash_bytes = msgpack.packb(hashes)
+def missingHashIterator(commit, hash_bytes, err, pb2_func):
     comp_bytes = blosc.compress(
         hash_bytes, cname='blosclz', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
 
@@ -107,8 +98,7 @@ def missingHashIterator(commit, hashes, err, pb2_func):
         yield rpc_method
 
 
-def missingHashRequestIterator(commit, hashes, pb2_func):
-    hash_bytes = msgpack.packb(hashes)
+def missingHashRequestIterator(commit, hash_bytes, pb2_func):
     comp_bytes = blosc.compress(
         hash_bytes, cname='blosclz', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
 
@@ -120,3 +110,105 @@ def missingHashRequestIterator(commit, hashes, pb2_func):
     for bchunk in chunkIterator:
         rpc_method.hashs = bchunk
         yield rpc_method
+
+
+# ------------------------ serialization formats -------------------------
+
+
+ArrayIdent = NamedTuple('ArrayIdent', [
+    ('digest', str),
+    ('schema', str)
+])
+
+ArrayRecord = NamedTuple('ArrayRecord', [
+    ('array', np.ndarray),
+    ('digest', str),
+    ('schema', str),
+])
+
+
+def serialize_arr(arr: np.ndarray) -> bytes:
+    """
+    dtype_num ndim dim1_size dim2_size ... dimN_size array_bytes
+    """
+    domain = struct.pack(f'<II', arr.dtype.num, arr.ndim)
+    for dim in arr.shape:
+        domain += struct.pack(f'<I', dim)
+    return domain + arr.tobytes()
+
+
+def deserialize_arr(raw: bytes) -> np.ndarray:
+    dtnum, ndim = struct.unpack('<II', raw[:8])
+    dtype = np.typeDict[dtnum]
+    dataStart = 8 + (ndim * 4)
+    shape = struct.unpack(f'<{ndim}I', raw[8:dataStart])
+    arr = np.frombuffer(raw, dtype=dtype, offset=dataStart).reshape(shape)
+    return arr
+
+
+def serialize_ident(digest: str, schema: str) -> bytes:
+    """
+    len_digest digest_str len_schema schema_str
+    """
+    ident_digest = struct.pack(f'<I{len(digest)}s', len(digest), digest.encode())
+    ident_schema = struct.pack(f'<I{len(schema)}s', len(schema), schema.encode())
+    return ident_digest + ident_schema
+
+
+def deserialize_ident(raw: bytes) -> ArrayIdent:
+    digestLen = struct.unpack('<I', raw[:4])[0]
+    digestEnd = 4 + (digestLen * 1)
+
+    schemaStart = 4 + digestEnd
+    schemaLen = struct.unpack('<I', raw[digestEnd:schemaStart])[0]
+
+    digest = struct.unpack(f'<{digestLen}s', raw[4:digestEnd])[0].decode()
+    schema = struct.unpack(f'<{schemaLen}s', raw[schemaStart:])[0].decode()
+
+    return ArrayIdent(digest, schema)
+
+
+def serialize_record(arr: np.ndarray, digest: str, schema: str) -> bytes:
+    """
+    len_raw_ident len_raw_arr raw_ident, raw_arr
+    """
+    raw_arr = serialize_arr(arr)
+    raw_ident = serialize_ident(digest, schema)
+    record = struct.pack(f'<2Q', len(raw_ident), len(raw_arr))
+    return record + raw_ident + raw_arr
+
+
+def deserialize_record(raw: bytes) -> ArrayRecord:
+    identStart = 16  # 2 * 8 bytes
+    identLen, arrLen = struct.unpack(f'<2Q', raw[:identStart])
+    identEnd = identStart + identLen
+    arrEnd = identEnd + arrLen
+
+    arr = deserialize_arr(raw[identEnd:arrEnd])
+    ident = deserialize_ident(raw[identStart:identEnd])
+
+    return ArrayRecord(arr, ident.digest, ident.schema)
+
+
+def serialize_record_pack(records: List[bytes]) -> bytes:
+    """
+    num_records len_rec1 raw_rec1 len_rec2 raw_rec2 ... len_recN raw_recN
+    """
+    raw_pack = struct.pack(f'<I', len(records))
+    raw_packs = []
+    for rec in records:
+        raw_packs.append(b''.join([struct.pack(f'<Q', len(rec)), rec]))
+    pack = b''.join([raw_pack, *raw_packs])
+    return pack
+
+
+def deserialize_record_pack(raw: bytes) -> List[bytes]:
+    numRecords = struct.unpack(f'<I', raw[:4])[0]
+    cursorPos = 4
+    recs = []
+    for i in range(numRecords):
+        lenRec = struct.unpack(f'<Q', raw[cursorPos:cursorPos+8])[0]
+        rec = raw[cursorPos+8:cursorPos+8+lenRec]
+        recs.append(rec)
+        cursorPos += (8 + lenRec)
+    return recs

@@ -16,18 +16,10 @@ import hangar
 backend_params = ['00', '10']
 
 
-@pytest.fixture(autouse=True)
-def reset_singletons(monkeypatch):
-    """
-    cleanup all singleton instances anyway before each test, to ensure
-    no leaked state between tests.
-    """
-    hangar.context.TxnRegisterSingleton._instances = {}
-    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
-
-
 @pytest.fixture()
-def managed_tmpdir(tmp_path):
+def managed_tmpdir(monkeypatch, tmp_path):
+    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
+    hangar.context.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
 

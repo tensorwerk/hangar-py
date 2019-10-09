@@ -322,6 +322,7 @@ def test_branch_create_and_list(written_two_cmt_server_repo):
         assert res.stdout == "['master', 'origin/master', 'testbranch']\n"
 
 
+@pytest.mark.filterwarnings("ignore:Arrayset.* contains `reference-only` samples")
 def test_branch_create_and_delete(written_two_cmt_server_repo):
     server, base_repo = written_two_cmt_server_repo
 

@@ -278,39 +278,39 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
 @pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[4, 10]])
 @pytest.mark.parametrize('nDevCommits,nDevSamples', [[3, 24]])
 @pytest.mark.parametrize('fetchBranch,fetchCommit,fetchAsetns,fetchNbytes,fetchAll_history', [
-    ['master',      None,  None,        None,  False],
-    ['testbranch',  None,  None,        None,  False],
-    [None,          'ma',  None,        None,  False],
-    [None,          'br',  None,        None,  False],
+    ['master',      None,  None,              None,  False],
+    ['testbranch',  None,  None,              None,  False],
+    [None,          'ma',  None,              None,  False],
+    [None,          'br',  None,              None,  False],
     ['master',      None,  ('writtenaset',),  None,  False],
-    ['testbranch',  None,  ('_two',),   None,  False],
+    ['testbranch',  None,  ('_two',),         None,  False],
     [None,          'ma',  ('writtenaset',),  None,  False],
-    [None,          'br',  ('_two',),   None,  False],
-    ['master',      None,  None,        None,  False],
-    ['testbranch',  None,  None,        None,  False],
-    [None,          'ma',  None,        None,  False],
-    [None,          'br',  None,        None,  False],
+    [None,          'br',  ('_two',),         None,  False],
+    ['master',      None,  None,              None,  False],
+    ['testbranch',  None,  None,              None,  False],
+    [None,          'ma',  None,              None,  False],
+    [None,          'br',  None,              None,  False],
     ['master',      None,  ('writtenaset',),  None,  False],
-    ['testbranch',  None,  ('_two',),   None,  False],
+    ['testbranch',  None,  ('_two',),         None,  False],
     [None,          'ma',  ('writtenaset',),  None,  False],
-    [None,          'br',  ('_two',),   None,  False],
-    ['master',      None,  None,        None,  True],
-    ['testbranch',  None,  None,        None,  True],
-    [None,          'ma',  None,        None,  True],
-    [None,          'br',  None,        None,  True],
+    [None,          'br',  ('_two',),         None,  False],
+    ['master',      None,  None,              None,  True],
+    ['testbranch',  None,  None,              None,  True],
+    [None,          'ma',  None,              None,  True],
+    [None,          'br',  None,              None,  True],
     ['master',      None,  ('writtenaset',),  None,  True],
-    ['testbranch',  None,  ('_two',),   None,  True],
+    ['testbranch',  None,  ('_two',),         None,  True],
     [None,          'ma',  ('writtenaset',),  None,  True],
-    [None,          'br',  ('_two',),   None,  True],
-    ['master',      None,  None,        1000,  False],
-    ['testbranch',  None,  None,        1000,  False],
-    [None,          'ma',  None,        1000,  False],
-    [None,          'br',  None,        1000,  False],
+    [None,          'br',  ('_two',),         None,  True],
+    ['master',      None,  None,              1000,  False],
+    ['testbranch',  None,  None,              1000,  False],
+    [None,          'ma',  None,              1000,  False],
+    [None,          'br',  None,              1000,  False],
     ['master',      None,  ('writtenaset',),  1000,  False],
-    ['testbranch',  None,  ('_two',),   1000,  False],
+    ['testbranch',  None,  ('_two',),         1000,  False],
     [None,          'ma',  ('writtenaset',),  1000,  False],
-    [None,          'br',  ('_two',),   1000,  False],
-    [None,          'br',  ('_two',),   1000,  True],  # will raise error
+    [None,          'br',  ('_two',),         1000,  False],
+    [None,          'br',  ('_two',),         1000,  True],  # will raise error
 ])
 def test_server_push_two_branch_then_clone_fetch_data_options(
         server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
@@ -585,7 +585,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance
     push1 = repo.remote.push('origin', 'master')
     assert chunks.tensorChunkedIterator.call_count == 12
     for call in spy.call_args_list:
-        assert call[1]['uncomp_nbytes'] <= 101_575 # maximum amount over 100_000 observed in test development
+        assert call[1]['uncomp_nbytes'] <= 103_000 # maximum amount over 100_000 observed in test development
 
     assert push1 == 'master'
 
