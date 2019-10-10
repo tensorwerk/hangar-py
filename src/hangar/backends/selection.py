@@ -187,3 +187,30 @@ def is_local_backend(be_loc: _DataHashSpecs) -> bool:
         return False
     else:
         return True
+
+
+def backend_opts_from_heuristics(backend, array) -> dict:
+    if backend == '10':
+        opts = {}
+    elif backend == '00':
+        import h5py
+        opts = {
+            'default': {
+                'shuffle': True,
+                'complib': 'blosc:blosclz',
+                'complevel': 4,
+                'fletcher32': True},
+            'backup': {
+                'shuffle': True,
+                'complib': 'lzf',
+                'complevel': None,
+                'fletcher32': True},
+        }
+        hdf5BloscAvail = h5py.h5z.filter_avail(32001)
+        opts = opts['default'] if hdf5BloscAvail else opts['backup']
+    elif backend == '50':
+        opts = {}
+    else:
+        raise RuntimeError('Should not have been able to not select backend')
+
+    return opts

@@ -108,10 +108,11 @@ def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
 
 class REMOTE_50_Handler(object):
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype, default_backend_opts: dict):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
+        self.default_backend_opts = default_backend_opts
 
     def __enter__(self):
         return self

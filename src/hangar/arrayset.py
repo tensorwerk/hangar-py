@@ -12,6 +12,7 @@ from .backends import BACKEND_ACCESSOR_MAP
 from .backends import backend_decoder
 from .backends import backend_from_heuristics
 from .backends import is_local_backend
+from .backends import backend_opts_from_heuristics
 from .context import TxnRegister
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key
 from .records.queries import RecordQuery
@@ -133,7 +134,8 @@ class ArraysetDataReader(object):
                 self._fs[be] = accessor(
                     repo_path=self._path,
                     schema_shape=self._schema_max_shape,
-                    schema_dtype=np.typeDict[self._schema_dtype_num])
+                    schema_dtype=np.typeDict[self._schema_dtype_num],
+                    default_backend_opts=kwargs['default_backend_opts'])
                 self._fs[be].open(self._mode)
 
     def __enter__(self):
@@ -487,6 +489,7 @@ class ArraysetDataWriter(ArraysetDataReader):
     def __init__(self,
                  stagehashenv: lmdb.Environment,
                  default_schema_backend: str,
+                 default_backend_opts: dict,
                  *args, **kwargs):
         """Developer documentation for init method.
 
@@ -504,10 +507,13 @@ class ArraysetDataWriter(ArraysetDataReader):
                 See args of :class:`ArraysetDataReader`
         """
 
+        kwargs['default_backend_opts'] = default_backend_opts
+        kwargs['default_schema_backend'] = default_schema_backend
         super().__init__(*args, **kwargs)
 
         self._stagehashenv = stagehashenv
-        self._dflt_backend: str = default_schema_backend
+        self._dflt_backend = default_schema_backend
+        self._dflt_backend_opts = default_backend_opts
         self._dataenv: lmdb.Environment = kwargs['dataenv']
         self._hashenv: lmdb.Environment = kwargs['hashenv']
 
@@ -1142,7 +1148,8 @@ class Arraysets(object):
                       named_samples: bool = True,
                       variable_shape: bool = False,
                       *,
-                      backend: str = None) -> ArraysetDataWriter:
+                      backend: str = None,
+                      backend_opts: dict = None) -> ArraysetDataWriter:
         """Initializes a arrayset in the repository.
 
         Arraysets are groups of related data pieces (samples). All samples within
@@ -1239,16 +1246,22 @@ class Arraysets(object):
             if backend is not None:
                 if backend not in BACKEND_ACCESSOR_MAP:
                     raise ValueError(f'Backend specifier: {backend} not known')
+                if backend_opts is None:
+                    backend_opts = backend_opts_from_heuristics(backend, prototype)
             else:
                 backend = backend_from_heuristics(prototype)
+                backend_opts = backend_opts_from_heuristics(backend, prototype)
+
 
         except (ValueError, LookupError) as e:
             raise e from None
 
         # ----------- Determine schema format details -------------------------
 
+        import json
+        optsHsh = hash(json.dumps(backend_opts))
         schema_format = np.array(
-            (*prototype.shape, prototype.size, prototype.dtype.num), dtype=np.uint64)
+            (*prototype.shape, prototype.size, prototype.dtype.num, optsHsh), dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
 
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(name)
@@ -1258,7 +1271,8 @@ class Arraysets(object):
             schema_max_shape=prototype.shape,
             schema_dtype=prototype.dtype.num,
             schema_is_named=named_samples,
-            schema_default_backend=backend)
+            schema_default_backend=backend,
+            schema_default_backend_opts=backend_opts)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
@@ -1284,7 +1298,8 @@ class Arraysets(object):
             hashenv=self._hashenv,
             dataenv=self._dataenv,
             mode='a',
-            default_schema_backend=backend)
+            default_schema_backend=backend,
+            default_backend_opts=backend_opts)
 
         return self.get(name)
 
@@ -1379,7 +1394,8 @@ class Arraysets(object):
                 hashenv=hashenv,
                 dataenv=stageenv,
                 mode='a',
-                default_schema_backend=schemaSpec.schema_default_backend)
+                default_schema_backend=schemaSpec.schema_default_backend,
+                default_backend_opts=schemaSpec.schema_default_backend_opts)
 
         return cls('a', repo_pth, arraysets, hashenv, stageenv, stagehashenv)
 
@@ -1421,6 +1437,7 @@ class Arraysets(object):
                 varDtypeNum=schemaSpec.schema_dtype,
                 dataenv=cmtrefenv,
                 hashenv=hashenv,
-                mode='r')
+                mode='r',
+                default_backend_opts=schemaSpec.schema_default_backend_opts)
 
         return cls('r', repo_pth, arraysets, None, None, None)

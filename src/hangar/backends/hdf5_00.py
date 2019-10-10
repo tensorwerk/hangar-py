@@ -144,21 +144,19 @@ CHUNK_MAX_NBYTES = 255_000  # < 256 KB to fit in L2 CPU Cache
 CHUNK_MAX_RDCC_NBYTES = 100_000_000
 CHUNK_RDCC_W0 = 0.75
 
-# filter definition and backup selection if not available.
-filter_opts = {
-    'default': {
-        'shuffle': True,
-        'complib': 'blosc:blosclz',
-        'complevel': 4,
-        'fletcher32': True},
-    'backup': {
-        'shuffle': True,
-        'complib': 'lzf',
-        'complevel': None,
-        'fletcher32': True},
-}
-hdf5BloscAvail = h5py.h5z.filter_avail(32001)
-HDF5_FILTER = filter_opts['default'] if hdf5BloscAvail else filter_opts['backup']
+# # filter definition and backup selection if not available.
+# filter_opts = {
+#     'default': {
+#         'shuffle': True,
+#         'complib': 'blosc:blosclz',
+#         'complevel': 4,
+#         'fletcher32': True},
+#     'backup': {
+#         'shuffle': True,
+#         'complib': 'lzf',
+#         'complevel': None,
+#         'fletcher32': True},
+# }
 
 
 # -------------------------------- Parser Implementation ----------------------
@@ -249,10 +247,11 @@ class HDF5_00_FileHandles(object):
     write to the same arrayset schema.
     """
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype, default_backend_opts: dict):
         self.path: os.PathLike = repo_path
         self.schema_shape: tuple = schema_shape
         self.schema_dtype: np.dtype = schema_dtype
+        self.default_backend_opts = default_backend_opts
 
         self.rFp: HDF5_00_MapTypes = {}
         self.wFp: HDF5_00_MapTypes = {}
@@ -554,7 +553,7 @@ class HDF5_00_FileHandles(object):
 
         # ----------------------- Dataset Creation ----------------------------
 
-        optKwargs = self._dataset_opts(**HDF5_FILTER)
+        optKwargs = self._dataset_opts(**self.default_backend_opts)
         for dset_num in range(COLLECTION_COUNT):
             self.wFp[uid].create_dataset(
                 f'/{dset_num}',
@@ -576,9 +575,9 @@ class HDF5_00_FileHandles(object):
         self.wFp[self.w_uid]['/'].attrs['rdcc_nbytes'] = rdcc_nbytes_val
         self.wFp[self.w_uid]['/'].attrs['rdcc_w0'] = CHUNK_RDCC_W0
         self.wFp[self.w_uid]['/'].attrs['rdcc_nslots'] = rdcc_nslots_prime_val
-        self.wFp[self.w_uid]['/'].attrs['shuffle'] = HDF5_FILTER['shuffle']
-        self.wFp[self.w_uid]['/'].attrs['complib'] = HDF5_FILTER['complib']
-        self.wFp[self.w_uid]['/'].attrs['fletcher32'] = HDF5_FILTER['fletcher32']
+        # self.wFp[self.w_uid]['/'].attrs['shuffle'] = HDF5_FILTER['shuffle']
+        # self.wFp[self.w_uid]['/'].attrs['complib'] = HDF5_FILTER['complib']
+        # self.wFp[self.w_uid]['/'].attrs['fletcher32'] = HDF5_FILTER['fletcher32']
         self.wFp[self.w_uid]['/'].attrs['chunk_shape'] = chunk_shape
         if optKwargs['compression_opts'] is not None:
             self.wFp[self.w_uid]['/'].attrs['compression_opts'] = optKwargs['compression_opts']
