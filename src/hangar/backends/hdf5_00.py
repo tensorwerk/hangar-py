@@ -144,20 +144,6 @@ CHUNK_MAX_NBYTES = 255_000  # < 256 KB to fit in L2 CPU Cache
 CHUNK_MAX_RDCC_NBYTES = 100_000_000
 CHUNK_RDCC_W0 = 0.75
 
-# # filter definition and backup selection if not available.
-# filter_opts = {
-#     'default': {
-#         'shuffle': True,
-#         'complib': 'blosc:blosclz',
-#         'complevel': 4,
-#         'fletcher32': True},
-#     'backup': {
-#         'shuffle': True,
-#         'complib': 'lzf',
-#         'complevel': None,
-#         'fletcher32': True},
-# }
-
 
 # -------------------------------- Parser Implementation ----------------------
 

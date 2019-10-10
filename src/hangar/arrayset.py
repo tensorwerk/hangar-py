@@ -272,7 +272,7 @@ class ArraysetDataReader(object):
         return bool(self._contains_partial_remote_data)
 
     @property
-    def remote_reference_sample_keys(self) -> List[Union[str, int]]:
+    def remote_reference_keys(self) -> List[Union[str, int]]:
         """Returns sample names whose data is stored in a remote server reference.
 
         Returns
@@ -289,7 +289,7 @@ class ArraysetDataReader(object):
 
     @property
     def backend(self) -> str:
-        """The default backend for the arrayset which can be written to
+        """The default backend for the arrayset.
 
         Returns
         -------
@@ -300,7 +300,12 @@ class ArraysetDataReader(object):
 
     @property
     def backend_opts(self):
-        """The opts applied to the default backend which the arrayset could be written to.
+        """The opts applied to the default backend.
+
+        Returns
+        -------
+        dict
+            config settings used to set up filters
         """
         return self._dflt_backend_opts
 
@@ -629,31 +634,53 @@ class ArraysetDataWriter(ArraysetDataReader):
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
 
-    def change_default_backend(self, backend: str, opts: Optional[dict] = None):
-        if self._is_conman:
-            raise
+    def change_backend(self, backend: str, opts: Optional[dict] = None):
+        """Change the default backend and filters applied to future data writes.
 
+        .. warning::
+
+           This method is meant for advanced users only.
+
+        Parameters
+        ----------
+        backend : str
+            format code of the desired backend.
+        opts : Optional[dict], optional
+            When dict is specified, items specify configuration options for
+            backend filters. If None, the default filter options for the
+            specified backend are applied, by default None
+
+        Raises
+        ------
+        RuntimeError
+            If this method was called while this arrayset is invoked in a
+            context manager
+        ValueError
+            If the backend format code is not valid.
+        """
+
+        if self._is_conman:
+            raise RuntimeError('Cannot call method inside arrayset context manager.')
         if backend not in BACKEND_ACCESSOR_MAP:
             raise ValueError(f'Backend specifier: {backend} not known')
-
-        prototype = np.zeros(self.shape, dtype=self.dtype)
+        proto = np.zeros(self.shape, dtype=self.dtype)
         if opts is None:
-            opts = backend_opts_from_heuristics(backend, prototype)
+            opts = backend_opts_from_heuristics(backend, proto)
 
         # ----------- Determine schema format details -------------------------
 
         backendHsh = hash(backend)
         optsHsh = hash(json.dumps(opts))
         schema_format = np.array(
-            (*prototype.shape, prototype.size, prototype.dtype.num, backendHsh, optsHsh), dtype=np.uint64)
+            (*proto.shape, proto.size, proto.dtype.num, backendHsh, optsHsh),
+            dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
-
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.name)
         asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
             schema_is_var=self.variable_shape,
-            schema_max_shape=prototype.shape,
-            schema_dtype=prototype.dtype.num,
+            schema_max_shape=proto.shape,
+            schema_dtype=proto.dtype.num,
             schema_is_named=self.named_samples,
             schema_default_backend=backend,
             schema_default_backend_opts=opts)
@@ -662,7 +689,6 @@ class ArraysetDataWriter(ArraysetDataReader):
         hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
         hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         hashSchemaVal = asetSchemaVal
-
         dataTxn.put(asetSchemaKey, asetSchemaVal)
         hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
         TxnRegister().commit_writer_txn(self._dataenv)
@@ -675,7 +701,6 @@ class ArraysetDataWriter(ArraysetDataReader):
                 schema_dtype=np.typeDict[self._schema_dtype_num])
         else:
             self._fs[backend].close()
-
         self._fs[backend].open(mode=self._mode)
         self._fs[backend].backend_opts = opts
         self._dflt_backend = backend
@@ -1041,7 +1066,7 @@ class Arraysets(object):
         """
         res: Mapping[str, Iterable[Union[int, str]]] = {}
         for asetn, aset in self._arraysets.items():
-            res[asetn] = aset.remote_reference_sample_keys
+            res[asetn] = aset.remote_reference_keys
         return res
 
     def keys(self) -> List[str]:
@@ -1251,6 +1276,8 @@ class Arraysets(object):
             was specified) defaults to False.
         backend : DEVELOPER USE ONLY. str, optional, kwarg only
             Backend which should be used to write the arrayset files on disk.
+        backend_opts: DEVELOPER USE ONLY. dict, optional, kwarg only
+            filter options applied to the specified backend.
 
         Returns
         -------
@@ -1313,7 +1340,6 @@ class Arraysets(object):
                 backend = backend_from_heuristics(prototype)
                 backend_opts = backend_opts_from_heuristics(backend, prototype)
 
-
         except (ValueError, LookupError) as e:
             raise e from None
 
@@ -1322,9 +1348,9 @@ class Arraysets(object):
         backendHsh = hash(backend)
         optsHsh = hash(json.dumps(backend_opts))
         schema_format = np.array(
-            (*prototype.shape, prototype.size, prototype.dtype.num, backendHsh, optsHsh), dtype=np.uint64)
+            (*prototype.shape, prototype.size, prototype.dtype.num, backendHsh, optsHsh),
+             dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
-
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(name)
         asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
@@ -1341,7 +1367,6 @@ class Arraysets(object):
         hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
         hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         hashSchemaVal = asetSchemaVal
-
         dataTxn.put(asetSchemaKey, asetSchemaVal)
         hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
         TxnRegister().commit_writer_txn(self._dataenv)
