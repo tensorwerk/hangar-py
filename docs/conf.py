@@ -13,6 +13,7 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
+    'sphinx.ext.intersphinx',
     'sphinx_click.ext',
     'nbsphinx',
     'sphinx.ext.mathjax',
@@ -24,6 +25,7 @@ if os.getenv('SPELLCHECK'):
     spelling_show_suggestions = True
     spelling_lang = 'en_US'
 
+autodoc_mock_imports = ['torch', 'tensorflow']
 autosummary_generate = True
 
 source_suffix = {
@@ -49,6 +51,12 @@ extlinks = {
     'issue': ('https://github.com/tensorwerk/hangar-py/issues/%s', '#'),
     'pr': ('https://github.com/tensorwerk/hangar-py/pull/%s', 'PR #'),
 }
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3', None),
+    'torch': ('https://pytorch.org/docs/master', None),
+    'numpy': ('http://docs.scipy.org/doc/numpy', None),
+}
+
 # on_rtd is whether we are on readthedocs.org
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
