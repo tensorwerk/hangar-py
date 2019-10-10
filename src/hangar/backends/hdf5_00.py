@@ -247,11 +247,11 @@ class HDF5_00_FileHandles(object):
     write to the same arrayset schema.
     """
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype, default_backend_opts: dict):
+    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
         self.path: os.PathLike = repo_path
         self.schema_shape: tuple = schema_shape
         self.schema_dtype: np.dtype = schema_dtype
-        self.default_backend_opts = default_backend_opts
+        self._dflt_backend_opts: Optional[dict] = None
 
         self.rFp: HDF5_00_MapTypes = {}
         self.wFp: HDF5_00_MapTypes = {}
@@ -301,7 +301,19 @@ class HDF5_00_FileHandles(object):
         self.rFp = {}
         self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
-        self.open(self.mode)
+        self.open(mode=self.mode)
+
+    @property
+    def backend_opts(self):
+        return self._dflt_backend_opts
+
+    @backend_opts.setter
+    def backend_opts(self, val):
+        if self.mode == 'a':
+            self._dflt_backend_opts = val
+            return
+        else:
+            raise AttributeError(f"can't set property in read only mode")
 
     def open(self, mode: str, *, remote_operation: bool = False):
         """Open an hdf5 file handle in the Handler Singleton
@@ -553,7 +565,7 @@ class HDF5_00_FileHandles(object):
 
         # ----------------------- Dataset Creation ----------------------------
 
-        optKwargs = self._dataset_opts(**self.default_backend_opts)
+        optKwargs = self._dataset_opts(**self._dflt_backend_opts)
         for dset_num in range(COLLECTION_COUNT):
             self.wFp[uid].create_dataset(
                 f'/{dset_num}',

@@ -51,7 +51,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     repo_path=self.env.repo_path,
                     schema_shape=None,
                     schema_dtype=None)
-                self._rFs[backend].open('r')
+                self._rFs[backend].open(mode='r')
 
         src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
         dst_path = pjoin(repo_path, c.CONFIG_SERVER_NAME)

@@ -56,7 +56,7 @@ Technical Notes
 """
 import os
 import re
-from typing import NamedTuple, Match
+from typing import NamedTuple, Match, Optional
 
 import numpy as np
 
@@ -108,11 +108,12 @@ def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
 
 class REMOTE_50_Handler(object):
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype, default_backend_opts: dict):
+    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
-        self.default_backend_opts = default_backend_opts
+        self._dflt_backend_opts: Optional[dict] = None
+        self.mode: Optional[str] = None
 
     def __enter__(self):
         return self
@@ -120,7 +121,20 @@ class REMOTE_50_Handler(object):
     def __exit__(self, *exc):
         return
 
-    def open(self, *args, **kwargs):
+    @property
+    def backend_opts(self):
+        return self._dflt_backend_opts
+
+    @backend_opts.setter
+    def backend_opts(self, val):
+        if self.mode == 'a':
+            self._dflt_backend_opts = val
+            return
+        else:
+            raise AttributeError(f"can't set property in read only mode")
+
+    def open(self, mode, *args, **kwargs):
+        self.mode = mode
         return
 
     def close(self, *args, **kwargs):

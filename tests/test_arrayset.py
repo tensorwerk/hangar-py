@@ -28,7 +28,7 @@ class TestArrayset(object):
         asetOld = co.arraysets.get('writtenaset')
         asetOldPath = asetOld._path
         asetOldAsetn = asetOld._asetn
-        asetOldDefaultSchemaHash = asetOld._default_schema_hash
+        asetOldDefaultSchemaHash = asetOld._dflt_schema_hash
 
         asetOld.add(array5by7, '1')
         co.commit('this is a commit message')
@@ -42,7 +42,7 @@ class TestArrayset(object):
         assert np.allclose(asetNew['1'], array5by7)
         assert asetOldPath == asetNew._path
         assert asetOldAsetn == asetNew._asetn
-        assert asetOldDefaultSchemaHash == asetNew._default_schema_hash
+        assert asetOldDefaultSchemaHash == asetNew._dflt_schema_hash
         co.close()
 
     @pytest.mark.parametrize("aset_backend", backend_params)
@@ -777,7 +777,7 @@ class TestMultiprocessArraysetReads(object):
                     sName = str(sIdx + kstart)
                     d[sName] = arr
                     masterSampList.append(arr)
-            assert d._backend == backend
+            assert d.backend == backend
             cmt = co.commit(f'master commit number: {cIdx}')
             masterCmtList.append((cmt, list(masterSampList)))
             co.close()
@@ -810,7 +810,7 @@ class TestMultiprocessArraysetReads(object):
                     sName = str(sIdx + kstart)
                     d[sName] = arr
                     masterSampList.append(arr)
-                assert d._backend == backend
+                assert d.backend == backend
             cmt = co.commit(f'master commit number: {cIdx}')
             masterCmtList.append((cmt, list(masterSampList)))
             co.close()
@@ -837,7 +837,7 @@ class TestMultiprocessArraysetReads(object):
                 sName = str(sIdx)
                 d[sName] = arr
                 masterSampList.append(arr)
-            assert d._backend == backend
+            assert d.backend == backend
         cmt = co.commit(f'master commit number one')
         co.close()
 

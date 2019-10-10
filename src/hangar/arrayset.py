@@ -4,6 +4,8 @@ import warnings
 from multiprocessing import cpu_count, get_context
 from typing import (
     Iterator, Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple)
+import json
+
 
 import lmdb
 import numpy as np
@@ -54,6 +56,8 @@ class ArraysetDataReader(object):
                  dataenv: lmdb.Environment,
                  hashenv: lmdb.Environment,
                  mode: str,
+                 default_schema_backend: str,
+                 default_backend_opts: str,
                  *args, **kwargs):
         """Developer documentation for init method
 
@@ -93,7 +97,9 @@ class ArraysetDataReader(object):
         self._schema_dtype_num = varDtypeNum
         self._samples_are_named = samplesAreNamed
         self._schema_max_shape = tuple(varMaxShape)
-        self._default_schema_hash = default_schema_hash
+        self._dflt_schema_hash = default_schema_hash
+        self._dflt_backend = default_schema_backend
+        self._dflt_backend_opts = default_backend_opts
 
         self._is_conman: bool = False
         self._index_expr_factory = np.s_
@@ -134,9 +140,8 @@ class ArraysetDataReader(object):
                 self._fs[be] = accessor(
                     repo_path=self._path,
                     schema_shape=self._schema_max_shape,
-                    schema_dtype=np.typeDict[self._schema_dtype_num],
-                    default_backend_opts=kwargs['default_backend_opts'])
-                self._fs[be].open(self._mode)
+                    schema_dtype=np.typeDict[self._schema_dtype_num])
+                self._fs[be].open(mode=self._mode)
 
     def __enter__(self):
         self._is_conman = True
@@ -195,7 +200,7 @@ class ArraysetDataReader(object):
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__} \
                 \n    Arrayset Name             : {self._asetn}\
-                \n    Schema Hash              : {self._default_schema_hash}\
+                \n    Schema Hash              : {self._dflt_schema_hash}\
                 \n    Variable Shape           : {bool(int(self._schema_variable))}\
                 \n    (max) Shape              : {self._schema_max_shape}\
                 \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
@@ -209,7 +214,7 @@ class ArraysetDataReader(object):
         res = f'{self.__class__}('\
               f'repo_pth={self._path}, '\
               f'aset_name={self._asetn}, '\
-              f'default_schema_hash={self._default_schema_hash}, '\
+              f'default_schema_hash={self._dflt_schema_hash}, '\
               f'isVar={self._schema_variable}, '\
               f'varMaxShape={self._schema_max_shape}, '\
               f'varDtypeNum={self._schema_dtype_num}, '\
@@ -281,6 +286,23 @@ class ArraysetDataReader(object):
                 if beLoc.backend == '50':
                     remote_keys.append(sampleName)
         return remote_keys
+
+    @property
+    def backend(self) -> str:
+        """The default backend for the arrayset which can be written to
+
+        Returns
+        -------
+        str
+            numeric format code of the default backend.
+        """
+        return self._dflt_backend
+
+    @property
+    def backend_opts(self):
+        """The opts applied to the default backend which the arrayset could be written to.
+        """
+        return self._dflt_backend_opts
 
     def keys(self, local: bool = False) -> Iterator[Union[str, int]]:
         """generator which yields the names of every sample in the arrayset
@@ -488,8 +510,6 @@ class ArraysetDataWriter(ArraysetDataReader):
 
     def __init__(self,
                  stagehashenv: lmdb.Environment,
-                 default_schema_backend: str,
-                 default_backend_opts: dict,
                  *args, **kwargs):
         """Developer documentation for init method.
 
@@ -507,13 +527,11 @@ class ArraysetDataWriter(ArraysetDataReader):
                 See args of :class:`ArraysetDataReader`
         """
 
-        kwargs['default_backend_opts'] = default_backend_opts
-        kwargs['default_schema_backend'] = default_schema_backend
         super().__init__(*args, **kwargs)
 
+        self._fs[self._dflt_backend].backend_opts = self._dflt_backend_opts
+
         self._stagehashenv = stagehashenv
-        self._dflt_backend = default_schema_backend
-        self._dflt_backend_opts = default_backend_opts
         self._dataenv: lmdb.Environment = kwargs['dataenv']
         self._hashenv: lmdb.Environment = kwargs['hashenv']
 
@@ -575,17 +593,6 @@ class ArraysetDataWriter(ArraysetDataReader):
         """
         return self.remove(key)
 
-    @property
-    def _backend(self) -> str:
-        """The default backend for the arrayset which can be written to
-
-        Returns
-        -------
-        str
-            numeric format code of the default backend.
-        """
-        return self._dflt_backend
-
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
 
@@ -621,6 +628,60 @@ class ArraysetDataWriter(ArraysetDataReader):
         compatible = True if reason == '' else False
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
+
+    def change_default_backend(self, backend: str, opts: Optional[dict] = None):
+        if self._is_conman:
+            raise
+
+        if backend not in BACKEND_ACCESSOR_MAP:
+            raise ValueError(f'Backend specifier: {backend} not known')
+
+        prototype = np.zeros(self.shape, dtype=self.dtype)
+        if opts is None:
+            opts = backend_opts_from_heuristics(backend, prototype)
+
+        # ----------- Determine schema format details -------------------------
+
+        backendHsh = hash(backend)
+        optsHsh = hash(json.dumps(opts))
+        schema_format = np.array(
+            (*prototype.shape, prototype.size, prototype.dtype.num, backendHsh, optsHsh), dtype=np.uint64)
+        schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
+
+        asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.name)
+        asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
+            schema_hash=schema_hash,
+            schema_is_var=self.variable_shape,
+            schema_max_shape=prototype.shape,
+            schema_dtype=prototype.dtype.num,
+            schema_is_named=self.named_samples,
+            schema_default_backend=backend,
+            schema_default_backend_opts=opts)
+
+        dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
+        hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
+        hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
+        hashSchemaVal = asetSchemaVal
+
+        dataTxn.put(asetSchemaKey, asetSchemaVal)
+        hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
+        TxnRegister().commit_writer_txn(self._dataenv)
+        TxnRegister().commit_writer_txn(self._hashenv)
+
+        if backend not in self._fs:
+            self._fs[backend] = BACKEND_ACCESSOR_MAP[backend](
+                repo_path=self._path,
+                schema_shape=self._schema_max_shape,
+                schema_dtype=np.typeDict[self._schema_dtype_num])
+        else:
+            self._fs[backend].close()
+
+        self._fs[backend].open(mode=self._mode)
+        self._fs[backend].backend_opts = opts
+        self._dflt_backend = backend
+        self._dflt_backend_opts = opts
+        self._dflt_schema_hash = schema_hash
+        return
 
     def add(self, data: np.ndarray, name: Union[str, int] = None,
             **kwargs) -> Union[str, int]:
@@ -1258,10 +1319,10 @@ class Arraysets(object):
 
         # ----------- Determine schema format details -------------------------
 
-        import json
+        backendHsh = hash(backend)
         optsHsh = hash(json.dumps(backend_opts))
         schema_format = np.array(
-            (*prototype.shape, prototype.size, prototype.dtype.num, optsHsh), dtype=np.uint64)
+            (*prototype.shape, prototype.size, prototype.dtype.num, backendHsh, optsHsh), dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
 
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(name)
@@ -1438,6 +1499,7 @@ class Arraysets(object):
                 dataenv=cmtrefenv,
                 hashenv=hashenv,
                 mode='r',
+                default_schema_backend=schemaSpec.schema_default_backend,
                 default_backend_opts=schemaSpec.schema_default_backend_opts)
 
         return cls('r', repo_pth, arraysets, None, None, None)
