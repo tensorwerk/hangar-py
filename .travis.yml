@@ -48,6 +48,28 @@ matrix:
         - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
+    - name: "Win Python 3.6: Run tests"
+      os: windows
+      language: shell
+      env:
+        - PATH=/c/Python36:/c/Python36/Scripts:$PATH
+        - TOXENV=py36-nocov
+      before_install:
+        - choco install python --version 3.6.2
+        - python -m pip install --upgrade pip
+      after_success:
+        - codecov
+    - name: "Win Python 3.7: Run tests"
+      os: windows
+      language: shell
+      env:
+        - PATH=/c/Python37:/c/Python37/Scripts:$PATH
+        - TOXENV=py37-cover-ml,report
+      before_install:
+        - choco install python --version 3.7.3
+        - python -m pip install --upgrade pip
+      after_success:
+        - codecov
 before_install:
   - |
     if [ "$TRAVIS_OS_NAME" == "osx" ]; then

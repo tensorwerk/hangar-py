@@ -54,7 +54,7 @@ def test_version_long_option():
         assert res.stdout == f'main, version {hangar.__version__}\n'
 
 
-def test_init_repo():
+def test_init_repo(managed_tmpdir):
     runner = CliRunner()
     with runner.isolated_filesystem():
         P = getcwd()
@@ -181,7 +181,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
         assert res.exit_code == 0
 
 
-def test_add_remote():
+def test_add_remote(managed_tmpdir):
     from hangar.remotes import RemoteInfo
 
     runner = CliRunner()
@@ -199,7 +199,7 @@ def test_add_remote():
         assert remote_list == [RemoteInfo(name='origin', address='localhost:50051')]
 
 
-def test_remove_remote():
+def test_remove_remote(managed_tmpdir):
     from hangar.remotes import RemoteInfo
 
     runner = CliRunner()
