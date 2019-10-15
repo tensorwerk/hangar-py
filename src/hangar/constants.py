@@ -44,7 +44,7 @@ LMDB_SETTINGS = {
     'meminit': False,
     'subdir': False,
     'lock': False,
-    'max_spare_txns': 2,
+    'max_spare_txns': 4,
 }
 
 LMDB_REF_NAME = 'ref.lmdb'
