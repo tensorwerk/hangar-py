@@ -10,6 +10,14 @@ New Features
 
 * Added ability to delete branch names/pointers from a local repository via both API and CLI.
   (`#128 <https://github.com/tensorwerk/hangar-py/pull/128>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added ``local`` keyword arg to arrayset key/value iterators to return only locally available samples
+  (`#131 <https://github.com/tensorwerk/hangar-py/pull/131>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+Improvements
+------------
+
+* Removed ``msgpack`` and ``pyyaml`` dependencies. Cleaned up and improved remote client/server code.
+  (`#130 <https://github.com/tensorwerk/hangar-py/pull/130>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 Bug Fixes
 ---------
