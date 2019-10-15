@@ -180,3 +180,10 @@ def backend_from_heuristics(array: np.ndarray) -> str:
         backend = '00'
 
     return backend
+
+
+def is_local_backend(be_loc: _DataHashSpecs) -> bool:
+    if be_loc[0].startswith('5'):
+        return False
+    else:
+        return True

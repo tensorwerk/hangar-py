@@ -300,7 +300,7 @@ class ReaderCheckout(object):
 
             Names(s) of the samples to query
 
-        except_missing: bool, **KWARG ONLY
+        except_missing: bool, **KWARG ONLY**
 
             If False, will not throw exceptions on missing sample key value.
             Will raise KeyError if True and missing key found.
@@ -884,7 +884,7 @@ class WriterCheckout(object):
 
             Names(s) of the samples to query
 
-        except_missing: bool, **KWARG ONLY
+        except_missing: bool, **KWARG ONLY**
 
             If False, will not throw exceptions on missing sample key value.
             Will raise KeyError if True and missing key found.

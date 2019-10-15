@@ -8,7 +8,10 @@ from typing import (
 import lmdb
 import numpy as np
 
-from .backends import BACKEND_ACCESSOR_MAP, backend_decoder, backend_from_heuristics
+from .backends import BACKEND_ACCESSOR_MAP
+from .backends import backend_decoder
+from .backends import backend_from_heuristics
+from .backends import is_local_backend
 from .context import TxnRegister
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key
 from .records.queries import RecordQuery
@@ -111,7 +114,7 @@ class ArraysetDataReader(object):
                 self._sspecs[asetNames.data_name] = be_loc
                 used_bes.add(be_loc.backend)
 
-            if '50' in used_bes:
+            if not all([is_local_backend(be) for be in used_bes]):
                 self._contains_partial_remote_data = True
                 warnings.warn(
                     f'Arrayset: {self._asetn} contains `reference-only` samples, with '
@@ -277,59 +280,106 @@ class ArraysetDataReader(object):
                     remote_keys.append(sampleName)
         return remote_keys
 
-    def keys(self) -> Iterator[Union[str, int]]:
+    def keys(self, local: bool = False) -> Iterator[Union[str, int]]:
         """generator which yields the names of every sample in the arrayset
 
-        For write enabled checkouts, is technically possible to iterate over the
-        arrayset object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginning the loop.) While
-        not necessary for read checkouts, we perform the same operation for both
-        read and write checkouts in order in order to avoid differences.
+        Parameters
+        ----------
+        local : bool, optional
+            if True, returned keys will only correspond to data which is
+            available for reading on the local disk, by default False
 
         Yields
         ------
         Iterator[Union[str, int]]
             keys of one sample at a time inside the arrayset
-        """
-        for name in tuple(self._sspecs.keys()):
-            yield name
 
-    def values(self) -> Iterator[np.ndarray]:
-        """generator which yields the tensor data for every sample in the arrayset
-
+        Notes
+        -----
         For write enabled checkouts, is technically possible to iterate over the
         arrayset object while adding/deleting data, in order to avoid internal
         python runtime errors (``dictionary changed size during iteration`` we
         have to make a copy of they key list before beginning the loop.) While
         not necessary for read checkouts, we perform the same operation for both
         read and write checkouts in order in order to avoid differences.
+        """
+        if not local:
+            for name in tuple(self._sspecs.keys()):
+                yield name
+        else:
+            for name, be in tuple(self._sspecs.items()):
+                if is_local_backend(be):
+                    yield name
+                else:
+                    continue
+
+    def values(self, local=False) -> Iterator[np.ndarray]:
+        """generator which yields the tensor data for every sample in the arrayset
+
+        Parameters
+        ----------
+        local : bool, optional
+            if True, returned values will only correspond to data which is
+            available for reading on the local disk. No attempt will be made to
+            read data existing on a remote server, by default False
 
         Yields
         ------
         Iterator[np.ndarray]
             values of one sample at a time inside the arrayset
-        """
-        for name in tuple(self._sspecs.keys()):
-            yield self.get(name)
 
-    def items(self) -> Iterator[Tuple[Union[str, int], np.ndarray]]:
-        """generator yielding two-tuple of (name, tensor), for every sample in the arrayset.
-
+        Notes
+        -----
         For write enabled checkouts, is technically possible to iterate over the
         arrayset object while adding/deleting data, in order to avoid internal
         python runtime errors (``dictionary changed size during iteration`` we
         have to make a copy of they key list before beginning the loop.) While
         not necessary for read checkouts, we perform the same operation for both
         read and write checkouts in order in order to avoid differences.
+        """
+        if not local:
+            for name in tuple(self._sspecs.keys()):
+                yield self.get(name)
+        else:
+            for name, be in tuple(self._sspecs.items()):
+                if is_local_backend(be):
+                    yield self.get(name)
+                else:
+                    continue
+
+    def items(self, local=False) -> Iterator[Tuple[Union[str, int], np.ndarray]]:
+        """generator yielding two-tuple of (name, tensor), for every sample in the arrayset.
+
+        Parameters
+        ----------
+        local : bool, optional
+            if True, returned keys/values will only correspond to data which is
+            available for reading on the local disk, No attempt will be made to
+            read data existing on a remote server, by default False
 
         Yields
         ------
         Iterator[Tuple[Union[str, int], np.ndarray]]
             sample name and stored value for every sample inside the arrayset
+
+        Notes
+        -----
+        For write enabled checkouts, is technically possible to iterate over the
+        arrayset object while adding/deleting data, in order to avoid internal
+        python runtime errors (``dictionary changed size during iteration`` we
+        have to make a copy of they key list before beginning the loop.) While
+        not necessary for read checkouts, we perform the same operation for both
+        read and write checkouts in order in order to avoid differences.
         """
-        for name in tuple(self._sspecs.keys()):
-            yield (name, self.get(name))
+        if not local:
+            for name in tuple(self._sspecs.keys()):
+                yield (name, self.get(name))
+        else:
+            for name, be in tuple(self._sspecs.items()):
+                if is_local_backend(be):
+                    yield (name, self.get(name))
+                else:
+                    continue
 
     def get(self, name: Union[str, int]) -> np.ndarray:
         """Retrieve a sample in the arrayset with a specific name.

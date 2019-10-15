@@ -185,6 +185,90 @@ class TestDataWithFixedSizedArrayset(object):
                 assert np.allclose(sample, next(tensors_in_the_order))
         co.close()
 
+    @pytest.mark.parametrize("aset1_backend", backend_params)
+    @pytest.mark.parametrize("aset2_backend", backend_params)
+    @pytest.mark.parametrize("aset3_backend", backend_params)
+    def test_iterating_over_local_only(self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray):
+        co = repo.checkout(write=True)
+        all_tensors = []
+        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend=aset1_backend)
+        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
+        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
+
+        with aset1 as d1, aset2 as d2, aset3 as d3:
+            d1['1'] = randomsizedarray
+            d1['2'] = np.zeros_like(randomsizedarray)
+            d1['3'] = np.zeros_like(randomsizedarray) + 5
+
+            d2['1'] = np.ones((2, 2), dtype=np.int)
+            d2['2'] = np.ones((2, 2), dtype=np.int) * 5
+            d2['3'] = np.zeros((2, 2), dtype=np.int)
+
+            d3['1'] = np.ones((3, 4), dtype=np.float32)
+            d3['2'] = np.ones((3, 4), dtype=np.float32) * 7
+            d3['3'] = np.zeros((3, 4), dtype=np.float32)
+
+        all_tensors.extend([aset1['1'], aset1['2'], aset1['3']])
+        all_tensors.extend([aset2['1'], aset2['2'], aset2['3']])
+        all_tensors.extend([aset3['1'], aset3['2'], aset3['3']])
+
+        co.commit('this is a commit message')
+        co.close()
+
+        co = repo.checkout()
+
+        # perform the mock
+        template = co._arraysets._arraysets['aset1']._sspecs['3']
+        co._arraysets._arraysets['aset1']._sspecs['4'] = template._replace(backend='50')
+        co._arraysets._arraysets['aset2']._sspecs['4'] = template._replace(backend='50')
+
+        # iterating over .items()
+        tensors_in_the_order = iter(all_tensors)
+        for dname, aset in co.arraysets.items():
+            assert aset._asetn == dname
+            count = 0
+            for sname, sample in aset.items(local=True):
+                count += 1
+                assert np.allclose(sample, next(tensors_in_the_order))
+                assert '4' != sname
+            assert count == 3
+
+        # iterating over .keys()
+        tensors_in_the_order = iter(all_tensors)
+        for dname in co.arraysets.keys():
+            count = 0
+            for sname in co.arraysets[dname].keys(local=True):
+                count += 1
+                assert np.allclose(co.arraysets[dname][sname], next(tensors_in_the_order))
+                assert '4' != sname
+            assert count == 3
+
+        # iterating over .values()
+        tensors_in_the_order = iter(all_tensors)
+        for aset in co.arraysets.values():
+            count = 0
+            for sample in aset.values(local=True):
+                count += 1
+                assert np.allclose(sample, next(tensors_in_the_order))
+            assert count == 3
+
+        assert list(co['aset1'].keys()) == ['1', '2', '3', '4']
+        with pytest.raises((FileNotFoundError, KeyError)):
+            list(co['aset1'].values())
+        with pytest.raises((FileNotFoundError, KeyError)):
+            list(co['aset1'].items())
+
+        assert list(co['aset2'].keys()) == ['1', '2', '3', '4']
+        with pytest.raises((FileNotFoundError, KeyError)):
+            list(co['aset2'].values())
+        with pytest.raises((FileNotFoundError, KeyError)):
+            list(co['aset2'].items())
+
+        assert list(co['aset3'].keys()) == ['1', '2', '3']
+        assert len(list(co['aset3'].values())) == 3
+        assert len(list(co['aset3'].items())) == 3
+        co.close()
+
     def test_get_data(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         co.arraysets['writtenaset']['1'] = array5by7
@@ -612,7 +696,6 @@ class TestVariableSizedArrayset(object):
             assert np.allclose(rd[k], v)
         wco.close()
         rco.close()
-
 
     @pytest.mark.parametrize('aset_specs', [
         [['aset1', [(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10)],
