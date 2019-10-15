@@ -71,7 +71,7 @@ def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
 def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None):
 
     compBytes = blosc.compress(
-        buf, clevel=3, cname='zlib', typesize=1, shuffle=blosc.SHUFFLE)
+        buf, clevel=3, cname='zstd', typesize=1, shuffle=blosc.SHUFFLE)
 
     request = pb2_request(
         comp_nbytes=len(compBytes),
@@ -85,7 +85,7 @@ def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None
 
 def missingHashIterator(commit, hash_bytes, err, pb2_func):
     comp_bytes = blosc.compress(
-        hash_bytes, cname='zlib', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
+        hash_bytes, cname='zstd', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
 
     rpc_method = pb2_func(
         commit=commit,
@@ -100,7 +100,7 @@ def missingHashIterator(commit, hash_bytes, err, pb2_func):
 
 def missingHashRequestIterator(commit, hash_bytes, pb2_func):
     comp_bytes = blosc.compress(
-        hash_bytes, cname='zlib', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
+        hash_bytes, cname='zstd', clevel=3, typesize=1, shuffle=blosc.SHUFFLE)
 
     rpc_method = pb2_func(
         commit=commit,
