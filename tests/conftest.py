@@ -16,18 +16,10 @@ import hangar
 backend_params = ['00', '10']
 
 
-@pytest.fixture(autouse=True)
-def reset_singletons(monkeypatch):
-    """
-    cleanup all singleton instances anyway before each test, to ensure
-    no leaked state between tests.
-    """
-    hangar.context.TxnRegisterSingleton._instances = {}
-    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
-
-
 @pytest.fixture()
-def managed_tmpdir(tmp_path):
+def managed_tmpdir(monkeypatch, tmp_path):
+    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
+    hangar.context.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
 
@@ -201,30 +193,6 @@ def server_instance(managed_tmpdir, worker_id):
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
     mkdir(base_tmpdir)
     server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
-    server.start()
-    yield address
-
-    hangserver.env._close_environments()
-    server.stop(0.1)
-    time.sleep(0.2)
-    if platform.system() == 'Windows':
-        # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.3)
-
-
-@pytest.fixture()
-def server_instance_push_restricted(managed_tmpdir, worker_id):
-    from hangar import serve
-
-    address = f'localhost:{randint(50000, 59999)}'
-    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
-    mkdir(base_tmpdir)
-    server, hangserver, _ = serve(base_tmpdir,
-                                  overwrite=True,
-                                  channel_address=address,
-                                  restrict_push=True,
-                                  username='right_username',
-                                  password='right_password')
     server.start()
     yield address
 

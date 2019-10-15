@@ -85,10 +85,7 @@ def header_adder_interceptor(header, value):
             metadata = list(client_call_details.metadata)
 
         if (header != '') and (value != ''):
-            metadata.append((
-                header,
-                value,
-            ))
+            metadata.append((header, value))
         client_call_details = _ClientCallDetails(
             client_call_details.method,
             client_call_details.timeout,

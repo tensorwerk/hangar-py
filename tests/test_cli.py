@@ -222,7 +222,7 @@ def test_remove_remote():
         assert repo.remote.list_all() == []
 
 
-def test_list_all_remotes():
+def test_list_all_remotes(managed_tmpdir):
     from hangar.remotes import RemoteInfo
 
     runner = CliRunner()
@@ -322,6 +322,7 @@ def test_branch_create_and_list(written_two_cmt_server_repo):
         assert res.stdout == "['master', 'origin/master', 'testbranch']\n"
 
 
+@pytest.mark.filterwarnings("ignore:Arrayset.* contains `reference-only` samples")
 def test_branch_create_and_delete(written_two_cmt_server_repo):
     server, base_repo = written_two_cmt_server_repo
 
@@ -374,12 +375,12 @@ def test_branch_create_and_delete(written_two_cmt_server_repo):
         assert res.stdout == "['master', 'origin/master']\n"
 
 
-def test_start_server():
+def test_start_server(managed_tmpdir):
     import time
     runner = CliRunner()
     with runner.isolated_filesystem():
         startTime = time.time()
         res = runner.invoke(cli.server, ['--ip', 'localhost', '--port', '50111', '--timeout', '1'])
-        assert time.time() - startTime >= 1
+        assert time.time() - startTime <= 1.8  # buffer to give it time to stop
         assert res.exit_code == 0
         assert 'Hangar Server Started' in res.stdout

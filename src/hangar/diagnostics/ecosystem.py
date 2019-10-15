@@ -4,12 +4,10 @@ from typing import Dict, List, Tuple, Union
 required_packages = [
     ('hangar', lambda p: p.__version__),
     ('click', lambda p: p.__version__),
-    ('msgpack', lambda p: '.'.join([str(v) for v in p.version])),
     ('lmdb', lambda p: p.__version__),
     ('h5py', lambda p: p.__version__),
     ('numpy', lambda p: p.__version__),
     ('blosc', lambda p: p.__version__),
-    ('yaml', lambda p: p.__version__),
     ('tqdm', lambda p: p.__version__),
     ('wrapt', lambda p: p.__version__),
     ('grpc', lambda p: p.__version__),

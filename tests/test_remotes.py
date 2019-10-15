@@ -278,39 +278,39 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
 @pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[4, 10]])
 @pytest.mark.parametrize('nDevCommits,nDevSamples', [[3, 24]])
 @pytest.mark.parametrize('fetchBranch,fetchCommit,fetchAsetns,fetchNbytes,fetchAll_history', [
-    ['master',      None,  None,        None,  False],
-    ['testbranch',  None,  None,        None,  False],
-    [None,          'ma',  None,        None,  False],
-    [None,          'br',  None,        None,  False],
+    ['master',      None,  None,              None,  False],
+    ['testbranch',  None,  None,              None,  False],
+    [None,          'ma',  None,              None,  False],
+    [None,          'br',  None,              None,  False],
     ['master',      None,  ('writtenaset',),  None,  False],
-    ['testbranch',  None,  ('_two',),   None,  False],
+    ['testbranch',  None,  ('_two',),         None,  False],
     [None,          'ma',  ('writtenaset',),  None,  False],
-    [None,          'br',  ('_two',),   None,  False],
-    ['master',      None,  None,        None,  False],
-    ['testbranch',  None,  None,        None,  False],
-    [None,          'ma',  None,        None,  False],
-    [None,          'br',  None,        None,  False],
+    [None,          'br',  ('_two',),         None,  False],
+    ['master',      None,  None,              None,  False],
+    ['testbranch',  None,  None,              None,  False],
+    [None,          'ma',  None,              None,  False],
+    [None,          'br',  None,              None,  False],
     ['master',      None,  ('writtenaset',),  None,  False],
-    ['testbranch',  None,  ('_two',),   None,  False],
+    ['testbranch',  None,  ('_two',),         None,  False],
     [None,          'ma',  ('writtenaset',),  None,  False],
-    [None,          'br',  ('_two',),   None,  False],
-    ['master',      None,  None,        None,  True],
-    ['testbranch',  None,  None,        None,  True],
-    [None,          'ma',  None,        None,  True],
-    [None,          'br',  None,        None,  True],
+    [None,          'br',  ('_two',),         None,  False],
+    ['master',      None,  None,              None,  True],
+    ['testbranch',  None,  None,              None,  True],
+    [None,          'ma',  None,              None,  True],
+    [None,          'br',  None,              None,  True],
     ['master',      None,  ('writtenaset',),  None,  True],
-    ['testbranch',  None,  ('_two',),   None,  True],
+    ['testbranch',  None,  ('_two',),         None,  True],
     [None,          'ma',  ('writtenaset',),  None,  True],
-    [None,          'br',  ('_two',),   None,  True],
-    ['master',      None,  None,        1000,  False],
-    ['testbranch',  None,  None,        1000,  False],
-    [None,          'ma',  None,        1000,  False],
-    [None,          'br',  None,        1000,  False],
+    [None,          'br',  ('_two',),         None,  True],
+    ['master',      None,  None,              1000,  False],
+    ['testbranch',  None,  None,              1000,  False],
+    [None,          'ma',  None,              1000,  False],
+    [None,          'br',  None,              1000,  False],
     ['master',      None,  ('writtenaset',),  1000,  False],
-    ['testbranch',  None,  ('_two',),   1000,  False],
+    ['testbranch',  None,  ('_two',),         1000,  False],
     [None,          'ma',  ('writtenaset',),  1000,  False],
-    [None,          'br',  ('_two',),   1000,  False],
-    [None,          'br',  ('_two',),   1000,  True],  # will raise error
+    [None,          'br',  ('_two',),         1000,  False],
+    [None,          'br',  ('_two',),         1000,  True],  # will raise error
 ])
 def test_server_push_two_branch_then_clone_fetch_data_options(
         server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
@@ -556,12 +556,58 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
     newRepo._env._close_environments()
 
 
-def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, managed_tmpdir):
-    from hangar.remote import config
-    from hangar import Repository
+# ---------------------------- fixture func servers ---------------------------
 
-    config.config['server']['grpc']['fetch_max_nbytes'] = 100_000
-    config.config['client']['grpc']['push_max_nbytes'] = 100_000
+
+@pytest.fixture()
+def server_instance_nbytes_limit(managed_tmpdir, worker_id):
+    from hangar import serve
+
+    address = f'localhost:{randint(50000, 59999)}'
+    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
+    mkdir(base_tmpdir)
+    server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
+    hangserver.CFG['SERVER_GRPC']['fetch_max_nbytes'] = '100000'
+    hangserver.CFG['CLIENT_GRPC']['push_max_nbytes'] = '100000'
+    server.start()
+    yield address
+
+    hangserver.env._close_environments()
+    server.stop(0.1)
+    time.sleep(0.2)
+    if platform.system() == 'Windows':
+        # time for open file handles to close before tmp dir can be removed.
+        time.sleep(0.3)
+
+@pytest.fixture()
+def server_instance_push_restricted(managed_tmpdir, worker_id):
+    from hangar import serve
+
+    address = f'localhost:{randint(50000, 59999)}'
+    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
+    mkdir(base_tmpdir)
+    server, hangserver, _ = serve(base_tmpdir,
+                                  overwrite=True,
+                                  channel_address=address,
+                                  restrict_push=True,
+                                  username='right_username',
+                                  password='right_password')
+    server.start()
+    yield address
+
+    hangserver.env._close_environments()
+    server.stop(0.1)
+    time.sleep(0.2)
+    if platform.system() == 'Windows':
+        # time for open file handles to close before tmp dir can be removed.
+        time.sleep(0.3)
+
+
+# -----------------------------------------------------------------------------
+
+def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance_nbytes_limit, repo, managed_tmpdir):
+    from hangar import Repository
+    from hangar.remote import chunks, client
 
     # Push master branch test
     masterCmtList = []
@@ -582,16 +628,24 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
         masterCmtList.append((cmt, masterSampList))
         co.close()
 
-    repo.remote.add('origin', server_instance)
+    repo.remote.add('origin', server_instance_nbytes_limit)
+
+    spy = mocker.spy(chunks, 'tensorChunkedIterator')
     push1 = repo.remote.push('origin', 'master')
+    assert chunks.tensorChunkedIterator.call_count == 12
+    for call in spy.call_args_list:
+        assert call[1]['uncomp_nbytes'] <= 103_000 # maximum amount over 100_000 observed in test development
+
     assert push1 == 'master'
 
     # Clone test (master branch)
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir, exists=False)
-    newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+    newRepo.clone('Test User', 'tester@foo.com', server_instance_nbytes_limit, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
+
+    spy = mocker.spy(client.HangarClient, 'fetch_data')
     for cmt, sampList in masterCmtList:
         newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
@@ -601,6 +655,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(server_instance, repo, 
         for sIdx, samp in enumerate(sampList):
             assert np.allclose(nco.arraysets['aset'][str(sIdx)], samp)
         nco.close()
+    assert client.HangarClient.fetch_data.call_count == 12
     newRepo._env._close_environments()
 
 

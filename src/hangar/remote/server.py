@@ -1,5 +1,4 @@
 import hashlib
-import io
 import os
 import tempfile
 import warnings
@@ -7,14 +6,13 @@ import threading
 import time
 from concurrent import futures
 from os.path import join as pjoin
+import shutil
+import configparser
 
 import blosc
 import grpc
 import lmdb
-import msgpack
-import numpy as np
 
-from . import config
 from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
@@ -56,8 +54,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 self._rFs[backend].open('r')
 
         src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
-        config.ensure_file(src_path, destination=repo_path, comment=False)
-        config.refresh(paths=[repo_path])
+        dst_path = pjoin(repo_path, c.CONFIG_SERVER_NAME)
+        if not os.path.isfile(dst_path):
+            shutil.copyfile(src_path, dst_path)
+        self.CFG = configparser.ConfigParser()
+        self.CFG.read(dst_path)
 
         self.txnregister = TxnRegister()
         self.repo_path = self.env.repo_path
@@ -75,10 +76,10 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
     def GetClientConfig(self, request, context):
         """Return parameters to the client to set up channel options as desired by the server.
         """
-        push_max_nbytes = str(config.get('client.grpc.push_max_nbytes'))
-        enable_compression = config.get('client.grpc.enable_compression')
-        enable_compression = str(1) if enable_compression is True else str(0)
-        optimization_target = config.get('client.grpc.optimization_target')
+        clientCFG = self.CFG['CLIENT_GRPC']
+        push_max_nbytes = clientCFG['push_max_nbytes']
+        enable_compression = clientCFG['enable_compression']
+        optimization_target = clientCFG['optimization_target']
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.GetClientConfigReply(error=err)
@@ -250,8 +251,19 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
         Please see comments below which explain why not all requests are
         guarrenteed to fully complete in one operation.
-        """
 
+        We receive a list of digests to send to the client. One consideration
+        we have is that there is no way to know how much memory will be used
+        when the data is read from disk. Samples are compressed against
+        each-other before going over the wire, which means its preferable to
+        read in as much as possible. However, since we don't want to overload
+        the client system when the binary blob is decompressed into individual
+        tensors, we set some maximum size which tensors can occupy when
+        uncompressed. When we receive a list of digests whose data size is in
+        excess of this limit, we just say sorry to the client, send the chunk
+        of digests/tensors off to them as is (incomplete), and request that
+        the client figure out what it still needs and ask us again.
+        """
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 uncomp_nbytes = request.uncomp_nbytes
@@ -271,29 +283,13 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             yield reply
             raise StopIteration()
 
-        buff = io.BytesIO(uncompBytes)
-        unpacker = msgpack.Unpacker(
-            buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
-
-        # We receive a list of digests to send to the client. One consideration
-        # we have is that there is no way to know how much memory will be used
-        # when the data is read from disk. Samples are compressed against
-        # each-other before going over the wire, which means its preferable to
-        # read in as much as possible. However, since we don't want to overload
-        # the client system when the binary blob is decompressed into individual
-        # tensors, we set some maximum size which tensors can occupy when
-        # uncompressed. When we receive a list of digests whose data size is in
-        # excess of this limit, we just say sorry to the client, send the chunk
-        # of digests/tensors off to them as is (incomplete), and request that
-        # the client figure out what it still needs and ask us again.
-
-        totalSize = 0
-        buf = io.BytesIO()
-        packer = msgpack.Packer(use_bin_type=True)
+        totalSize, records = 0, []
+        unpacked_digests = uncompBytes.decode().split(c.SEP_LST)
         hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
-        fetch_max_nbytes = config.get('server.grpc.fetch_max_nbytes')
+
         try:
-            for digest in unpacker:
+            fetch_max_nbytes = int(self.CFG['SERVER_GRPC']['fetch_max_nbytes'])
+            for digest in unpacked_digests:
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
                 hashVal = hashTxn.get(hashKey, default=False)
                 if hashVal is False:
@@ -308,41 +304,35 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     spec = backend_decoder(hashVal)
                     tensor = self._rFs[spec.backend].read_data(spec)
 
-                p = packer.pack((digest, tensor.shape, tensor.dtype.num, tensor.tobytes()))
-                buf.seek(totalSize)
-                buf.write(p)
-                totalSize += len(p)
-
+                record = chunks.serialize_record(tensor, digest, '')
+                records.append(record)
+                totalSize += len(record)
                 if totalSize >= fetch_max_nbytes:
+                    pack = chunks.serialize_record_pack(records)
                     err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                     cIter = chunks.tensorChunkedIterator(
-                        buf=buf, uncomp_nbytes=totalSize, itemsize=tensor.itemsize,
+                        buf=pack, uncomp_nbytes=len(pack), itemsize=tensor.itemsize,
                         pb2_request=hangar_service_pb2.FetchDataReply, err=err)
                     yield from cIter
-                    time.sleep(0.1)
                     msg = 'HANGAR REQUESTED RETRY: developer enforced limit on returned '\
                           'raw data size to prevent memory overload of user system.'
                     context.set_details(msg)
                     context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
                     err = hangar_service_pb2.ErrorProto(code=8, message=msg)
+                    totalSize, records = 0, []
                     yield hangar_service_pb2.FetchDataReply(error=err, raw_data=b'')
                     raise StopIteration()
-
         except StopIteration:
-            totalSize = 0
-
+            totalSize, records = 0, []
         finally:
             # finish sending all remaining tensors if max size hash not been hit.
             if totalSize > 0:
+                pack = chunks.serialize_record_pack(records)
                 err = hangar_service_pb2.ErrorProto(code=0, message='OK')
                 cIter = chunks.tensorChunkedIterator(
-                    buf=buf,
-                    uncomp_nbytes=totalSize,
-                    itemsize=tensor.itemsize,
-                    pb2_request=hangar_service_pb2.FetchDataReply,
-                    err=err)
+                    buf=pack, uncomp_nbytes=len(pack), itemsize=tensor.itemsize,
+                    pb2_request=hangar_service_pb2.FetchDataReply, err=err)
                 yield from cIter
-            buf.close()
             self.txnregister.abort_reader_txn(self.env.hashenv)
 
     def PushData(self, request_iterator, context):
@@ -371,23 +361,20 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             reply = hangar_service_pb2.PushDataReply(error=err)
             return reply
 
-        buff = io.BytesIO(uncompBytes)
-        unpacker = msgpack.Unpacker(
-            buff, use_list=False, raw=False, max_buffer_size=1_000_000_000)
-        # hashTxn = self.txnregister.begin_writer_txn(self.env.hashenv)
+        unpacked_records = chunks.deserialize_record_pack(uncompBytes)
         received_data = []
-        for data in unpacker:
-            digest, schema_hash, dShape, dTypeN, dBytes = data
-            tensor = np.frombuffer(dBytes, dtype=np.typeDict[dTypeN]).reshape(dShape)
-            received_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
-            if received_hash != digest:
-                msg = f'HASH MANGLED, received: {received_hash} != expected digest: {digest}'
+        for record in unpacked_records:
+            data = chunks.deserialize_record(record)
+            schema_hash = data.schema
+            received_hash = hashlib.blake2b(data.array.tobytes(), digest_size=20).hexdigest()
+            if received_hash != data.digest:
+                msg = f'HASH MANGLED, received: {received_hash} != expected digest: {data.digest}'
                 context.set_details(msg)
                 context.set_code(grpc.StatusCode.DATA_LOSS)
                 err = hangar_service_pb2.ErrorProto(code=15, message=msg)
                 reply = hangar_service_pb2.PushDataReply(error=err)
                 return reply
-            received_data.append((received_hash, tensor))
+            received_data.append((received_hash, data.array))
         saved_digests = self.CW.data(schema_hash, received_data)
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
@@ -522,7 +509,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             offset += size
 
         uncompBytes = blosc.decompress(hBytes)
-        c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=False))
+        c_hashs_raw = chunks.deserialize_record_pack(uncompBytes)
+        c_hashset = set([chunks.deserialize_ident(raw).digest for raw in c_hashs_raw])
 
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
@@ -533,10 +521,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             tmpDB.close()
 
         c_missing = list(s_hashes.difference(c_hashset))
-        c_hash_schemas = [(c_mis, s_hashes_schemas[c_mis]) for c_mis in c_missing]
+        c_hash_schemas_raw = [chunks.serialize_ident(c_mis, s_hashes_schemas[c_mis]) for c_mis in c_missing]
+        raw_pack = chunks.serialize_record_pack(c_hash_schemas_raw)
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         response_pb = hangar_service_pb2.FindMissingHashRecordsReply
-        cIter = chunks.missingHashIterator(commit, c_hash_schemas, err, response_pb)
+        cIter = chunks.missingHashIterator(commit, raw_pack, err, response_pb)
         yield from cIter
 
     def PushFindMissingHashRecords(self, request_iterator, context):
@@ -551,12 +540,17 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             offset += size
 
         uncompBytes = blosc.decompress(hBytes)
-        c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=False))
+        c_hashs_raw = chunks.deserialize_record_pack(uncompBytes)
+        c_hashset = set([chunks.deserialize_ident(raw).digest for raw in c_hashs_raw])
+
         s_hashset = set(hashs.HashQuery(self.env.hashenv).list_all_hash_keys_raw())
-        s_missing = list(c_hashset.difference(s_hashset))
+        s_missing = c_hashset.difference(s_hashset)
+        s_hashs_raw = [chunks.serialize_ident(s_mis, '') for s_mis in s_missing]
+        raw_pack = chunks.serialize_record_pack(s_hashs_raw)
+
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         response_pb = hangar_service_pb2.FindMissingHashRecordsReply
-        cIter = chunks.missingHashIterator(commit, s_missing, err, response_pb)
+        cIter = chunks.missingHashIterator(commit, raw_pack, err, response_pb)
         yield from cIter
 
     def FetchFindMissingLabels(self, request_iterator, context):
@@ -570,7 +564,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             hBytes[offset: offset + size] = request.hashs
             offset += size
         uncompBytes = blosc.decompress(hBytes)
-        c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=False))
+        c_hashs_raw = chunks.deserialize_record_pack(uncompBytes)
+        c_hashset = set([chunks.deserialize_ident(raw).digest for raw in c_hashs_raw])
 
         with tempfile.TemporaryDirectory() as tempD:
             tmpDF = os.path.join(tempD, 'test.lmdb')
@@ -580,9 +575,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             tmpDB.close()
 
         c_missing = list(s_hashes.difference(c_hashset))
+        c_missing_raw = [chunks.serialize_ident(c_mis, '') for c_mis in c_missing]
+        raw_pack = chunks.serialize_record_pack(c_missing_raw)
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         response_pb = hangar_service_pb2.FindMissingLabelsReply
-        cIter = chunks.missingHashIterator(commit, c_missing, err, response_pb)
+        cIter = chunks.missingHashIterator(commit, raw_pack, err, response_pb)
         yield from cIter
 
     def PushFindMissingLabels(self, request_iterator, context):
@@ -596,15 +593,18 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             hBytes[offset: offset + size] = request.hashs
             offset += size
         uncompBytes = blosc.decompress(hBytes)
-        c_hashset = set(msgpack.unpackb(uncompBytes, raw=False, use_list=True))
+        c_hashs_raw = chunks.deserialize_record_pack(uncompBytes)
+        c_hashset = set([chunks.deserialize_ident(raw).digest for raw in c_hashs_raw])
         s_hash_keys = list(hashs.HashQuery(self.env.labelenv).list_all_hash_keys_db())
         s_hashes = map(parsing.hash_meta_raw_key_from_db_key, s_hash_keys)
         s_hashset = set(s_hashes)
 
         s_missing = list(c_hashset.difference(s_hashset))
+        s_hashs_raw = [chunks.serialize_ident(s_mis, '') for s_mis in s_missing]
+        raw_pack = chunks.serialize_record_pack(s_hashs_raw)
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         response_pb = hangar_service_pb2.FindMissingLabelsReply
-        cIter = chunks.missingHashIterator(commit, s_missing, err, response_pb)
+        cIter = chunks.missingHashIterator(commit, raw_pack, err, response_pb)
         yield from cIter
 
     def FetchFindMissingSchemas(self, request, context):
@@ -655,22 +655,36 @@ def serve(hangar_path: os.PathLike,
 
     # ------------------- Configure Server ------------------------------------
 
-    src_path = pjoin(os.path.dirname(__file__), 'config_server.yml')
-    dest_path = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
-    config.ensure_file(src_path, destination=dest_path, comment=False)
-    config.refresh(paths=[dest_path])
+    dst_path = pjoin(hangar_path, c.DIR_HANGAR_SERVER, c.CONFIG_SERVER_NAME)
+    CFG = configparser.ConfigParser()
+    if os.path.isfile(dst_path):
+        CFG.read(dst_path)
+    else:
+        src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
+        CFG.read(src_path)
 
-    enable_compression = config.get('server.grpc.enable_compression')
-    optimization_target = config.get('server.grpc.optimization_target')
+    serverCFG = CFG['SERVER_GRPC']
+    enable_compression = serverCFG['enable_compression']
+    if enable_compression == 'NoCompression':
+        compression_val = grpc.Compression.NoCompression
+    elif enable_compression == 'Deflate':
+        compression_val = grpc.Compression.Deflate
+    elif enable_compression == 'Gzip':
+        compression_val = grpc.Compression.Gzip
+    else:
+        compression_val = grpc.Compression.NoCompression
+
+    optimization_target = serverCFG['optimization_target']
     if channel_address is None:
-        channel_address = config.get('server.grpc.channel_address')
-    max_thread_pool_workers = config.get('server.grpc.max_thread_pool_workers')
-    max_concurrent_rpcs = config.get('server.grpc.max_concurrent_rpcs')
+        channel_address = serverCFG['channel_address']
+    max_thread_pool_workers = int(serverCFG['max_thread_pool_workers'])
+    max_concurrent_rpcs = int(serverCFG['max_concurrent_rpcs'])
 
+    adminCFG = CFG['SERVER_ADMIN']
     if (restrict_push is None) and (username is None) and (password is None):
-        admin_restrict_push = config.get('server.admin.restrict_push')
-        admin_username = config.get('server.admin.username')
-        admin_password = config.get('server.admin.password')
+        admin_restrict_push = bool(int(adminCFG['restrict_push']))
+        admin_username = adminCFG['username']
+        admin_password = adminCFG['password']
     else:
         admin_restrict_push = restrict_push
         admin_username = username
@@ -688,13 +702,14 @@ def serve(hangar_path: os.PathLike,
     server = grpc.server(
         thread_pool=grpc_thread_pool,
         maximum_concurrent_rpcs=max_concurrent_rpcs,
-        options=[('grpc.default_compression_algorithm', enable_compression),
-                 ('grpc.optimization_target', optimization_target)],
+        options=[('grpc.optimization_target', optimization_target)],
+        compression=compression_val,
         interceptors=(interc,))
 
     # ------------------- Start the GRPC server -------------------------------
 
-    hangserv = HangarServer(dest_path, overwrite)
+    server_dir = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
+    hangserv = HangarServer(server_dir, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
     server.add_insecure_port(channel_address)
     return (server, hangserv, channel_address)

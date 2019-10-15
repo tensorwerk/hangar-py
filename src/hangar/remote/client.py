@@ -1,15 +1,13 @@
 import logging
 import hashlib
-import io
 import os
 import tempfile
 import time
-from typing import Tuple, List, Sequence
+from typing import Tuple, Sequence
 
 import blosc
 import grpc
 import lmdb
-import msgpack
 import numpy as np
 from tqdm import tqdm
 
@@ -22,7 +20,6 @@ from ..context import Environments, TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
-from ..records import heads
 from ..records import parsing
 from ..records import queries
 from ..records import summarize
@@ -99,8 +96,19 @@ class HangarClient(object):
                 request = hangar_service_pb2.GetClientConfigRequest()
                 response = tmp_stub.GetClientConfig(request)
                 self.cfg['push_max_nbytes'] = int(response.config['push_max_nbytes'])
-                self.cfg['enable_compression'] = bool(int(response.config['enable_compression']))
                 self.cfg['optimization_target'] = response.config['optimization_target']
+
+                enable_compression = response.config['enable_compression']
+                if enable_compression == 'NoCompression':
+                    compression_val = grpc.Compression.NoCompression
+                elif enable_compression == 'Deflate':
+                    compression_val = grpc.Compression.Deflate
+                elif enable_compression == 'Gzip':
+                    compression_val = grpc.Compression.Gzip
+                else:
+                    compression_val = grpc.Compression.NoCompression
+                self.cfg['enable_compression'] = compression_val
+
             except grpc.RpcError as err:
                 if not (err.code() == grpc.StatusCode.UNAVAILABLE) and (self.wait_ready is True):
                     logger.error(err)
@@ -118,8 +126,8 @@ class HangarClient(object):
         tmp_insec_channel.close()
         configured_channel = grpc.insecure_channel(
             self.address,
-            options=[('grpc.default_compression_algorithm', self.cfg['enable_compression']),
-                     ('grpc.optimization_target', self.cfg['optimization_target'])])
+            options=[('grpc.optimization_target', self.cfg['optimization_target'])],
+            compression=self.cfg['enable_compression'])
         self.channel = grpc.intercept_channel(configured_channel, self.header_adder_int)
         self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
 
@@ -314,17 +322,12 @@ class HangarClient(object):
         RuntimeError
             if received digest != requested or what was reported to be sent.
         """
-        totalSize, buf = 0, io.BytesIO()
-        packer = msgpack.Packer(use_bin_type=True)
-        packed_digests = map(packer.pack, digests)
-        for p in packed_digests:
-            buf.write(p)
-            totalSize += len(p)
-
         try:
+            raw_digests = c.SEP_LST.join(digests).encode()
             cIter = chunks.tensorChunkedIterator(
-                buf=buf, uncomp_nbytes=totalSize, itemsize=1,
+                buf=raw_digests, uncomp_nbytes=len(raw_digests), itemsize=1,
                 pb2_request=hangar_service_pb2.FetchDataRequest)
+
             replies = self.stub.FetchData(cIter)
             for idx, reply in enumerate(replies):
                 if idx == 0:
@@ -332,7 +335,7 @@ class HangarClient(object):
                     dBytes, offset = bytearray(comp_nbytes), 0
                 size = len(reply.raw_data)
                 if size > 0:
-                    dBytes[offset: offset + size] = reply.raw_data
+                    dBytes[offset:offset + size] = reply.raw_data
                     offset += size
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
@@ -344,23 +347,17 @@ class HangarClient(object):
         uncompBytes = blosc.decompress(dBytes)
         if uncomp_nbytes != len(uncompBytes):
             raise RuntimeError(f'uncomp_nbytes: {uncomp_nbytes} != received {comp_nbytes}')
-        buff = io.BytesIO(uncompBytes)
-        unpacker = msgpack.Unpacker(
-            buff, use_list=True, raw=False, max_buffer_size=1_000_000_000)
-
         received_data = []
-        for data in unpacker:
-            hdigest, dShape, dTypeN, ddBytes = data
-            tensor = np.frombuffer(ddBytes, dtype=np.typeDict[dTypeN]).reshape(dShape)
-            received_hash = hashlib.blake2b(tensor.tobytes(), digest_size=20).hexdigest()
-            if received_hash != hdigest:
-                raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {hdigest}')
-            received_data.append((received_hash, tensor))
+        unpacked_records = chunks.deserialize_record_pack(uncompBytes)
+        for record in unpacked_records:
+            data = chunks.deserialize_record(record)
+            received_hash = hashlib.blake2b(data.array.tobytes(), digest_size=20).hexdigest()
+            if received_hash != data.digest:
+                raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {data.digest}')
+            received_data.append((received_hash, data.array))
         return received_data
 
-    def push_data(self,
-                  schema_hash: str,
-                  digests: Sequence[str],
+    def push_data(self, schema_hash: str, digests: Sequence[str],
                   pbar: tqdm = None) -> hangar_service_pb2.PushDataReply:
         """Given a schema and digest list, read the data and send to the server
 
@@ -385,46 +382,57 @@ class HangarClient(object):
         rpc_error
             if the server received corrupt data
         """
-        totalSize, buf = 0, io.BytesIO()
-        packer = msgpack.Packer(use_bin_type=True)
-        hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
         try:
+            specs = []
+            hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
             for digest in digests:
-                pbar.update(1)
                 hashKey = parsing.hash_data_db_key_from_raw_key(digest)
                 hashVal = hashTxn.get(hashKey, default=False)
                 if not hashVal:
                     raise KeyError(f'No hash record with key: {hashKey}')
+                be_loc = backend_decoder(hashVal)
+                specs.append((digest, be_loc))
+        finally:
+            TxnRegister().abort_reader_txn(self.env.hashenv)
 
-                spec = backend_decoder(hashVal)
+        try:
+            totalSize, records = 0, []
+            for k in self._rFs.keys():
+                self._rFs[k].__enter__()
+            responses = []
+            for digest, spec in specs:
                 arr = self._rFs[spec.backend].read_data(spec)
-                p = packer.pack((digest, schema_hash, arr.shape, arr.dtype.num, arr.tobytes()))
-                totalSize += len(p)
-                buf.write(p)
-                # only send a group of tensors <= Max Size so that the server
-                # does not run out of RAM for large repos
-                if totalSize >= self.cfg['push_max_nbytes']:
+                record = chunks.serialize_record(arr, digest, schema_hash)
+                records.append(record)
+                totalSize += len(record)
+                if (totalSize >= self.cfg['push_max_nbytes']) or (len(records) > 2000):
+                    # send tensor pack when >= configured max nbytes occupied in memory
+                    pbar.update(2000)
+                    pack = chunks.serialize_record_pack(records)
                     cIter = chunks.tensorChunkedIterator(
-                        buf=buf, uncomp_nbytes=totalSize, itemsize=arr.itemsize,
+                        buf=pack, uncomp_nbytes=len(pack), itemsize=1,
                         pb2_request=hangar_service_pb2.PushDataRequest)
-                    response = self.stub.PushData(cIter)
+                    response = self.stub.PushData.future(cIter)
+                    responses.append(response)
                     totalSize = 0
-                    buf.close()
-                    buf = io.BytesIO()
+                    records = []
         except grpc.RpcError as rpc_error:
             logger.error(rpc_error)
             raise rpc_error
         finally:
-            # finish sending all remaining tensors if max size has not been hit.
+            for k in self._rFs.keys():
+                self._rFs[k].__exit__()
             if totalSize > 0:
+                # finish sending all remaining tensors if max size has not been hit.
+                pack = chunks.serialize_record_pack(records)
                 cIter = chunks.tensorChunkedIterator(
-                    buf=buf, uncomp_nbytes=totalSize, itemsize=arr.itemsize,
+                    buf=pack, uncomp_nbytes=len(pack), itemsize=arr.itemsize,
                     pb2_request=hangar_service_pb2.PushDataRequest)
-                response = self.stub.PushData(cIter)
-                buf.close()
-            TxnRegister().abort_reader_txn(self.env.hashenv)
-
-        return response
+                response = self.stub.PushData.future(cIter)
+                responses.append(response)
+        for fut in responses:
+            last = fut.result()
+        return last
 
     def fetch_label(self, digest: str) -> Tuple[str, bytes]:
         """get a the raw bytes for a metadata/label digest
@@ -486,13 +494,12 @@ class HangarClient(object):
         return reply
 
     def push_find_missing_commits(self, branch_name):
-        # TODO: THIS PROCESSING SHOULD NOT BE DONE HERE
-        branch_head = heads.get_branch_head_commit(self.env.branchenv, branch_name)
-        branch_rec = hangar_service_pb2.BranchRecord(name=branch_name, commit=branch_head)
         branch_commits = summarize.list_history(
             refenv=self.env.refenv,
             branchenv=self.env.branchenv,
             branch_name=branch_name)
+        branch_rec = hangar_service_pb2.BranchRecord(
+            name=branch_name, commit=branch_commits['head'])
 
         request = hangar_service_pb2.FindMissingCommitsRequest()
         request.commits.extend(branch_commits['order'])
@@ -503,8 +510,10 @@ class HangarClient(object):
     def fetch_find_missing_hash_records(self, commit):
 
         all_hashs = hashs.HashQuery(self.env.hashenv).list_all_hash_keys_raw()
+        all_hashs_raw = [chunks.serialize_ident(digest, '') for digest in all_hashs]
+        raw_pack = chunks.serialize_record_pack(all_hashs_raw)
         pb2_func = hangar_service_pb2.FindMissingHashRecordsRequest
-        cIter = chunks.missingHashRequestIterator(commit, all_hashs, pb2_func)
+        cIter = chunks.missingHashRequestIterator(commit, raw_pack, pb2_func)
         responses = self.stub.FetchFindMissingHashRecords(cIter)
         for idx, response in enumerate(responses):
             if idx == 0:
@@ -515,9 +524,9 @@ class HangarClient(object):
             offset += size
 
         uncompBytes = blosc.decompress(hBytes)
-        missing_hashs = msgpack.unpackb(uncompBytes, raw=False, use_list=False)
-        received_data = [(digest, schema_hash) for digest, schema_hash in missing_hashs]
-        return received_data
+        raw_idents = chunks.deserialize_record_pack(uncompBytes)
+        idents = [chunks.deserialize_ident(raw) for raw in raw_idents]
+        return idents
 
     def push_find_missing_hash_records(self, commit, tmpDB: lmdb.Environment = None):
 
@@ -533,8 +542,11 @@ class HangarClient(object):
             c_hashs_schemas = queries.RecordQuery(tmpDB).data_hash_to_schema_hash()
             c_hashes = list(set(c_hashs_schemas.keys()))
 
+        c_hashs_raw = [chunks.serialize_ident(digest, '') for digest in c_hashes]
+        raw_pack = chunks.serialize_record_pack(c_hashs_raw)
         pb2_func = hangar_service_pb2.FindMissingHashRecordsRequest
-        cIter = chunks.missingHashRequestIterator(commit, c_hashes, pb2_func)
+        cIter = chunks.missingHashRequestIterator(commit, raw_pack, pb2_func)
+
         responses = self.stub.PushFindMissingHashRecords(cIter)
         for idx, response in enumerate(responses):
             if idx == 0:
@@ -545,17 +557,19 @@ class HangarClient(object):
             offset += size
 
         uncompBytes = blosc.decompress(hBytes)
-        s_missing_hashs = msgpack.unpackb(uncompBytes, raw=False, use_list=False)
-        s_mis_hsh_sch = [(s_hsh, c_hashs_schemas[s_hsh]) for s_hsh in s_missing_hashs]
+        s_missing_raw = chunks.deserialize_record_pack(uncompBytes)
+        s_mis_hsh = [chunks.deserialize_ident(raw).digest for raw in s_missing_raw]
+        s_mis_hsh_sch = [(s_hsh, c_hashs_schemas[s_hsh]) for s_hsh in s_mis_hsh]
         return s_mis_hsh_sch
 
     def fetch_find_missing_labels(self, commit):
         c_hash_keys = hashs.HashQuery(self.env.labelenv).list_all_hash_keys_db()
         c_hashset = set(map(parsing.hash_meta_raw_key_from_db_key, c_hash_keys))
-        c_hashes = list(c_hashset)
+        c_hashs_raw = [chunks.serialize_ident(digest, '') for digest in c_hashset]
+        raw_pack = chunks.serialize_record_pack(c_hashs_raw)
 
         pb2_func = hangar_service_pb2.FindMissingLabelsRequest
-        cIter = chunks.missingHashRequestIterator(commit, c_hashes, pb2_func)
+        cIter = chunks.missingHashRequestIterator(commit, raw_pack, pb2_func)
         responses = self.stub.FetchFindMissingLabels(cIter)
         for idx, response in enumerate(responses):
             if idx == 0:
@@ -566,8 +580,9 @@ class HangarClient(object):
             offset += size
 
         uncompBytes = blosc.decompress(hBytes)
-        missing_hashs = msgpack.unpackb(uncompBytes, raw=False, use_list=False)
-        return missing_hashs
+        s_missing_raw = chunks.deserialize_record_pack(uncompBytes)
+        s_mis_hsh = [chunks.deserialize_ident(raw).digest for raw in s_missing_raw]
+        return s_mis_hsh
 
     def push_find_missing_labels(self, commit, tmpDB: lmdb.Environment = None):
 
@@ -583,8 +598,10 @@ class HangarClient(object):
             c_hashset = set(queries.RecordQuery(tmpDB).metadata_hashes())
             c_hashes = list(c_hashset)
 
+        c_hashs_raw = [chunks.serialize_ident(digest, '') for digest in c_hashes]
+        raw_pack = chunks.serialize_record_pack(c_hashs_raw)
         pb2_func = hangar_service_pb2.FindMissingLabelsRequest
-        cIter = chunks.missingHashRequestIterator(commit, c_hashes, pb2_func)
+        cIter = chunks.missingHashRequestIterator(commit, raw_pack, pb2_func)
         responses = self.stub.PushFindMissingLabels(cIter)
         for idx, response in enumerate(responses):
             if idx == 0:
@@ -595,8 +612,9 @@ class HangarClient(object):
             offset += size
 
         uncompBytes = blosc.decompress(hBytes)
-        missing_hashs = msgpack.unpackb(uncompBytes, raw=False, use_list=False)
-        return missing_hashs
+        s_missing_raw = chunks.deserialize_record_pack(uncompBytes)
+        s_mis_hsh = [chunks.deserialize_ident(raw).digest for raw in s_missing_raw]
+        return s_mis_hsh
 
     def fetch_find_missing_schemas(self, commit):
         c_schemaset = set(hashs.HashQuery(self.env.hashenv).list_all_schema_keys_raw())

@@ -8,7 +8,7 @@ from os.path import join as pjoin
 from typing import MutableMapping, Optional
 
 import lmdb
-import yaml
+import configparser
 
 from . import constants as c
 from . import __version__
@@ -271,9 +271,11 @@ class Environments(object):
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA))
         print(f'Hangar Repo initialized at: {self.repo_path}')
 
-        userConf = {'name': user_name, 'email': user_email}
+        userConf = {'USER': {'name': user_name, 'email': user_email}}
+        CFG = configparser.ConfigParser()
+        CFG.read_dict(userConf)
         with open(pjoin(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
-            yaml.safe_dump(userConf, f, default_flow_style=False)
+            CFG.write(f)
 
         readmeTxt = readme_contents(user_name, user_email)
         with open(pjoin(self.repo_path, c.README_FILE_NAME), 'w') as f:

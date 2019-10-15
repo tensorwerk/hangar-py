@@ -34,8 +34,8 @@ DIR_DATA_REMOTE = 'remote_data'
 
 # configuration file names:
 
-CONFIG_USER_NAME = 'config_user.yml'
-CONFIG_SERVER_NAME = 'config_server.yml'
+CONFIG_USER_NAME = 'config_user.ini'
+CONFIG_SERVER_NAME = 'config_server.ini'
 
 # LMDB database names and settings.
 
