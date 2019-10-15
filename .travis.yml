@@ -1,7 +1,6 @@
 matrix:
   include:
-    - "Linux Python 3.7: Build Docs"
-      os: linux
+    - os: linux
       dist: xenial
       language: python
       python: '3.7'
@@ -13,8 +12,7 @@ matrix:
       addons:
         apt_packages:
           - pandoc
-    - name: "Linux Python 3.6: Run tests"
-      os: linux
+    - os: linux
       dist: xenial
       language: python
       python: '3.6'
@@ -23,8 +21,7 @@ matrix:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
         - TOXENV=py36-nocov
-    - name: "Linux Python 3.7: Run tests"
-      os: linux
+    - os: linux
       dist: xenial
       language: python
       python: '3.7'
@@ -35,16 +32,14 @@ matrix:
         - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
-    - name: "OsX Python 3.6: Run tests"
-      os: osx
+    - os: osx
       osx_image: xcode9.4
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
         - TR_PYTHON_VERSION="3.6.8"
         - TOXENV=py36-nocov
-    - name: "OsX Python 3.7: Run tests"
-      os: osx
+    - os: osx
       osx_image: xcode9.4
       language: generic
       env:
