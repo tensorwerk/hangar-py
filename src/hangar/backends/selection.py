@@ -196,12 +196,12 @@ def backend_opts_from_heuristics(backend, array) -> dict:
         import h5py
         opts = {
             'default': {
-                'shuffle': True,
+                'shuffle': 'byte',
                 'complib': 'blosc:blosclz',
                 'complevel': 4,
                 'fletcher32': True},
             'backup': {
-                'shuffle': True,
+                'shuffle': 'byte',
                 'complib': 'lzf',
                 'complevel': None,
                 'fletcher32': True},

@@ -219,6 +219,12 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
     return raw_val
 
 
+# ------------------------ Filter Options -------------------------------------
+
+
+
+
+
 # ------------------------- Accessor Object -----------------------------------
 
 
@@ -414,35 +420,82 @@ class HDF5_00_FileHandles(object):
         ----------
         complib : str
             the compression lib to use, one of ['lzf', 'gzip', 'blosc:blosclz',
-            'blosc:lz4', 'blosc:lz4hc', 'blosc:snappy', 'blosc:zlib', 'blosc:zstd']
+            'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd']
         complevel : int
             compression level to specify (accepts values [0, 9] for all except 'lzf'
             where no complevel is accepted)
         shuffle : bool
-            if True, enable byte shuffle filter, if blosc compression, pass through
-            'bits' is accepted as well.
+            if True or `byte`, enable byte shuffle filter, if blosc
+            compression, pass through 'bits' is accepted as well. False, or
+            None indicates no shuffle should be applied.
         fletcher32 : bool
             enable fletcher32 checksum validation of data integrity, (defaults to
             True, which is enabled)
         """
+        # ---- blosc hdf5 plugin filters ----
+        _blosc_shuffle = {
+            None: 0,
+            'none': 0,
+            'byte': 1,
+            'bit': 2}
+        _blosc_compression = {
+            'blosc:blosclz': 0,
+            'blosc:lz4': 1,
+            'blosc:lz4hc': 2,
+            # Not built 'snappy': 3,
+            'blosc:zlib': 4,
+            'blosc:zstd': 5}
+        _blosc_complevel = {
+            **{i: i for i in range(10)},
+            None: 9,
+            'none': 9}
+
+        # ---- h5py built in filters ----
+        _lzf_gzip_shuffle = {
+            None: False,
+            False: False,
+            'none': False,
+            True: True,
+            'byte': True}
+        _lzf_complevel = {
+            False: None,
+            None: None,
+            'none': None}
+        _gzip_complevel = {
+            **{i: i for i in range(10)},
+            None: 4,
+            'none': 4}
+
         if complib.startswith('blosc'):
-            shuffle = 2 if shuffle == 'bit' else 1 if shuffle else 0
-            compressors = ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib', 'zstd']
-            complib = ['blosc:' + c for c in compressors].index(complib)
             args = {
                 'compression': 32001,
-                'compression_opts': (0, 0, 0, 0, complevel, shuffle, complib),
+                'compression_opts': (
+                    0, 0, 0, 0,
+                    _blosc_complevel[complevel],
+                    _blosc_shuffle[shuffle],
+                    _blosc_compression[complib]),
                 'fletcher32': fletcher32,
-            }
-            if shuffle:
-                args['shuffle'] = False
-        else:
+                'shuffle': False}
+        elif complib == 'lzf':
             args = {
-                'shuffle': shuffle,
+                'shuffle': _lzf_gzip_shuffle[shuffle],
                 'compression': complib,
-                'compression_opts': None if complib == 'lzf' else complevel,
-                'fletcher32': fletcher32,
-            }
+                'compression_opts': _lzf_complevel[complevel],
+                'fletcher32': fletcher32}
+        elif complib == 'gzip':
+            args = {
+                'shuffle': _lzf_gzip_shuffle[shuffle],
+                'compression': complib,
+                'compression_opts': _gzip_complevel[complevel],
+                'fletcher32': fletcher32}
+        elif complib in (None, False, 'none'):
+            args = {
+                'shuffle': False,
+                'compression': None,
+                'compression_opts': None,
+                'fletcher32': fletcher32}
+        else:
+            raise ValueError(f'unknown value for opt arg `complib`: {complib}')
         return args
 
     @staticmethod
