@@ -107,7 +107,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
         assert len(nco.arraysets['writtenaset']) == len(sampList)
 
         assert nco.arraysets['writtenaset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['writtenaset'].remote_reference_sample_keys
+        remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
@@ -236,7 +236,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         assert len(nco.arraysets['writtenaset']) == nMasterSamples
 
         assert nco.arraysets['writtenaset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['writtenaset'].remote_reference_sample_keys
+        remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
@@ -260,7 +260,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         assert len(nco.arraysets['writtenaset']) == nDevSamples
 
         assert nco.arraysets['writtenaset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['writtenaset'].remote_reference_sample_keys
+        remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
         assert [str(idx) for idx in range(len(sampList))] == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)

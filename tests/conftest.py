@@ -70,7 +70,7 @@ def written_repo(repo):
 @pytest.fixture(params=backend_params)
 def repo_with_20_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
-    second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7, backend=request.param)
+    second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7, backend_opts=request.param)
     first_aset = co.arraysets['writtenaset']
     for i in range(20):
         array5by7[:] = i
@@ -84,7 +84,7 @@ def repo_with_20_samples(request, written_repo, array5by7):
 @pytest.fixture(params=backend_params)
 def repo_with_10000_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
-    aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend=request.param)
+    aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
     with aset:
         for i in range(10000):
             array5by7[:] = i
@@ -98,7 +98,7 @@ def repo_with_10000_samples(request, written_repo, array5by7):
 def variable_shape_written_repo(request, repo):
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(
-        name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend=request.param)
+        name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend_opts=request.param)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -127,7 +127,7 @@ def randomsizedarray():
 def written_two_cmt_repo(request, repo, array5by7):
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(
-        name='writtenaset', shape=(5, 7), dtype=np.float32, backend=request.param)
+        name='writtenaset', shape=(5, 7), dtype=np.float32, backend_opts=request.param)
     for cIdx in range(2):
         if cIdx != 0:
             co = repo.checkout(write=True)

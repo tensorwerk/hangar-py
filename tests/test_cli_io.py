@@ -28,7 +28,7 @@ def test_import_images(backend, plug, generate_3_images):
         dummyData[:] = 0
         co1 = repo.checkout(write=True, branch='master')
         co1.arraysets.init_arrayset(
-            name='dummy', prototype=dummyData, named_samples=True, backend=backend)
+            name='dummy', prototype=dummyData, named_samples=True, backend_opts=backend)
         co1.arraysets['dummy']['arr1.jpg'] = dummyData
         co1.close()
 
@@ -68,7 +68,7 @@ def test_export_images(backend, in_commands, expected_fnames, generate_3_images)
         dummyData = np.ones_like(im1[1])
         co1 = repo.checkout(write=True, branch='master')
         co1.arraysets.init_arrayset(
-            name='dummy', prototype=dummyData, named_samples=True, backend=backend)
+            name='dummy', prototype=dummyData, named_samples=True, backend_opts=backend)
         co1.arraysets['dummy']['lol.jpg'] = dummyData
         co1.close()
 
@@ -98,7 +98,7 @@ def test_view_images(monkeypatch, backend, generate_3_images):
         dummyData = np.ones_like(im1[1])
         co1 = repo.checkout(write=True, branch='master')
         co1.arraysets.init_arrayset(
-            name='dummy', prototype=dummyData, named_samples=True, backend=backend)
+            name='dummy', prototype=dummyData, named_samples=True, backend_opts=backend)
         co1.arraysets['dummy']['lol.jpg'] = dummyData
         co1.close()
 

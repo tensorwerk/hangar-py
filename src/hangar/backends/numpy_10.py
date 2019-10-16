@@ -85,7 +85,7 @@ from collections import ChainMap
 from functools import partial
 from os.path import join as pjoin
 from os.path import splitext as psplitext
-from typing import MutableMapping, NamedTuple, Tuple
+from typing import MutableMapping, NamedTuple, Tuple, Optional
 from zlib import adler32
 
 import numpy as np
@@ -184,6 +184,7 @@ class NUMPY_10_FileHandles(object):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
+        self._dflt_backend_opts: Optional[dict] = None
 
         self.rFp: MutableMapping[str, np.memmap] = {}
         self.wFp: MutableMapping[str, np.memmap] = {}
@@ -209,6 +210,18 @@ class NUMPY_10_FileHandles(object):
     def __exit__(self, *exc):
         if self.w_uid in self.wFp:
             self.wFp[self.w_uid].flush()
+
+    @property
+    def backend_opts(self):
+        return self._dflt_backend_opts
+
+    @backend_opts.setter
+    def backend_opts(self, val):
+        if self.mode == 'a':
+            self._dflt_backend_opts = val
+            return
+        else:
+            raise AttributeError(f"can't set property in read only mode")
 
     def open(self, mode: str, *, remote_operation: bool = False):
         """open numpy file handle coded directories

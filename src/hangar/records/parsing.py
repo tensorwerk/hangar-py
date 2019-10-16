@@ -283,7 +283,8 @@ RawArraysetSchemaVal = NamedTuple('RawArraysetSchemaVal', [
     ('schema_is_var', bool),
     ('schema_max_shape', tuple),
     ('schema_is_named', bool),
-    ('schema_default_backend', str)])
+    ('schema_default_backend', str),
+    ('schema_default_backend_opts', dict)])
 RawArraysetSchemaVal.__doc__ = 'Information Specifying a Arrayset Schema'
 
 """
@@ -401,7 +402,8 @@ def arrayset_record_schema_db_key_from_raw_key(aset_name):
 def arrayset_record_schema_db_val_from_raw_val(schema_hash,
                                                schema_is_var, schema_max_shape,
                                                schema_dtype, schema_is_named,
-                                               schema_default_backend):
+                                               schema_default_backend,
+                                               schema_default_backend_opts):
     """Format the db_value which includes all details of the arrayset schema.
 
     Parameters
@@ -423,6 +425,8 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         Are samples in the arraysets identifiable with names, or not.
     schema_default_backend : str
         backend specification for the schema default backend.
+    schema_default_backend_opts : dict
+        filter options for the default schema backend writer.
 
     Returns
     -------
@@ -436,6 +440,7 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         'schema_max_shape': schema_max_shape,
         'schema_is_named': schema_is_named,
         'schema_default_backend': schema_default_backend,
+        'schema_default_backend_opts': schema_default_backend_opts,
     }
     db_schema_val = json.dumps(schema_val, separators=(',', ':')).encode()
     return db_schema_val

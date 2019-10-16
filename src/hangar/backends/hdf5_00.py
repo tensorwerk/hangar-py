@@ -144,22 +144,6 @@ CHUNK_MAX_NBYTES = 255_000  # < 256 KB to fit in L2 CPU Cache
 CHUNK_MAX_RDCC_NBYTES = 100_000_000
 CHUNK_RDCC_W0 = 0.75
 
-# filter definition and backup selection if not available.
-filter_opts = {
-    'default': {
-        'shuffle': True,
-        'complib': 'blosc:blosclz',
-        'complevel': 4,
-        'fletcher32': True},
-    'backup': {
-        'shuffle': True,
-        'complib': 'lzf',
-        'complevel': None,
-        'fletcher32': True},
-}
-hdf5BloscAvail = h5py.h5z.filter_avail(32001)
-HDF5_FILTER = filter_opts['default'] if hdf5BloscAvail else filter_opts['backup']
-
 
 # -------------------------------- Parser Implementation ----------------------
 
@@ -253,6 +237,7 @@ class HDF5_00_FileHandles(object):
         self.path: os.PathLike = repo_path
         self.schema_shape: tuple = schema_shape
         self.schema_dtype: np.dtype = schema_dtype
+        self._dflt_backend_opts: Optional[dict] = None
 
         self.rFp: HDF5_00_MapTypes = {}
         self.wFp: HDF5_00_MapTypes = {}
@@ -302,7 +287,19 @@ class HDF5_00_FileHandles(object):
         self.rFp = {}
         self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
-        self.open(self.mode)
+        self.open(mode=self.mode)
+
+    @property
+    def backend_opts(self):
+        return self._dflt_backend_opts
+
+    @backend_opts.setter
+    def backend_opts(self, val):
+        if self.mode == 'a':
+            self._dflt_backend_opts = val
+            return
+        else:
+            raise AttributeError(f"can't set property in read only mode")
 
     def open(self, mode: str, *, remote_operation: bool = False):
         """Open an hdf5 file handle in the Handler Singleton
@@ -417,35 +414,82 @@ class HDF5_00_FileHandles(object):
         ----------
         complib : str
             the compression lib to use, one of ['lzf', 'gzip', 'blosc:blosclz',
-            'blosc:lz4', 'blosc:lz4hc', 'blosc:snappy', 'blosc:zlib', 'blosc:zstd']
+            'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd']
         complevel : int
             compression level to specify (accepts values [0, 9] for all except 'lzf'
             where no complevel is accepted)
         shuffle : bool
-            if True, enable byte shuffle filter, if blosc compression, pass through
-            'bits' is accepted as well.
+            if True or `byte`, enable byte shuffle filter, if blosc
+            compression, pass through 'bits' is accepted as well. False, or
+            None indicates no shuffle should be applied.
         fletcher32 : bool
             enable fletcher32 checksum validation of data integrity, (defaults to
             True, which is enabled)
         """
+        # ---- blosc hdf5 plugin filters ----
+        _blosc_shuffle = {
+            None: 0,
+            'none': 0,
+            'byte': 1,
+            'bit': 2}
+        _blosc_compression = {
+            'blosc:blosclz': 0,
+            'blosc:lz4': 1,
+            'blosc:lz4hc': 2,
+            # Not built 'snappy': 3,
+            'blosc:zlib': 4,
+            'blosc:zstd': 5}
+        _blosc_complevel = {
+            **{i: i for i in range(10)},
+            None: 9,
+            'none': 9}
+
+        # ---- h5py built in filters ----
+        _lzf_gzip_shuffle = {
+            None: False,
+            False: False,
+            'none': False,
+            True: True,
+            'byte': True}
+        _lzf_complevel = {
+            False: None,
+            None: None,
+            'none': None}
+        _gzip_complevel = {
+            **{i: i for i in range(10)},
+            None: 4,
+            'none': 4}
+
         if complib.startswith('blosc'):
-            shuffle = 2 if shuffle == 'bit' else 1 if shuffle else 0
-            compressors = ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib', 'zstd']
-            complib = ['blosc:' + c for c in compressors].index(complib)
             args = {
                 'compression': 32001,
-                'compression_opts': (0, 0, 0, 0, complevel, shuffle, complib),
+                'compression_opts': (
+                    0, 0, 0, 0,
+                    _blosc_complevel[complevel],
+                    _blosc_shuffle[shuffle],
+                    _blosc_compression[complib]),
                 'fletcher32': fletcher32,
-            }
-            if shuffle:
-                args['shuffle'] = False
-        else:
+                'shuffle': False}
+        elif complib == 'lzf':
             args = {
-                'shuffle': shuffle,
+                'shuffle': _lzf_gzip_shuffle[shuffle],
                 'compression': complib,
-                'compression_opts': None if complib == 'lzf' else complevel,
-                'fletcher32': fletcher32,
-            }
+                'compression_opts': _lzf_complevel[complevel],
+                'fletcher32': fletcher32}
+        elif complib == 'gzip':
+            args = {
+                'shuffle': _lzf_gzip_shuffle[shuffle],
+                'compression': complib,
+                'compression_opts': _gzip_complevel[complevel],
+                'fletcher32': fletcher32}
+        elif complib in (None, False, 'none'):
+            args = {
+                'shuffle': False,
+                'compression': None,
+                'compression_opts': None,
+                'fletcher32': fletcher32}
+        else:
+            raise ValueError(f'unknown value for opt arg `complib`: {complib}')
         return args
 
     @staticmethod
@@ -554,7 +598,7 @@ class HDF5_00_FileHandles(object):
 
         # ----------------------- Dataset Creation ----------------------------
 
-        optKwargs = self._dataset_opts(**HDF5_FILTER)
+        optKwargs = self._dataset_opts(**self._dflt_backend_opts)
         for dset_num in range(COLLECTION_COUNT):
             self.wFp[uid].create_dataset(
                 f'/{dset_num}',
@@ -576,9 +620,9 @@ class HDF5_00_FileHandles(object):
         self.wFp[self.w_uid]['/'].attrs['rdcc_nbytes'] = rdcc_nbytes_val
         self.wFp[self.w_uid]['/'].attrs['rdcc_w0'] = CHUNK_RDCC_W0
         self.wFp[self.w_uid]['/'].attrs['rdcc_nslots'] = rdcc_nslots_prime_val
-        self.wFp[self.w_uid]['/'].attrs['shuffle'] = HDF5_FILTER['shuffle']
-        self.wFp[self.w_uid]['/'].attrs['complib'] = HDF5_FILTER['complib']
-        self.wFp[self.w_uid]['/'].attrs['fletcher32'] = HDF5_FILTER['fletcher32']
+        # self.wFp[self.w_uid]['/'].attrs['shuffle'] = HDF5_FILTER['shuffle']
+        # self.wFp[self.w_uid]['/'].attrs['complib'] = HDF5_FILTER['complib']
+        # self.wFp[self.w_uid]['/'].attrs['fletcher32'] = HDF5_FILTER['fletcher32']
         self.wFp[self.w_uid]['/'].attrs['chunk_shape'] = chunk_shape
         if optKwargs['compression_opts'] is not None:
             self.wFp[self.w_uid]['/'].attrs['compression_opts'] = optKwargs['compression_opts']

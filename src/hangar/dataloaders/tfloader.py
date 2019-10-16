@@ -8,7 +8,7 @@ from ..utils import LazyImporter
 
 try:
     tf = LazyImporter('tensorflow')
-except (ImportError, ModuleNotFoundError):
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     raise ImportError(
         'Could not import "tensorflow" library. Ensure library is '
         'installed correctly to use tensorflow dataloader functions')

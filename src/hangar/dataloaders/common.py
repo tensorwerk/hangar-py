@@ -43,7 +43,7 @@ class GroupedAsets(object):
             self.arrayset_names.append(aset.name)
             aset_lens.add(len(aset))
             all_keys.append(set(aset.keys()))
-            all_remote_keys.append(set(aset.remote_reference_sample_keys))
+            all_remote_keys.append(set(aset.remote_reference_keys))
 
         if len(aset_lens) > 1:
             warnings.warn('Arraysets do not contain equal number of samples', UserWarning)

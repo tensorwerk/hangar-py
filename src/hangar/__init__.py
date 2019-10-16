@@ -6,16 +6,16 @@ from .remote.server import serve
 from .repository import Repository
 
 
-def raise_ImportError(message, *args, **kwargs):
+def raise_ImportError(message, *args, **kwargs):  # pragma: no cover
     raise ImportError(message)
 
 
-try:
+try:                 # pragma: no cover
     from .dataloaders.tfloader import make_tf_dataset
-except ImportError:
+except ImportError:  # pragma: no cover
     make_tf_dataset = partial(raise_ImportError, "Could not import tensorflow. Install dependencies")
 
-try:
+try:                 # pragma: no cover
     from .dataloaders.torchloader import make_torch_dataset
-except ImportError:
+except ImportError:  # pragma: no cover
     make_torch_dataset = partial(raise_ImportError, "Could not import torch. Install dependencies")

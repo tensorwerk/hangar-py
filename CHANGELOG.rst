@@ -12,6 +12,8 @@ New Features
   (`#128 <https://github.com/tensorwerk/hangar-py/pull/128>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added ``local`` keyword arg to arrayset key/value iterators to return only locally available samples
   (`#131 <https://github.com/tensorwerk/hangar-py/pull/131>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Ability to change the backend storage format and options applied to an ``arrayset`` after initialization.
+  (`#133 <https://github.com/tensorwerk/hangar-py/pull/133>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 Improvements
 ------------
