@@ -10,8 +10,7 @@ Overview
     * - docs
       - |docs|
     * - tests
-      - | |travis| |appveyor|
-        | |codecov|
+      - | |travis| |codecov|
     * - package
       - | |version| |wheel| |conda-forge|
         | |supported-versions| |supported-implementations|
@@ -23,10 +22,6 @@ Overview
 .. |travis| image:: https://travis-ci.com/tensorwerk/hangar-py.svg?branch=master
     :alt: Travis-CI Build Status
     :target: https://travis-ci.com/tensorwerk/hangar-py
-
-.. |appveyor| image:: https://ci.appveyor.com/api/projects/status/github/tensorwerk/hangar-py?branch=master&svg=true
-    :alt: AppVeyor Build Status
-    :target: https://ci.appveyor.com/project/rlizzo/hangar-py
 
 .. |codecov| image:: https://codecov.io/gh/tensorwerk/hangar-py/branch/master/graph/badge.svg
    :alt: Code Coverage
