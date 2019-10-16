@@ -57,19 +57,19 @@ def _unary_unary_rpc_terminator(code, details):
     return grpc.unary_unary_rpc_method_handler(terminate)
 
 
-def _unary_stream_rpc_terminator(code, details):
+def _unary_stream_rpc_terminator(code, details):  # pragma: no cover
     def terminate(ignored_request, context):
         context.abort(code, details)
     return grpc.unary_stream_rpc_method_handler(terminate)
 
 
-def _stream_unary_rpc_terminator(code, details):
+def _stream_unary_rpc_terminator(code, details):  # pragma: no cover
     def terminate(ignored_request, context):
         context.abort(code, details)
     return grpc.unary_stream_rpc_method_handler(terminate)
 
 
-def _stream_stream_rpc_terminator(code, details):
+def _stream_stream_rpc_terminator(code, details):  # pragma: no cover
     def terminate(ignored_request, context):
         context.abort(code, details)
     return grpc.stream_stream_rpc_method_handler(terminate)
@@ -80,13 +80,13 @@ def _select_rpc_terminator(intercepted_method):
 
     if method_type == 'uu':
         return _unary_unary_rpc_terminator
-    elif method_type == 'su':
+    elif method_type == 'su':  # pragma: no cover
         return _stream_unary_rpc_terminator
-    elif method_type == 'us':
+    elif method_type == 'us':  # pragma: no cover
         return _unary_stream_rpc_terminator
-    elif method_type == 'ss':
+    elif method_type == 'ss':  # pragma: no cover
         return _stream_stream_rpc_terminator
-    else:
+    else:                      # pragma: no cover
         raise ValueError(f'unknown method type: {method_type} for service: {intercepted_method}')
 
 

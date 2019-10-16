@@ -6,7 +6,7 @@ from ..utils import LazyImporter
 
 try:
     torchdata = LazyImporter('torch.utils.data')
-except (ImportError, ModuleNotFoundError):
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     raise ImportError(
         'Could not import "pytorch" library. Ensure library is '
         'installed correctly to use pytorch dataloader functions')
