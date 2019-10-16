@@ -219,12 +219,6 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
     return raw_val
 
 
-# ------------------------ Filter Options -------------------------------------
-
-
-
-
-
 # ------------------------- Accessor Object -----------------------------------
 
 
