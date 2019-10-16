@@ -265,7 +265,7 @@ class TestCheckout(object):
     @pytest.mark.parametrize("aset_backend", backend_params)
     def test_operate_on_arrayset_samples_after_commiting_but_not_closing_checkout(self, aset_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend=aset_backend)
+        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset_backend)
         aset.add(array5by7, '1')
         co.commit('hi')
 
@@ -299,11 +299,11 @@ class TestCheckout(object):
     def test_operate_on_arraysets_after_commiting_but_not_closing_checkout(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         asets = co.arraysets
-        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend=aset1_backend)
+        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
         aset.add(array5by7, '1')
         co.commit('hi')
 
-        aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend=aset2_backend)
+        aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
         aset2['0'] = np.arange(50)
         co.commit('hello 2')
         assert np.allclose(aset2['0'], np.arange(50))
@@ -333,11 +333,11 @@ class TestCheckout(object):
     @pytest.mark.parametrize("aset2_backend", backend_params)
     def test_reset_staging_area_clears_arraysets(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend=aset1_backend)
+        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
         aset.add(array5by7, '1')
         co.commit('hi')
 
-        aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend=aset2_backend)
+        aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
         aset2['0'] = np.arange(50)
         # verifications before reset
         assert np.allclose(aset2['0'], np.arange(50))

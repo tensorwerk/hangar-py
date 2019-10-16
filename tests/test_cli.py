@@ -92,7 +92,7 @@ def test_push_fetch_records(server_instance, backend):
         dummyData = np.arange(50)
         co1 = repo.checkout(write=True, branch='master')
         co1.arraysets.init_arrayset(
-            name='dummy', prototype=dummyData, named_samples=True, backend=backend)
+            name='dummy', prototype=dummyData, named_samples=True, backend_opts=backend)
         for idx in range(10):
             dummyData[:] = idx
             co1.arraysets['dummy'][str(idx)] = dummyData
@@ -141,7 +141,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
         dummyData = np.arange(50)
         co1 = repo.checkout(write=True, branch='master')
         co1.arraysets.init_arrayset(
-            name='dummy', prototype=dummyData, named_samples=True, backend=backend)
+            name='dummy', prototype=dummyData, named_samples=True, backend_opts=backend)
         for idx in range(10):
             dummyData[:] = idx
             co1.arraysets['dummy'][str(idx)] = dummyData

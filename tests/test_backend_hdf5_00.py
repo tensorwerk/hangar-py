@@ -1,5 +1,7 @@
+
 import pytest
 import h5py
+
 
 @pytest.mark.parametrize('clib,clibCode',
                          [('blosc:blosclz', 0), ('blosc:lz4', 1),
@@ -73,16 +75,19 @@ hdf5BloscAvail = h5py.h5z.filter_avail(32001)
 def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, clevel, cshuffle, cshuffleCode):
 
     opts = {
+        'backend': '00',
         'shuffle': cshuffle,
         'complib': clib,
         'complevel': clevel,
         'fletcher32': True
     }
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend='00', backend_opts=opts)
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    assert aset.backend == '00'
     with aset as a:
         for i in range(10):
             a[i] = array5by7 + i
+
     plist = aset._fs['00'].wFp['/0'].id.get_create_plist()
     _, _, resopts, _ = plist.get_filter(0)
     res_clevel, res_cshuffle, res_clib = resopts[4:7]
@@ -97,13 +102,15 @@ def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, 
 def test_arrayset_init_with_various_lzf_opts(repo, array5by7, cshuffle, cshuffleCode):
 
     opts = {
+        'backend': '00',
         'shuffle': cshuffle,
         'complib': 'lzf',
         'complevel': None,
         'fletcher32': True
     }
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend='00', backend_opts=opts)
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    assert aset.backend == '00'
     with aset as a:
         for i in range(10):
             a[i] = array5by7 + i
@@ -121,13 +128,15 @@ def test_arrayset_init_with_various_lzf_opts(repo, array5by7, cshuffle, cshuffle
 def test_arrayset_init_with_various_gzip_opts(repo, array5by7, clevel, cshuffle, cshuffleCode):
 
     opts = {
+        'backend': '00',
         'shuffle': cshuffle,
         'complib': 'gzip',
         'complevel': clevel,
         'fletcher32': True
     }
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend='00', backend_opts=opts)
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    assert aset.backend == '00'
     with aset as a:
         for i in range(10):
             a[i] = array5by7 + i

@@ -12,9 +12,8 @@ import numpy as np
 
 from .backends import BACKEND_ACCESSOR_MAP
 from .backends import backend_decoder
-from .backends import backend_from_heuristics
 from .backends import is_local_backend
-from .backends import backend_opts_from_heuristics
+from .backends import parse_user_backend_opts
 from .context import TxnRegister
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key
 from .records.queries import RecordQuery
@@ -634,7 +633,7 @@ class ArraysetDataWriter(ArraysetDataReader):
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
 
-    def change_backend(self, backend: str, opts: Optional[dict] = None):
+    def change_backend(self, backend_opts: Union[str, dict]):
         """Change the default backend and filters applied to future data writes.
 
         .. warning::
@@ -643,12 +642,12 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         Parameters
         ----------
-        backend : str
-            format code of the desired backend.
-        opts : Optional[dict], optional
-            When dict is specified, items specify configuration options for
-            backend filters. If None, the default filter options for the
-            specified backend are applied, by default None
+        backend_opts : Optional[Union[str, dict]]
+            If str, backend format code to specify, opts are automatically
+            inffered. If dict, key `backend` must have a valid backend format code
+            value, and the rest of the items are assumed to be valid specs for that
+            particular backend. If none, both backend and opts are inffered from
+            the array prototype
 
         Raises
         ------
@@ -661,16 +660,14 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         if self._is_conman:
             raise RuntimeError('Cannot call method inside arrayset context manager.')
-        if backend not in BACKEND_ACCESSOR_MAP:
-            raise ValueError(f'Backend specifier: {backend} not known')
+
         proto = np.zeros(self.shape, dtype=self.dtype)
-        if opts is None:
-            opts = backend_opts_from_heuristics(backend, proto)
+        beopts = parse_user_backend_opts(backend_opts=backend_opts, prototype=proto)
 
         # ----------- Determine schema format details -------------------------
 
-        backendHsh = hash(backend)
-        optsHsh = hash(json.dumps(opts))
+        backendHsh = hash(beopts.backend)
+        optsHsh = hash(json.dumps(beopts.opts))
         schema_format = np.array(
             (*proto.shape, proto.size, proto.dtype.num, backendHsh, optsHsh),
             dtype=np.uint64)
@@ -682,8 +679,8 @@ class ArraysetDataWriter(ArraysetDataReader):
             schema_max_shape=proto.shape,
             schema_dtype=proto.dtype.num,
             schema_is_named=self.named_samples,
-            schema_default_backend=backend,
-            schema_default_backend_opts=opts)
+            schema_default_backend=beopts.backend,
+            schema_default_backend_opts=beopts.opts)
 
         dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
         hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
@@ -694,17 +691,17 @@ class ArraysetDataWriter(ArraysetDataReader):
         TxnRegister().commit_writer_txn(self._dataenv)
         TxnRegister().commit_writer_txn(self._hashenv)
 
-        if backend not in self._fs:
-            self._fs[backend] = BACKEND_ACCESSOR_MAP[backend](
+        if beopts.backend not in self._fs:
+            self._fs[beopts.backend] = BACKEND_ACCESSOR_MAP[beopts.backend](
                 repo_path=self._path,
                 schema_shape=self._schema_max_shape,
                 schema_dtype=np.typeDict[self._schema_dtype_num])
         else:
-            self._fs[backend].close()
-        self._fs[backend].open(mode=self._mode)
-        self._fs[backend].backend_opts = opts
-        self._dflt_backend = backend
-        self._dflt_backend_opts = opts
+            self._fs[beopts.backend].close()
+        self._fs[beopts.backend].open(mode=self._mode)
+        self._fs[beopts.backend].backend_opts = beopts.opts
+        self._dflt_backend = beopts.backend
+        self._dflt_backend_opts = beopts.opts
         self._dflt_schema_hash = schema_hash
         return
 
@@ -1234,8 +1231,7 @@ class Arraysets(object):
                       named_samples: bool = True,
                       variable_shape: bool = False,
                       *,
-                      backend: str = None,
-                      backend_opts: dict = None) -> ArraysetDataWriter:
+                      backend_opts: Optional[Union[str, dict]] = None) -> ArraysetDataWriter:
         """Initializes a arrayset in the repository.
 
         Arraysets are groups of related data pieces (samples). All samples within
@@ -1274,10 +1270,10 @@ class Arraysets(object):
             added to the arrayset can then have dimension sizes <= to this
             initial specification (so long as they have the same rank as what
             was specified) defaults to False.
-        backend : DEVELOPER USE ONLY. str, optional, kwarg only
-            Backend which should be used to write the arrayset files on disk.
-        backend_opts: DEVELOPER USE ONLY. dict, optional, kwarg only
-            filter options applied to the specified backend.
+        backend_opts : Optional[Union[str, dict]], optional
+            ADVANCED USERS ONLY, backend format code and filter opts to apply
+            to arrayset data. If None, automatically infered and set based on
+            data shape and type. by default None
 
         Returns
         -------
@@ -1311,45 +1307,38 @@ class Arraysets(object):
                     f'Arrayset name provided: `{name}` is invalid. Can only contain '
                     f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
             if name in self._arraysets:
-                raise LookupError(f'KEY EXISTS: arrayset already exists with name: {name}.')
+                raise LookupError(f'Arrayset already exists with name: {name}.')
 
             if prototype is not None:
                 if not isinstance(prototype, np.ndarray):
                     raise ValueError(
-                        f'If specified (not None) `prototype` argument be `np.ndarray`-like.'
+                        f'If not `None`, `prototype` argument be `np.ndarray`-like.'
                         f'Invalid value: {prototype} of type: {type(prototype)}')
                 elif not prototype.flags.c_contiguous:
                     raise ValueError(f'`prototype` must be "C" contiguous array.')
             elif isinstance(shape, (tuple, list, int)) and (dtype is not None):
                 prototype = np.zeros(shape, dtype=dtype)
             else:
-                raise ValueError(f'`shape` & `dtype` args required if no `prototype` set.')
+                raise ValueError(f'`shape` & `dtype` required if no `prototype` set.')
 
             if (0 in prototype.shape) or (prototype.ndim > 31):
                 raise ValueError(
-                    f'Invalid shape specification with ndim: {prototype.ndim} and shape: '
-                    f'{prototype.shape}. Array rank > 31 dimensions not allowed AND '
-                    'all dimension sizes must be > 0.')
+                    f'Invalid shape specification with ndim: {prototype.ndim} and '
+                    f'shape: {prototype.shape}. Array rank > 31 dimensions not '
+                    f'allowed AND all dimension sizes must be > 0.')
 
-            if backend is not None:
-                if backend not in BACKEND_ACCESSOR_MAP:
-                    raise ValueError(f'Backend specifier: {backend} not known')
-                if backend_opts is None:
-                    backend_opts = backend_opts_from_heuristics(backend, prototype)
-            else:
-                backend = backend_from_heuristics(prototype)
-                backend_opts = backend_opts_from_heuristics(backend, prototype)
+            beopts = parse_user_backend_opts(backend_opts, prototype)
 
         except (ValueError, LookupError) as e:
             raise e from None
 
         # ----------- Determine schema format details -------------------------
 
-        backendHsh = hash(backend)
-        optsHsh = hash(json.dumps(backend_opts))
+        backendHsh = hash(beopts.backend)
+        optsHsh = hash(json.dumps(beopts.opts))
         schema_format = np.array(
             (*prototype.shape, prototype.size, prototype.dtype.num, backendHsh, optsHsh),
-             dtype=np.uint64)
+            dtype=np.uint64)
         schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(name)
         asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
@@ -1358,8 +1347,8 @@ class Arraysets(object):
             schema_max_shape=prototype.shape,
             schema_dtype=prototype.dtype.num,
             schema_is_named=named_samples,
-            schema_default_backend=backend,
-            schema_default_backend_opts=backend_opts)
+            schema_default_backend=beopts.backend,
+            schema_default_backend_opts=beopts.opts)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
@@ -1384,8 +1373,8 @@ class Arraysets(object):
             hashenv=self._hashenv,
             dataenv=self._dataenv,
             mode='a',
-            default_schema_backend=backend,
-            default_backend_opts=backend_opts)
+            default_schema_backend=beopts.backend,
+            default_backend_opts=beopts.opts)
 
         return self.get(name)
 

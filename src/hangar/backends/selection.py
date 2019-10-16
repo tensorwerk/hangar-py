@@ -83,7 +83,7 @@ Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the
 process.
 """
-from typing import Dict, Union, Callable, Mapping
+from typing import Dict, Union, Callable, Mapping, NamedTuple, Optional
 
 import numpy as np
 
@@ -153,6 +153,12 @@ def backend_decoder(db_val: bytes) -> _DataHashSpecs:
     return decoded
 
 
+# --------------------------- Backend Heuristics ------------------------------
+
+
+BackendOpts = NamedTuple('BackendOpts', [('backend', str), ('opts', dict)])
+
+
 def backend_from_heuristics(array: np.ndarray) -> str:
     """Given a prototype array, attempt to select the appropriate backend.
 
@@ -189,7 +195,32 @@ def is_local_backend(be_loc: _DataHashSpecs) -> bool:
         return True
 
 
-def backend_opts_from_heuristics(backend, array) -> dict:
+def backend_opts_from_heuristics(backend: str, array: np.ndarray) -> dict:
+    """Generate default backend opt args for a backend and array sample.
+
+    Parameters
+    ----------
+    backend : str
+        backend format code.
+    array : np.ndarray
+        sample (prototype) of the array data which the backend opts will be
+        applied to
+
+    Returns
+    -------
+    dict
+        backend opts determined appropriate for the system.
+
+    Raises
+    ------
+    ValueError
+        if the specified backend format code is invalid.
+
+    TODO
+    ----
+    In the current implementation, the `array` parameter is unused. Either come
+    up with a use or remove it from the parameter list.
+    """
     if backend == '10':
         opts = {}
     elif backend == '00':
@@ -211,6 +242,58 @@ def backend_opts_from_heuristics(backend, array) -> dict:
     elif backend == '50':
         opts = {}
     else:
-        raise RuntimeError('Should not have been able to not select backend')
+        raise ValueError('Should not have been able to not select backend')
 
     return opts
+
+
+def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
+                            prototype: np.ndarray) -> BackendOpts:
+    """Decide the backend and opts to apply given a users selection (or default `None` value)
+
+    Parameters
+    ----------
+    backend_opts : Optional[Union[str, dict]]
+        If str, backend format code to specify, opts are automatically
+        inffered. If dict, key `backend` must have a valid backend format code
+        value, and the rest of the items are assumed to be valid specs for that
+        particular backend. If none, both backend and opts are inffered from
+        the array prototype provided.
+    prototype : np.ndarray
+        Sample of the data array which will be save (same dtype and shape) to
+        base the storage backend and opts on.
+
+    Returns
+    -------
+    BackendOpts : Optional[Union[str, dict]]
+        NamedTuple containing fields `backend` and `opts`
+
+    Raises
+    ------
+    ValueError
+        If str type and backend format code invalid
+    ValueError
+        if dict type, and no `backend` field (or invalid value) is present
+        identifying a backend format code
+    ValueError
+        If anything other than a str, dict, or `None` object was passed in from
+        the user
+    """
+    if isinstance(backend_opts, str):
+        if backend_opts not in BACKEND_ACCESSOR_MAP:
+            raise ValueError(f'Backend specifier: {backend_opts} not known')
+        else:
+            backend = backend_opts
+            opts = backend_opts_from_heuristics(backend, prototype)
+    elif isinstance(backend_opts, dict):
+        if backend_opts['backend'] not in BACKEND_ACCESSOR_MAP:
+            raise ValueError(f'Backend specifier: {backend_opts} not known')
+        backend = backend_opts['backend']
+        opts = {k: v for k, v in backend_opts.items() if k != 'backend'}
+    elif backend_opts is None:
+        backend = backend_from_heuristics(prototype)
+        opts = backend_opts_from_heuristics(backend, prototype)
+    else:
+        raise ValueError(f'Backend opts value: {backend_opts} is invalid')
+
+    return BackendOpts(backend=backend, opts=opts)
