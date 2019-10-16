@@ -32,22 +32,6 @@ matrix:
         - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
-    - os: osx
-      osx_image: xcode9.4
-      language: generic
-      env:
-        - CONDA_INSTALL_LOCN="${HOME}/miniconda"
-        - TR_PYTHON_VERSION="3.6.8"
-        - TOXENV=py36-nocov
-    - os: osx
-      osx_image: xcode9.4
-      language: generic
-      env:
-        - CONDA_INSTALL_LOCN="${HOME}/miniconda"
-        - TR_PYTHON_VERSION="3.7.0"
-        - TOXENV=py37-cover-ml,report
-      after_success:
-        - codecov
     - name: "Win Python 3.6: Run tests"
       os: windows
       language: shell
@@ -66,6 +50,22 @@ matrix:
       before_install:
         - choco install python --version 3.7.3
         - python -m pip install --upgrade pip
+      after_success:
+        - codecov
+    - os: osx
+      osx_image: xcode9.4
+      language: generic
+      env:
+        - CONDA_INSTALL_LOCN="${HOME}/miniconda"
+        - TR_PYTHON_VERSION="3.6.8"
+        - TOXENV=py36-nocov
+    - os: osx
+      osx_image: xcode9.4
+      language: generic
+      env:
+        - CONDA_INSTALL_LOCN="${HOME}/miniconda"
+        - TR_PYTHON_VERSION="3.7.0"
+        - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
 before_install:

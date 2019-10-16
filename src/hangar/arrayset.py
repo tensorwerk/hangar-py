@@ -638,7 +638,9 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         .. warning::
 
-           This method is meant for advanced users only.
+           This method is meant for advanced users only. Please refer to the
+           hangar backend codebase for information on accepted parameters and
+           options.
 
         Parameters
         ----------
