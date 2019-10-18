@@ -18,7 +18,16 @@ def make_torch_dataset(arraysets,
                        field_names: Sequence[str] = None):
     """
     Returns a :class:`torch.utils.data.Dataset` object which can be loaded into
-    a :class:s`torch.utils.data.DataLoader`.
+    a :class:`torch.utils.data.DataLoader`.
+
+    .. warning::
+
+       On Windows systems, setting the parameter ``num_workers`` in the
+       resulting :class:`torch.utils.data.DataLoader` method will result in a
+       RuntimeError or deadlock. This is due to limitations of multiprocess
+       start methods on Windows itself. Using the default argument value
+       (``num_workers=0``) will let the DataLoader work in single process mode
+       as expected.
 
     Parameters
     ----------
