@@ -214,7 +214,7 @@ def test_check_repository_software_version_fails_on_older_repo(managed_tmpdir):
         Repository(managed_tmpdir, exists=True)
 
 
-@pytest.mark.parametrize('failVersions', ['1.0.0', '0.4.0', '0.3.1', '1.4.1'])
+@pytest.mark.parametrize('failVersions', ['1.0.0', '0.4.1', '0.5.0', '1.4.1'])
 def test_check_repository_software_version_fails_on_newer_hangar_version(managed_tmpdir, monkeypatch, failVersions):
     import hangar
     from hangar import Repository

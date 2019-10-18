@@ -161,7 +161,9 @@ have as we move to compatible changes in the future.
 """
 
 
-incompatible_changes_after = [VersionSpec(major=0, minor=2, micro=0)]
+incompatible_changes_after = [
+    VersionSpec(major=0, minor=2, micro=0),
+    VersionSpec(major=0, minor=3, micro=0)]
 
 
 def is_repo_software_version_compatible(repo_v: VersionSpec, curr_v: VersionSpec) -> bool:
