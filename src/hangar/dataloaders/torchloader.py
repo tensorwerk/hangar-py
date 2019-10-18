@@ -1,5 +1,6 @@
 import warnings
-from typing import Sequence, Dict
+from collections import namedtuple
+from typing import Sequence
 from .common import GroupedAsets
 from ..utils import LazyImporter
 
@@ -58,19 +59,23 @@ def make_torch_dataset(arraysets,
             raise TypeError(f'type(keys): {type(keys)} != (list, tuple, set)')
 
     gasets = GroupedAsets(arraysets, keys, index_range)
-
     if field_names:
         if not isinstance(field_names, (list, tuple, set)):
-            raise TypeError(
-                f'type(field_names): {type(field_names)} != (list, tuple, set)')
+            raise TypeError(f'type(field_names): {type(field_names)} not collection')
         if len(field_names) != len(arraysets):
-            m = f'len(field_names): {len(field_names)} != len(arraysets): {len(arraysets)}'
-            raise ValueError(m)
-        fields = tuple(field_names)
+            err = f'# field_names {len(field_names)} != # arraysets: {len(arraysets)}'
+            raise ValueError(err)
+        BTName = '_'.join(['BatchTuple', *field_names])
+        BTFieldNames = field_names
     else:
-        fields = tuple(gasets.arrayset_names)
+        BTName = '_'.join(['BatchTuple', *gasets.arrayset_names])
+        BTFieldNames = gasets.arrayset_names
 
-    return TorchDataset(gasets.arrayset_array, gasets.sample_names, fields)
+    wrapper = namedtuple(BTName, field_names=BTFieldNames, rename=True)
+    globals()[BTName] = wrapper
+    return TorchDataset(hangar_arraysets=gasets.arrayset_array,
+                        sample_names=gasets.sample_names,
+                        wrapper=wrapper)
 
 
 class TorchDataset(torchdata.Dataset):
@@ -95,15 +100,15 @@ class TorchDataset(torchdata.Dataset):
     sample_names : tuple of allowed sample names/keys
         User can select a subset of all the available samples and pass the
         names for only those
-    fields : Tuple[str]
-        A tuple of arrayset names to use as dict keys paired with values of
-        :class:`torch.Tensor` used to wrap the output from :meth:`.__getitem__`.
+    wrapper : namedtuple
+        namedtuple placed in global memory used to wrap the output from
+        __getitem__
     """
 
-    def __init__(self, hangar_arraysets, sample_names, fields):
+    def __init__(self, hangar_arraysets, sample_names, wrapper):
         self.hangar_arraysets = hangar_arraysets
         self.sample_names = sample_names
-        self.fields = fields
+        self.wrapper: namedtuple = wrapper
 
     def __len__(self) -> int:
         """
@@ -116,17 +121,22 @@ class TorchDataset(torchdata.Dataset):
         """
         return len(self.sample_names)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         """Use data names array to find the sample name at an index and loop
         through the array of hangar arraysets to return the sample.
 
+        Parameters
+        ----------
+        index : int
+            some sample index location.
+
         Returns
         -------
-        Dict[str, :class:`torch.Tensor`]
+        namedtuple[:class:`torch.Tensor`]
             One sample with the given name from all the provided arraysets
         """
         key = self.sample_names[index]
         out = []
         for aset in self.hangar_arraysets:
             out.append(aset.get(key))
-        return dict(zip(self.fields, out))
+        return self.wrapper._make(out)
