@@ -6,6 +6,7 @@ import string
 import weakref
 from io import StringIO
 from functools import partial
+from itertools import tee
 from typing import Union, Any
 import importlib
 import types
@@ -164,6 +165,13 @@ def is_ascii(str_data: str) -> bool:
     except (UnicodeEncodeError, AttributeError):
         return False
     return True
+
+
+def pairwise(iterable):
+    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 
 def find_next_prime(N: int) -> int:
