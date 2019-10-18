@@ -72,9 +72,10 @@ def repo_with_20_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
     second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7, backend_opts=request.param)
     first_aset = co.arraysets['writtenaset']
-    for i in range(20):
+    for i in range(0, 20):
         array5by7[:] = i
         first_aset[str(i)] = array5by7
+        array5by7[:] = -i
         second_aset[str(i)] = array5by7
     co.commit('20 samples')
     co.close()

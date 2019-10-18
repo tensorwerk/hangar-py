@@ -1,6 +1,7 @@
 from os.path import join as pjoin
 from os import mkdir
 import pytest
+import sys
 import numpy as np
 from hangar import Repository
 
@@ -145,13 +146,11 @@ class TestTorchDataLoader(object):
         with pytest.raises(TypeError):  # field_names's type is wrong
             make_torch_dataset([first_aset, second_aset], field_names={'input': '', 'target': ''})
         torch_dset = make_torch_dataset([first_aset, second_aset], field_names=('input', 'target'))
-        assert hasattr(torch_dset[1], 'input')
-        assert hasattr(torch_dset[1], 'target')
-        if torch.__version__ > '1.0.1':
-            loader = DataLoader(torch_dset, batch_size=5)
-            for sample in loader:
-                assert hasattr(sample, 'input')
-                assert hasattr(sample, 'target')
+        assert len(torch_dset) == 20
+        loader = DataLoader(torch_dset, batch_size=5)
+        for sample in loader:
+            assert type(sample).__name__ == 'BatchTuple_input_target'
+            assert sample._fields == ('input', 'target')
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
@@ -162,8 +161,47 @@ class TestTorchDataLoader(object):
         torch_dset = make_torch_dataset([aset])
         loader = DataLoader(torch_dset, batch_size=1000, drop_last=True)
         for data in loader:
+            assert type(data).__name__ == 'BatchTuple_aset'
             assert data.aset.shape == (1000, 5, 7)
         co.close()
+
+    @pytest.mark.xfail(sys.platform == "win32",
+                       strict=True,
+                       reason="multiprocess workers does not run on windows")
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self, repo_with_10000_samples):
+        repo = repo_with_10000_samples
+        co = repo.checkout()
+        aset = co.arraysets['aset']
+        torch_dset = make_torch_dataset([aset])
+        loader = DataLoader(torch_dset, batch_size=1000, drop_last=True, num_workers=2)
+        for data in loader:
+            assert type(data).__name__ == 'BatchTuple_aset'
+            assert data.aset.shape == (1000, 5, 7)
+        co.close()
+
+    @pytest.mark.xfail(sys.platform == "win32",
+                       strict=True,
+                       reason="multiprocess workers does not run on windows")
+    @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
+    def test_two_aset_loader_two_worker_dataloader(self, repo_with_20_samples):
+        repo = repo_with_20_samples
+        co = repo.checkout()
+        first_aset = co.arraysets['writtenaset']
+        second_aset = co.arraysets['second_aset']
+        torch_dset = make_torch_dataset([first_aset, second_aset])
+        loader = DataLoader(torch_dset, batch_size=2, drop_last=True, num_workers=2)
+        count = 0
+        for asets_batch in loader:
+            assert type(asets_batch).__name__ == 'BatchTuple_writtenaset_second_aset'
+            assert isinstance(asets_batch, tuple)
+            assert len(asets_batch) == 2
+            assert asets_batch._fields == ('writtenaset', 'second_aset')
+            assert asets_batch.writtenaset.shape == (2, 5, 7)
+            assert asets_batch.second_aset.shape == (2, 5, 7)
+            assert np.allclose(asets_batch.writtenaset, -asets_batch.second_aset)
+            count += 1
+        assert count == 10
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
     @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
