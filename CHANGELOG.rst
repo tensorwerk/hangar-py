@@ -20,6 +20,8 @@ Improvements
 
 * Removed ``msgpack`` and ``pyyaml`` dependencies. Cleaned up and improved remote client/server code.
   (`#130 <https://github.com/tensorwerk/hangar-py/pull/130>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Multiprocess Torch DataLoaders allowed on Linux and MacOS.
+  (`#144 <https://github.com/tensorwerk/hangar-py/pull/144>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 Bug Fixes
 ---------
