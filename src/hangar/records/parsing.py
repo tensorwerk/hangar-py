@@ -3,6 +3,7 @@ from itertools import cycle
 from time import sleep
 from time import perf_counter
 from random import randint
+import string
 from typing import Union, NamedTuple, Tuple, Iterable
 from hashlib import blake2b
 
@@ -56,7 +57,7 @@ def repo_version_raw_spec_from_raw_string(v_str: str) -> VersionSpec:
         NamedTuple containing int fileds of `major`, `minor`, `micro` version.
     """
     smajor, sminor, smicro = v_str.split('.')
-    res = VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro))
+    res = VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro[0]))
     return res
 
 

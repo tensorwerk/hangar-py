@@ -7,6 +7,7 @@ from . import parsing
 from .parsing import VersionSpec
 from .. import constants as c
 from ..context import TxnRegister
+from ..utils import pairwise
 
 
 """
@@ -161,7 +162,10 @@ have as we move to compatible changes in the future.
 """
 
 
-incompatible_changes_after = [VersionSpec(major=0, minor=2, micro=0)]
+incompatible_changes_after = [
+    VersionSpec(major=0, minor=2, micro=0),
+    VersionSpec(major=0, minor=3, micro=0),
+    VersionSpec(major=0, minor=4, micro=0)]
 
 
 def is_repo_software_version_compatible(repo_v: VersionSpec, curr_v: VersionSpec) -> bool:
@@ -179,12 +183,12 @@ def is_repo_software_version_compatible(repo_v: VersionSpec, curr_v: VersionSpec
     bool
         True if compatible, False if not.
     """
-    if repo_v in incompatible_changes_after:
-        if curr_v.major > repo_v.major:
-            return False
-        elif curr_v.minor > repo_v.minor:
-            return False
-        elif curr_v.micro > repo_v.micro:
-            return False
-
+    for start, end in pairwise(incompatible_changes_after):
+        if (repo_v >= start) and (repo_v < end):
+            if (curr_v < start) or (curr_v >= end):
+                return False
+            elif (curr_v >= start) and (curr_v < end):
+                return True
+    if (repo_v >= end) and (curr_v < end):
+        return False
     return True

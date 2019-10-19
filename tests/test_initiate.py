@@ -183,12 +183,15 @@ def test_get_ecosystem_details(managed_tmpdir):
 
 def test_check_repository_version(written_repo):
     from hangar import __version__
+    from pkg_resources import parse_version
+
     repo = written_repo
-    assert repo.version == __version__
+    assert repo.version == parse_version(__version__).base_version
 
 
 def test_check_repository_software_version_startup(managed_tmpdir):
     from hangar import Repository, __version__
+    from pkg_resources import parse_version
 
     repo = Repository(managed_tmpdir, exists=False)
     repo.init('test user', 'test@foo.bar', remove_old=True)
@@ -196,7 +199,7 @@ def test_check_repository_software_version_startup(managed_tmpdir):
 
     nrepo = Repository(managed_tmpdir, exists=True)
     assert nrepo.initialized is True
-    assert nrepo.version == __version__
+    assert nrepo.version == parse_version(__version__).base_version
     nrepo._env._close_environments()
 
 
@@ -214,24 +217,19 @@ def test_check_repository_software_version_fails_on_older_repo(managed_tmpdir):
         Repository(managed_tmpdir, exists=True)
 
 
-@pytest.mark.parametrize('failVersions', ['1.0.0', '0.4.0', '0.3.1', '1.4.1'])
-def test_check_repository_software_version_fails_on_newer_hangar_version(managed_tmpdir, monkeypatch, failVersions):
-    import hangar
+@pytest.mark.parametrize('futureVersion', ['1.0.0', '0.14.1', '0.15.0', '1.4.1'])
+def test_check_repository_software_version_works_on_newer_hangar_version(managed_tmpdir, monkeypatch, futureVersion):
     from hangar import Repository
-    from hangar.records.parsing import repo_version_raw_spec_from_raw_string
-    from hangar.records import vcompat
-    from hangar import context
-
-    currentVspec = repo_version_raw_spec_from_raw_string(hangar.__version__)
-    new_incomp = vcompat.incompatible_changes_after
-    new_incomp.append(currentVspec)
-    monkeypatch.setattr(vcompat, 'incompatible_changes_after', new_incomp)
 
     repo = Repository(managed_tmpdir, exists=False)
     repo.init('test user', 'test@foo.bar', remove_old=True)
+    old_version = repo.version
     # force writing of new software version. should trigger error on next read.
     repo._env._close_environments()
 
-    monkeypatch.setattr(context, '__version__', failVersions)
-    with pytest.raises(RuntimeError):
-        Repository(managed_tmpdir, exists=True)
+    import hangar
+    monkeypatch.setattr(hangar, '__version__', futureVersion)
+    nrepo = Repository(managed_tmpdir, exists=True)
+    assert hangar.__version__ == futureVersion
+    assert nrepo.version == old_version
+    nrepo._env._close_environments()

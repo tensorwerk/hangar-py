@@ -14,7 +14,7 @@ Overview
     * - package
       - | |version| |wheel| |conda-forge|
         | |supported-versions| |supported-implementations|
-        | |commits-since|
+        | |license|
 .. |docs| image:: https://readthedocs.org/projects/hangar-py/badge/?style=flat
     :target: https://readthedocs.org/projects/hangar-py
     :alt: Documentation Status
@@ -31,9 +31,9 @@ Overview
     :alt: PyPI Package latest release
     :target: https://pypi.org/project/hangar
 
-.. |commits-since| image:: https://img.shields.io/github/commits-since/tensorwerk/hangar-py/v0.3.0.svg
-    :alt: Commits since latest release
-    :target: https://github.com/tensorwerk/hangar-py/compare/v0.3.0...master
+.. |license| image:: https://img.shields.io/github/license/tensorwerk/hangar-py
+   :alt: GitHub license
+   :target: https://github.com/tensorwerk/hangar-py/blob/master/LICENSE
 
 .. |conda-forge| image:: https://img.shields.io/conda/vn/conda-forge/hangar.svg
    :alt: Conda-Forge Latest Version
