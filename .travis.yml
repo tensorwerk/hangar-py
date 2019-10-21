@@ -101,7 +101,7 @@ before_install:
       which pyenv
       ln -s ~/.cache/pyenv/versions ~/.pyenv/versions
       export PATH="$HOME/.pyenv/bin:$PATH"
-      pyenv install --skip-existin $TR_PYTHON_VERSION
+      pyenv install --skip-existing $TR_PYTHON_VERSION
       eval "$(pyenv init -)"
       pyenv global $TR_PYTHON_VERSION
       # A manual check that the correct version of Python is running.
