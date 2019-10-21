@@ -53,7 +53,8 @@ matrix:
       cache:
         - pip
         - directories:
-          - $HOME/.pyenv_cache
+          - $HOME/.cache/pip
+          - $HOME/.cache/pyenv
     # nocov
     - os: linux
       dist: xenial
@@ -89,12 +90,16 @@ matrix:
       cache:
         - pip
         - directories:
-          - $HOME/.pyenv_cache
+          - $HOME/.cache/pip
+          - $HOME/.cache/pyenv
 before_install:
   - |
     if [ "$TRAVIS_OS_NAME" == "osx" ]; then
       unset PYENV_ROOT
+      mkdir -p ~/.cache/pyenv/versions
       curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash
+      which pyenv
+      ln -s ~/.cache/pyenv/versions ~/.pyenv/versions
       export PATH="$HOME/.pyenv/bin:$PATH"
       pyenv install $TR_PYTHON_VERSION
       eval "$(pyenv init -)"
