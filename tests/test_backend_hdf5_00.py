@@ -14,12 +14,10 @@ def test_blosc_filter_opts_result_in_correct_dataset_args(
 
     out = HDF5_00_FileHandles._dataset_opts(complib=clib,
                                             complevel=clevel,
-                                            shuffle=cshuffle,
-                                            fletcher32=True)
+                                            shuffle=cshuffle)
     expected = {
         'compression': 32001,
         'compression_opts': (0, 0, 0, 0, clevel, cshuffleCode, clibCode),
-        'fletcher32': True,
         'shuffle': False}
 
     assert out == expected
@@ -31,12 +29,10 @@ def test_lzf_filter_opts_result_in_correct_dataset_args(cshuffle, cshuffleCode):
 
     out = HDF5_00_FileHandles._dataset_opts(complib='lzf',
                                             complevel=None,
-                                            shuffle=cshuffle,
-                                            fletcher32=True)
+                                            shuffle=cshuffle)
     expected = {
         'compression': 'lzf',
         'compression_opts': None,
-        'fletcher32': True,
         'shuffle': cshuffleCode}
 
     assert out == expected
@@ -49,12 +45,10 @@ def test_gzip_filter_opts_result_in_correct_dataset_args(clevel, cshuffle, cshuf
 
     out = HDF5_00_FileHandles._dataset_opts(complib='gzip',
                                             complevel=clevel,
-                                            shuffle=cshuffle,
-                                            fletcher32=True)
+                                            shuffle=cshuffle)
     expected = {
         'compression': 'gzip',
         'compression_opts': clevel,
-        'fletcher32': True,
         'shuffle': cshuffleCode}
 
     assert out == expected
@@ -78,7 +72,6 @@ def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, 
         'shuffle': cshuffle,
         'complib': clib,
         'complevel': clevel,
-        'fletcher32': True
     }
     wco = repo.checkout(write=True)
     aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
@@ -106,7 +99,6 @@ def test_arrayset_init_with_various_lzf_opts(repo, array5by7, cshuffle, cshuffle
         'shuffle': cshuffle,
         'complib': 'lzf',
         'complevel': None,
-        'fletcher32': True
     }
     wco = repo.checkout(write=True)
     aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
@@ -132,7 +124,6 @@ def test_arrayset_init_with_various_gzip_opts(repo, array5by7, clevel, cshuffle,
         'shuffle': cshuffle,
         'complib': 'gzip',
         'complevel': clevel,
-        'fletcher32': True
     }
     wco = repo.checkout(write=True)
     aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)

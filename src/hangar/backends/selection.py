@@ -227,15 +227,15 @@ def backend_opts_from_heuristics(backend: str, array: np.ndarray) -> dict:
         import h5py
         opts = {
             'default': {
-                'shuffle': 'byte',
-                'complib': 'blosc:blosclz',
-                'complevel': 4,
-                'fletcher32': True},
+                'shuffle': None,
+                'complib': 'blosc:zstd',
+                'complevel': 3,
+            },
             'backup': {
                 'shuffle': 'byte',
                 'complib': 'lzf',
                 'complevel': None,
-                'fletcher32': True},
+            },
         }
         hdf5BloscAvail = h5py.h5z.filter_avail(32001)
         opts = opts['default'] if hdf5BloscAvail else opts['backup']

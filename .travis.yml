@@ -39,11 +39,22 @@ matrix:
       osx_image: xcode9.4
       language: generic
       env:
-        - CONDA_INSTALL_LOCN="${HOME}/miniconda"
-        - TR_PYTHON_VERSION="3.7.0"
+        - TR_PYTHON_VERSION=3.7.2
+        - PYENV_VERSION=3.7.2
         - TOXENV=py37-cover-ml,report
+      addons:
+        homebrew:
+          packages:
+            - openssl
+            - readline
+            - xz
       after_success:
         - codecov
+      cache:
+        - pip
+        - directories:
+          - $HOME/.cache/pip
+          - $HOME/.cache/pyenv
     # nocov
     - os: linux
       dist: xenial
@@ -67,32 +78,35 @@ matrix:
       osx_image: xcode9.4
       language: generic
       env:
-        - CONDA_INSTALL_LOCN="${HOME}/miniconda"
-        - TR_PYTHON_VERSION="3.6.8"
+        - TR_PYTHON_VERSION=3.6.8
+        - PYENV_VERSION=3.6.8
         - TOXENV=py36-nocov
+      addons:
+        homebrew:
+          packages:
+            - openssl
+            - readline
+            - xl
+      cache:
+        - pip
+        - directories:
+          - $HOME/.cache/pip
+          - $HOME/.cache/pyenv
 before_install:
   - |
     if [ "$TRAVIS_OS_NAME" == "osx" ]; then
-      # Install and set up miniconda.
-      wget http://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh
-      bash miniconda.sh -b -p $CONDA_INSTALL_LOCN
-      # c-blosc libraries are having trouble building on travis osx machines.
-      # temporarily disabling the build steps until it's cleared out upstream
-      export CC=gcc
-      export CXX=g++
-      export INCLUDE_ZSTD=0
-      export DISABLE_BLOSC_SSE2=0
-      export PATH=${CONDA_INSTALL_LOCN}/bin:$PATH
-      conda config --set always_yes true
-      conda update conda
-      conda install -c conda-forge python=${TR_PYTHON_VERSION} python-blosc zstd zlib
-      # ensure we have the latest version of pip installed
-      python -m pip install -U pip
-      python -m pip install -U setuptools
-      python -m pip install -U wheel
-      # To ease debugging, list installed packages
-      conda info -a
-      conda list
+      unset PYENV_ROOT
+      mkdir -p ~/.cache/pyenv/versions
+      curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash
+      which pyenv
+      ln -s ~/.cache/pyenv/versions ~/.pyenv/versions
+      export PATH="$HOME/.pyenv/bin:$PATH"
+      pyenv install --skip-existin $TR_PYTHON_VERSION
+      eval "$(pyenv init -)"
+      pyenv global $TR_PYTHON_VERSION
+      # A manual check that the correct version of Python is running.
+      python --version
+      python -m pip install -U pip setuptools wheel
     fi
   - python --version
   - uname -a
