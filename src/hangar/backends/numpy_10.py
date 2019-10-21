@@ -86,7 +86,7 @@ from functools import partial
 from os.path import join as pjoin
 from os.path import splitext as psplitext
 from typing import MutableMapping, NamedTuple, Tuple, Optional
-from zlib import adler32
+from xxhash import xxh64_hexdigest
 
 import numpy as np
 from numpy.lib.format import open_memmap
@@ -117,7 +117,7 @@ NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec',
                                     ('shape', Tuple[int])])
 
 
-def numpy_10_encode(uid: str, checksum: int, collection_idx: int, shape: tuple) -> bytes:
+def numpy_10_encode(uid: str, checksum: str, collection_idx: int, shape: tuple) -> bytes:
     """converts the numpy data spect to an appropriate db value
 
     Parameters
@@ -125,7 +125,7 @@ def numpy_10_encode(uid: str, checksum: int, collection_idx: int, shape: tuple) 
     uid : str
         file name (schema uid) of the np file to find this data piece in.
     checksum : int
-        adler32 checksum of the data as computed on that local machine.
+        xxhash64_hexdigest checksum of the data as computed on that local machine.
     collection_idx : int
         collection first axis index in which this data piece resides.
     shape : tuple
@@ -139,10 +139,8 @@ def numpy_10_encode(uid: str, checksum: int, collection_idx: int, shape: tuple) 
         hash data db value recording all input specifications
     """
     out_str = f'{_FmtCode}{c.SEP_KEY}'\
-              f'{uid}{c.SEP_HSH}{checksum}'\
-              f'{c.SEP_HSH}'\
-              f'{collection_idx}'\
-              f'{c.SEP_SLC}'\
+              f'{uid}{c.SEP_HSH}{checksum}{c.SEP_HSH}'\
+              f'{collection_idx}{c.SEP_SLC}'\
               f'{_ShapeFmtRE.sub("", str(shape))}'
     return out_str.encode()
 
@@ -377,9 +375,9 @@ class NUMPY_10_FileHandles(object):
                 raise
 
         out = np.array(res, dtype=res.dtype, order='C')
-        cksum = adler32(out)
-        if cksum != int(hashVal.checksum):
-            raise RuntimeError(f'DATA CORRUPTION ERROR: Checksum {cksum} != recorded for {hashVal}')
+        if xxh64_hexdigest(out) != hashVal.checksum:
+            raise RuntimeError(
+                f'DATA CORRUPTION Checksum {xxh64_hexdigest(out)} != recorded {hashVal}')
         return out
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
@@ -398,7 +396,7 @@ class NUMPY_10_FileHandles(object):
         bytes
             db hash record value specifying location information
         """
-        checksum = adler32(array)
+        checksum = xxh64_hexdigest(array)
         if self.w_uid in self.wFp:
             self.hIdx += 1
             if self.hIdx >= COLLECTION_SIZE:

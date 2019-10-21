@@ -128,6 +128,7 @@ try:
     import hdf5plugin
 except (ImportError, ModuleNotFoundError):
     pass
+from xxhash import xxh64_hexdigest
 
 from .. import __version__
 from .. import constants as c
@@ -159,19 +160,25 @@ _ShapeFmtRE: Pattern = re.compile('[,\(\)\[\]]')
 _SplitDecoderRE: Pattern = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
 
 
-HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec',
-                                  [('backend', str), ('uid', str),
-                                   ('dataset', str), ('dataset_idx', int),
-                                   ('shape', Tuple[int])])
+HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec', [
+    ('backend', str),
+    ('uid', str),
+    ('checksum', str),
+    ('dataset', str),
+    ('dataset_idx', int),
+    ('shape', Tuple[int])])
 
 
-def hdf5_00_encode(uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) -> bytes:
+def hdf5_00_encode(uid: str, checksum: str, dataset: str, dataset_idx: int,
+                   shape: Tuple[int]) -> bytes:
     """converts the hdf5 data has spec to an appropriate db value
 
     Parameters
     ----------
     uid : str
         the file name prefix which the data is written to.
+    checksum : int
+        xxhash_64.hex_digest checksum of the data bytes in numpy array form.
     dataset : str
         collection (ie. hdf5 dataset) name to find this data piece.
     dataset_idx : int
@@ -186,10 +193,9 @@ def hdf5_00_encode(uid: str, dataset: str, dataset_idx: int, shape: Tuple[int]) 
     bytes
         hash data db value recording all input specifications.
     """
-    out_str = f'{_FmtCode}{c.SEP_KEY}{uid}'\
-              f'{c.SEP_HSH}'\
-              f'{dataset}{c.SEP_LST}{dataset_idx}'\
-              f'{c.SEP_SLC}'\
+    out_str = f'{_FmtCode}{c.SEP_KEY}'\
+              f'{uid}{c.SEP_HSH}{checksum}{c.SEP_HSH}'\
+              f'{dataset}{c.SEP_LST}{dataset_idx}{c.SEP_SLC}'\
               f'{_ShapeFmtRE.sub("", str(shape))}'
     return out_str.encode()
 
@@ -209,7 +215,7 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
         `instance`, `dataset`, `dataset_idx`, `shape`
     """
     db_str = db_val.decode()
-    _, uid, dataset_vs, shape_vs = _SplitDecoderRE.split(db_str)
+    _, uid, checksum, dataset_vs, shape_vs = _SplitDecoderRE.split(db_str)
     dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
     # if the data is of empty shape -> shape_vs = '' str.split() default value
     # of none means split according to any whitespace, and discard empty strings
@@ -217,6 +223,7 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
     shape = tuple(int(x) for x in shape_vs.split())
     raw_val = HDF5_00_DataHashSpec(backend=_FmtCode,
                                    uid=uid,
+                                   checksum=checksum,
                                    dataset=dataset,
                                    dataset_idx=int(dataset_idx),
                                    shape=shape)
@@ -402,7 +409,7 @@ class HDF5_00_FileHandles(object):
         os.rmdir(process_dir)
 
     @staticmethod
-    def _dataset_opts(complib: str, complevel: int, shuffle: Union[bool, str], fletcher32: bool) -> dict:
+    def _dataset_opts(complib: str, complevel: int, shuffle: Union[bool, str]) -> dict:
         """specify compression options for the hdf5 dataset.
 
         .. seealso:: :function:`_blosc_opts`
@@ -426,9 +433,6 @@ class HDF5_00_FileHandles(object):
             if True or `byte`, enable byte shuffle filter, if blosc
             compression, pass through 'bits' is accepted as well. False, or
             None indicates no shuffle should be applied.
-        fletcher32 : bool
-            enable fletcher32 checksum validation of data integrity, (defaults to
-            True, which is enabled)
         """
         # ---- blosc hdf5 plugin filters ----
         _blosc_shuffle = {
@@ -472,26 +476,22 @@ class HDF5_00_FileHandles(object):
                     _blosc_complevel[complevel],
                     _blosc_shuffle[shuffle],
                     _blosc_compression[complib]),
-                'fletcher32': fletcher32,
                 'shuffle': False}
         elif complib == 'lzf':
             args = {
                 'shuffle': _lzf_gzip_shuffle[shuffle],
                 'compression': complib,
-                'compression_opts': _lzf_complevel[complevel],
-                'fletcher32': fletcher32}
+                'compression_opts': _lzf_complevel[complevel]}
         elif complib == 'gzip':
             args = {
                 'shuffle': _lzf_gzip_shuffle[shuffle],
                 'compression': complib,
-                'compression_opts': _gzip_complevel[complevel],
-                'fletcher32': fletcher32}
+                'compression_opts': _gzip_complevel[complevel]}
         elif complib in (None, False, 'none'):
             args = {
                 'shuffle': False,
                 'compression': None,
-                'compression_opts': None,
-                'fletcher32': fletcher32}
+                'compression_opts': None}
         else:
             raise ValueError(f'unknown value for opt arg `complib`: {complib}')
         return args
@@ -624,9 +624,6 @@ class HDF5_00_FileHandles(object):
         self.wFp[self.w_uid]['/'].attrs['rdcc_nbytes'] = rdcc_nbytes_val
         self.wFp[self.w_uid]['/'].attrs['rdcc_w0'] = CHUNK_RDCC_W0
         self.wFp[self.w_uid]['/'].attrs['rdcc_nslots'] = rdcc_nslots_prime_val
-        # self.wFp[self.w_uid]['/'].attrs['shuffle'] = HDF5_FILTER['shuffle']
-        # self.wFp[self.w_uid]['/'].attrs['complib'] = HDF5_FILTER['complib']
-        # self.wFp[self.w_uid]['/'].attrs['fletcher32'] = HDF5_FILTER['fletcher32']
         self.wFp[self.w_uid]['/'].attrs['chunk_shape'] = chunk_shape
         if optKwargs['compression_opts'] is not None:
             self.wFp[self.w_uid]['/'].attrs['compression_opts'] = optKwargs['compression_opts']
@@ -689,6 +686,9 @@ class HDF5_00_FileHandles(object):
                 else:
                     raise
         out = destArr.reshape(hashVal.shape)
+        if xxh64_hexdigest(out) != hashVal.checksum:
+            raise RuntimeError(
+                f'DATA CORRUPTION Checksum {xxh64_hexdigest(out)} != recorded {hashVal}')
         return out
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
@@ -710,6 +710,7 @@ class HDF5_00_FileHandles(object):
             string identifying the collection dataset and collection dim-0 index
             which the array can be accessed at.
         """
+        checksum = xxh64_hexdigest(array)
         if self.w_uid in self.wFp:
             self.hIdx += 1
             if self.hIdx >= self.hMaxSize:
@@ -730,6 +731,7 @@ class HDF5_00_FileHandles(object):
         self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(flat_arr, srcSlc, destSlc)
 
         hashVal = hdf5_00_encode(uid=self.w_uid,
+                                 checksum=checksum,
                                  dataset=self.hNextPath,
                                  dataset_idx=self.hIdx,
                                  shape=array.shape)

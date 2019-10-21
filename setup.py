@@ -86,6 +86,7 @@ setup(
         'numpy',
         'tqdm',
         'wrapt',
+        'xxhash',
     ],
     extras_require=extra_require,
     entry_points={
