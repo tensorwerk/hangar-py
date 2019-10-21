@@ -122,8 +122,12 @@ from os.path import splitext as psplitext
 from functools import partial
 from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable, Pattern
 
-import h5py
 import numpy as np
+import h5py
+try:
+    import hdf5plugin
+except (ImportError, ModuleNotFoundError):
+    pass
 
 from .. import __version__
 from .. import constants as c

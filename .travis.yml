@@ -12,15 +12,7 @@ matrix:
       addons:
         apt_packages:
           - pandoc
-    - os: linux
-      dist: xenial
-      language: python
-      python: '3.6'
-      cache: pip
-      env:
-        - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
-        - SEGFAULT_SIGNALS=all
-        - TOXENV=py36-nocov
+    # cover
     - os: linux
       dist: xenial
       language: python
@@ -32,15 +24,6 @@ matrix:
         - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
-    - name: "Win Python 3.6: Run tests"
-      os: windows
-      language: shell
-      env:
-        - PATH=/c/Python36:/c/Python36/Scripts:$PATH
-        - TOXENV=py36-nocov
-      before_install:
-        - choco install python --version 3.6.2
-        - python -m pip install --upgrade pip
     - name: "Win Python 3.7: Run tests"
       os: windows
       language: shell
@@ -57,17 +40,36 @@ matrix:
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
-        - TR_PYTHON_VERSION="3.6.8"
+        - TR_PYTHON_VERSION="3.7.0"
+        - TOXENV=py37-cover-ml,report
+      after_success:
+        - codecov
+    # nocov
+    - os: linux
+      dist: xenial
+      language: python
+      python: '3.6'
+      cache: pip
+      env:
+        - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
+        - SEGFAULT_SIGNALS=all
         - TOXENV=py36-nocov
+    - name: "Win Python 3.6: Run tests"
+      os: windows
+      language: shell
+      env:
+        - PATH=/c/Python36:/c/Python36/Scripts:$PATH
+        - TOXENV=py36-nocov
+      before_install:
+        - choco install python --version 3.6.2
+        - python -m pip install --upgrade pip
     - os: osx
       osx_image: xcode9.4
       language: generic
       env:
         - CONDA_INSTALL_LOCN="${HOME}/miniconda"
-        - TR_PYTHON_VERSION="3.7.0"
-        - TOXENV=py37-cover-ml,report
-      after_success:
-        - codecov
+        - TR_PYTHON_VERSION="3.6.8"
+        - TOXENV=py36-nocov
 before_install:
   - |
     if [ "$TRAVIS_OS_NAME" == "osx" ]; then

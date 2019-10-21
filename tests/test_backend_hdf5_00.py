@@ -87,7 +87,8 @@ def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, 
         for i in range(10):
             a[i] = array5by7 + i
 
-    plist = aset._fs['00'].wFp['/0'].id.get_create_plist()
+    wuid = aset._fs['00'].w_uid
+    plist = aset._fs['00'].wFp[wuid]['/0'].id.get_create_plist()
     _, _, resopts, _ = plist.get_filter(0)
     res_clevel, res_cshuffle, res_clib = resopts[4:7]
     assert res_clevel == clevel
