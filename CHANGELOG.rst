@@ -22,6 +22,8 @@ Improvements
   (`#130 <https://github.com/tensorwerk/hangar-py/pull/130>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Multiprocess Torch DataLoaders allowed on Linux and MacOS.
   (`#144 <https://github.com/tensorwerk/hangar-py/pull/144>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added blosc compression to HDF5 backend by default on PyPi installations.
+  (`#146 <https://github.com/tensorwerk/hangar-py/pull/146>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 Bug Fixes
 ---------
