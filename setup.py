@@ -81,6 +81,7 @@ setup(
         'grpcio',
         'protobuf',
         'h5py==2.9.0',
+        'hdf5plugin==2.0.0',
         'lmdb>=0.94,<=0.96',
         'numpy',
         'tqdm',
