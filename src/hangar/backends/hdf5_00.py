@@ -685,10 +685,14 @@ class HDF5_00_FileHandles(object):
                     destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
                 else:
                     raise
+
         out = destArr.reshape(hashVal.shape)
         if xxh64_hexdigest(out) != hashVal.checksum:
-            raise RuntimeError(
-                f'DATA CORRUPTION Checksum {xxh64_hexdigest(out)} != recorded {hashVal}')
+            # try casting to check if dtype does not match for all zeros case
+            out = out.astype(np.typeDict[self.Fp[hashVal.uid]['/'].attrs['schema_dtype_num']])
+            if xxh64_hexdigest(out) != hashVal.checksum:
+                raise RuntimeError(
+                    f'DATA CORRUPTION Checksum {xxh64_hexdigest(out)} != recorded {hashVal}')
         return out
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
