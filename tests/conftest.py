@@ -95,6 +95,23 @@ def repo_with_10000_samples(request, written_repo, array5by7):
     yield written_repo
 
 
+@pytest.fixture()
+def dummy_repo(repo):
+    # for diff testing
+    dummyData = np.arange(50).astype(np.int64)
+    co1 = repo.checkout(write=True, branch='master')
+    co1.arraysets.init_arrayset(
+        name='dummy', prototype=dummyData, named_samples=True)
+    for idx in range(10):
+        dummyData[:] = idx
+        co1.arraysets['dummy'][idx] = dummyData
+    co1.metadata['hello'] = 'world'
+    co1.metadata['somemetadatakey'] = 'somemetadatavalue'
+    co1.commit('first commit adding dummy data and hello meta')
+    co1.close()
+    return repo
+
+
 @pytest.fixture(params=backend_params)
 def variable_shape_written_repo(request, repo):
     co = repo.checkout(write=True)

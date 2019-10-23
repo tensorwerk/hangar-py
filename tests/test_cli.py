@@ -30,6 +30,7 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  push        Upload local BRANCH commit history / data to REMOTE server.\n'\
            '  remote      Operations for working with remote server references\n'\
            '  server      Start a hangar server, initializing one if does not exist.\n'\
+           '  status      Display changes made in the staging area compared to it\'s base...\n'\
            '  summary     Display content summary at STARTPOINT (short-digest or branch).\n'\
            '  view        Use a plugin to view the data of some SAMPLE in ARRAYSET at...\n'
 
@@ -292,6 +293,26 @@ def test_log(written_two_cmt_server_repo, capsys):
         with capsys.disabled():
             res = runner.invoke(cli.log, ['master'], obj=new_repo)
             assert res.stdout == f"{capsys.readouterr().out}\n"
+
+
+def test_status(dummy_repo):
+    from hangar.records.summarize import status
+
+    dummyData = np.arange(50).astype(np.int64)
+    co2 = dummy_repo.checkout(write=True)
+    for idx in range(10, 20):
+        dummyData[:] = idx
+        co2.arraysets['dummy'][str(idx)] = dummyData
+        co2.arraysets['dummy'][idx] = dummyData
+    co2.metadata['foo'] = 'bar'
+    df = co2.diff.staged()
+    co2.close()
+    expected = status('master', df.diff).getvalue()
+
+    runner = CliRunner()
+    res = runner.invoke(cli.status, obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == expected
 
 
 def test_branch_create_and_list(written_two_cmt_server_repo):

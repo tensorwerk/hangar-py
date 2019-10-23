@@ -188,11 +188,13 @@ def summary(env, *, branch='', commit='') -> StringIO:
     return buf
 
 
-def status(diff: DiffOut) -> StringIO:
+def status(branch_name: str, diff: DiffOut) -> StringIO:
     """Format human readable string buffer of changes in a staging area
 
     Parameters
     ----------
+    branch_name : str
+        Name of the branch the diff is from.
     diff : DiffOut
         diff struct tuple returned from standard diff tool.
 
@@ -230,6 +232,9 @@ def status(diff: DiffOut) -> StringIO:
         return buf
 
     buf = StringIO()
+    buf.write('============ \n')
+    buf.write(f'| Branch: {branch_name} \n')
+    buf.write(' \n')
     for changes, changeType in zip(diff, diff.__annotations__.keys()):
         buf.write('============ \n')
         buf.write(f'| {changeType.upper()} \n')

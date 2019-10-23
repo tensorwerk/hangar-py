@@ -232,6 +232,20 @@ def log(repo: Repository, startpoint):
         click.echo(repo.log(commit=base_commit))
 
 
+@main.command()
+@pass_repo
+def status(repo: Repository):
+    """Display changes made in the staging area compared to it's base commit
+    """
+    from hangar.records.summarize import status
+    co = repo.checkout(write=True)
+    try:
+        diff = co.diff.staged()
+        click.echo(status(co.branch_name, diff.diff).getvalue(), nl=False)
+    finally:
+        co.close()
+
+
 # ------------------------------- Branching -----------------------------------
 
 
