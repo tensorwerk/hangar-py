@@ -713,8 +713,12 @@ class WriterCheckout(object):
                 raise e
         else:
             if current_head != self._branch_name:
-                cmt = heads.get_branch_head_commit(
-                    branchenv=self._branchenv, branch_name=self._branch_name)
+                try:
+                    cmt = heads.get_branch_head_commit(
+                        branchenv=self._branchenv, branch_name=self._branch_name)
+                except ValueError as e:
+                    self.close()
+                    raise e
                 commiting.replace_staging_area_with_commit(
                     refenv=self._refenv, stageenv=self._stageenv, commit_hash=cmt)
                 heads.set_staging_branch_head(

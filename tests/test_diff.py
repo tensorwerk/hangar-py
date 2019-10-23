@@ -105,7 +105,7 @@ class TestReaderDiff(object):
         dummyData = np.arange(50)
 
         # adding data in master
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         dummyData[:] = 123
         co.arraysets['dummy']['55'] = dummyData
         co.commit('Adding data in master')
@@ -118,7 +118,7 @@ class TestReaderDiff(object):
         co.commit('adding data in testbranch')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch').conflict
         assert conflicts.conflict is True
         assert len(conflicts.t1.samples) == 1
@@ -131,7 +131,7 @@ class TestReaderDiff(object):
         dummyData = np.arange(50)
         dummyData[:] = 123
         repo = repo_1_br_no_conf
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         del co.arraysets['dummy']['6']
         co.arraysets['dummy']['7'] = dummyData
         co.commit('removal & mutation in master')
@@ -143,7 +143,7 @@ class TestReaderDiff(object):
         co.commit('removal & mutation in dev')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t21.samples) == 1
         assert len(conflicts.t22.samples) == 1
@@ -158,7 +158,7 @@ class TestReaderDiff(object):
         dummyData = np.arange(50)
         dummyData[:] = 123
         repo = repo_1_br_no_conf
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         co.arraysets['dummy']['7'] = dummyData
         co.commit('mutation in master')
         co.close()
@@ -169,7 +169,7 @@ class TestReaderDiff(object):
         co.commit('mutation in dev')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t3.samples) == 1
         for k in conflicts.t3.samples:
@@ -181,7 +181,7 @@ class TestReaderDiff(object):
         repo = written_repo
 
         repo.create_branch('testbranch')
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         co.arraysets.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float64)
         co.commit('aset init in master')
         co.close()
@@ -191,7 +191,7 @@ class TestReaderDiff(object):
         co.commit('aset init in dev')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t1.schema) == 1
         for k in conflicts.t1.schema:
@@ -201,14 +201,14 @@ class TestReaderDiff(object):
     def test_aset_removal_conflict(self, written_repo):
         # t21 and t22
         repo = written_repo
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         co.arraysets.init_arrayset(name='testing_aset1', shape=(5, 7), dtype=np.float64)
         co.arraysets.init_arrayset(name='testing_aset2', shape=(5, 7), dtype=np.float64)
         co.commit('added asets')
         co.close()
         repo.create_branch('testbranch')
 
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         del co.arraysets['testing_aset1']
         del co.arraysets['testing_aset2']
         co.arraysets.init_arrayset(name='testing_aset2', shape=(5, 7), dtype=np.float32)
@@ -222,7 +222,7 @@ class TestReaderDiff(object):
         co.commit('mutation and removal from dev')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts.t21.schema) == 1
         assert len(conflicts.t22.schema) == 1
@@ -233,13 +233,13 @@ class TestReaderDiff(object):
     def test_aset_mutation_conflict(self, written_repo):
         # t3
         repo = written_repo
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         co.arraysets.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float64)
         co.commit('added aset')
         co.close()
         repo.create_branch('testbranch')
 
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         del co.arraysets['testing_aset']
         co.arraysets.init_arrayset(name='testing_aset', shape=(7, 7), dtype=np.float64)
         co.commit('mutation from master')
@@ -251,7 +251,7 @@ class TestReaderDiff(object):
         co.commit('mutation from dev')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts.t3.schema) == 1
         assert list(conflicts.t3.schema.keys()) == ['testing_aset']
@@ -265,12 +265,12 @@ class TestReaderDiff(object):
         co.commit('metadata addition')
         co.close()
 
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         co.metadata['metatest'] = 'value2'
         co.commit('metadata addition')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         for k in conflicts.t1.metadata:
             assert k == create_meta_nt('metatest')
@@ -286,13 +286,13 @@ class TestReaderDiff(object):
         co.commit('removed & mutated')
         co.close()
 
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         del co.metadata['hello']
         co.metadata['somemetadatakey'] = 'somemetadatavalue - not anymore'
         co.commit('removed & mutation')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         co.close()
 
@@ -311,12 +311,12 @@ class TestReaderDiff(object):
         co.commit('mutated')
         co.close()
 
-        co = repo.checkout(write=True)
+        co = repo.checkout(write=True, branch='master')
         co.metadata['hello'] = 'again and again'
         co.commit('mutation')
         co.close()
 
-        co = repo.checkout()
+        co = repo.checkout(branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts.t3.metadata) == 1
         for k in conflicts.t3.metadata:

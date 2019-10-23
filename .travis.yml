@@ -55,6 +55,7 @@ matrix:
         - directories:
           - $HOME/.cache/pip
           - $HOME/.cache/pyenv
+          - $HOME/.cache/tox
     # nocov
     - os: linux
       dist: xenial
@@ -92,14 +93,18 @@ matrix:
         - directories:
           - $HOME/.cache/pip
           - $HOME/.cache/pyenv
+          - $HOME/.cache/tox
 before_install:
   - |
     if [ "$TRAVIS_OS_NAME" == "osx" ]; then
       unset PYENV_ROOT
       mkdir -p ~/.cache/pyenv/versions
+      mkdir -p ~/.cache/tox
+      mkdir -p ~/tensorwerk/hangar-py/.tox
       curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash
       which pyenv
       ln -s ~/.cache/pyenv/versions ~/.pyenv/versions
+      ln -s ~/.cache/tox ~/tensorwerk/hangar-py/.tox
       export PATH="$HOME/.pyenv/bin:$PATH"
       pyenv install --skip-existing $TR_PYTHON_VERSION
       eval "$(pyenv init -)"

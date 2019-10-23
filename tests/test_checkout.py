@@ -612,3 +612,14 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(written_tw
     with pytest.raises(PermissionError):
         repr(co)
     assert co.__dict__ == {}
+
+
+def test_checkout_branch_not_existing_does_not_hold_writer_lock(written_two_cmt_repo):
+    repo = written_two_cmt_repo
+    assert 'doesnotexist' not in repo.list_branches()
+    assert repo.writer_lock_held is False
+    with pytest.raises(ValueError):
+        co = repo.checkout(write=True, branch='doesnotexist')
+    assert repo.writer_lock_held is False
+    with pytest.raises(NameError):
+        co.branch_name  # should not even exist

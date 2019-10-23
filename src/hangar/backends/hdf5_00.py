@@ -116,6 +116,7 @@ import math
 import os
 import re
 import time
+import logging
 from collections import ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
@@ -125,7 +126,13 @@ from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable,
 import numpy as np
 import h5py
 try:
+    # hdf5plugin warns if a filter is already loaded. we temporarily surpress
+    # that here, then reset the logger level to it's initial version.
+    _logger = logging.getLogger('hdf5plugin')
+    _initialLevel = _logger.getEffectiveLevel()
+    _logger.setLevel(logging.ERROR)
     import hdf5plugin
+    _logger.setLevel(_initialLevel)
 except (ImportError, ModuleNotFoundError):
     pass
 from xxhash import xxh64_hexdigest

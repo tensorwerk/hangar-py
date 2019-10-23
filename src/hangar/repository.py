@@ -181,7 +181,7 @@ class Repository(object):
     def checkout(self,
                  write: bool = False,
                  *,
-                 branch: str = 'master',
+                 branch: str = '',
                  commit: str = '') -> Union[ReaderCheckout, WriterCheckout]:
         """Checkout the repo at some point in time in either `read` or `write` mode.
 
@@ -197,7 +197,7 @@ class Repository(object):
         branch : str, optional
             name of the branch to checkout. This utilizes the state of the repo
             as it existed at the branch ``HEAD`` commit when this checkout object
-            was instantiated, defaults to 'master'
+            was instantiated, defaults to ''
         commit : str, optional
             specific hash of a commit to use for the checkout (instead of a
             branch ``HEAD`` commit). This argument takes precedent over a branch
@@ -218,6 +218,8 @@ class Repository(object):
         self.__verify_repo_initialized()
         try:
             if write is True:
+                if branch == '':
+                    branch = heads.get_staging_branch_head(self._env.branchenv)
                 co = WriterCheckout(
                     repo_pth=self._repo_path,
                     branch_name=branch,

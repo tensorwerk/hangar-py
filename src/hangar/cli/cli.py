@@ -52,6 +52,92 @@ def init(repo: Repository, name, email, overwrite):
         repo.init(user_name=name, user_email=email, remove_old=overwrite)
 
 
+# -------------------------- Checkout Writer ----------------------------------
+
+@main.command()
+@click.argument('branchname', nargs=1, required=True)
+@pass_repo
+def checkout(repo: Repository, branchname):
+    """Checkout writer head branch at BRANCHNAME.
+
+    This method requires that no process currently holds the writer lock.
+    In addition, it requires that the contents of the staging area are
+    "CLEAN" (no changes have been staged).
+    """
+    try:
+        co = repo.checkout(write=True, branch=branchname)
+        co.close()
+        click.echo(f'Writer checkout head set to branch: {branchname}')
+    except (ValueError, PermissionError) as e:
+        exc = click.ClickException(e)
+        exc.show()
+
+
+@main.command()
+@click.option('--message', '-m', multiple=True,
+              help='The commit message. If provided multiple times '
+                   'each argument gets converted into a new line.')
+@pass_repo
+def commit(repo: Repository, message):
+    """Commits outstanding changes.
+
+    Commit changes to the given files into the repository. You will need to
+    'push' to push up your changes to other repositories.
+    """
+    from hangar.records.summarize import status
+
+    co = repo.checkout(write=True)
+    try:
+        if not message:
+            diff = co.diff.staged()
+            status_txt = status(co.branch_name, diff.diff)
+            status_txt.seek(0)
+            marker = '# Changes To Be committed: \n'
+            hint = ['\n', '\n', marker, '# \n']
+            for line in status_txt.readlines():
+                hint.append(f'# {line}')
+            # open default system editor
+            message = click.edit(''.join(hint))
+            if message is None:
+                click.echo('Aborted!')
+                return
+            msg = message.split(marker)[0].rstrip()
+            if not msg:
+                click.echo('Aborted! Empty commit message')
+                return
+        else:
+            msg = '\n'.join(message)
+
+        click.echo('Commit message:\n' + msg)
+        try:
+            digest = co.commit(msg)
+            click.echo(f'Commit Successful. Digest: {digest}')
+        except RuntimeError as e:
+            exc = click.ClickException(e)
+            exc.show()
+    finally:
+        co.close()
+
+
+# -------------------------- Arrayset Interactor ------------------------------
+
+
+# @main.group(no_args_is_help=True, add_help_option=True)
+# @click.pass_context
+# def arrayset(ctx):
+#     """Operations for working with arraysets in the writer checkout
+#     """
+#     pass
+
+
+# @arrayset.command(name='create')
+# @click.argument('name', nargs=1, required=True)
+# @click.
+# @pass_repo
+# def create_arrayset(repo: Repository, name)
+
+
+
 # ---------------------------- Remote Interaction -----------------------------
 
 

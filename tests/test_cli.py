@@ -20,7 +20,9 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '\n'\
            'Commands:\n'\
            '  branch      operate on and list branch pointers.\n'\
+           '  checkout    Checkout writer head branch at BRANCHNAME.\n'\
            '  clone       Initialize a repository at the current path and fetch updated...\n'\
+           '  commit      Commits outstanding changes.\n'\
            '  export      export ARRAYSET sample data as it existed a STARTPOINT to some...\n'\
            '  fetch       Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data  Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
@@ -63,6 +65,150 @@ def test_init_repo(managed_tmpdir):
         res = runner.invoke(cli.init, ['--name', 'test', '--email', 'test@foo.com'], obj=repo)
         assert res.exit_code == 0
         assert repo._Repository__verify_repo_initialized() is None
+
+
+def test_checkout_writer_branch_works(dummy_repo: Repository):
+    from hangar.records.heads import get_staging_branch_head
+    dummy_repo.create_branch('dev')
+    runner = CliRunner()
+    res = runner.invoke(cli.checkout, ['dev'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == 'Writer checkout head set to branch: dev\n'
+    recorded_branch = get_staging_branch_head(dummy_repo._env.branchenv)
+    assert recorded_branch == 'dev'
+    assert dummy_repo.writer_lock_held is False
+
+
+def test_checkout_writer_branch_nonexistant_branch_errors(dummy_repo: Repository):
+    from hangar.records.heads import get_staging_branch_head
+    runner = CliRunner()
+    res = runner.invoke(cli.checkout, ['doesnotexist'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == 'Error: branch with name: doesnotexist does not exist. cannot get head.\n'
+    recorded_branch = get_staging_branch_head(dummy_repo._env.branchenv)
+    assert recorded_branch == 'master'
+    assert dummy_repo.writer_lock_held is False
+
+
+def test_checkout_writer_branch_lock_held_errors(dummy_repo: Repository):
+    from hangar.records.heads import get_staging_branch_head
+    dummy_repo.create_branch('testbranch')
+    co = dummy_repo.checkout(write=True, branch='master')
+    try:
+        runner = CliRunner()
+        res = runner.invoke(cli.checkout, ['testbranch'], obj=dummy_repo)
+        assert res.exit_code == 0
+        msg = res.stdout
+        assert msg.startswith('Error: Cannot acquire the writer lock.') is True
+        recorded_branch = get_staging_branch_head(dummy_repo._env.branchenv)
+        assert recorded_branch == 'master'
+        assert dummy_repo.writer_lock_held is True
+        assert co.branch_name == 'master'
+    finally:
+        co.close()
+    assert dummy_repo.writer_lock_held is False
+
+
+def test_commit_cli_message(dummy_repo: Repository):
+    co = dummy_repo.checkout(write=True)
+    co.metadata['newkeyhere'] = 'somevaluehere'
+    base_digest = co.commit_hash
+    base_branch = co.branch_name
+    co.close()
+    assert base_branch == 'master'
+
+    runner = CliRunner()
+    res = runner.invoke(cli.commit, ['-m', 'this is my commit message'], obj=dummy_repo)
+    assert res.exit_code == 0
+    out = res.stdout
+    assert out.startswith('Commit message:\nthis is my commit message\nCommit Successful') is True
+    new_digest = out.split(' ')[-1].rstrip('\n')
+    assert new_digest != base_digest
+
+    nco = dummy_repo.checkout(write=True)
+    try:
+        assert nco.commit_hash == new_digest
+        assert nco.branch_name == base_branch
+    finally:
+        nco.close()
+
+
+def test_commit_cli_message_with_no_changes(dummy_repo: Repository):
+    co = dummy_repo.checkout(write=True)
+    base_digest = co.commit_hash
+    base_branch = co.branch_name
+    co.close()
+    assert base_branch == 'master'
+
+    runner = CliRunner()
+    res = runner.invoke(cli.commit, ['-m', 'this is my commit message'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout.endswith('Error: No changes made in staging area. Cannot commit.\n')
+
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert co.branch_name == base_branch
+        assert co.commit_hash == base_digest
+    finally:
+        co.close()
+
+
+def substitute_editor_commit_message(hint):
+    return 'this is my commit message\n' + hint
+
+
+def test_commit_editor_message(monkeypatch, dummy_repo: Repository):
+    import click
+    monkeypatch.setattr(click, 'edit', substitute_editor_commit_message)
+
+    co = dummy_repo.checkout(write=True)
+    co.metadata['newkeyhere'] = 'somevaluehere'
+    base_digest = co.commit_hash
+    base_branch = co.branch_name
+    co.close()
+    assert base_branch == 'master'
+
+    runner = CliRunner()
+    res = runner.invoke(cli.commit, obj=dummy_repo)
+    assert res.exit_code == 0
+    out = res.stdout
+    assert out.startswith('Commit message:\nthis is my commit message\nCommit Successful') is True
+    new_digest = out.split(' ')[-1].rstrip('\n')
+    assert new_digest != base_digest
+
+    nco = dummy_repo.checkout(write=True)
+    try:
+        assert nco.commit_hash == new_digest
+        assert nco.branch_name == base_branch
+    finally:
+        nco.close()
+
+
+def substitute_editor_empty_commit_message(hint):
+    return hint
+
+
+def test_commit_editor_empty_message(monkeypatch, dummy_repo: Repository):
+    import click
+    monkeypatch.setattr(click, 'edit', substitute_editor_empty_commit_message)
+
+    co = dummy_repo.checkout(write=True)
+    co.metadata['newkeyhere'] = 'somevaluehere'
+    base_digest = co.commit_hash
+    base_branch = co.branch_name
+    co.close()
+    assert base_branch == 'master'
+
+    runner = CliRunner()
+    res = runner.invoke(cli.commit, obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == 'Aborted! Empty commit message\n'
+    nco = dummy_repo.checkout(write=True)
+    try:
+        assert nco.commit_hash == base_digest
+        assert nco.branch_name == base_branch
+    finally:
+        nco.close()
 
 
 def test_clone(written_two_cmt_server_repo):
