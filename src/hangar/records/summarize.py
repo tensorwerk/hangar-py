@@ -2,11 +2,13 @@ import os
 import time
 from io import StringIO
 
+import numpy as np
 import lmdb
 
 from . import heads, commiting, queries
 from ..context import TxnRegister
-from ..utils import format_bytes, file_size, folder_size
+from ..diff import DiffOut, Changes
+from ..utils import format_bytes, file_size, folder_size, unique_everseen
 
 
 def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
@@ -109,7 +111,7 @@ def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no co
     return buf
 
 
-def summary(env, *, branch='', commit=''):
+def summary(env, *, branch='', commit='') -> StringIO:
     """Summary of data set stored in repository.
 
     Parameters
@@ -123,8 +125,8 @@ def summary(env, *, branch='', commit=''):
 
     Returns
     -------
-    dict:
-        the contents of the commit ref at the queried commit.
+    StringIO:
+        buffer formatting the contents of the commit ref at the queried commit.
     """
     if commit != '':
         cmt = commit
@@ -183,4 +185,54 @@ def summary(env, *, branch='', commit=''):
         buf.write(f'|----------------- \n')
         buf.write(f'|  Number of Keys: {query.metadata_count()} \n')
 
+    return buf
+
+
+def status(diff: DiffOut) -> StringIO:
+    """Format human readable string buffer of changes in a staging area
+
+    Parameters
+    ----------
+    diff : DiffOut
+        diff struct tuple returned from standard diff tool.
+
+    Returns
+    -------
+    StringIO
+        Buffer containing human readable printable string of change summary
+    """
+    def _diff_info(df: Changes) -> StringIO:
+        """Format buffer for each of `ADDED`, `DELETED`, `MUTATED` changes
+        """
+        buf = StringIO()
+        buf.write(f'|---------- \n')
+        buf.write(f'| Schema: {len(df.schema)} \n')
+        for k, v in df.schema.items():
+            buf.write(f'|  - "{k}": \n')
+            buf.write(f'|       named: {v.schema_is_named} \n')
+            buf.write(f'|       dtype: {np.dtype(np.typeDict[v.schema_dtype])} \n')
+            buf.write(f'|       (max) shape: {v.schema_max_shape} \n')
+            buf.write(f'|       variable shape: {v.schema_is_var} \n')
+            buf.write(f'|       backend: {v.schema_default_backend} \n')
+            buf.write(f'|       backend opts: {v.schema_default_backend_opts} \n')
+
+        buf.write('|---------- \n')
+        buf.write(f'| Samples: {len(df.samples)} \n')
+        unique = unique_everseen(df.samples.keys(), lambda x: x.aset_name)
+        for u in unique:
+            un = u.aset_name
+            count = sum((1 for k in df.samples.keys() if k.aset_name == un))
+            buf.write(f'|  - "{un}": {count} \n')
+
+        buf.write('|---------- \n')
+        buf.write(f'| Metadata: {len(df.metadata)} \n')
+        buf.write(' \n')
+        return buf
+
+    buf = StringIO()
+    for changes, changeType in zip(diff, diff.__annotations__.keys()):
+        buf.write('============ \n')
+        buf.write(f'| {changeType.upper()} \n')
+        change_buf = _diff_info(changes)
+        buf.write(change_buf.getvalue())
     return buf

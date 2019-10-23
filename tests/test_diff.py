@@ -374,9 +374,9 @@ class TestWriterDiff(object):
         co = repo.checkout(write=True)
         co.arraysets['writtenaset']['45'] = dummyData
         assert co.diff.status() == 'DIRTY'
-        diff = co.diff.staged().diff
+        diff = co.diff.staged()
         calledWithAset = False
-        for record in diff.added.samples:
+        for record in diff.diff.added.samples:
             if record.aset_name == 'writtenaset':
                 calledWithAset = True
                 assert record.data_name in '45'
@@ -390,8 +390,8 @@ class TestWriterDiff(object):
         co = repo.checkout(write=True)
         co.arraysets.init_arrayset(name='sampleaset', shape=(3, 5), dtype=np.float32)
         assert co.diff.status() == 'DIRTY'
-        diff = co.diff.staged().diff
-        assert 'sampleaset' in diff.added.schema
+        diff = co.diff.staged()
+        assert 'sampleaset' in diff.diff.added.schema
         co.commit('init aset')
         assert co.diff.status() == 'CLEAN'
         co.close()
