@@ -21,6 +21,7 @@ class PluginManager(object):
         Scan for entry points, find the plugins and store them in provided storage
         containers
         """
+        # TODO: fetch plugin.accepts and plugin.provides from entrypoint if possible
         for entry_point in pkg_resources.iter_entry_points('hangar.external.plugins'):
             PluginClass = entry_point.load()
             self._plugin_store[entry_point.name] = PluginClass()

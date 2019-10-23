@@ -8,7 +8,6 @@ from hangar import Repository
 from hangar.cli import cli
 from conftest import backend_params
 
-
 # -------------------------------- test data ----------------------------------
 
 
@@ -289,7 +288,6 @@ def test_push_fetch_records(server_instance, backend):
     ['origin', 'master', '--nbytes', '3Kb'],
 ])
 def test_fetch_records_and_data(server_instance, backend, options):
-
     runner = CliRunner()
     with runner.isolated_filesystem():
         repo = Repository(getcwd(), exists=False)
@@ -699,3 +697,154 @@ def test_start_server(managed_tmpdir):
         assert time.time() - startTime <= 1.8  # buffer to give it time to stop
         assert res.exit_code == 0
         assert 'Hangar Server Started' in res.stdout
+
+
+# =========================== External Plugin =================================
+
+def monkeypatch_scan(provides, accepts, attribute, func):
+    def wrapper(self):
+        from hangar.external import BasePlugin
+
+        plugin = BasePlugin(provides, accepts)
+        plugin.__dict__[attribute] = func
+
+        self._plugin_store['myplugin'] = plugin
+    return wrapper
+
+
+def test_import(monkeypatch, written_repo):
+    from hangar.external import PluginManager
+    repo = written_repo
+    runner = CliRunner()
+    shape = (5, 7)
+    fpath = 'data.ext'
+    aset_name = 'writtenaset'
+
+    def load(fpath, *args, **kwargs):
+        data = np.random.random((5, 7)).astype(np.float64)
+        return data, fpath
+
+    with monkeypatch.context() as m:
+        m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['load'], ['ext'], 'load', load))
+
+        # invalid branch
+        res = runner.invoke(cli.import_data, [aset_name, fpath, '--branch', 'invalid'], obj=repo)
+        assert 'invalid does not exist' in res.stdout
+
+        # invalid plugin
+        res = runner.invoke(cli.import_data, [aset_name, fpath, '--plugin', 'invalid'], obj=repo)
+        assert str(res.exception) == 'Plugin invalid not found'
+
+        # adding data
+        res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
+        assert res.exit_code == 0
+        co = repo.checkout(write=True)
+        co.commit('added data')
+        d1 = co.arraysets[aset_name][fpath]
+        co.close()
+
+        # without overwrite
+        res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
+        assert res.exit_code == 0
+        co = repo.checkout()
+        d2 = co.arraysets[aset_name][fpath]
+        assert np.allclose(d1, d2)
+
+        # with overwrite
+        res = runner.invoke(cli.import_data, [aset_name, fpath, '--overwrite'], obj=repo)
+        assert res.exit_code == 0
+        co = repo.checkout(write=True)
+        co.commit('added data')
+        d3 = co.arraysets[aset_name][fpath]
+        co.close()
+        assert not np.allclose(d1, d3)
+    assert d1.shape == d2.shape == d3.shape == shape
+
+
+def test_export(monkeypatch, written_repo, tmp_path):
+    from hangar.external import PluginManager
+    import os
+
+    repo = written_repo
+    runner = CliRunner()
+    shape = (5, 7)
+    aset_name = 'writtenaset'
+
+    co = repo.checkout(write=True)
+    aset = co.arraysets[aset_name]
+    aset['data'] = np.random.random(shape)
+    co.commit('added')
+    co.close()
+
+    save_msg = "Data saved from custom save function"
+
+    def save(fpath, *args, **kwargs):
+        print(save_msg)
+        print(fpath)
+
+    with monkeypatch.context() as m:
+        m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', save))
+        res = runner.invoke(
+            cli.export_data, [aset_name, '-o', str(tmp_path), '--sample', 'data', '--format', 'ext'], obj=repo)
+        assert res.exit_code == 0
+        assert save_msg in res.output
+
+        # invalid plugin
+        res = runner.invoke(
+            cli.export_data, [aset_name, '-o', str(tmp_path), '--plugin', 'invalid'], obj=repo)
+        assert str(res.exception) == 'Plugin invalid not found'
+
+        # without --out
+        res = runner.invoke(
+            cli.export_data, [aset_name, '--sample', 'data', '--format', 'ext'], obj=repo)
+        assert os.getcwd() in res.output
+
+        # wrong sample name
+        res = runner.invoke(
+            cli.export_data, [aset_name, '--sample', 'wrongname', '--format', 'ext'], obj=repo)
+        assert 'KEY ERROR' in res.output
+
+        # with branch
+        res = runner.invoke(
+            cli.export_data, [aset_name, 'master', '--sample', 'data', '--format', 'ext'], obj=repo)
+        assert res.exit_code == 0
+
+
+def test_show(monkeypatch, written_repo):
+    from hangar.external import PluginManager
+    repo = written_repo
+    runner = CliRunner()
+    shape = (5, 7)
+    aset_name = 'writtenaset'
+
+    co = repo.checkout(write=True)
+    aset = co.arraysets[aset_name]
+    aset['data'] = np.random.random(shape)
+    co.commit('added')
+    co.close()
+
+    show_msg = "Data is displayed from custom show function"
+
+    def show(fpath, *args, **kwargs):
+        print(show_msg)
+
+    with monkeypatch.context() as m:
+        m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['show'], ['ext'], 'show', show))
+
+        res = runner.invoke(
+            cli.view_data, [aset_name, 'data', '--format', 'ext'], obj=repo)
+        assert res.exit_code == 0
+        assert show_msg in res.output
+
+        # with startpoint
+        res = runner.invoke(
+            cli.view_data, [aset_name, 'data', 'master', '--format', 'ext'], obj=repo)
+        assert res.exit_code == 0
+        res = runner.invoke(
+            cli.view_data, [aset_name, 'data', 'wrongstartpoint', '--format', 'ext'], obj=repo)
+        assert 'No expanded commit hash found for short: wrongstartpoint' in str(res.exception)
+
+        # wrong format
+        res = runner.invoke(
+            cli.view_data, [aset_name, 'data', '--format', 'wrong'], obj=repo)
+        assert 'No plugins found' in str(res.exception)

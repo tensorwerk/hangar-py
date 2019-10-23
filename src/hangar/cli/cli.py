@@ -15,13 +15,14 @@ Why does this file exist, and why not put this in __main__?
 """
 import os
 import time
-import warnings
 
 import click
 import numpy as np
 
 from hangar import Repository
 from hangar import __version__
+
+from .utils import parse_custom_arguments
 
 
 pass_repo = click.make_pass_decorator(Repository, ensure=True)
@@ -535,136 +536,172 @@ def server(overwrite, ip, port, timeout):
 # ---------------------------- Import Exporters -------------------------------
 
 
-@main.command(name='import')
+@main.command(name='import', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
 @click.argument('arrayset', required=True)
 @click.argument('path', required=True)
-@click.option('--branch', default=None, help='branch to import data to')
+@click.option('--branch', default=None, help='branch to import data')
 @click.option('--plugin', default=None, help='override auto-infered plugin')
 @click.option('--overwrite', is_flag=True,
               help='overwrite data samples with the same name as the imported data file ')
 @pass_repo
-def import_data(repo: Repository, arrayset, path, branch, plugin, overwrite):
+@click.pass_context
+def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite):
     """Import file(s) at PATH to ARRAYSET in the staging area.
     """
-    from hangar.cli.io import imread
+    # TODO: ignore warning through env variable
+    import types
+    from hangar import external
     from hangar.records.heads import get_staging_branch_head
+    kwargs = parse_custom_arguments(ctx.args)
 
+    if branch is not None:
+        if branch in repo.list_branches():
+            branch_name = branch
+        else:
+            click.echo(f'Branch name: {branch} does not exist, Exiting.')
+            return None
+    else:
+        branch_name = get_staging_branch_head(repo._env.branchenv)
+    click.echo(f'Writing to branch: {branch_name}')
+
+    co = repo.checkout(write=True, branch=branch_name)
     try:
-        if branch is not None:
-            if branch in repo.list_branches():
-                branch_name = branch
-            else:
-                click.echo(f'Branch name: {branch} does not exist, Exiting.')
-                return None
+        aset = co.arraysets.get(arrayset)
+        if os.path.isdir(path):
+            files = [os.path.join(path, fname) for fname in os.listdir(path)]
         else:
-            branch_name = get_staging_branch_head(repo._env.branchenv)
-        click.echo(f'Writing to branch: {branch_name}')
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            co = repo.checkout(write=True, branch=branch_name)
-            aset = co.arraysets.get(arrayset)
-
-        if os.path.isfile(path):
-            fname = os.path.basename(path)
-            if not overwrite:
-                if fname in aset:
-                    click.echo(f'skipping existing name: {fname} as overwrite flag not set')
-                    return None
-            fNamePth = [(fname, path)]
-        else:
-            fnames = os.listdir(path)
-            if not overwrite:
-                fnames = [fname for fname in fnames if fname not in aset]
-            fNamePth = [(fname, os.path.join(path, fname)) for fname in fnames]
-
-        with aset as a, click.progressbar(fNamePth) as fnamesBar:
-            for fn, fpth in fnamesBar:
-                arr = imread(fpth, plugin=plugin)
-                try:
-                    a[fn] = arr
-                except ValueError as e:
-                    click.echo(e)
+            files = [path]
+        with aset, click.progressbar(files) as filesBar:
+            for fpath in filesBar:
+                extension = os.path.splitext(fpath)[1].strip('.')
+                loaded = external.load(fpath, plugin=plugin, extension=extension, **kwargs)
+                if isinstance(loaded, types.GeneratorType):
+                    for arr, fname in loaded:
+                        if not overwrite and fname in aset:
+                            continue
+                        try:
+                            aset[fname] = arr
+                        except ValueError as e:
+                            click.echo(e)
+                else:
+                    arr, fname = loaded
+                    if not overwrite and fname in aset:
+                        continue
+                    try:
+                        aset[fname] = arr
+                    except ValueError as e:
+                        click.echo(e)
     finally:
         co.close()
 
 
-@main.command(name='export')
-@click.argument('startpoint', nargs=1, required=True)
+@main.command(name='export', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
 @click.argument('arrayset', required=True)
-@click.option('-o', '--out', required=True, help='Path to export the data to.')
-@click.option('-s', '--sample', default=False, help='Sample name to export')
-@click.option('-f', '--format', 'format_', required=False, help='File format used for exporting.')
+@click.argument('startpoint', nargs=1, default=None, required=False)
+@click.option('-o', '--out', required=False, default=os.getcwd(), help="Directory to export data")
+@click.option('-s', '--sample', default=None, help='Sample name to export. You can optionally specify the type'
+                                                   ' of sample name after the colon (ex. 54:str or 54:int)')
+@click.option('-f', '--format', 'format_', required=False, help='File format of output file')
 @click.option('--plugin', required=False, help='override auto-inferred plugin')
 @pass_repo
-def export_data(repo: Repository, startpoint, arrayset, out, sample, format_, plugin):
-    """export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
+@click.pass_context
+def export_data(ctx, repo: Repository, arrayset, out, startpoint, sample, format_, plugin):
     """
+    Export ARRAYSET sample data as it existed in the branch or commit to some format and path.
+    """
+    # TODO: ignore warning through env variable
+    # TODO: document --sample exceptional case
     from hangar.records.commiting import expand_short_commit_digest
-    from hangar.records.heads import get_branch_head_commit
-    from hangar.cli.io import imsave
+    from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
+    from hangar import external
+
+    kwargs = parse_custom_arguments(ctx.args)
 
     if startpoint in repo.list_branches():
         base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
-    else:
+    elif startpoint:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+    else:
+        branch_name = get_staging_branch_head(repo._env.branchenv)
+        base_commit = get_branch_head_commit(repo._env.branchenv, branch_name)
+    co = repo.checkout(commit=base_commit)
 
     try:
-        co = repo.checkout(write=False, commit=base_commit)
-        arrayset = co.arraysets[arrayset]
+        aset = co.arraysets.get(arrayset)
         if sample:
+            sample, stype = sample.split(':') if ':' in sample else (sample, '')
+            if stype == 'int' or stype == 'str':
+                sample = eval(stype)(sample)
+            elif stype:
+                click.echo(f"ValueError: invalid sample type {stype}")
+                return
             sampleNames = [sample]
         else:
-            sampleNames = list(arrayset.keys())
+            sampleNames = list(aset.keys())
 
-        if format_:
-            format_ = format_.lstrip('.')
-        outP = os.path.expanduser(os.path.normpath(out))
+        extension = format_.lstrip('.') if format_ else None
+        out = os.path.normpath(os.path.expanduser(out))
+        if not os.path.isdir(out):
+            click.echo(f"Directory {out} does not exist")
+            return
 
-        with arrayset as aset, click.progressbar(sampleNames) as sNamesBar:
+        with aset, click.progressbar(sampleNames) as sNamesBar:
             for sampleN in sNamesBar:
-                if format_:
-                    if sampleN.endswith(format_):
-                        outFP = os.path.join(outP, f'{sampleN}')
-                    else:
-                        outFP = os.path.join(outP, f'{sampleN}.{format_}')
-                else:
-                    outFP = os.path.join(outP, f'{sampleN}')
                 try:
                     data = aset[sampleN]
-                    imsave(outFP, data)
+                    if extension:
+                        outP = os.path.join(out, f"{sampleN}.{extension}")
+                    else:
+                        outP = os.path.join(out, sampleN)
+                    external.save(outP, data, plugin, extension, **kwargs)
                 except KeyError as e:
                     click.echo(e)
     finally:
         co.close()
 
 
-@main.command(name='view')
-@click.argument('startpoint', nargs=1, type=str, required=True)
+@main.command(name='view', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
 @click.argument('arrayset', type=str, required=True)
 @click.argument('sample', type=str, required=True)
-@click.option('--plugin', default=None,
-              help='Plugin name to use instead of auto-inferred plugin')
+@click.argument('startpoint', nargs=1, default=None, required=False)
+@click.option('-f', '--format', 'format_', required=False, help='File format of output file')
+@click.option('--plugin', default=None, help='Plugin name to use instead of auto-inferred plugin')
 @pass_repo
-def view_data(repo: Repository, startpoint, arrayset, sample, plugin):
-    """Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
+@click.pass_context
+def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plugin):
     """
+    Use a plugin to view the data of some SAMPLE in ARRAYSET at branch or commit head
+    """
+    # TODO: why two view functions
+    # TODO: ignore warning through env variable
     from hangar.records.commiting import expand_short_commit_digest
-    from hangar.records.heads import get_branch_head_commit
-    from hangar.cli.io import imshow, show
+    from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
+    from hangar import external
 
+    kwargs = parse_custom_arguments(ctx.args)
     if startpoint in repo.list_branches():
         base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
-    else:
+    elif startpoint:
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
+    else:
+        branch_name = get_staging_branch_head(repo._env.branchenv)
+        base_commit = get_branch_head_commit(repo._env.branchenv, branch_name)
+    co = repo.checkout(commit=base_commit)
+
+    sample, stype = sample.split(':') if ':' in sample else (sample, '')
+    if stype == 'int' or stype == 'str':
+        sample = eval(stype)(sample)
+    elif stype:
+        click.echo(f"ValueError: invalid sample type {stype}")
+        return
+
+    extension = format_.lstrip('.') if format_ else None
 
     try:
-        co = repo.checkout(write=False, commit=base_commit)
-        arrayset = co.arraysets[arrayset]
+        aset = co.arraysets.get(arrayset)
         try:
-            data = arrayset[sample]
-            imshow(data, plugin=plugin)
-            show()
+            data = aset[sample]
+            external.show(data, plugin=plugin, extension=extension, **kwargs)
         except KeyError as e:
             click.echo(e)
     finally:
