@@ -546,7 +546,8 @@ def server(overwrite, ip, port, timeout):
 @pass_repo
 @click.pass_context
 def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite):
-    """Import file(s) at PATH to ARRAYSET in the staging area.
+    """
+    Import file(s) at PATH to ARRAYSET in the staging area.
     """
     # TODO: ignore warning through env variable
     import types
@@ -600,17 +601,24 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 @click.argument('startpoint', nargs=1, default=None, required=False)
 @click.option('-o', '--out', required=False, default=os.getcwd(), help="Directory to export data")
 @click.option('-s', '--sample', default=None, help='Sample name to export. You can optionally specify the type'
-                                                   ' of sample name after the colon (ex. 54:str or 54:int)')
+                                                   ' of sample name after the colon (ex. `54:str` or `54:int`)')
 @click.option('-f', '--format', 'format_', required=False, help='File format of output file')
 @click.option('--plugin', required=False, help='override auto-inferred plugin')
 @pass_repo
 @click.pass_context
 def export_data(ctx, repo: Repository, arrayset, out, startpoint, sample, format_, plugin):
     """
-    Export ARRAYSET sample data as it existed in the branch or commit to some format and path.
+    Export ARRAYSET sample data as it existed a STARTPOINT to some format and path. Specifying
+    which sample to be exported is possible by using the switch `--sample` (without this,
+    all the samples in the given arrayset will be exported). Since hangar supports both
+    int and str datatype for the sample name, specifying that while mentioning the sample name
+    might be necessary at times. It is possible to do that by separating the name and type by
+    a colon. For example,
+        1. if the sample name is string of numeric 10 - `10:str` or `10`
+        2. if the sample name is `sample1` - `sample1:str1 or `sample1`
+        3. if the sample name is an int, let say 10 - `10:int`
     """
     # TODO: ignore warning through env variable
-    # TODO: document --sample exceptional case
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
     from hangar import external
@@ -630,11 +638,7 @@ def export_data(ctx, repo: Repository, arrayset, out, startpoint, sample, format
         aset = co.arraysets.get(arrayset)
         if sample:
             sample, stype = sample.split(':') if ':' in sample else (sample, '')
-            if stype == 'int' or stype == 'str':
-                sample = eval(stype)(sample)
-            elif stype:
-                click.echo(f"ValueError: invalid sample type {stype}")
-                return
+            sample = int(sample) if stype == 'int' else str(sample)
             sampleNames = [sample]
         else:
             sampleNames = list(aset.keys())
@@ -670,9 +674,8 @@ def export_data(ctx, repo: Repository, arrayset, out, startpoint, sample, format
 @click.pass_context
 def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plugin):
     """
-    Use a plugin to view the data of some SAMPLE in ARRAYSET at branch or commit head
+    Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT
     """
-    # TODO: why two view functions
     # TODO: ignore warning through env variable
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
@@ -689,11 +692,7 @@ def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plug
     co = repo.checkout(commit=base_commit)
 
     sample, stype = sample.split(':') if ':' in sample else (sample, '')
-    if stype == 'int' or stype == 'str':
-        sample = eval(stype)(sample)
-    elif stype:
-        click.echo(f"ValueError: invalid sample type {stype}")
-        return
+    sample = int(sample) if stype == 'int' else str(sample)
 
     extension = format_.lstrip('.') if format_ else None
 

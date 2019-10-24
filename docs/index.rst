@@ -12,6 +12,7 @@
    design
    api
    cli
+   externals
    faq
    backends
    contributing

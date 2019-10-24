@@ -23,7 +23,7 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  checkout    Checkout writer head branch at BRANCHNAME.\n'\
            '  clone       Initialize a repository at the current path and fetch updated...\n'\
            '  commit      Commits outstanding changes.\n'\
-           '  export      export ARRAYSET sample data as it existed a STARTPOINT to some...\n'\
+           '  export      Export ARRAYSET sample data as it existed a STARTPOINT to some...\n'\
            '  fetch       Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data  Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
            '  import      Import file(s) at PATH to ARRAYSET in the staging area.\n'\
@@ -700,6 +700,8 @@ def test_start_server(managed_tmpdir):
 
 
 # =========================== External Plugin =================================
+from hangar.external import PluginManager
+
 
 def monkeypatch_scan(provides, accepts, attribute, func):
     def wrapper(self):
@@ -712,139 +714,206 @@ def monkeypatch_scan(provides, accepts, attribute, func):
     return wrapper
 
 
-def test_import(monkeypatch, written_repo):
-    from hangar.external import PluginManager
-    repo = written_repo
-    runner = CliRunner()
-    shape = (5, 7)
-    fpath = 'data.ext'
+@pytest.fixture()
+def written_repo_with_1_sample(written_repo):
     aset_name = 'writtenaset'
+    shape = (5, 7)
+    co = written_repo.checkout(write=True)
+    aset = co.arraysets[aset_name]
+    aset['data'] = np.random.random(shape)
+    co.commit('added')
+    co.close()
+    yield written_repo
 
+
+class TestImport(object):
+
+    @staticmethod
     def load(fpath, *args, **kwargs):
         data = np.random.random((5, 7)).astype(np.float64)
         return data, fpath
 
-    with monkeypatch.context() as m:
-        m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['load'], ['ext'], 'load', load))
+    def test_import(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        shape = (5, 7)
+        fpath = 'data.ext'
+        aset_name = 'writtenaset'
 
-        # invalid branch
-        res = runner.invoke(cli.import_data, [aset_name, fpath, '--branch', 'invalid'], obj=repo)
-        assert 'invalid does not exist' in res.stdout
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['load'], ['ext'], 'load', self.load))
+            # adding data
+            res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
+            assert res.exit_code == 0
+            co = repo.checkout(write=True)
+            co.commit('added data')
+            d1 = co.arraysets[aset_name][fpath]
+            co.close()
 
-        # invalid plugin
-        res = runner.invoke(cli.import_data, [aset_name, fpath, '--plugin', 'invalid'], obj=repo)
-        assert str(res.exception) == 'Plugin invalid not found'
+            # without overwrite
+            res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
+            assert res.exit_code == 0
+            co = repo.checkout()
+            d2 = co.arraysets[aset_name][fpath]
+            co.close()
+            assert np.allclose(d1, d2)
 
-        # adding data
-        res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
-        assert res.exit_code == 0
-        co = repo.checkout(write=True)
-        co.commit('added data')
-        d1 = co.arraysets[aset_name][fpath]
-        co.close()
+            # with overwrite
+            res = runner.invoke(cli.import_data, [aset_name, fpath, '--overwrite'], obj=repo)
+            assert res.exit_code == 0
+            co = repo.checkout(write=True)
+            co.commit('added data')
+            d3 = co.arraysets[aset_name][fpath]
+            co.close()
+            assert not np.allclose(d1, d3)
+        assert d1.shape == d2.shape == d3.shape == shape
 
-        # without overwrite
-        res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
-        assert res.exit_code == 0
-        co = repo.checkout()
-        d2 = co.arraysets[aset_name][fpath]
-        assert np.allclose(d1, d2)
+    def test_import_wrong_args(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        fpath = 'data.ext'
+        aset_name = 'writtenaset'
 
-        # with overwrite
-        res = runner.invoke(cli.import_data, [aset_name, fpath, '--overwrite'], obj=repo)
-        assert res.exit_code == 0
-        co = repo.checkout(write=True)
-        co.commit('added data')
-        d3 = co.arraysets[aset_name][fpath]
-        co.close()
-        assert not np.allclose(d1, d3)
-    assert d1.shape == d2.shape == d3.shape == shape
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['load'], ['ext'], 'load', self.load))
+
+            # invalid branch
+            res = runner.invoke(cli.import_data, [aset_name, fpath, '--branch', 'invalid'], obj=repo)
+            assert 'invalid does not exist' in res.stdout
+
+            # invalid plugin
+            res = runner.invoke(cli.import_data, [aset_name, fpath, '--plugin', 'invalid'], obj=repo)
+            assert str(res.exception) == 'Plugin invalid not found'
+
+    def test_import_generator_on_load(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        fpath = 'data.ext'
+        aset_name = 'writtenaset'
+
+        def load(fpath, *args, **kwargs):
+            for i in range(10):
+                data, name = self.load(fpath, *args, **kwargs)
+                yield data, f"{i}_{name}"
+
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['load'], ['ext'], 'load', load))
+            res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
+            assert res.exit_code == 0
+            co = repo.checkout(write=True)
+            co.commit('added data')
+            aset = co.arraysets[aset_name]
+            for i in range(10):
+                assert f"{i}_{fpath}" in aset.keys()
+            co.close()
 
 
-def test_export(monkeypatch, written_repo, tmp_path):
-    from hangar.external import PluginManager
-    import os
-
-    repo = written_repo
-    runner = CliRunner()
-    shape = (5, 7)
-    aset_name = 'writtenaset'
-
-    co = repo.checkout(write=True)
-    aset = co.arraysets[aset_name]
-    aset['data'] = np.random.random(shape)
-    co.commit('added')
-    co.close()
-
+class TestExport(object):
     save_msg = "Data saved from custom save function"
 
-    def save(fpath, *args, **kwargs):
-        print(save_msg)
+    @classmethod
+    def save(cls, fpath, *args, **kwargs):
+        print(cls.save_msg)
         print(fpath)
 
-    with monkeypatch.context() as m:
-        m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', save))
-        res = runner.invoke(
-            cli.export_data, [aset_name, '-o', str(tmp_path), '--sample', 'data', '--format', 'ext'], obj=repo)
-        assert res.exit_code == 0
-        assert save_msg in res.output
+    def test_export_success(self, monkeypatch, written_repo_with_1_sample, tmp_path):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
 
-        # invalid plugin
-        res = runner.invoke(
-            cli.export_data, [aset_name, '-o', str(tmp_path), '--plugin', 'invalid'], obj=repo)
-        assert str(res.exception) == 'Plugin invalid not found'
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
+            res = runner.invoke(
+                cli.export_data, [aset_name, '-o', str(tmp_path), '--sample', 'data', '--format', 'ext'], obj=repo)
+            assert res.exit_code == 0
+            assert self.save_msg in res.output
 
-        # without --out
-        res = runner.invoke(
-            cli.export_data, [aset_name, '--sample', 'data', '--format', 'ext'], obj=repo)
-        assert os.getcwd() in res.output
+    def test_export_wrong_arg(self, monkeypatch, written_repo_with_1_sample, tmp_path):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
 
-        # wrong sample name
-        res = runner.invoke(
-            cli.export_data, [aset_name, '--sample', 'wrongname', '--format', 'ext'], obj=repo)
-        assert 'KEY ERROR' in res.output
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
+            res = runner.invoke(
+                cli.export_data, [aset_name, '-o', str(tmp_path), '--plugin', 'invalid'], obj=repo)
+            assert str(res.exception) == 'Plugin invalid not found'
 
-        # with branch
-        res = runner.invoke(
-            cli.export_data, [aset_name, 'master', '--sample', 'data', '--format', 'ext'], obj=repo)
-        assert res.exit_code == 0
+    def test_export_without_specifying_out(self, monkeypatch, written_repo_with_1_sample):
+        import os
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
+
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
+            res = runner.invoke(
+                cli.export_data, [aset_name, '--sample', 'data', '--format', 'ext'], obj=repo)
+            assert os.getcwd() in res.output
+
+    def test_export_for_non_existent_sample(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
+
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
+            res = runner.invoke(
+                cli.export_data, [aset_name, '--sample', 'wrongname', '--format', 'ext'], obj=repo)
+            assert 'KEY ERROR' in res.output
+
+    def test_export_for_specified_branch(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
+
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
+            res = runner.invoke(
+                cli.export_data, [aset_name, 'master', '--sample', 'data', '--format', 'ext'], obj=repo)
+            assert res.exit_code == 0
 
 
-def test_show(monkeypatch, written_repo):
-    from hangar.external import PluginManager
-    repo = written_repo
-    runner = CliRunner()
-    shape = (5, 7)
-    aset_name = 'writtenaset'
-
-    co = repo.checkout(write=True)
-    aset = co.arraysets[aset_name]
-    aset['data'] = np.random.random(shape)
-    co.commit('added')
-    co.close()
-
+class TestShow(object):
     show_msg = "Data is displayed from custom show function"
 
-    def show(fpath, *args, **kwargs):
-        print(show_msg)
+    @classmethod
+    def show(cls, fpath, *args, **kwargs):
+        print(cls.show_msg)
 
-    with monkeypatch.context() as m:
-        m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['show'], ['ext'], 'show', show))
+    def test_show_success(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
 
-        res = runner.invoke(
-            cli.view_data, [aset_name, 'data', '--format', 'ext'], obj=repo)
-        assert res.exit_code == 0
-        assert show_msg in res.output
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['show'], ['ext'], 'show', self.show))
+            res = runner.invoke(
+                cli.view_data, [aset_name, 'data', '--format', 'ext'], obj=repo)
+            assert res.exit_code == 0
+            assert self.show_msg in res.output
 
-        # with startpoint
-        res = runner.invoke(
-            cli.view_data, [aset_name, 'data', 'master', '--format', 'ext'], obj=repo)
-        assert res.exit_code == 0
-        res = runner.invoke(
-            cli.view_data, [aset_name, 'data', 'wrongstartpoint', '--format', 'ext'], obj=repo)
-        assert 'No expanded commit hash found for short: wrongstartpoint' in str(res.exception)
+    def test_show_on_startpoint(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
 
-        # wrong format
-        res = runner.invoke(
-            cli.view_data, [aset_name, 'data', '--format', 'wrong'], obj=repo)
-        assert 'No plugins found' in str(res.exception)
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['show'], ['ext'], 'show', self.show))
+            res = runner.invoke(
+                cli.view_data, [aset_name, 'data', 'master', '--format', 'ext'], obj=repo)
+            assert res.exit_code == 0
+            res = runner.invoke(
+                cli.view_data, [aset_name, 'data', 'wrongstartpoint', '--format', 'ext'], obj=repo)
+            assert 'No expanded commit hash found for short: wrongstartpoint' in str(res.exception)
+
+    def test_show_with_wrong_arg(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
+
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['show'], ['ext'], 'show', self.show))
+            res = runner.invoke(
+                cli.view_data, [aset_name, 'data', '--format', 'wrong'], obj=repo)
+            assert 'No plugins found' in str(res.exception)

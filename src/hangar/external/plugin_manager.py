@@ -3,32 +3,50 @@ from typing import Callable
 
 
 class PluginManager(object):
+    """
+    Container class that holds the information about available plugins and
+    provides required method to fetch and clean up the plugin systems
+    """
+
     valid_provides = ['load', 'save', 'show', 'board_show']
 
     def __init__(self):
-        self.reset_plugins()
+        self._plugin_store = {}  # ex: {'pil': loaded_pil_module}
+        self._default_plugins = {}  # ex: {'jpg': {'save': 'pil'}}
+        self.plugins_loaded = False
+
+    def reset_plugins(self):
+        """
+        Reset plugin clears the existing storages and then scans
+        `hangar.external.plugins` for plugins. Once `plugin store` is populated,
+        it creates finds the default plugins to make auto-inference based on
+        file format possible
+        """
+        self._clear_plugins()
+        self._scan_plugins()
         self._read_defaults()
 
     def _clear_plugins(self):
         """
         Clear the plugin state to the default, i.e., where no plugins are loaded
         """
-        self._plugin_store = {}  # ex: {'pil': loaded_pil_module}
-        self._default_plugins = {}  # ex: {'jpg': {'save': 'pil'}}
+        self._plugin_store.clear()
+        self._default_plugins.clear()
+        self.plugins_loaded = False
 
     def _scan_plugins(self):
         """
         Scan for entry points, find the plugins and store them in provided storage
         containers
         """
-        # TODO: fetch plugin.accepts and plugin.provides from entrypoint if possible
         for entry_point in pkg_resources.iter_entry_points('hangar.external.plugins'):
             PluginClass = entry_point.load()
             self._plugin_store[entry_point.name] = PluginClass()
+        self.plugins_loaded = True
 
     def _read_defaults(self):
         """
-        Populate preferred plugin dict that maps file formats to plugins and methods. This
+        Populate default plugin dict that maps file formats to plugins and methods. This
         is used to infer which plugin to use at runtime based on file format
         """
         for fname, plugin in self._plugin_store.items():
@@ -36,10 +54,6 @@ class PluginManager(object):
             for pair in generator:
                 if pair not in self._default_plugins:
                     self._default_plugins[pair] = fname
-
-    def reset_plugins(self):
-        self._clear_plugins()
-        self._scan_plugins()
 
     def get_plugin(self, method: str, plugin: str = None, extension: str = None) -> Callable:
         """

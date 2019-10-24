@@ -1,7 +1,23 @@
+"""
+High level methods let user interact with hangar without diving into the internal
+methods of hangar. We have enabled four basic entry points as high level methods
+1. load
+2. save
+3. show
+4. board_show
+
+These entry points by itself is not capable of doing anything. But they are entry
+points to the same methods in the `hangar.external` plugins available in pypi. These
+high level entry points are used by the CLI for doing import, export and view
+operations as well as the `hangarboard <https://github.com/tensorwerk/hangarboard>`_
+for visualization (using `board_show`)
+"""
 from typing import Tuple
 
 import numpy as np
 from .plugin_manager import PluginManager
+
+pm = PluginManager()
 
 
 def load(fpath: str, plugin: str = None,
@@ -36,7 +52,8 @@ def load(fpath: str, plugin: str = None,
         ndarray returned from the given plugin
 
     """
-    pm = PluginManager()
+    if not pm.plugins_loaded:
+        pm.reset_plugins()
     func = pm.get_plugin('load', plugin=plugin, extension=extension)
     return func(fpath, **plugin_kwargs)
 
@@ -69,7 +86,8 @@ def save(fpath: str, arr: np.ndarray, plugin: str = None,
         command line argument, all the unknown keyword arguments will be collected
         as `plugin_kwargs`
     """
-    pm = PluginManager()
+    if not pm.plugins_loaded:
+        pm.reset_plugins()
     func = pm.get_plugin('save', plugin=plugin, extension=extension)
     func(fpath, arr, **plugin_kwargs)
 
@@ -99,7 +117,8 @@ def show(arr: np.ndarray, plugin: str = None,
         command line argument, all the unknown keyword arguments will be collected
         as `plugin_kwargs`
     """
-    pm = PluginManager()
+    if not pm.plugins_loaded:
+        pm.reset_plugins()
     func = pm.get_plugin('show', plugin=plugin, extension=extension)
     return func(arr, **plugin_kwargs)
 
@@ -130,6 +149,7 @@ def board_show(arr: np.ndarray, plugin: str = None,
         command line argument, all the unknown keyword arguments will be collected
         as `plugin_kwargs`
     """
-    pm = PluginManager()
+    if not pm.plugins_loaded:
+        pm.reset_plugins()
     func = pm.get_plugin('board_show', plugin=plugin, extension=extension)
     return func(arr, **plugin_kwargs)
