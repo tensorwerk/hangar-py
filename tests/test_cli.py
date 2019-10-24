@@ -41,10 +41,18 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
 # ------------------------------- begin tests ---------------------------------
 
 
-def test_help():
+def test_help_option():
     runner = CliRunner()
     with runner.isolated_filesystem():
         res = runner.invoke(cli.main, ['--help'])
+        assert res.exit_code == 0
+        assert res.stdout == help_res
+
+
+def test_help_no_args_option():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        res = runner.invoke(cli.main)
         assert res.exit_code == 0
         assert res.stdout == help_res
 
@@ -84,7 +92,7 @@ def test_checkout_writer_branch_nonexistant_branch_errors(dummy_repo: Repository
     from hangar.records.heads import get_staging_branch_head
     runner = CliRunner()
     res = runner.invoke(cli.checkout, ['doesnotexist'], obj=dummy_repo)
-    assert res.exit_code == 0
+    assert res.exit_code == 1
     assert res.stdout == 'Error: branch with name: doesnotexist does not exist. cannot get head.\n'
     recorded_branch = get_staging_branch_head(dummy_repo._env.branchenv)
     assert recorded_branch == 'master'
@@ -98,7 +106,7 @@ def test_checkout_writer_branch_lock_held_errors(dummy_repo: Repository):
     try:
         runner = CliRunner()
         res = runner.invoke(cli.checkout, ['testbranch'], obj=dummy_repo)
-        assert res.exit_code == 0
+        assert res.exit_code == 1
         msg = res.stdout
         assert msg.startswith('Error: Cannot acquire the writer lock.') is True
         recorded_branch = get_staging_branch_head(dummy_repo._env.branchenv)
@@ -143,7 +151,7 @@ def test_commit_cli_message_with_no_changes(dummy_repo: Repository):
 
     runner = CliRunner()
     res = runner.invoke(cli.commit, ['-m', 'this is my commit message'], obj=dummy_repo)
-    assert res.exit_code == 0
+    assert res.exit_code == 1
     assert res.stdout.endswith('Error: No changes made in staging area. Cannot commit.\n')
 
     co = dummy_repo.checkout(write=True)
@@ -518,6 +526,21 @@ def test_arrayset_create_invalid_dtype_fails(dummy_repo):
         co.close()
 
 
+def test_arrayset_create_invalid_name_fails(dummy_repo):
+    runner = CliRunner()
+    res = runner.invoke(cli.create_arrayset, ['tra#in', 'FLOAT32', '256'], obj=dummy_repo)
+    assert res.exit_code == 1
+    msg = res.stdout
+    assert msg.startswith('Error: Arrayset name provided: `tra#in` is invalid.') is True
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert 'tra#in' not in co.arraysets
+        assert 'dummy' in co.arraysets
+        assert len(co.arraysets) == 1
+    finally:
+        co.close()
+
+
 def test_arrayset_create_no_named_samples(dummy_repo):
     runner = CliRunner()
     res = runner.invoke(
@@ -573,7 +596,7 @@ def test_remove_arrayset(dummy_repo):
 def test_remove_non_existing_arrayset(dummy_repo):
     runner = CliRunner()
     res = runner.invoke(cli.remove_arrayset, ['doesnotexist'], obj=dummy_repo)
-    assert res.exit_code == 0
+    assert res.exit_code == 1
     assert res.stdout == "Error: 'Cannot remove: doesnotexist. Key does not exist.'\n"
     co = dummy_repo.checkout(write=True)
     try:

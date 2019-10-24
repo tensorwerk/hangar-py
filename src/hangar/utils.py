@@ -49,8 +49,10 @@ def set_blosc_nthreads() -> int:
         ncores blosc will use on the system
     """
     nCores = blosc.detect_number_of_cores()
-    if nCores <= 2:
+    if nCores == 1:
         nUsed = 1
+    elif nCores == 2:
+        nUsed = 2
     elif nCores <= 4:
         nUsed = nCores - 1
     else:
@@ -175,9 +177,13 @@ def pairwise(iterable):
 
 
 def unique_everseen(iterable, key=None):
-    "List unique elements, preserving order. Remember all elements ever seen."
-    # unique_everseen('AAAABBBCCDAABBB') --> A B C D
-    # unique_everseen('ABBCcAD', str.lower) --> A B C D
+    """List unique elements, preserving order. Remember all elements ever seen.
+
+    >>> list(unique_everseen('AAAABBBCCDAABBB'))
+    ['A', 'B', 'C', 'D']
+    >>> list(unique_everseen('ABBCcAD', str.lower))
+    ['A', 'B', 'C', 'D']
+    """
     seen = set()
     seen_add = seen.add
     if key is None:
@@ -225,7 +231,7 @@ def find_next_prime(N: int) -> int:
             return n
 
 
-def file_size(p: os.PathLike) -> int:
+def file_size(p: os.PathLike) -> int:  # pragma: no cover
     """Query the file size of a specific file
 
     Parameters

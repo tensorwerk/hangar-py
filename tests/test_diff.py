@@ -8,36 +8,40 @@ def create_meta_nt(name):
     return res
 
 
-class TestReaderDiff(object):
+class TestReaderWriterDiff(object):
 
-    def test_diff_by_commit_and_branch(self, repo_2_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_diff_by_commit_and_branch(self, repo_2_br_no_conf, writer):
         repo = repo_2_br_no_conf
         testco = repo.checkout(branch='testbranch')
-        masterco = repo.checkout(branch='master')
+        masterco = repo.checkout(write=writer, branch='master')
         commit_diffs = masterco.diff.commit(testco.commit_hash)
         branch_diffs = masterco.diff.branch('testbranch')
         assert commit_diffs == branch_diffs
         testco.close()
         masterco.close()
 
-    def test_diff_with_wrong_commit_hash(self, repo_2_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_diff_with_wrong_commit_hash(self, repo_2_br_no_conf, writer):
         repo = repo_2_br_no_conf
         testco = repo.checkout(branch='testbranch')
-        masterco = repo.checkout(branch='master')
+        masterco = repo.checkout(write=writer, branch='master')
         wrong_commit_hash = testco.commit_hash + 'WrongHash'
         with pytest.raises(ValueError):
             masterco.diff.commit(wrong_commit_hash)
         testco.close()
         masterco.close()
 
-    def test_diff_with_wrong_branch_name(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_diff_with_wrong_branch_name(self, repo_1_br_no_conf, writer):
         repo = repo_1_br_no_conf
-        masterco = repo.checkout(branch='master')
+        masterco = repo.checkout(write=writer, branch='master')
         with pytest.raises(ValueError):
             masterco.diff.branch('wrong_branch_name')
         masterco.close()
 
-    def test_comparing_diffs_of_dev_and_master(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_comparing_diffs_of_dev_and_master(self, repo_1_br_no_conf, writer):
         repo = repo_1_br_no_conf
         dummyData = np.arange(50)
 
@@ -48,12 +52,12 @@ class TestReaderDiff(object):
         testco.commit("mutation and removal")
         testco.close()
 
-        co1 = repo.checkout(branch='master')
+        co1 = repo.checkout(write=writer, branch='master')
         diffdata1 = co1.diff.branch('testbranch')
         diffs1 = diffdata1.diff
         co1.close()
 
-        co2 = repo.checkout(branch='testbranch')
+        co2 = repo.checkout(write=writer, branch='testbranch')
         diffdata2 = co2.diff.branch('master')
         diffs2 = diffdata2.diff
         co2.close()
@@ -62,7 +66,8 @@ class TestReaderDiff(object):
         assert diffs1.deleted.samples == diffs2.deleted.samples
         assert diffs1.mutated.samples == diffs2.mutated.samples
 
-    def test_diff_data_samples(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_diff_data_samples(self, repo_1_br_no_conf, writer):
         repo = repo_1_br_no_conf
         dummyData = np.arange(50)
 
@@ -73,7 +78,7 @@ class TestReaderDiff(object):
         testco.commit("mutation and removal")
         testco.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         diffdata = co.diff.branch('testbranch')
         conflicts = diffdata.conflict
         assert conflicts.conflict is False
@@ -99,7 +104,8 @@ class TestReaderDiff(object):
             assert mutated.data_name == '1'
         co.close()
 
-    def test_sample_addition_conflict(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_sample_addition_conflict(self, repo_1_br_no_conf, writer):
         # t1
         repo = repo_1_br_no_conf
         dummyData = np.arange(50)
@@ -118,7 +124,7 @@ class TestReaderDiff(object):
         co.commit('adding data in testbranch')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch').conflict
         assert conflicts.conflict is True
         assert len(conflicts.t1.samples) == 1
@@ -126,7 +132,8 @@ class TestReaderDiff(object):
             assert k.data_name == '55'
         co.close()
 
-    def test_sample_removal_conflict(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_sample_removal_conflict(self, repo_1_br_no_conf, writer):
         # t21 and t22
         dummyData = np.arange(50)
         dummyData[:] = 123
@@ -143,7 +150,7 @@ class TestReaderDiff(object):
         co.commit('removal & mutation in dev')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t21.samples) == 1
         assert len(conflicts.t22.samples) == 1
@@ -153,7 +160,8 @@ class TestReaderDiff(object):
             assert k.data_name == '7'
         co.close()
 
-    def test_sample_mutation_conflict(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_sample_mutation_conflict(self, repo_1_br_no_conf, writer):
         # t3
         dummyData = np.arange(50)
         dummyData[:] = 123
@@ -169,14 +177,15 @@ class TestReaderDiff(object):
         co.commit('mutation in dev')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t3.samples) == 1
         for k in conflicts.t3.samples:
             assert k.data_name == '7'
         co.close()
 
-    def test_aset_addition_conflict(self, written_repo):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_aset_addition_conflict(self, written_repo, writer):
         # t1
         repo = written_repo
 
@@ -191,14 +200,15 @@ class TestReaderDiff(object):
         co.commit('aset init in dev')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t1.schema) == 1
         for k in conflicts.t1.schema:
             assert k == 'testing_aset'
         co.close()
 
-    def test_aset_removal_conflict(self, written_repo):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_aset_removal_conflict(self, written_repo, writer):
         # t21 and t22
         repo = written_repo
         co = repo.checkout(write=True, branch='master')
@@ -222,7 +232,7 @@ class TestReaderDiff(object):
         co.commit('mutation and removal from dev')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts.t21.schema) == 1
         assert len(conflicts.t22.schema) == 1
@@ -230,7 +240,8 @@ class TestReaderDiff(object):
         assert list(conflicts.t22.schema.keys()) == ['testing_aset2']
         co.close()
 
-    def test_aset_mutation_conflict(self, written_repo):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_aset_mutation_conflict(self, written_repo, writer):
         # t3
         repo = written_repo
         co = repo.checkout(write=True, branch='master')
@@ -251,13 +262,14 @@ class TestReaderDiff(object):
         co.commit('mutation from dev')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts.t3.schema) == 1
         assert list(conflicts.t3.schema.keys()) == ['testing_aset']
         co.close()
 
-    def test_meta_addition_conflict(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_meta_addition_conflict(self, repo_1_br_no_conf, writer):
         # t1
         repo = repo_1_br_no_conf
         co = repo.checkout(write=True, branch='testbranch')
@@ -270,14 +282,15 @@ class TestReaderDiff(object):
         co.commit('metadata addition')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         for k in conflicts.t1.metadata:
             assert k == create_meta_nt('metatest')
         assert len(conflicts.t1.metadata) == 1
         co.close()
 
-    def test_meta_removal_conflict(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_meta_removal_conflict(self, repo_1_br_no_conf, writer):
         # t21 and t22
         repo = repo_1_br_no_conf
         co = repo.checkout(write=True, branch='testbranch')
@@ -292,7 +305,7 @@ class TestReaderDiff(object):
         co.commit('removed & mutation')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         co.close()
 
@@ -303,7 +316,8 @@ class TestReaderDiff(object):
         for k in conflicts.t22.metadata:
             assert k == create_meta_nt('somemetadatakey')
 
-    def test_meta_mutation_conflict(self, repo_1_br_no_conf):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_meta_mutation_conflict(self, repo_1_br_no_conf, writer):
         # t3
         repo = repo_1_br_no_conf
         co = repo.checkout(write=True, branch='testbranch')
@@ -316,14 +330,15 @@ class TestReaderDiff(object):
         co.commit('mutation')
         co.close()
 
-        co = repo.checkout(branch='master')
+        co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts.t3.metadata) == 1
         for k in conflicts.t3.metadata:
             assert k == create_meta_nt('hello')
         co.close()
 
-    def test_commits_inside_cm(self, written_repo, array5by7):
+    @pytest.mark.parametrize('writer', [False, True])
+    def test_commits_inside_cm(self, written_repo, array5by7, writer):
         repo = written_repo
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='testbranch')
@@ -337,7 +352,7 @@ class TestReaderDiff(object):
             aset[101] = array5by7
             co.commit('another commit inside cm')
         co.close()
-        co = repo.checkout(branch='testbranch')
+        co = repo.checkout(write=writer, branch='testbranch')
         assert np.allclose(co.arraysets['writtenaset'][101], array5by7)
         diff = co.diff.branch('master').diff
         assert create_meta_nt('crazykey') in diff.added.metadata.keys()

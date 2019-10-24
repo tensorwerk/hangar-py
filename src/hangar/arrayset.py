@@ -279,12 +279,10 @@ class ArraysetDataReader(object):
         List[Union[str, int]]
             list of sample keys in the arrayset.
         """
-        remote_keys = []
+        keys = []
         if self.contains_remote_references is True:
-            for sampleName, beLoc in self._sspecs.items():
-                if beLoc.backend == '50':
-                    remote_keys.append(sampleName)
-        return remote_keys
+            keys = [name for name, be in self._sspecs.items() if not is_local_backend(be)]
+        return keys
 
     @property
     def backend(self) -> str:
@@ -338,8 +336,6 @@ class ArraysetDataReader(object):
             for name, be in tuple(self._sspecs.items()):
                 if is_local_backend(be):
                     yield name
-                else:
-                    continue
 
     def values(self, local=False) -> Iterator[np.ndarray]:
         """generator which yields the tensor data for every sample in the arrayset
@@ -372,8 +368,6 @@ class ArraysetDataReader(object):
             for name, be in tuple(self._sspecs.items()):
                 if is_local_backend(be):
                     yield self.get(name)
-                else:
-                    continue
 
     def items(self, local=False) -> Iterator[Tuple[Union[str, int], np.ndarray]]:
         """generator yielding two-tuple of (name, tensor), for every sample in the arrayset.
@@ -406,8 +400,6 @@ class ArraysetDataReader(object):
             for name, be in tuple(self._sspecs.items()):
                 if is_local_backend(be):
                     yield (name, self.get(name))
-                else:
-                    continue
 
     def get(self, name: Union[str, int]) -> np.ndarray:
         """Retrieve a sample in the arrayset with a specific name.
@@ -618,16 +610,17 @@ class ArraysetDataWriter(ArraysetDataReader):
         elif not data.flags.c_contiguous:
             reason = f'`data` must be "C" contiguous array.'
 
-        if self._schema_variable is True:
-            if data.ndim != len(self._schema_max_shape):
-                reason = f'`data` rank: {data.ndim} != aset rank: {len(self._schema_max_shape)}'
-            for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
-                if dDimSize > schDimSize:
-                    reason = f'dimensions of `data`: {data.shape} exceed variable max '\
-                             f'dims of aset: {self._asetn} specified max dimensions: '\
-                             f'{self._schema_max_shape}: SIZE: {dDimSize} > {schDimSize}'
-        elif data.shape != self._schema_max_shape:
-            reason = f'data shape: {data.shape} != fixed aset shape: {self._schema_max_shape}'
+        if reason == '':
+            if self._schema_variable is True:
+                if data.ndim != len(self._schema_max_shape):
+                    reason = f'`data` rank: {data.ndim} != aset rank: {len(self._schema_max_shape)}'
+                for dDimSize, schDimSize in zip(data.shape, self._schema_max_shape):
+                    if dDimSize > schDimSize:
+                        reason = f'dimensions of `data`: {data.shape} exceed variable max '\
+                                 f'dims of aset: {self._asetn} specified max dimensions: '\
+                                 f'{self._schema_max_shape}: SIZE: {dDimSize} > {schDimSize}'
+            elif data.shape != self._schema_max_shape:
+                reason = f'data shape: {data.shape} != fixed aset shape: {self._schema_max_shape}'
 
         compatible = True if reason == '' else False
         res = CompatibleArray(compatible=compatible, reason=reason)
@@ -846,17 +839,14 @@ class ArraysetDataWriter(ArraysetDataReader):
         try:
             isRecordDeleted = self._dataTxn.delete(dataKey)
             if isRecordDeleted is False:
-                raise KeyError(f'No sample: {name} type: {type(name)} exists in: {self._asetn}')
+                raise KeyError(f'No sample {name} in {self._asetn}')
             del self._sspecs[name]
-
             if len(self._sspecs) == 0:
-                # if this is the last data piece existing in a arrayset, remove the schema
+                # if this is the last data piece existing in a arrayset, remove schema
                 asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self._asetn)
                 self._dataTxn.delete(asetSchemaKey)
-
         except KeyError as e:
             raise e
-
         finally:
             if not self._is_conman:
                 self._TxnRegister.commit_writer_txn(self._dataenv)
@@ -1006,7 +996,7 @@ class Arraysets(object):
             This operation is not allowed under any circumstance
 
         """
-        msg = f'HANGAR NOT ALLOWED:: To add a arrayset use `init_arrayset` method.'
+        msg = f'Not allowed! To add a arrayset use `init_arrayset` method.'
         raise PermissionError(msg)
 
     def __contains__(self, key: str) -> bool:

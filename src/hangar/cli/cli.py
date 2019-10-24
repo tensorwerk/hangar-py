@@ -30,7 +30,7 @@ pass_repo = click.make_pass_decorator(Repository, ensure=True)
 @click.group(no_args_is_help=True, add_help_option=True, invoke_without_command=True)
 @click.version_option(version=__version__, help='display current Hangar Version')
 @click.pass_context
-def main(ctx):
+def main(ctx):  # pragma: no cover
     P = os.getcwd()
     ctx.obj = Repository(path=P, exists=False)
 
@@ -70,8 +70,7 @@ def checkout(repo: Repository, branchname):
         co.close()
         click.echo(f'Writer checkout head set to branch: {branchname}')
     except (ValueError, PermissionError) as e:
-        exc = click.ClickException(e)
-        exc.show()
+        raise click.ClickException(e)
 
 
 @main.command()
@@ -114,8 +113,7 @@ def commit(repo: Repository, message):
             digest = co.commit(msg)
             click.echo(f'Commit Successful. Digest: {digest}')
         except RuntimeError as e:
-            exc = click.ClickException(e)
-            exc.show()
+            raise click.ClickException(e)
     finally:
         co.close()
 
@@ -125,7 +123,7 @@ def commit(repo: Repository, message):
 
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
-def arrayset(ctx):
+def arrayset(ctx):  # pragma: no cover
     """Operations for working with arraysets in the writer checkout.
     """
     pass
@@ -177,8 +175,7 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
                                           variable_shape=variable_)
         click.echo(f'Initialized Arrayset: {aset.name}')
     except (ValueError, LookupError, PermissionError) as e:
-        exc = click.ClickException(e)
-        exc.show()
+        raise click.ClickException(e)
     finally:
         try:
             co.close()
@@ -200,8 +197,7 @@ def remove_arrayset(repo: Repository, name):
         removed = co.arraysets.remove_aset(name)
         click.echo(f'Successfully removed arrayset: {removed}')
     except (ValueError, KeyError, PermissionError) as e:
-        exc = click.ClickException(e)
-        exc.show()
+        raise click.ClickException(e)
     finally:
         try:
             co.close()
@@ -306,7 +302,7 @@ def push(repo: Repository, remote, branch):
 
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
-def remote(ctx):
+def remote(ctx):  # pragma: no cover
     """Operations for working with remote server references
     """
     pass
@@ -408,7 +404,7 @@ def status(repo: Repository):
 
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
-def branch(ctx):
+def branch(ctx):  # pragma: no cover
     """operate on and list branch pointers.
     """
     pass

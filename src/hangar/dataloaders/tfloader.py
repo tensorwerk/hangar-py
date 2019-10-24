@@ -14,7 +14,7 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover
         'installed correctly to use tensorflow dataloader functions')
 
 
-def yield_data(arraysets, sample_names, shuffle=False):
+def yield_data(arraysets, sample_names, shuffle=False):  # pragma: no cover
     if shuffle:
         sample_names = list(sample_names)
         random.shuffle(sample_names)

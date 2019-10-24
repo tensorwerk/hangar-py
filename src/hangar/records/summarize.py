@@ -27,8 +27,8 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
         available, or staging area head)
     commit_hash : string, optional
         if specified, get the history starting at this specific commit,
-        overrides branch name if both are specified (the default is `None`, which
-        will use the branch_name arg if available, or staging area head)
+        overrides branch name if both are specified (the default is `None`,
+        which will use the branch_name arg if available, or staging area head)
 
     Returns
     -------

@@ -86,88 +86,84 @@ class GraphState(Enum):  # pylint: disable=too-few-public-methods
     COLLAPSING = 5
 
 
-class Graph(object):
+class Graph(object):  # pragma: no cover
     """
     The commit currently being processed
-            struct commit *commit
+        struct commit *commit
 
-    The number of interesting parents that this commit has.
-    Note that this is not the same as the actual number of parents.
-    This count excludes parents that won't be printed in the graph
-    output, as determined by is_interesting().
-            int num_parents
+    The number of interesting parents that this commit has. Note that this is
+    not the same as the actual number of parents. This count excludes parents
+    that won't be printed in the graph output, as determined by
+    is_interesting().
+        int num_parents
 
-    The width of the graph output for this commit.
-    All rows for this commit are padded to this width, so that
-    messages printed after the graph output are aligned.
-            int width
+    The width of the graph output for this commit. All rows for this commit are
+    padded to this width, so that messages printed after the graph output are
+    aligned.
+        int width
 
-    The next expansion row to print
-    when state is GraphState.PRE_COMMIT
-            int expansion_row
+    The next expansion row to print when state is GraphState.PRE_COMMIT
+        int expansion_row
 
-    The current output state.
-    This tells us what kind of line next_line() should output.
-            enum graph_state state
+    The current output state. This tells us what kind of line next_line()
+    should output.
+        enum graph_state state
 
-    The output state for the previous line of output.
-    This is primarily used to determine how the first merge line
-    should appear, based on the last line of the previous commit.
-            enum graph_state prev_state
+    The output state for the previous line of output. This is primarily used to
+    determine how the first merge line should appear, based on the last line of
+    the previous commit.
+        enum graph_state prev_state
 
-    The index of the column that refers to this commit.
-    If none of the incoming columns refer to this commit,
-    this will be equal to num_columns.
-            int commit_index
+    The index of the column that refers to this commit. If none of the incoming
+    columns refer to this commit, this will be equal to num_columns.
+        int commit_index
 
-    The commit_index for the previously displayed commit.
-    This is used to determine how the first line of a merge
-    graph output should appear, based on the last line of the
-    previous commit.
-            int prev_commit_index
+    The commit_index for the previously displayed commit. This is used to
+    determine how the first line of a merge graph output should appear, based
+    on the last line of the previous commit.
+        int prev_commit_index
 
-    The maximum number of columns that can be stored in the columns
-    and new_columns arrays. This is also half the number of entries
-    that can be stored in the mapping and new_mapping arrays.
-            int column_capacity
+    The maximum number of columns that can be stored in the columns and
+    new_columns arrays. This is also half the number of entries that can be
+    stored in the mapping and new_mapping arrays.
+        int column_capacity
 
     The number of columns (also called "branch lines" in some places)
-            int num_columns
+        int num_columns
 
     The number of columns in the new_columns array
-            int num_new_columns
+        int num_new_columns
 
     The number of entries in the mapping array
-            int mapping_size
+        int mapping_size
 
     The column state before we output the current commit.
-            struct column *columns
+        struct column *columns
 
-    The new column state after we output the current commit.
-    Only valid when state is GraphState.COLLAPSING.
-            struct column *new_columns
+    The new column state after we output the current commit. Only valid when
+    state is GraphState.COLLAPSING.
+        struct column *new_columns
 
-    An array that tracks the current state of each
-    character in the output line during state GraphState.COLLAPSING.
-    Each entry is -1 if this character is empty, or a non-negative
-    integer if the character contains a branch line. The value of
-    the integer indicates the target position for this branch line.
-    (I.e., this array maps the current column positions to their
-    desired positions.)
+    An array that tracks the current state of each character in the output line
+    during state GraphState.COLLAPSING. Each entry is -1 if this character is
+    empty, or a non-negative integer if the character contains a branch line.
+    The value of the integer indicates the target position for this branch
+    line. (I.e., this array maps the current column positions to their desired
+    positions.)
 
-    The maximum capacity of this array is always
-    sizeof(int) * 2 * column_capacity.
-            int *mapping
+    The maximum capacity of this array is always sizeof(int) * 2 *
+    column_capacity.
+        int *mapping
 
-    A temporary array for computing the next mapping state
-    while we are outputting a mapping line. This is stored as part
-    of the git_graph simply so we don't have to allocate a new
-    temporary array each time we have to output a collapsing line.
-            int *new_mapping
+    A temporary array for computing the next mapping state while we are
+    outputting a mapping line. This is stored as part of the git_graph simply
+    so we don't have to allocate a new temporary array each time we have to
+    output a collapsing line.
+        int *new_mapping
 
-    The current default column color being used. This is
-    stored as an index into the array column_colors.
-            unsigned short default_column_color
+    The current default column color being used. This is stored as an index
+    into the array column_colors.
+        unsigned short default_column_color
     """
     def __init__(self,
                  fh=None,

@@ -6,11 +6,13 @@ required_packages = [
     ('click', lambda p: p.__version__),
     ('lmdb', lambda p: p.__version__),
     ('h5py', lambda p: p.__version__),
+    ('hdf5plugin', lambda p: p.version),
     ('numpy', lambda p: p.__version__),
     ('blosc', lambda p: p.__version__),
     ('tqdm', lambda p: p.__version__),
     ('wrapt', lambda p: p.__version__),
     ('grpc', lambda p: p.__version__),
+    ('xxhash', lambda p: p.VERSION),
 ]
 
 
@@ -45,7 +47,7 @@ def get_system_info() -> List[Tuple[str, str]]:
 
     try:
         loc = locale.getlocale()
-    except ValueError:
+    except ValueError:  # pragma: no cover
         loc = None
 
     host = [
@@ -77,21 +79,21 @@ def get_optional_info() -> Dict[str, Union[str, bool]]:
     try:
         import h5py
         bloscFilterAvail = h5py.h5z.filter_avail(32001)
-    except ImportError:
+    except ImportError:  # pragma: no cover
         bloscFilterAvail = False
     res['blosc-hdf5-plugin'] = bloscFilterAvail
 
     try:
         import torch
         torchVersion = torch.__version__
-    except ImportError:
+    except ImportError:  # pragma: no cover
         torchVersion = False
     res['pytorch'] = torchVersion
 
     try:
         import tensorflow
         tensorflowVersion = tensorflow.__version__
-    except ImportError:
+    except ImportError:  # pragma: no cover
         tensorflowVersion = False
     res['tensorflow'] = tensorflowVersion
 
@@ -111,7 +113,7 @@ def get_package_info(pkgs):
             mod = importlib.import_module(modname)
             ver = ver_f(mod)
             pversions.append((modname, ver))
-        except Exception:
+        except Exception:  # pragma: no cover
             pversions.append((modname, None))
 
     return pversions

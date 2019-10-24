@@ -16,6 +16,14 @@ def test_is_ff_merge(repo_1_br_no_conf):
     assert cmt_hash == testbranch_head
 
 
+def test_merge_fails_if_changes_staged(repo_1_br_no_conf):
+    co = repo_1_br_no_conf.checkout(write=True, branch='master')
+    co.metadata['temporary'] = 'value'
+    co.close()
+    with pytest.raises(RuntimeError, match='Changes are currently pending'):
+        repo_1_br_no_conf.merge('merge commit', 'master', 'testbranch')
+
+
 def test_ff_merge_no_conf_correct_contents_for_name_or_hash_checkout(repo_1_br_no_conf):
     cmt_hash = repo_1_br_no_conf.merge('merge commit', 'master', 'testbranch')
     coByName = repo_1_br_no_conf.checkout(branch='master')
@@ -83,6 +91,51 @@ def test_3_way_merge_no_conflict_correct_contents(repo_2_br_no_conf):
     checkarr = np.zeros_like(np.arange(50))
     for k, v in aset.items():
         checkarr[:] = int(k)
+        assert np.allclose(v, checkarr)
+
+    # arrayset sample keys
+    aset_keys = list(aset.keys())
+    for genKey in range(30):
+        assert str(genKey) in aset_keys
+        aset_keys.remove(str(genKey))
+    assert len(aset_keys) == 20
+    co.close()
+
+
+def test_3_way_merge_no_conflict_and_mutation_correct_contents(repo_2_br_no_conf):
+    co = repo_2_br_no_conf.checkout(write=True, branch='master')
+    co.arraysets['dummy']['1'] = co.arraysets['dummy']['0']
+    co.commit('mutated master')
+    co.close()
+
+    co = repo_2_br_no_conf.checkout(write=True, branch='testbranch')
+    co.arraysets['dummy']['2'] = co.arraysets['dummy']['0']
+    co.commit('mutated testbranch')
+    co.close()
+
+    repo_2_br_no_conf.merge('merge commit', 'master', 'testbranch')
+    co = repo_2_br_no_conf.checkout(branch='master')
+    # metadata
+    assert len(co.metadata) == 3
+    assert co.metadata['hello'] == 'world'
+    assert co.metadata['foo'] == 'bar'
+
+    # arraysets
+    assert len(co.arraysets) == 1
+    assert 'dummy' in co.arraysets
+    # arrayset samples
+    aset = co.arraysets['dummy']
+    assert len(aset) == 50
+
+    # arrayset sample values
+    checkarr = np.zeros_like(np.arange(50))
+    for k, v in aset.items():
+        if k == '2':
+            checkarr[:] = 0
+        elif k == '1':
+            checkarr[:] = 0
+        else:
+            checkarr[:] = int(k)
         assert np.allclose(v, checkarr)
 
     # arrayset sample keys
