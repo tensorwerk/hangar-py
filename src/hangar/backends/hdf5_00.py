@@ -133,7 +133,7 @@ try:
     _logger.setLevel(logging.ERROR)
     import hdf5plugin
     _logger.setLevel(_initialLevel)
-except (ImportError, ModuleNotFoundError):
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     pass
 from xxhash import xxh64_hexdigest
 
@@ -298,7 +298,7 @@ class HDF5_00_FileHandles(object):
         del state['Fp']
         return state
 
-    def __setstate__(self, state: dict) -> None:
+    def __setstate__(self, state: dict) -> None:  # pragma: no cover
         """ensure multiprocess operations can pickle relevant data.
         """
         self.__dict__.update(state)

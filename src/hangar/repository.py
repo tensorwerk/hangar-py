@@ -487,9 +487,9 @@ class Repository(object):
 
         Returns
         -------
-        heads.BranchHead
-            NamedTuple[str, str] with fields for `name` and `digest` of the branch
-            created (if the operation was successful)
+        :class:`~.heads.BranchHead`
+            NamedTuple[str, str] with fields for ``name`` and ``digest`` of the
+            branch created (if the operation was successful)
 
         Raises
         ------
@@ -499,8 +499,8 @@ class Repository(object):
         ValueError
             If the branch already exists.
         RuntimeError
-            If the repository does not have at-least one commit on the `default`
-            (ie. `master`) branch.
+            If the repository does not have at-least one commit on the "default"
+            (ie. ``master``) branch.
         """
         self.__verify_repo_initialized()
         if (not is_ascii(name)) or (not is_suitable_user_key(name)):
@@ -605,7 +605,7 @@ class Repository(object):
 
         Returns
         -------
-        :class:`~heads.BranchHead`
+        :class:`~.heads.BranchHead`
             NamedTuple[str, str] with fields for `name` and `digest` of the branch
             pointer deleted.
 

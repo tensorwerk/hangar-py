@@ -35,7 +35,7 @@ CompatibleArray = NamedTuple(
 class ArraysetDataReader(object):
     """Class implementing get access to data in a arrayset.
 
-    The methods implemented here are common to the :class:`ArraysetDataWriter`
+    The methods implemented here are common to the :class:`.ArraysetDataWriter`
     accessor class as well as to this ``"read-only"`` method. Though minimal,
     the behavior of read and write checkouts is slightly unique, with the main
     difference being that ``"read-only"`` checkouts implement both thread and
@@ -151,7 +151,7 @@ class ArraysetDataReader(object):
         return
 
     def __getitem__(self, key: Union[str, int]) -> np.ndarray:
-        """Retrieve a sample with a given key. Convenience method for dict style access.
+        """Retrieve a sample with a given key, convenience method for dict style access.
 
         .. seealso:: :meth:`get`
 
@@ -162,7 +162,7 @@ class ArraysetDataReader(object):
 
         Returns
         -------
-        np.ndarray
+        :class:`numpy.ndarray`
             sample array data corresponding to the provided key
         """
         return self.get(key)
@@ -349,7 +349,7 @@ class ArraysetDataReader(object):
 
         Yields
         ------
-        Iterator[np.ndarray]
+        Iterator[:class:`numpy.ndarray`]
             values of one sample at a time inside the arrayset
 
         Notes
@@ -381,7 +381,7 @@ class ArraysetDataReader(object):
 
         Yields
         ------
-        Iterator[Tuple[Union[str, int], np.ndarray]]
+        Iterator[Tuple[Union[str, int], :class:`numpy.ndarray`]]
             sample name and stored value for every sample inside the arrayset
 
         Notes
@@ -425,7 +425,7 @@ class ArraysetDataReader(object):
 
         Returns
         -------
-        np.ndarray
+        :class:`numpy.ndarray`
             Tensor data stored in the arrayset archived with provided name(s).
 
         Raises
@@ -469,7 +469,7 @@ class ArraysetDataReader(object):
 
         Returns
         -------
-        List[np.ndarray]
+        List[:class:`numpy.ndarray`]
             Tensor data stored in the arrayset archived with provided name(s).
 
             If a single sample name is passed in as the, the corresponding
@@ -495,12 +495,12 @@ class ArraysetDataWriter(ArraysetDataReader):
     """Class implementing methods to write data to a arrayset.
 
     Writer specific methods are contained here, and while read functionality is
-    shared with the methods common to :class:`ArraysetDataReader`. Write-enabled
+    shared with the methods common to :class:`.ArraysetDataReader`. Write-enabled
     checkouts are not thread/process safe for either ``writes`` OR ``reads``,
     a restriction we impose for ``write-enabled`` checkouts in order to ensure
     data integrity above all else.
 
-    .. seealso:: :class:`ArraysetDataReader`
+    .. seealso:: :class:`.ArraysetDataReader`
 
     """
 
@@ -561,7 +561,7 @@ class ArraysetDataWriter(ArraysetDataReader):
         ----------
         key : Union[str, int]
             name of the sample to add to the arrayset
-        value : np.array
+        value : :class:`numpy.ndarray`
             tensor data to add as the sample
 
         Returns
@@ -594,7 +594,7 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         Parameters
         ----------
-        data : np.ndarray
+        data : :class:`numpy.ndarray`
             array to check compatibility for
 
         Returns
@@ -639,7 +639,7 @@ class ArraysetDataWriter(ArraysetDataReader):
         ----------
         backend_opts : Optional[Union[str, dict]]
             If str, backend format code to specify, opts are automatically
-            inffered. If dict, key `backend` must have a valid backend format code
+            inffered. If dict, key ``backend`` must have a valid backend format code
             value, and the rest of the items are assumed to be valid specs for that
             particular backend. If none, both backend and opts are inffered from
             the array prototype
@@ -706,7 +706,7 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         Parameters
         ----------
-        data : np.ndarray
+        data : :class:`numpy.ndarray`
             data to store as a sample in the arrayset.
         name : Union[str, int], optional
             name to assign to the same (assuming the arrayset accepts named
@@ -957,9 +957,9 @@ class Arraysets(object):
     def _ipython_key_completions_(self):
         """Let ipython know that any key based access can use the arrayset keys
 
-        Since we don't want to inherit from dict, nor mess with `__dir__` for the
-        sanity of developers, this is the best way to ensure users can autocomplete
-        keys.
+        Since we don't want to inherit from dict, nor mess with `__dir__` for
+        the sanity of developers, this is the best way to ensure users can
+        autocomplete keys.
 
         Returns
         -------
@@ -978,17 +978,17 @@ class Arraysets(object):
 
         Returns
         -------
-        :class:`ArraysetDataReader` or :class:`ArraysetDataWriter`
-            The object which is returned depends on the mode of checkout specified.
-            If the arrayset was checked out with write-enabled, return writer object,
-            otherwise return read only object.
+        Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]
+            The object which is returned depends on the mode of checkout
+            specified. If the arrayset was checked out with write-enabled,
+            return writer object, otherwise return read only object.
         """
         return self.get(key)
 
     def __setitem__(self, key, value):
         """Specifically prevent use dict style setting for arrayset objects.
 
-        Arraysets must be created using the factory function :py:meth:`init_arrayset`.
+        Arraysets must be created using the method :meth:`init_arrayset`.
 
         Raises
         ------
@@ -1073,7 +1073,7 @@ class Arraysets(object):
 
         Yields
         -------
-        Iterable[Union[ArraysetDataReader, ArraysetDataWriter]]
+        Iterable[Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]]
             Generator of ArraysetData accessor objects (set to read or write mode
             as appropriate)
         """
@@ -1086,7 +1086,7 @@ class Arraysets(object):
 
         Yields
         ------
-        Iterable[Tuple[str, Union[ArraysetDataReader, ArraysetDataWriter]]]
+        Iterable[Tuple[str, Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]]]
             returns two tuple of all all arrayset names/object pairs in the checkout.
         """
         for asetN, asetObj in self._arraysets.items():
@@ -1105,7 +1105,7 @@ class Arraysets(object):
 
         Returns
         -------
-        Union[ArraysetDataReader, ArraysetDataWriter]
+        Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]
             ArraysetData accessor (set to read or write mode as appropriate) which
             governs interaction with the data
 
@@ -1176,7 +1176,7 @@ class Arraysets(object):
 
         Parameters
         ----------
-        mapping: Mapping[str, np.ndarray]
+        mapping: Mapping[str, :class:`numpy.ndarray`]
             Dict mapping (any number of) arrayset names to tensor data (samples)
             which to add. The arraysets must exist, and must be set to accept
             samples which are not named by the user
@@ -1245,10 +1245,10 @@ class Arraysets(object):
             The shape of the data samples which will be written in this arrayset.
             This argument and the `dtype` argument are required if a `prototype`
             is not provided, defaults to None.
-        dtype : np.dtype
+        dtype : :class:`numpy.dtype`
             The datatype of this arrayset. This argument and the `shape` argument
             are required if a `prototype` is not provided., defaults to None.
-        prototype : np.ndarray
+        prototype : :class:`numpy.ndarray`
             A sample array of correct datatype and shape which will be used to
             initialize the arrayset storage mechanisms. If this is provided, the
             `shape` and `dtype` arguments must not be set, defaults to None.
@@ -1258,7 +1258,7 @@ class Arraysets(object):
             defaults to True, which means all samples should have names.
         variable_shape : bool, optional
             If this is a variable sized arrayset. If true, a the maximum shape is
-            set from the provided `shape` or `prototype` argument. Any sample
+            set from the provided ``shape`` or ``prototype`` argument. Any sample
             added to the arrayset can then have dimension sizes <= to this
             initial specification (so long as they have the same rank as what
             was specified) defaults to False.
@@ -1269,7 +1269,7 @@ class Arraysets(object):
 
         Returns
         -------
-        :class:`ArraysetDataWriter`
+        :class:`.ArraysetDataWriter`
             instance object of the initialized arrayset.
 
         Raises
@@ -1371,7 +1371,7 @@ class Arraysets(object):
         return self.get(name)
 
     def remove_aset(self, aset_name: str) -> str:
-        """remove the arrayset and all data contained within it from the repository.
+        """remove the arrayset and all data contained within it.
 
         Parameters
         ----------
@@ -1421,10 +1421,10 @@ class Arraysets(object):
     def _from_staging_area(cls, repo_pth, hashenv, stageenv, stagehashenv):
         """Class method factory to checkout :class:`Arraysets` in write-enabled mode
 
-        This is not a user facing operation, and should never be manually called
-        in normal operation. Once you get here, we currently assume that
-        verification of the write lock has passed, and that write operations are
-        safe.
+        This is not a user facing operation, and should never be manually
+        called in normal operation. Once you get here, we currently assume that
+        verification of the write lock has passed, and that write operations
+        are safe.
 
         Parameters
         ----------
@@ -1439,7 +1439,7 @@ class Arraysets(object):
 
         Returns
         -------
-        :class:`Arraysets`
+        :class:`.Arraysets`
             Interface class with write-enabled attributes activated and any
             arraysets existing initialized in write mode via
             :class:`.arrayset.ArraysetDataWriter`.
@@ -1486,7 +1486,7 @@ class Arraysets(object):
 
         Returns
         -------
-        :class:`Arraysets`
+        :class:`.Arraysets`
             Interface class with all write-enabled attributes deactivated
             arraysets initialized in read mode via :class:`.arrayset.ArraysetDataReader`.
         """
