@@ -1,8 +1,7 @@
 __version__ = '0.4.0b0'
-__all__ = ['Repository', 'serve', 'make_tf_dataset', 'make_torch_dataset']
+__all__ = ['Repository', 'make_tf_dataset', 'make_torch_dataset']
 
 from functools import partial
-from .remote.server import serve
 from .repository import Repository
 
 

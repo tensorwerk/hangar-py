@@ -205,7 +205,7 @@ def repo_2_br_no_conf(repo_1_br_no_conf):
 
 @pytest.fixture()
 def server_instance(managed_tmpdir, worker_id):
-    from hangar import serve
+    from hangar.remote.server import serve
 
     address = f'localhost:{randint(50000, 59999)}'
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')

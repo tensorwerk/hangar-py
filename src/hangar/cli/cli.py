@@ -502,7 +502,7 @@ def server(overwrite, ip, port, timeout):
     More simply put, we know more, so we can optimize access more; similar, but
     not identical.
     """
-    from hangar import serve
+    from hangar.remote.server import serve
 
     P = os.getcwd()
     ip_port = f'{ip}:{port}'

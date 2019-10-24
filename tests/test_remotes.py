@@ -561,7 +561,7 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
 
 @pytest.fixture()
 def server_instance_nbytes_limit(managed_tmpdir, worker_id):
-    from hangar import serve
+    from hangar.remote.server import serve
 
     address = f'localhost:{randint(50000, 59999)}'
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
@@ -581,7 +581,7 @@ def server_instance_nbytes_limit(managed_tmpdir, worker_id):
 
 @pytest.fixture()
 def server_instance_push_restricted(managed_tmpdir, worker_id):
-    from hangar import serve
+    from hangar.remote.server import serve
 
     address = f'localhost:{randint(50000, 59999)}'
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
