@@ -18,6 +18,7 @@ import time
 import warnings
 
 import click
+import numpy as np
 
 from hangar import Repository
 from hangar import __version__
@@ -122,20 +123,90 @@ def commit(repo: Repository, message):
 # -------------------------- Arrayset Interactor ------------------------------
 
 
-# @main.group(no_args_is_help=True, add_help_option=True)
-# @click.pass_context
-# def arrayset(ctx):
-#     """Operations for working with arraysets in the writer checkout
-#     """
-#     pass
+@main.group(no_args_is_help=True, add_help_option=True)
+@click.pass_context
+def arrayset(ctx):
+    """Operations for working with arraysets in the writer checkout.
+    """
+    pass
 
 
-# @arrayset.command(name='create')
-# @click.argument('name', nargs=1, required=True)
-# @click.
-# @pass_repo
-# def create_arrayset(repo: Repository, name)
+@arrayset.command(name='create')
+@click.option('--variable-shape', '-vs', 'variable_', is_flag=True, default=False,
+              help='flag indicating sample dimensions can be any size up to max shape.')
+@click.option('--named/--not-named', default=True,
+              help='flag indicating if samples are named or not.')
+@click.argument('name', nargs=1, type=click.STRING, required=True)
+@click.argument('dtype', nargs=1, type=click.Choice([
+                'UINT8', 'INT8', 'UINT16', 'INT16', 'UINT32', 'INT32',
+                'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64']), required=True)
+@click.argument('shape', nargs=-1, type=click.INT, required=True)
+@pass_repo
+def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
+    """Create an arrayset with NAME and DTYPE of SHAPE.
 
+    The arrayset will be created in the staging area / branch last used by a
+    writer-checkout. Valid NAMEs contain only ascii letters and ['.', '_', '-']
+    (no whitespace). The DTYPE must be one of ['UINT8', 'INT8', 'UINT16',
+    'INT16', 'UINT32', 'INT32', 'UINT64', 'INT64', 'FLOAT16', 'FLOAT32',
+    'FLOAT64']. The SHAPE must be the last argument(s) specified, where each
+    dimension size is identified by a (space seperated) list of numbers.
+
+    Examples:
+
+      To specify, an arrayset for some training images of dtype uint8 and shape
+      (256, 256, 3) we should say:
+
+        $ hangar arrayset create train_images UINT8 256 256 3
+
+      To specify that the samples can be variably shaped (have any dimension size
+      up to the maximum SHAPE specified) we would say:
+
+        $ hangar arrayset create train_images UINT8 256 256 3 --variable-shape
+
+      or equivalently:
+
+        $ hangar arrayset create --variable-shape train_images UINT8 256 256 3
+    """
+    try:
+        co = repo.checkout(write=True)
+        aset = co.arraysets.init_arrayset(name=name,
+                                          shape=shape,
+                                          dtype=np.typeDict[dtype.lower()],
+                                          named_samples=named,
+                                          variable_shape=variable_)
+        click.echo(f'Initialized Arrayset: {aset.name}')
+    except (ValueError, LookupError, PermissionError) as e:
+        exc = click.ClickException(e)
+        exc.show()
+    finally:
+        try:
+            co.close()
+        except NameError:
+            pass
+
+
+@arrayset.command(name='remove')
+@click.argument('name', nargs=1, type=click.STRING, required=True)
+@pass_repo
+def remove_arrayset(repo: Repository, name):
+    """Delete the arrayset NAME (and all samples) from staging area.
+
+    The arrayset will be created in the staging area / branch last used by a
+    writer-checkout.
+    """
+    try:
+        co = repo.checkout(write=True)
+        removed = co.arraysets.remove_aset(name)
+        click.echo(f'Successfully removed arrayset: {removed}')
+    except (ValueError, KeyError, PermissionError) as e:
+        exc = click.ClickException(e)
+        exc.show()
+    finally:
+        try:
+            co.close()
+        except NameError:
+            pass
 
 
 # ---------------------------- Remote Interaction -----------------------------
@@ -390,7 +461,8 @@ def branch_create(repo: Repository, name, startpoint):
 
 @branch.command(name='delete')
 @click.argument('name', nargs=1, required=True)
-@click.option('--force', '-f', is_flag=True, default=False, help='flag to force delete branch which has un-merged history.')
+@click.option('--force', '-f', is_flag=True, default=False,
+              help='flag to force delete branch which has un-merged history.')
 @pass_repo
 def branch_remove(repo: Repository, name, force):
     """Remove a branch pointer with the provided NAME

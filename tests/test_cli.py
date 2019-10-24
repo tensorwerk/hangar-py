@@ -19,6 +19,7 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  --help     Show this message and exit.\n'\
            '\n'\
            'Commands:\n'\
+           '  arrayset    Operations for working with arraysets in the writer checkout.\n'\
            '  branch      operate on and list branch pointers.\n'\
            '  checkout    Checkout writer head branch at BRANCHNAME.\n'\
            '  clone       Initialize a repository at the current path and fetch updated...\n'\
@@ -459,6 +460,130 @@ def test_status(dummy_repo):
     res = runner.invoke(cli.status, obj=dummy_repo)
     assert res.exit_code == 0
     assert res.stdout == expected
+
+
+def test_arrayset_create_uint8(dummy_repo):
+    runner = CliRunner()
+    res = runner.invoke(
+        cli.create_arrayset,
+        ['train_images', 'UINT8', '256', '256', '3'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == 'Initialized Arrayset: train_images\n'
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert 'train_images' in co.arraysets
+        assert co.arraysets['train_images'].shape == (256, 256, 3)
+        assert co.arraysets['train_images'].dtype == np.uint8
+        assert co.arraysets['train_images'].named_samples is True
+        assert co.arraysets['train_images'].variable_shape is False
+        assert len(co.arraysets['train_images']) == 0
+    finally:
+        co.close()
+
+
+def test_arrayset_create_float32(dummy_repo):
+    runner = CliRunner()
+    res = runner.invoke(
+        cli.create_arrayset,
+        ['train_images', 'FLOAT32', '256'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == 'Initialized Arrayset: train_images\n'
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert 'train_images' in co.arraysets
+        assert co.arraysets['train_images'].shape == (256,)
+        assert co.arraysets['train_images'].dtype == np.float32
+        assert co.arraysets['train_images'].named_samples is True
+        assert co.arraysets['train_images'].variable_shape is False
+        assert len(co.arraysets['train_images']) == 0
+    finally:
+        co.close()
+
+
+def test_arrayset_create_invalid_dtype_fails(dummy_repo):
+    runner = CliRunner()
+    res = runner.invoke(
+        cli.create_arrayset,
+        ['train_images', 'FLOAT7', '256'], obj=dummy_repo)
+    assert res.exit_code == 2
+    expected = ('Error: Invalid value for "[UINT8|INT8|UINT16|INT16|UINT32|INT32|'
+                'UINT64|INT64|FLOAT16|FLOAT32|FLOAT64]": invalid choice: FLOAT7. '
+                '(choose from UINT8, INT8, UINT16, INT16, UINT32, INT32, UINT64, '
+                'INT64, FLOAT16, FLOAT32, FLOAT64)\n')
+    assert res.stdout.endswith(expected) is True
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert 'train_images' not in co.arraysets
+    finally:
+        co.close()
+
+
+def test_arrayset_create_no_named_samples(dummy_repo):
+    runner = CliRunner()
+    res = runner.invoke(
+        cli.create_arrayset,
+        ['train_images', 'FLOAT32', '256', '--not-named'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == 'Initialized Arrayset: train_images\n'
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert 'train_images' in co.arraysets
+        assert co.arraysets['train_images'].shape == (256,)
+        assert co.arraysets['train_images'].dtype == np.float32
+        assert co.arraysets['train_images'].named_samples is False
+        assert co.arraysets['train_images'].variable_shape is False
+        assert len(co.arraysets['train_images']) == 0
+    finally:
+        co.close()
+
+
+def test_arrayset_create_variable_shape(dummy_repo):
+    runner = CliRunner()
+    res = runner.invoke(
+        cli.create_arrayset,
+        ['train_images', 'FLOAT32', '256', '--variable-shape'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == 'Initialized Arrayset: train_images\n'
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert 'train_images' in co.arraysets
+        assert co.arraysets['train_images'].shape == (256,)
+        assert co.arraysets['train_images'].dtype == np.float32
+        assert co.arraysets['train_images'].named_samples is True
+        assert co.arraysets['train_images'].variable_shape is True
+        assert len(co.arraysets['train_images']) == 0
+    finally:
+        co.close()
+
+
+def test_remove_arrayset(dummy_repo):
+    runner = CliRunner()
+    res = runner.invoke(cli.remove_arrayset, ['dummy'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == 'Successfully removed arrayset: dummy\n'
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert 'dummy_repo' not in co.arraysets
+        assert len(co.arraysets) == 0
+        assert len(co.metadata) == 2
+    finally:
+        co.close()
+
+
+def test_remove_non_existing_arrayset(dummy_repo):
+    runner = CliRunner()
+    res = runner.invoke(cli.remove_arrayset, ['doesnotexist'], obj=dummy_repo)
+    assert res.exit_code == 0
+    assert res.stdout == "Error: 'Cannot remove: doesnotexist. Key does not exist.'\n"
+    co = dummy_repo.checkout(write=True)
+    try:
+        assert 'doesnotexist' not in co.arraysets
+        assert 'dummy' in co.arraysets
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['dummy']) == 10
+        assert len(co.metadata) == 2
+    finally:
+        co.close()
 
 
 def test_branch_create_and_list(written_two_cmt_server_repo):
