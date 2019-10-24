@@ -222,17 +222,17 @@ class ReaderCheckout(object):
 
         Returns
         -------
-        Arrayset
+        :class:`~.arrayset.Arraysets`
             single arrayset parameter, no samples specified
 
-        np.ndarray
+        :class:`numpy.ndarray`
             Single arrayset specified, single sample key specified
 
-        List[np.ndarray]
+        List[:class:`numpy.ndarray`]
             Single arrayset, multiple samples array data for each sample is
             returned in same order sample keys are recieved.
 
-        List[NamedTuple[*np.ndarray]]
+        List[NamedTuple[``*``:class:`numpy.ndarray`]]
             Multiple arraysets, multiple samples. Each arrayset's name is used
             as a field in the NamedTuple elements, each NamedTuple contains
             arrays stored in each arrayset via a common sample key. Each sample
@@ -307,17 +307,17 @@ class ReaderCheckout(object):
 
         Returns
         -------
-        Arrayset
+        :class:`~.arrayset.Arraysets`
             single arrayset parameter, no samples specified
 
-        np.ndarray
+        :class:`numpy.ndarray`
             Single arrayset specified, single sample key specified
 
-        List[np.ndarray]
+        List[:class:`numpy.ndarray`]
             Single arrayset, multiple samples array data for each sample is
             returned in same order sample keys are recieved.
 
-        List[NamedTuple[*np.ndarray]]
+        List[NamedTuple[``*``:class:`numpy.ndarray`]]
             Multiple arraysets, multiple samples. Each arrayset's name is used
             as a field in the NamedTuple elements, each NamedTuple contains
             arrays stored in each arrayset via a common sample key. Each sample
@@ -410,7 +410,7 @@ class ReaderCheckout(object):
 
         Returns
         -------
-        Arraysets
+        :class:`~.arrayset.Arraysets`
             weakref proxy to the arraysets object which behaves exactly like a
             arraysets accessor class but which can be invalidated when the writer
             lock is released.
@@ -425,7 +425,7 @@ class ReaderCheckout(object):
 
         .. seealso::
 
-            The class :class:`hangar.metadata.MetadataReader` contains all methods
+            The class :class:`~hangar.metadata.MetadataReader` contains all methods
             accessible by this property accessor
 
         Returns
@@ -468,7 +468,7 @@ class ReaderCheckout(object):
 
         Returns
         -------
-        string
+        str
             commit hash of the checkout
         """
         self.__verify_checkout_alive()
@@ -713,8 +713,12 @@ class WriterCheckout(object):
                 raise e
         else:
             if current_head != self._branch_name:
-                cmt = heads.get_branch_head_commit(
-                    branchenv=self._branchenv, branch_name=self._branch_name)
+                try:
+                    cmt = heads.get_branch_head_commit(
+                        branchenv=self._branchenv, branch_name=self._branch_name)
+                except ValueError as e:
+                    self.close()
+                    raise e
                 commiting.replace_staging_area_with_commit(
                     refenv=self._refenv, stageenv=self._stageenv, commit_hash=cmt)
                 heads.set_staging_branch_head(
@@ -806,17 +810,17 @@ class WriterCheckout(object):
 
         Returns
         -------
-        Arrayset
+        :class:`~.arrayset.Arraysets`
             single arrayset parameter, no samples specified
 
-        np.ndarray
+        :class:`numpy.ndarray`
             Single arrayset specified, single sample key specified
 
-        List[np.ndarray]
+        List[:class:`numpy.ndarray`]
             Single arrayset, multiple samples array data for each sample is
             returned in same order sample keys are recieved.
 
-        List[NamedTuple[*np.ndarray]]
+        List[NamedTuple[``*``:class:`numpy.ndarray`]]
             Multiple arraysets, multiple samples. Each arrayset's name is used
             as a field in the NamedTuple elements, each NamedTuple contains
             arrays stored in each arrayset via a common sample key. Each sample
@@ -884,29 +888,29 @@ class WriterCheckout(object):
 
             Names(s) of the samples to query
 
-        except_missing: bool, **KWARG ONLY**
+        except_missing: bool, *kwarg-only*
 
             If False, will not throw exceptions on missing sample key value.
             Will raise KeyError if True and missing key found.
 
         Returns
         -------
-        Arrayset
+        :class:`~.arrayset.Arraysets`
             single arrayset parameter, no samples specified
 
-        np.ndarray
+        :class:`numpy.ndarray`
             Single arrayset specified, single sample key specified
 
-        List[np.ndarray]
+        List[:class:`numpy.ndarray`]
             Single arrayset, multiple samples array data for each sample is
             returned in same order sample keys are recieved.
 
-        List[NamedTuple[*np.ndarray]]
+        List[NamedTuple[``*``:class:`numpy.ndarray`]]
             Multiple arraysets, multiple samples. Each arrayset's name is used
             as a field in the NamedTuple elements, each NamedTuple contains
             arrays stored in each arrayset via a common sample key. Each sample
-            key is returned values as an individual element in the
-            List. The sample order is returned in the same order it wasw recieved.
+            key is returned values as an individual element in the List. The
+            sample order is returned in the same order it wasw recieved.
 
         """
         try:
@@ -1007,7 +1011,7 @@ class WriterCheckout(object):
             elements (``np.ndarray``) in a List or Tuple. The number of keys and
             the number of values must match exactally.
 
-        values: Union[np.ndarray, Iterable[np.ndarray]]
+        values: Union[:class:`numpy.ndarray`, Iterable[:class:`numpy.ndarray`]]
             Data to store in the specified arraysets/sample keys. When
             specifying multiple ``arraysets`` or ``samples``, each data piece
             to be stored must reside as individual elements (``np.ndarray``) in
@@ -1125,7 +1129,7 @@ class WriterCheckout(object):
 
         Returns
         -------
-        Arraysets
+        :class:`~.arrayset.Arraysets`
             weakref proxy to the arraysets object which behaves exactly like a
             arraysets accessor class but which can be invalidated when the writer
             lock is released.
@@ -1192,7 +1196,7 @@ class WriterCheckout(object):
 
         Returns
         -------
-        string
+        str
             commit hash
         """
         self.__acquire_writer_lock()
@@ -1265,7 +1269,7 @@ class WriterCheckout(object):
 
         Returns
         -------
-        string
+        str
             The commit hash of the new commit.
 
         Raises

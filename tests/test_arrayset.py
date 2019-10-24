@@ -34,11 +34,9 @@ class TestArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        print(co.arraysets['writtenaset'].__dict__)
 
         # getting arrayset with dictionary like style method
         asetNew = co.arraysets['writtenaset']
-
         assert np.allclose(asetNew['1'], array5by7)
         assert asetOldPath == asetNew._path
         assert asetOldAsetn == asetNew._asetn
@@ -163,7 +161,6 @@ class TestDataWithFixedSizedArrayset(object):
 
         co.commit('this is a commit message')
         co.close()
-
         co = repo.checkout()
         # iterating over .items()
         tensors_in_the_order = iter(all_tensors)
@@ -214,9 +211,7 @@ class TestDataWithFixedSizedArrayset(object):
 
         co.commit('this is a commit message')
         co.close()
-
         co = repo.checkout()
-
         # perform the mock
         template = co._arraysets._arraysets['aset1']._sspecs['3']
         co._arraysets._arraysets['aset1']._sspecs['4'] = template._replace(backend='50')
@@ -224,8 +219,8 @@ class TestDataWithFixedSizedArrayset(object):
 
         # iterating over .items()
         tensors_in_the_order = iter(all_tensors)
-        for dname, aset in co.arraysets.items():
-            assert aset._asetn == dname
+        for dname in ['aset1', 'aset2', 'aset3']:
+            aset = co.arraysets[dname]
             count = 0
             for sname, sample in aset.items(local=True):
                 count += 1
@@ -235,17 +230,19 @@ class TestDataWithFixedSizedArrayset(object):
 
         # iterating over .keys()
         tensors_in_the_order = iter(all_tensors)
-        for dname in co.arraysets.keys():
+        for dname in ['aset1', 'aset2', 'aset3']:
+            aset = co.arraysets[dname]
             count = 0
-            for sname in co.arraysets[dname].keys(local=True):
+            for sname in aset.keys(local=True):
                 count += 1
-                assert np.allclose(co.arraysets[dname][sname], next(tensors_in_the_order))
+                assert np.allclose(aset[sname], next(tensors_in_the_order))
                 assert '4' != sname
             assert count == 3
 
         # iterating over .values()
         tensors_in_the_order = iter(all_tensors)
-        for aset in co.arraysets.values():
+        for dname in ['aset1', 'aset2', 'aset3']:
+            aset = co.arraysets[dname]
             count = 0
             for sample in aset.values(local=True):
                 count += 1
@@ -275,7 +272,6 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = written_repo.checkout()
-        print(list(co.arraysets['writtenaset'].keys()))
         assert np.allclose(co.arraysets['writtenaset']['1'], co.arraysets.get('writtenaset').get('1'), array5by7)
         co.close()
 
@@ -439,7 +435,6 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
 
-        print(written_repo.log())
         co = written_repo.checkout()
         with pytest.raises(KeyError):
             # removal of all data removes the arrayset
@@ -454,6 +449,19 @@ class TestDataWithFixedSizedArrayset(object):
         co.close()
         co = written_repo.checkout()
         assert np.allclose(co.arraysets['writtenaset']['1'], array5by7)
+        co.close()
+
+    def test_remove_data_nonexistant_sample_key_raises(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        co.arraysets['writtenaset'].add(array5by7, '1')
+        new_array = np.zeros_like(array5by7)
+        co.arraysets['writtenaset']['2'] = new_array
+        co.arraysets['writtenaset']['3'] = new_array + 5
+        with pytest.raises(KeyError):
+            co.arraysets['writtenaset'].remove('doesnotexist')
+        with pytest.raises(KeyError):
+            del co.arraysets['writtenaset']['doesnotexist']
+        co.commit('this is a commit message')
         co.close()
 
     @pytest.mark.parametrize("aset1_backend", backend_params)
@@ -521,6 +529,34 @@ class TestDataWithFixedSizedArrayset(object):
         newarr = np.random.random(another_shape).astype(dtype)
         with pytest.raises(ValueError):
             aset['3'] = newarr
+        co.close()
+
+    def test_add_sample_with_non_numpy_array_data_fails(self, written_repo):
+        co = written_repo.checkout(write=True)
+        with pytest.raises(ValueError, match='`data` argument type'):
+            co.arraysets['writtenaset'][1] = [[1, 2, 3, 4, 5, 6, 7] for i in range(5)]
+        co.close()
+
+    def test_add_sample_with_fortran_order_data_fails(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        with pytest.raises(ValueError, match='`data` must be "C" contiguous array.'):
+            co.arraysets['writtenaset'][1] = np.asfortranarray(array5by7)
+        co.close()
+
+    def test_add_sample_with_dimension_rank_fails(self, repo):
+        co = repo.checkout(write=True)
+        aset = co.arraysets.init_arrayset('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
+        arr = np.random.randn(2, 3, 2).astype(np.float32)
+        with pytest.raises(ValueError, match='`data` rank: 3 != aset rank: 2'):
+            aset[1] = arr
+        co.close()
+
+    def test_add_sample_with_dimension_exceeding_max_fails(self, repo):
+        co = repo.checkout(write=True)
+        aset = co.arraysets.init_arrayset('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
+        arr = np.random.randn(2, 4).astype(np.float32)
+        with pytest.raises(ValueError, match='dimensions of `data`: \(2, 4\) exceed'):
+            aset[1] = arr
         co.close()
 
     @pytest.mark.parametrize("aset_backend", backend_params)
@@ -611,6 +647,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_writer_arrayset_properties_are_correct(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
+        assert co.arraysets.iswriteable is True
         d = co.arraysets['writtenaset']
         assert d.name == 'writtenaset'
         assert d.dtype == array5by7.dtype
@@ -622,6 +659,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_reader_arrayset_properties_are_correct(self, written_repo, array5by7):
         co = written_repo.checkout(write=False)
+        assert co.arraysets.iswriteable is False
         d = co.arraysets['writtenaset']
         assert d.name == 'writtenaset'
         assert d.dtype == array5by7.dtype
@@ -629,6 +667,30 @@ class TestDataWithFixedSizedArrayset(object):
         assert d.variable_shape is False
         assert d.named_samples is True
         assert d.iswriteable is False
+
+    def test_iter_arrayset_samples_yields_keys(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        co.arraysets['writtenaset'].add(array5by7, 0)
+        new_array = np.zeros_like(array5by7)
+        co.arraysets['writtenaset'][1] = new_array
+        co.arraysets['writtenaset'][2] = new_array + 5
+
+        for idx, sname in enumerate(iter(co.arraysets['writtenaset'])):
+            assert sname == idx
+        assert idx == 2
+        co.close()
+
+    def test_iter_arraysets_yields_aset_names(self, repo_with_20_samples):
+        co = repo_with_20_samples.checkout(write=True)
+        for k in iter(co.arraysets):
+            assert k in ['second_aset', 'writtenaset']
+        co.close()
+
+    def test_set_item_arrayset_fails(self, written_repo):
+        co = written_repo.checkout(write=True)
+        with pytest.raises(PermissionError, match='Not allowed! To add a arrayset'):
+            co.arraysets['newaset'] = co.arraysets['writtenaset']
+        co.close()
 
 
 class TestVariableSizedArrayset(object):

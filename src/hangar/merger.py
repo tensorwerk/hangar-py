@@ -81,9 +81,9 @@ def select_merge_algorithm(message: str,
                              branch_name=current_head)
     if wDiffer.status() != 'CLEAN':
         e = RuntimeError(
-            'HANGAR RUNTIME ERROR: Changes are currently pending in the staging area ',
-            'To avoid mangled histories, the staging area must exist in a clean state ',
-            'Please reset or commit any changes before the merge operation')
+            'Changes are currently pending in the staging area To avoid mangled '
+            'histories, the staging area must exist in a clean state Please '
+            'reset or commit any changes before the merge operation')
         raise e from None
 
     try:

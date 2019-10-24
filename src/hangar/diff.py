@@ -194,7 +194,7 @@ def _all_raw_from_db_changes(outDb: DiffAndConflictsDB) -> DiffAndConflicts:
     Returns
     -------
     DiffAndConflicts
-        Human readable struct containing `diff` and `conflict` fields.
+        Human readable struct containing ``diff`` and ``conflict`` fields.
     """
     it = (outDb.diff.added, outDb.diff.deleted, outDb.diff.mutated)
     out = map(_raw_from_db_change, it)  # significant perf improvement for large commits
@@ -497,13 +497,13 @@ class ReaderUserDiff(BaseUserDiff):
         Returns
         -------
         DiffAndConflicts
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff
+            two-tuple of ``diff``, ``conflict`` (if any) calculated in the diff
             algorithm.
 
         Raises
         ------
         ValueError
-            if the specified `dev_commit_hash` is not a valid commit reference.
+            if the specified ``dev_commit_hash`` is not a valid commit reference.
         """
         outDb = self._commit(dev_commit_hash=dev_commit_hash)
         outRaw = _all_raw_from_db_changes(outDb)
@@ -520,7 +520,7 @@ class ReaderUserDiff(BaseUserDiff):
         Returns
         -------
         DiffAndConflicts
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff
+            two-tuple of ``diff``, ``conflict`` (if any) calculated in the diff
             algorithm.
 
         Raises
@@ -674,13 +674,13 @@ class WriterUserDiff(BaseUserDiff):
         Returns
         -------
         DiffAndConflicts
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff
+            two-tuple of ``diff``, ``conflict`` (if any) calculated in the diff
             algorithm.
 
         Raises
         ------
         ValueError
-            if the specified `dev_commit_hash` is not a valid commit reference.
+            if the specified ``dev_commit_hash`` is not a valid commit reference.
         """
         outDb = self._commit(dev_commit_hash=dev_commit_hash)
         outRaw = _all_raw_from_db_changes(outDb)
@@ -697,13 +697,13 @@ class WriterUserDiff(BaseUserDiff):
         Returns
         -------
         DiffAndConflicts
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff
+            two-tuple of ``diff``, ``conflict`` (if any) calculated in the diff
             algorithm.
 
         Raises
         ------
         ValueError
-            If the specified `dev_branch` does not exist.
+            If the specified ``dev_branch`` does not exist.
         """
         outDb = self._branch(dev_branch=dev_branch)
         outRaw = _all_raw_from_db_changes(outDb)
@@ -715,7 +715,7 @@ class WriterUserDiff(BaseUserDiff):
         Returns
         -------
         DiffAndConflicts
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff
+            two-tuple of ``diff``, ``conflict`` (if any) calculated in the diff
             algorithm.
         """
         outDb = self._staged()

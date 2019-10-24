@@ -181,7 +181,7 @@ class Repository(object):
     def checkout(self,
                  write: bool = False,
                  *,
-                 branch: str = 'master',
+                 branch: str = '',
                  commit: str = '') -> Union[ReaderCheckout, WriterCheckout]:
         """Checkout the repo at some point in time in either `read` or `write` mode.
 
@@ -197,7 +197,7 @@ class Repository(object):
         branch : str, optional
             name of the branch to checkout. This utilizes the state of the repo
             as it existed at the branch ``HEAD`` commit when this checkout object
-            was instantiated, defaults to 'master'
+            was instantiated, defaults to ''
         commit : str, optional
             specific hash of a commit to use for the checkout (instead of a
             branch ``HEAD`` commit). This argument takes precedent over a branch
@@ -218,6 +218,8 @@ class Repository(object):
         self.__verify_repo_initialized()
         try:
             if write is True:
+                if branch == '':
+                    branch = heads.get_staging_branch_head(self._env.branchenv)
                 co = WriterCheckout(
                     repo_pth=self._repo_path,
                     branch_name=branch,
@@ -485,9 +487,9 @@ class Repository(object):
 
         Returns
         -------
-        heads.BranchHead
-            NamedTuple[str, str] with fields for `name` and `digest` of the branch
-            created (if the operation was successful)
+        :class:`~.heads.BranchHead`
+            NamedTuple[str, str] with fields for ``name`` and ``digest`` of the
+            branch created (if the operation was successful)
 
         Raises
         ------
@@ -497,8 +499,8 @@ class Repository(object):
         ValueError
             If the branch already exists.
         RuntimeError
-            If the repository does not have at-least one commit on the `default`
-            (ie. `master`) branch.
+            If the repository does not have at-least one commit on the "default"
+            (ie. ``master``) branch.
         """
         self.__verify_repo_initialized()
         if (not is_ascii(name)) or (not is_suitable_user_key(name)):
@@ -603,7 +605,7 @@ class Repository(object):
 
         Returns
         -------
-        :class:`~heads.BranchHead`
+        :class:`~.heads.BranchHead`
             NamedTuple[str, str] with fields for `name` and `digest` of the branch
             pointer deleted.
 

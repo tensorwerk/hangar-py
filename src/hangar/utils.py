@@ -6,7 +6,7 @@ import string
 import weakref
 from io import StringIO
 from functools import partial
-from itertools import tee
+from itertools import tee, filterfalse
 from typing import Union, Any
 import importlib
 import types
@@ -49,8 +49,10 @@ def set_blosc_nthreads() -> int:
         ncores blosc will use on the system
     """
     nCores = blosc.detect_number_of_cores()
-    if nCores <= 2:
+    if nCores == 1:
         nUsed = 1
+    elif nCores == 2:
+        nUsed = 2
     elif nCores <= 4:
         nUsed = nCores - 1
     else:
@@ -174,6 +176,28 @@ def pairwise(iterable):
     return zip(a, b)
 
 
+def unique_everseen(iterable, key=None):
+    """List unique elements, preserving order. Remember all elements ever seen.
+
+    >>> list(unique_everseen('AAAABBBCCDAABBB'))
+    ['A', 'B', 'C', 'D']
+    >>> list(unique_everseen('ABBCcAD', str.lower))
+    ['A', 'B', 'C', 'D']
+    """
+    seen = set()
+    seen_add = seen.add
+    if key is None:
+        for element in filterfalse(seen.__contains__, iterable):
+            seen_add(element)
+            yield element
+    else:
+        for element in iterable:
+            k = key(element)
+            if k not in seen:
+                seen_add(k)
+                yield element
+
+
 def find_next_prime(N: int) -> int:
     """Find next prime >= N
 
@@ -207,7 +231,7 @@ def find_next_prime(N: int) -> int:
             return n
 
 
-def file_size(p: os.PathLike) -> int:
+def file_size(p: os.PathLike) -> int:  # pragma: no cover
     """Query the file size of a specific file
 
     Parameters

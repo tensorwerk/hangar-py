@@ -1,6 +1,6 @@
 import pytest
 import h5py
-
+import numpy as np
 
 @pytest.mark.parametrize('clib,clibCode',
                          [('blosc:blosclz', 0), ('blosc:lz4', 1),
@@ -140,3 +140,34 @@ def test_arrayset_init_with_various_gzip_opts(repo, array5by7, clevel, cshuffle,
     assert res_compression_opts == clevel
     wco.commit('hi')
     wco.close()
+
+
+def test_arrayset_overflows_collection_size_collection_count(repo, monkeypatch):
+    from hangar.backends import hdf5_00
+    monkeypatch.setattr(hdf5_00, 'COLLECTION_COUNT', 5)
+    monkeypatch.setattr(hdf5_00, 'COLLECTION_SIZE', 10)
+
+    wco = repo.checkout(write=True)
+    proto = np.arange(50).astype(np.uint16)
+    aset = wco.arraysets.init_arrayset('aset', prototype=proto, backend_opts='00')
+    with aset as cm_aset:
+        for i in range(500):
+            proto[:] = i
+            cm_aset[i] = proto
+    assert aset._fs['00'].hColsRemain == 4
+    assert aset._fs['00'].hMaxSize == 10
+    wco.commit('hello')
+
+    with aset as cm_aset:
+        for i in range(500):
+            proto[:] = i
+            assert np.allclose(proto, cm_aset[i])
+    wco.close()
+
+    rco = repo.checkout()
+    naset = rco.arraysets['aset']
+    with naset as ncm_aset:
+        for i in range(500):
+            proto[:] = i
+            assert np.allclose(proto, ncm_aset[i])
+    rco.close()

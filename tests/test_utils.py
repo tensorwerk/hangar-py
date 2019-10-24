@@ -1,6 +1,19 @@
 import pytest
 
 
+@pytest.mark.parametrize('arg,key,expected', [
+    ['AAABBBCCC', None, ['A', 'B', 'C']],
+    ['AAABbBCcC', str.lower, ['A', 'B', 'C']],
+    ['ABACBACDA', None, ['A', 'B', 'C', 'D']],
+    ['ABacBaCAd', str.upper, ['A', 'B', 'c', 'd']],
+])
+def test_unique_everseen(arg, key, expected):
+    from hangar.utils import unique_everseen
+
+    res = list(unique_everseen(arg, key=key))
+    assert res == expected
+
+
 @pytest.mark.parametrize('arg,expected', [
     [1, '1.00 B'],
     [1234, '1.23 kB'],
