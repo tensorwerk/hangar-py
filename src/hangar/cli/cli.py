@@ -130,7 +130,7 @@ def arrayset(ctx):  # pragma: no cover
 
 
 @arrayset.command(name='create')
-@click.option('--variable-shape', '-vs', 'variable_', is_flag=True, default=False,
+@click.option('--variable-shape', 'variable_', is_flag=True, default=False,
               help='flag indicating sample dimensions can be any size up to max shape.')
 @click.option('--named/--not-named', default=True,
               help='flag indicating if samples are named or not.')
@@ -144,27 +144,35 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
     """Create an arrayset with NAME and DTYPE of SHAPE.
 
     The arrayset will be created in the staging area / branch last used by a
-    writer-checkout. Valid NAMEs contain only ascii letters and ['.', '_', '-']
-    (no whitespace). The DTYPE must be one of ['UINT8', 'INT8', 'UINT16',
-    'INT16', 'UINT32', 'INT32', 'UINT64', 'INT64', 'FLOAT16', 'FLOAT32',
-    'FLOAT64']. The SHAPE must be the last argument(s) specified, where each
-    dimension size is identified by a (space seperated) list of numbers.
+    writer-checkout. Valid NAMEs contain only ascii letters and [``'.'``,
+    ``'_'``, ``'-'``] (no whitespace). The DTYPE must be one of [``'UINT8'``,
+    ``'INT8'``, ``'UINT16'``, ``'INT16'``, ``'UINT32'``, ``'INT32'``,
+    ``'UINT64'``, ``'INT64'``, ``'FLOAT16'``, ``'FLOAT32'``, ``'FLOAT64'``].
+    The SHAPE must be the last argument(s) specified, where each dimension size
+    is identified by a (space seperated) list of numbers.
 
     Examples:
 
-      To specify, an arrayset for some training images of dtype uint8 and shape
-      (256, 256, 3) we should say:
+    To specify, an arrayset for some training images of dtype uint8 and shape
+    (256, 256, 3) we should say:
 
-        $ hangar arrayset create train_images UINT8 256 256 3
+       .. code-block:: console
 
-      To specify that the samples can be variably shaped (have any dimension size
-      up to the maximum SHAPE specified) we would say:
+          $ hangar arrayset create train_images UINT8 256 256 3
 
-        $ hangar arrayset create train_images UINT8 256 256 3 --variable-shape
+    To specify that the samples can be variably shaped (have any dimension size
+    up to the maximum SHAPE specified) we would say:
 
-      or equivalently:
+       .. code-block:: console
 
-        $ hangar arrayset create --variable-shape train_images UINT8 256 256 3
+          $ hangar arrayset create train_images UINT8 256 256 3 --variable-shape
+
+    or equivalently:
+
+       .. code-block:: console
+
+          $ hangar arrayset create --variable-shape train_images UINT8 256 256 3
+
     """
     try:
         co = repo.checkout(write=True)
@@ -189,7 +197,7 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
 def remove_arrayset(repo: Repository, name):
     """Delete the arrayset NAME (and all samples) from staging area.
 
-    The arrayset will be created in the staging area / branch last used by a
+    The arrayset will be removed from the staging area / branch last used by a
     writer-checkout.
     """
     try:
