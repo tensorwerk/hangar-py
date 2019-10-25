@@ -3,9 +3,12 @@ import pytest
 
 class TestMetadata(object):
 
-    def test_writer_add_key_contains_whitespace(self, w_checkout):
+    @pytest.mark.parametrize('name', [
+        'invalid\n', '\ninvalid', 'inv name', 'inva@lid',' trythis', 'andthis ',
+        'VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'])
+    def test_writer_cannot_add_key_contains_whitespace(self, w_checkout, name):
         with pytest.raises(ValueError):
-            w_checkout.metadata.add('a a', 'b')
+            w_checkout.metadata.add(name, 'b')
 
     def test_writer_add_can_overwrite_key_with_new_value(self, w_checkout):
         w_checkout.metadata.add('a', 'b')

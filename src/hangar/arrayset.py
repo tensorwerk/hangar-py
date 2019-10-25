@@ -15,7 +15,7 @@ from .backends import backend_decoder
 from .backends import is_local_backend
 from .backends import parse_user_backend_opts
 from .context import TxnRegister
-from .utils import cm_weakref_obj_proxy, is_suitable_user_key
+from .utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
 from .records.queries import RecordQuery
 from .records.parsing import hash_data_db_key_from_raw_key
 from .records.parsing import generate_sample_name
@@ -746,7 +746,8 @@ class ArraysetDataWriter(ArraysetDataReader):
             if self._samples_are_named and not is_suitable_user_key(name):
                 raise ValueError(
                     f'Name provided: `{name}` type: {type(name)} is invalid. Can only contain '
-                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace) or int >= 0')
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace) or int >= 0. '
+                    f'Must be <= 64 characters long.')
             elif not self._samples_are_named:
                 name = kwargs['bulkn'] if 'bulkn' in kwargs else generate_sample_name()
 
@@ -1275,7 +1276,8 @@ class Arraysets(object):
         Raises
         ------
         ValueError
-            If provided name contains any non ascii, non alpha-numeric characters.
+            If provided name contains any non ascii letter characters
+            characters, or if the string is longer than 64 characters long.
         ValueError
             If required `shape` and `dtype` arguments are not provided in absence of
             `prototype` argument.
@@ -1294,10 +1296,11 @@ class Arraysets(object):
         # ------------- Checks for argument validity --------------------------
 
         try:
-            if not is_suitable_user_key(name):
+            if (not is_suitable_user_key(name)) or (not is_ascii(name)):
                 raise ValueError(
                     f'Arrayset name provided: `{name}` is invalid. Can only contain '
-                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace).')
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace). '
+                    f'Must be <= 64 characters long')
             if name in self._arraysets:
                 raise LookupError(f'Arrayset already exists with name: {name}.')
 

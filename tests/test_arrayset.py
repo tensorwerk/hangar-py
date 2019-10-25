@@ -6,10 +6,14 @@ from itertools import permutations
 
 class TestArrayset(object):
 
-    def test_invalid_asetname(self, repo, randomsizedarray):
+
+    @pytest.mark.parametrize('name', [
+        'invalid\n', '\ninvalid', 'inv name', 'inva@lid', 12, ' try', 'andthis ',
+        'VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'])
+    def test_invalid_asetname(self, repo, randomsizedarray, name):
         co = repo.checkout(write=True)
         with pytest.raises(ValueError):
-            co.arraysets.init_arrayset(name='invalid name', prototype=randomsizedarray)
+            co.arraysets.init_arrayset(name=name, prototype=randomsizedarray)
         co.close()
 
     def test_read_only_mode(self, written_repo):
@@ -340,6 +344,14 @@ class TestDataWithFixedSizedArrayset(object):
         assert np.allclose(co.arraysets['writtenaset']['1'], newFirstArray)
         assert np.allclose(co.arraysets['writtenaset'][2], secondArray)
         assert np.allclose(co.arraysets['writtenaset']['2'], thirdArray)
+        co.close()
+
+    def test_cannot_add_data_sample_name_longer_than_64_characters(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        aset = co.arraysets['writtenaset']
+        with pytest.raises(ValueError):
+            aset['VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'] = array5by7
+        assert len(co.arraysets['writtenaset']) == 0
         co.close()
 
     def test_add_with_wrong_argument_order(self, w_checkout, array5by7):

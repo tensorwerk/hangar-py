@@ -117,13 +117,14 @@ def symlink_rel(src: os.PathLike, dst: os.PathLike, *, is_dir=False):
     os.symlink(rel_path_src, dst, target_is_directory=is_dir)
 
 
-_SuitableCharRE = re.compile(r'[\w\.\-\_]+$', flags=re.ASCII)
+_SuitableCharRE = re.compile(r'[\w\.\-\_]+$\Z', flags=re.ASCII)
 
 
 def is_suitable_user_key(key: Union[str, int]) -> bool:
-    """Checks if string contains only alpha-numeric ascii chars or ['.', '-' '_'] (no whitespace)
+    """Checks if only alpha-numeric ascii chars or ['.', '-' '_'] (no whitespace)
 
-    Necessary because python 3.6 does not have a str.isascii() method.
+    Necessary because python 3.6 does not have a str.isascii() method. In
+    addition, checks that all input keys are less than 64 characters long.
 
     Parameters
     ----------
@@ -142,6 +143,8 @@ def is_suitable_user_key(key: Union[str, int]) -> bool:
             str_data = str(key)
         else:
             raise TypeError
+        if len(str_data) > 64:
+            return False
         return bool(_SuitableCharRE.match(str_data))
     except TypeError:
         return False

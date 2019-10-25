@@ -121,7 +121,8 @@ from collections import ChainMap
 from os.path import join as pjoin
 from os.path import splitext as psplitext
 from functools import partial
-from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable, Pattern
+from typing import (
+    MutableMapping, NamedTuple, Tuple, Optional, Union, Callable, Pattern)
 
 import numpy as np
 import h5py
@@ -572,9 +573,8 @@ class HDF5_00_FileHandles(object):
         # -------------------- Chunk & RDCC Vals ------------------------------
 
         sample_array = np.zeros(self.schema_shape, dtype=self.schema_dtype)
-        chunk_shape, chunk_nbytes = __class__._chunk_opts(
-            sample_array=sample_array,
-            max_chunk_nbytes=CHUNK_MAX_NBYTES)
+        chunk_shape, chunk_nbytes = self._chunk_opts(
+            sample_array=sample_array, max_chunk_nbytes=CHUNK_MAX_NBYTES)
 
         rdcc_nbytes_val = sample_array.nbytes * COLLECTION_SIZE
         if rdcc_nbytes_val < CHUNK_MAX_NBYTES:

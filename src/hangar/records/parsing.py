@@ -3,7 +3,6 @@ from itertools import cycle
 from time import sleep
 from time import perf_counter
 from random import randint
-import string
 from typing import Union, NamedTuple, Tuple, Iterable
 from hashlib import blake2b
 

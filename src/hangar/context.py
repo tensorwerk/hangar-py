@@ -313,7 +313,7 @@ class Environments(object):
         else:
             head_branch = heads.get_staging_branch_head(self.branchenv)
             commit_hash = heads.get_branch_head_commit(self.branchenv, head_branch)
-            txt = f'\n Warning: Neither BRANCH or COMMIT specified.'\
+            txt = f'\n Neither BRANCH or COMMIT specified.'\
                   f'\n * Checking out writing HEAD BRANCH: {head_branch}'
         print(txt)
 
