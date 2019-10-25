@@ -14,6 +14,22 @@ def test_unique_everseen(arg, key, expected):
     assert res == expected
 
 
+@pytest.mark.parametrize('pth', [pytest.File, None, 123])
+def test_valid_directory_path_errors_on_invalid_path_arg(pth):
+    from hangar.utils import is_valid_directory_path
+    with pytest.raises(TypeError, match='Path arg `p`'):
+        is_valid_directory_path(pth)
+
+
+def test_valid_directory_path_recognizes_not_a_directory(managed_tmpdir):
+    from hangar.utils import is_valid_directory_path
+    from os.path import join as pjoin
+    with open(pjoin(managed_tmpdir, 'test.txt'), 'w+') as f:
+        f.write('hello')
+    with pytest.raises(NotADirectoryError):
+        is_valid_directory_path(pjoin(managed_tmpdir, 'test.txt'))
+
+
 @pytest.mark.parametrize('arg,expected', [
     [1, '1.00 B'],
     [1234, '1.23 kB'],

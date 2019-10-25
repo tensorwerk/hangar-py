@@ -318,7 +318,7 @@ def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
     if not os.path.isdir(usr_path):
         msg = f'Path arg `p`: {p} is not a directory.'
         raise NotADirectoryError(msg)
-    if not os.access(usr_path, os.W_OK):
+    if not os.access(usr_path, os.W_OK):  # pragma: no cover
         msg = f'User does not have permission to write to directory path: {p}'
         raise PermissionError(msg)
 
