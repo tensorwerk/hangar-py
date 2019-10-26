@@ -17,7 +17,7 @@ from .remote.client import HangarClient
 from .remote.content import ContentWriter, ContentReader
 from .backends import backend_decoder
 from .records import heads, summarize, commiting, queries, parsing
-from .utils import is_ascii, is_suitable_user_key
+from .utils import is_suitable_user_key
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +25,15 @@ RemoteInfo = NamedTuple('RemoteInfo', [('name', str), ('address', str)])
 
 
 class Remotes(object):
-
     """Class which governs access to remote interactor objects.
 
     .. note::
 
-       The remote-server implementation is under heavy development, and
-       is likely to undergo changes in the Future. While we intend to
-       ensure compatability between software versions of Hangar repositories
-       written to disk, the API is likely to change. Please follow our
-       process at: https://www.github.com/tensorwerk/hangar-py
+       The remote-server implementation is under heavy development, and is
+       likely to undergo changes in the Future. While we intend to ensure
+       compatability between software versions of Hangar repositories written
+       to disk, the API is likely to change. Please follow our process at:
+       https://www.github.com/tensorwerk/hangar-py
 
     """
 
@@ -413,7 +412,7 @@ class Remotes(object):
         return commits
 
     def push(self, remote: str, branch: str,
-             *, username: str = '', password: str = '') -> bool:
+             *, username: str = '', password: str = '') -> str:
         """push changes made on a local repository to a remote repository.
 
         This method is semantically identical to a ``git push`` operation.

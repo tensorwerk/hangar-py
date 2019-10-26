@@ -567,7 +567,7 @@ class TestDataWithFixedSizedArrayset(object):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
         arr = np.random.randn(2, 4).astype(np.float32)
-        with pytest.raises(ValueError, match='dimensions of `data`: \(2, 4\) exceed'):
+        with pytest.raises(ValueError, match='dimensions of `data`: '):
             aset[1] = arr
         co.close()
 
