@@ -56,19 +56,23 @@ class PluginManager(object):
                     self._default_plugins[pair] = fname
 
     def get_plugin(self, method: str, plugin: str = None, extension: str = None) -> Callable:
-        """
-        Load installed plugin. User either needs to specify which plugin to load or should
-        provide file format to infer which plugin to use
+        """Load installed plugin.
+
+        User either needs to specify which plugin to load or should provide
+        file format to infer which plugin to use
 
         Parameters
         ----------
         method : str
-            Which method to load. Allowed methods are stored in `valid_provides`
+            Which method to import from the plugin. Methods implemented by the
+            extension author should be publically announced in ``valid_provides``
         plugin : str, optional
-            Which plugin to load the method from. Cannot leave as `None` if `extension` is also None
+            Which plugin to load the method from. Cannot leave as ``None`` if
+            ``extension`` is also ``None``
         extension : str, optional
-            format of the data on the disk. This information is used to infer which plugin to use
-            in case `plugin` not provided explicitly. Cannot leave as `None` if `plugin` is also None
+            format of the data on the disk. This information is used to infer
+            which plugin to use in case ``plugin`` is not provided explicitly.
+            Cannot leave as ``None`` if ``plugin`` is also ``None``
 
         Returns
         -------

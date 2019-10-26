@@ -21,13 +21,6 @@ def read(*names, **kwargs):
 
 
 extra_require = {
-    'dev': [
-        'grpcio_tools',
-        'mypy>=0.701',
-        'mypy-protobuf',
-        'pillow',
-        'matplotlib',
-    ],
     'plugins': ['hangar_pil', 'hangar_matplotlib'],
     'all': [],
 }

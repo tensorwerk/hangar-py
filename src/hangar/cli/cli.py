@@ -607,16 +607,22 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 @pass_repo
 @click.pass_context
 def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, format_, plugin):
-    """
-    Export ARRAYSET sample data as it existed a STARTPOINT to some format and path. Specifying
-    which sample to be exported is possible by using the switch `--sample` (without this,
-    all the samples in the given arrayset will be exported). Since hangar supports both
-    int and str datatype for the sample name, specifying that while mentioning the sample name
-    might be necessary at times. It is possible to do that by separating the name and type by
-    a colon. For example,
-        1. if the sample name is string of numeric 10 - `10:str` or `10`
-        2. if the sample name is `sample1` - `sample1:str1 or `sample1`
-        3. if the sample name is an int, let say 10 - `10:int`
+    """Export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
+
+    Specifying which sample to be exported is possible by using the switch
+    `--sample` (without this, all the samples in the given arrayset will be
+    exported). Since hangar supports both int and str datatype for the sample
+    name, specifying that while mentioning the sample name might be necessary
+    at times. It is possible to do that by separating the name and type by a
+    colon.
+
+    Example:
+
+       1. if the sample name is string of numeric 10 - ``10:str`` or ``10``
+
+       2. if the sample name is ``sample1`` - ``sample1:str1`` or ``sample1``
+
+       3. if the sample name is an int, let say 10 - ``10:int``
     """
     # TODO: ignore warning through env variable
     from hangar.records.commiting import expand_short_commit_digest
@@ -669,8 +675,7 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
 @pass_repo
 @click.pass_context
 def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plugin):
-    """
-    Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT
+    """Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
     """
     # TODO: ignore warning through env variable
     from hangar.records.commiting import expand_short_commit_digest
