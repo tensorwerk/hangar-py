@@ -17,6 +17,7 @@ from .remote.client import HangarClient
 from .remote.content import ContentWriter, ContentReader
 from .backends import backend_decoder
 from .records import heads, summarize, commiting, queries, parsing
+from .utils import is_suitable_user_key
 
 logger = logging.getLogger(__name__)
 
@@ -24,16 +25,15 @@ RemoteInfo = NamedTuple('RemoteInfo', [('name', str), ('address', str)])
 
 
 class Remotes(object):
-
     """Class which governs access to remote interactor objects.
 
     .. note::
 
-       The remote-server implementation is under heavy development, and
-       is likely to undergo changes in the Future. While we intend to
-       ensure compatability between software versions of Hangar repositories
-       written to disk, the API is likely to change. Please follow our
-       process at: https://www.github.com/tensorwerk/hangar-py
+       The remote-server implementation is under heavy development, and is
+       likely to undergo changes in the Future. While we intend to ensure
+       compatability between software versions of Hangar repositories written
+       to disk, the API is likely to change. Please follow our process at:
+       https://www.github.com/tensorwerk/hangar-py
 
     """
 
@@ -53,9 +53,8 @@ class Remotes(object):
             specified repo path.
         """
         if not self._env.repo_is_initialized:
-            msg = f'HANGAR RUNTIME ERROR:: Repository at path: {self._repo_path} has not '\
-                  f'been initialized. Please run the `init_repo()` function'
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                f'Path {self._repo_path} not Hangar Repo. Use `init_repo()` method')
 
     def add(self, name: str, address: str) -> RemoteInfo:
         """Add a remote to the repository accessible by `name` at `address`.
@@ -77,11 +76,20 @@ class Remotes(object):
         Raises
         ------
         ValueError
+            If provided name contains any non ascii letter characters
+            characters, or if the string is longer than 64 characters long.
+        ValueError
             If a remote with the provided name is already listed on this client,
             No-Op. In order to update a remote server address, it must be
             removed and then re-added with the desired address.
         """
         self.__verify_repo_initialized()
+        if (not isinstance(name, str)) or (not is_suitable_user_key(name)):
+            raise ValueError(
+                f'Remote name {name} of type: {type(name)} invalid. Must be '
+                f'string with only alpha-numeric (or "." "_" "-") ascii characters. '
+                f'Must be <= 64 characters long.')
+
         succ = heads.add_remote(self._env.branchenv, name=name, address=address)
         if succ is False:
             raise ValueError(f'No-Op: Remote named: {name} already exists.')
@@ -97,7 +105,7 @@ class Remotes(object):
 
         Raises
         ------
-        ValueError
+        KeyError
             If a remote with the provided name does not exist
 
         Returns
@@ -108,8 +116,8 @@ class Remotes(object):
         self.__verify_repo_initialized()
         try:
             address = heads.remove_remote(branchenv=self._env.branchenv, name=name)
-        except KeyError:
-            raise ValueError(f'No remote reference with name: {name}')
+        except KeyError as e:
+            raise e
         return RemoteInfo(name=name, address=address)
 
     def list_all(self) -> List[RemoteInfo]:
@@ -404,7 +412,7 @@ class Remotes(object):
         return commits
 
     def push(self, remote: str, branch: str,
-             *, username: str = '', password: str = '') -> bool:
+             *, username: str = '', password: str = '') -> str:
         """push changes made on a local repository to a remote repository.
 
         This method is semantically identical to a ``git push`` operation.

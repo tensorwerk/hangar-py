@@ -61,7 +61,6 @@ class MetadataReader(object):
         self._mode = mode
         self._path = repo_pth
         self._is_conman: bool = False
-
         self._labelenv: lmdb.Environment = labelenv
         self._labelTxn: Optional[lmdb.Transaction] = None
         self._TxnRegister = TxnRegister()
@@ -231,7 +230,6 @@ class MetadataReader(object):
             tmpconman = not self._is_conman
             if tmpconman:
                 self.__enter__()
-
             metaVal = self._labelTxn.get(self._mspecs[key])
             meta_val = parsing.hash_meta_raw_val_from_db_val(metaVal)
         except KeyError:
@@ -239,7 +237,6 @@ class MetadataReader(object):
         finally:
             if tmpconman:
                 self.__exit__()
-
         return meta_val
 
 
@@ -274,7 +271,6 @@ class MetadataWriter(MetadataReader):
         """
 
         super().__init__(*args, **kwargs)
-
         self._dataenv: lmdb.Environment = kwargs['dataenv']
         self._dataTxn: Optional[lmdb.Transaction] = None
 
@@ -331,7 +327,7 @@ class MetadataWriter(MetadataReader):
         Parameters
         ----------
         key : Union[str, int]
-            Name of the metadata piece, alphanumeric ascii characters only
+            Name of the metadata piece, alphanumeric ascii characters only.
         value : string
             Metadata value to store in the repository, any length of valid
             ascii characters.
@@ -345,7 +341,8 @@ class MetadataWriter(MetadataReader):
         Raises
         ------
         ValueError
-            If the `key` contains any whitespace or non alpha-numeric characters.
+            If the `key` contains any whitespace or non alpha-numeric
+            characters or is longer than 64 characters.
         ValueError
             If the `value` contains any non ascii characters.
         """
@@ -353,7 +350,8 @@ class MetadataWriter(MetadataReader):
             if not is_suitable_user_key(key):
                 raise ValueError(
                     f'Metadata key: {key} of type: {type(key)} invalid. Must be int '
-                    f'ascii string with only alpha-numeric / "." "_" "-" characters.')
+                    f'ascii string with only alpha-numeric / "." "_" "-" characters. '
+                    f'Must be <= 64 characters long.')
             elif not (isinstance(value, str) and is_ascii(value)):
                 raise ValueError(
                     f'Metadata Value: `{value}` not allowed. Must be ascii-only string')
@@ -369,7 +367,6 @@ class MetadataWriter(MetadataReader):
             hashKey = parsing.hash_meta_db_key_from_raw_key(val_hash)
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             metaRecVal = parsing.metadata_record_db_val_from_raw_val(val_hash)
-
             # check if meta record already exists with same key
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
@@ -390,7 +387,6 @@ class MetadataWriter(MetadataReader):
         finally:
             if tmpconman:
                 self.__exit__()
-
         return key
 
     def remove(self, key: Union[str, int]) -> Union[str, int]:
@@ -409,9 +405,6 @@ class MetadataWriter(MetadataReader):
 
         Raises
         ------
-        ValueError
-            If the key provided is not string type and containing only
-            ascii-alphanumeric characters.
         KeyError
             If the checkout does not contain metadata with the provided key.
         """
@@ -419,24 +412,18 @@ class MetadataWriter(MetadataReader):
             tmpconman = not self._is_conman
             if tmpconman:
                 self.__enter__()
-
-            if not is_suitable_user_key(key):
-                msg = f'HANGAR VALUE ERROR:: metadata key: `{key}` not allowed. Must be str'\
-                      f'containing alpha-numeric or "." "_" "-" ascii characters (no whitespace).'
-                raise ValueError(msg)
+            if key not in self._mspecs:
+                raise KeyError(f'No metadata exists with key: {key}')
 
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             delete_succeeded = self._dataTxn.delete(metaRecKey)
             if delete_succeeded is False:
-                msg = f'HANGAR KEY ERROR:: No metadata exists with key: {key}'
-                raise KeyError(msg)
+                raise KeyError(f'No metadata exists with key: {key}')
             del self._mspecs[key]
 
         except (KeyError, ValueError) as e:
             raise e from None
-
         finally:
             if tmpconman:
                 self.__exit__()
-
         return key

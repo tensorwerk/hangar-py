@@ -1,33 +1,14 @@
 import pytest
 
 
-def test_create_branch_fails_invalid_name(written_repo):
-    # TODO: really need property based test for this stuff...
-    # Should only contain ascii_letters, ascii_numbers,
-    # and '-', '_', '.' characters (no whitespace)
+@pytest.mark.parametrize('name', [
+    'dummy branch', 'origin/master', '\nmaster', '\\master', 'master\n'
+    'master\r\n', 'master ', 1412, 'foo !', 'foo@', 'foo#', 'foo$', '(foo)',
+    'VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'])
+def test_create_branch_fails_invalid_name(written_repo, name):
     repo = written_repo
     with pytest.raises(ValueError):
-        repo.create_branch('dummy branch')
-    with pytest.raises(ValueError):
-        repo.create_branch('origin/master')
-    with pytest.raises(ValueError):
-        repo.create_branch('\nmaster')
-    with pytest.raises(ValueError):
-        repo.create_branch('\\master')
-    with pytest.raises(ValueError):
-        repo.create_branch('master ')
-    with pytest.raises(ValueError):
-        repo.create_branch(1412)
-    with pytest.raises(ValueError):
-        repo.create_branch('foo !')
-    with pytest.raises(ValueError):
-        repo.create_branch('foo@')
-    with pytest.raises(ValueError):
-        repo.create_branch('foo#')
-    with pytest.raises(ValueError):
-        repo.create_branch('foo$')
-    with pytest.raises(ValueError):
-        repo.create_branch('(foo)')
+        repo.create_branch(name)
 
 
 def test_list_branches_only_reports_master_upon_initialization(repo):

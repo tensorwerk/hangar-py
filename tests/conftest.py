@@ -83,14 +83,14 @@ def repo_with_20_samples(request, written_repo, array5by7):
 
 
 @pytest.fixture(params=backend_params)
-def repo_with_10000_samples(request, written_repo, array5by7):
+def repo_with_1000_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
     aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
     with aset:
-        for i in range(10000):
+        for i in range(1000):
             array5by7[:] = i
             aset[i] = array5by7
-    co.commit('20000 samples')
+    co.commit('1000 samples')
     co.close()
     yield written_repo
 

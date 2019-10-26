@@ -495,7 +495,7 @@ class Repository(object):
         ------
         ValueError
             If the branch name provided contains characters outside of alpha-numeric
-            ascii characters and ".", "_", "-" (no whitespace).
+            ascii characters and ".", "_", "-" (no whitespace), or is > 64 characters.
         ValueError
             If the branch already exists.
         RuntimeError
@@ -504,9 +504,10 @@ class Repository(object):
         """
         self.__verify_repo_initialized()
         if (not is_ascii(name)) or (not is_suitable_user_key(name)):
-            e = ValueError(f'Branch name provided: {name} invalid. Must contain '
-                           f'only alpha-numeric or "." "_" "-" ascii characters.')
-            raise e from None
+            err = ValueError(
+                f'Branch name provided: {name} invalid. Must contain only alpha-numeric '
+                f'or "." "_" "-" ascii characters. And be <= 64 Characters')
+            raise err from None
         createdBranch = heads.create_branch(
             branchenv=self._env.branchenv,
             name=name,

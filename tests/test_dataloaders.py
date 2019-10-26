@@ -154,30 +154,30 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend(self, repo_with_10000_samples):
-        repo = repo_with_10000_samples
+    def test_lots_of_data_with_multiple_backend(self, repo_with_1000_samples):
+        repo = repo_with_1000_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         torch_dset = make_torch_dataset([aset])
-        loader = DataLoader(torch_dset, batch_size=1000, drop_last=True)
+        loader = DataLoader(torch_dset, batch_size=10, drop_last=True)
         for data in loader:
             assert type(data).__name__ == 'BatchTuple_aset'
-            assert data.aset.shape == (1000, 5, 7)
+            assert data.aset.shape == (10, 5, 7)
         co.close()
 
     @pytest.mark.xfail(sys.platform == "win32",
                        strict=True,
                        reason="multiprocess workers does not run on windows")
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self, repo_with_10000_samples):
-        repo = repo_with_10000_samples
+    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self, repo_with_1000_samples):
+        repo = repo_with_1000_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         torch_dset = make_torch_dataset([aset])
-        loader = DataLoader(torch_dset, batch_size=1000, drop_last=True, num_workers=2)
+        loader = DataLoader(torch_dset, batch_size=10, drop_last=True, num_workers=2)
         for data in loader:
             assert type(data).__name__ == 'BatchTuple_aset'
-            assert data.aset.shape == (1000, 5, 7)
+            assert data.aset.shape == (10, 5, 7)
         co.close()
 
     @pytest.mark.xfail(sys.platform == "win32",
@@ -388,14 +388,14 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend(self, repo_with_10000_samples):
-        repo = repo_with_10000_samples
+    def test_lots_of_data_with_multiple_backend(self, repo_with_1000_samples):
+        repo = repo_with_1000_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         tf_dset = make_tf_dataset([aset])
-        tf_dset = tf_dset.batch(1000)
+        tf_dset = tf_dset.batch(10)
         for data in tf_dset:
-            assert data[0].shape == (1000, 5, 7)
+            assert data[0].shape == (10, 5, 7)
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")

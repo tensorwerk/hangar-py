@@ -7,6 +7,14 @@ from random import randint
 import platform
 
 
+@pytest.mark.parametrize('name', [
+    'invalid\n', '\ninvalid', 'inv\name', 'inva/lid', 12, ' try', 'and this ',
+    'VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'])
+def test_cannot_add_invalid_remote_names(repo, name):
+    with pytest.raises(ValueError):
+        repo.remote.add(name, 'localhost:50051')
+
+
 def test_list_all_remotes_works(repo):
 
     remote_spec1 = repo.remote.add('origin', 'test')
@@ -65,7 +73,7 @@ def test_server_is_started_multiple_times_via_ping_pong(server_instance, written
     assert isinstance(roundTripTime, float)
 
 
-@pytest.mark.parametrize('nCommits,nSamples', [[1, 10], [10, 10]])
+@pytest.mark.parametrize('nCommits,nSamples', [[1, 10], [5, 10]])
 def test_push_and_clone_master_linear_history_multiple_commits(
         server_instance, repo, managed_tmpdir, array5by7, nCommits, nSamples):
     from hangar import Repository
@@ -121,8 +129,8 @@ def test_push_and_clone_master_linear_history_multiple_commits(
 
 
 
-@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [10, 10]])
-@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 3], [5, 5]])
+@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [5, 10]])
+@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 3], [3, 5]])
 def test_server_push_second_branch_with_new_commit(server_instance, repo,
                                                    array5by7, nMasterCommits,
                                                    nMasterSamples, nDevCommits,
@@ -169,7 +177,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
     assert push2 == branch.name
 
 
-@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [10, 10]])
+@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [5, 10]])
 @pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 5], [3, 5]])
 def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
@@ -252,7 +260,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     assert fetch == f'origin/{branch.name}'
     assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch.name}']
     for cmt, sampList in devCmtList:
-        # newRepo.remote.fetch_data('origin', commit=cmt)
+
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
         assert len(nco.arraysets) == 1
@@ -267,16 +275,16 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
             assert sIdx in nco.arraysets['writtenaset']
             with pytest.raises(FileNotFoundError):
                 shouldNotExist = nco.arraysets['writtenaset'][sIdx]
-            # assert np.allclose(nco.arraysets['writtenaset'][str(sIdx)], samp)
         nco.close()
+
     cloneBranchHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name=f'origin/{branch.name}')
     assert cloneBranchHist == branchHist
     newRepo._env._close_environments()
 
 
 @pytest.mark.filterwarnings('ignore::UserWarning')
-@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[4, 10]])
-@pytest.mark.parametrize('nDevCommits,nDevSamples', [[3, 24]])
+@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[2, 10]])
+@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 16]])
 @pytest.mark.parametrize('fetchBranch,fetchCommit,fetchAsetns,fetchNbytes,fetchAll_history', [
     ['master',      None,  None,              None,  False],
     ['testbranch',  None,  None,              None,  False],
@@ -605,7 +613,8 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
 
 # -----------------------------------------------------------------------------
 
-@pytest.mark.xfail(reason='unknown bug', run=True, strict=False)
+
+@pytest.mark.xfail(reason='unknown bug sporadically showing up.')
 def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance_nbytes_limit, repo, managed_tmpdir):
     from hangar import Repository
     from hangar.remote import chunks, client
@@ -643,7 +652,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir, exists=False)
-    newRepo.clone('Test User', 'tester@foo.com', server_instance_nbytes_limit, remove_old=True)
+    newRepo.clone('Test User', 'tester@foo.com', server_instance_nbytes_limit)
     assert newRepo.list_branches() == ['master', 'origin/master']
 
     spy = mocker.spy(client.HangarClient, 'fetch_data')
@@ -656,6 +665,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance
         for sIdx, samp in enumerate(sampList):
             assert np.allclose(nco.arraysets['aset'][str(sIdx)], samp)
         nco.close()
+        del nco
     assert client.HangarClient.fetch_data.call_count == 12
     newRepo._env._close_environments()
 
