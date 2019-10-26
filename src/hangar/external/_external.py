@@ -58,26 +58,28 @@ def load(fpath: str, plugin: str = None,
     return func(fpath, **plugin_kwargs)
 
 
-def save(fpath: str, arr: np.ndarray, plugin: str = None,
-         extension: str = None, **plugin_kwargs):
+def save(arr: np.ndarray, outdir: str, sample_n: str, extension: str,
+         plugin: str = None, **plugin_kwargs):
     """
     Wrapper to save data in numpy ndarray format to file using plugin's
     `save` method
 
     Parameters
     ----------
-    fpath : str
-        Target file path
     arr : ndarray
         Numpy array to be saved to file
+    outdir : str
+        Target directory
+    sample_n : str
+        Sample name from hangar
+    extension : str
+        Format of the file. This is used to infer which plugin to use
+        in case plugin name is not provided. This cannot be `None` if
+        `plugin` is also `None`
     plugin : str, optional
         Name of plugin to use.  By default, the preferred plugin for the
         given file format tried until a suitable. This cannot be `None` if
         `extension` is also `None`
-    extension : str, optional
-        Format of the file. This is used to infer which plugin to use
-        in case plugin name is not provided. This cannot be `None` if
-        `plugin` is also `None`
 
     Other Parameters
     ----------------
@@ -85,11 +87,21 @@ def save(fpath: str, arr: np.ndarray, plugin: str = None,
         Plugin specific keyword arguments. If the function is being called from
         command line argument, all the unknown keyword arguments will be collected
         as `plugin_kwargs`
+
+    Notes
+    -----
+    CLI or this method does not create the file name where to save. Instead they
+    pass the required details downstream to the plugins to do that once they verify
+    the given `outdir` is a valid directory. It is because we expect to get data
+    entries where one data entry is one file (like images) and also data entries
+    where multiple entries goes to single file (like CSV). With these ambiguous
+    cases in hand, it's more sensible to let the plugin handle the file handling
+    accordingly.
     """
     if not pm.plugins_loaded:
         pm.reset_plugins()
     func = pm.get_plugin('save', plugin=plugin, extension=extension)
-    func(fpath, arr, **plugin_kwargs)
+    func(arr, outdir, sample_n, extension, **plugin_kwargs)
 
 
 def show(arr: np.ndarray, plugin: str = None,

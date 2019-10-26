@@ -28,6 +28,7 @@ extra_require = {
         'pillow',
         'matplotlib',
     ],
+    'plugins': ['hangar_pil', 'hangar_matplotlib'],
     'all': [],
 }
 

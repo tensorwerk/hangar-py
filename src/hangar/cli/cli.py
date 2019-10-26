@@ -599,14 +599,14 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 @main.command(name='export', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
 @click.argument('arrayset', required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
-@click.option('-o', '--out', required=False, default=os.getcwd(), help="Directory to export data")
+@click.option('-o', '--out', 'outdir', required=False, default=os.getcwd(), help="Directory to export data")
 @click.option('-s', '--sample', default=None, help='Sample name to export. You can optionally specify the type'
                                                    ' of sample name after the colon (ex. `54:str` or `54:int`)')
 @click.option('-f', '--format', 'format_', required=False, help='File format of output file')
 @click.option('--plugin', required=False, help='override auto-inferred plugin')
 @pass_repo
 @click.pass_context
-def export_data(ctx, repo: Repository, arrayset, out, startpoint, sample, format_, plugin):
+def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, format_, plugin):
     """
     Export ARRAYSET sample data as it existed a STARTPOINT to some format and path. Specifying
     which sample to be exported is possible by using the switch `--sample` (without this,
@@ -644,20 +644,16 @@ def export_data(ctx, repo: Repository, arrayset, out, startpoint, sample, format
             sampleNames = list(aset.keys())
 
         extension = format_.lstrip('.') if format_ else None
-        out = os.path.normpath(os.path.expanduser(out))
-        if not os.path.isdir(out):
-            click.echo(f"Directory {out} does not exist")
+        outdir = os.path.normpath(os.path.expanduser(outdir))
+        if not os.path.isdir(outdir):
+            click.echo(f"Directory {outdir} does not exist")
             return
 
         with aset, click.progressbar(sampleNames) as sNamesBar:
             for sampleN in sNamesBar:
                 try:
                     data = aset[sampleN]
-                    if extension:
-                        outP = os.path.join(out, f"{sampleN}.{extension}")
-                    else:
-                        outP = os.path.join(out, sampleN)
-                    external.save(outP, data, plugin, extension, **kwargs)
+                    external.save(data, outdir, sampleN, extension, plugin, **kwargs)
                 except KeyError as e:
                     click.echo(e)
     finally:

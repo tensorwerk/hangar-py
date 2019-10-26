@@ -1,4 +1,5 @@
 from os import getcwd
+import os
 
 import numpy as np
 import pytest
@@ -812,8 +813,9 @@ class TestExport(object):
     save_msg = "Data saved from custom save function"
 
     @classmethod
-    def save(cls, fpath, *args, **kwargs):
+    def save(cls, data, outdir, sampleN, extension, *args, **kwargs):
         print(cls.save_msg)
+        fpath = os.path.join(outdir, f"{sampleN}.{extension}")
         print(fpath)
 
     def test_export_success(self, monkeypatch, written_repo_with_1_sample, tmp_path):
@@ -823,10 +825,17 @@ class TestExport(object):
 
         with monkeypatch.context() as m:
             m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
+
+            # single sample
             res = runner.invoke(
                 cli.export_data, [aset_name, '-o', str(tmp_path), '--sample', 'data', '--format', 'ext'], obj=repo)
             assert res.exit_code == 0
             assert self.save_msg in res.output
+
+            # whole arrayset
+            res = runner.invoke(
+                cli.export_data, [aset_name, '-o', str(tmp_path), '--format', 'ext'], obj=repo)
+            assert res.exit_code == 0
 
     def test_export_wrong_arg(self, monkeypatch, written_repo_with_1_sample, tmp_path):
         repo = written_repo_with_1_sample
