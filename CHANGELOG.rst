@@ -33,6 +33,14 @@ Bug Fixes
 
 * Programatic access to repository log contents now returns branch heads alongside other log info.
   (`#125 <https://github.com/tensorwerk/hangar-py/pull/125>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Fixed minor bug in types of values allowed for ``Arrayset`` names vs ``Sample`` names.
+  (`#151 <https://github.com/tensorwerk/hangar-py/pull/151>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+Breaking changes
+----------------
+
+* New commit reference serialization format is incompatible with repositories written in version 0.3.0 or earlier.
 
 
 `v0.3.0`_ (2019-09-10)
