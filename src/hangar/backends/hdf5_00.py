@@ -294,6 +294,46 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
     return raw_val
 
 
+# -------------------------- Filter Heuristics --------------------------------
+
+
+def hdf5_00_heuristic_filter_opts(prototype: np.ndarray) -> dict:
+    """generate default filter options from a prototype array
+
+    Parameters
+    ----------
+    prototype : :class:`numpy.ndarray`
+        sample array of expected shape and datatype
+
+    Returns
+    -------
+    dict
+        mapping containing default filter opts that the hdf5_00 storage manager
+        will accept.
+
+    TODO
+    ----
+
+    Do something with the prototype arrays, or get rid of the argument, it's
+    just taking up space at this point.
+    """
+    opts = {
+        'default': {
+            'shuffle': None,
+            'complib': 'blosc:zstd',
+            'complevel': 3,
+        },
+        'backup': {
+            'shuffle': 'byte',
+            'complib': 'lzf',
+            'complevel': None,
+        },
+    }
+    hdf5BloscAvail = h5py.h5z.filter_avail(32001)
+    opts = opts['default'] if hdf5BloscAvail else opts['backup']
+    return opts
+
+
 # ------------------------- Accessor Object -----------------------------------
 
 

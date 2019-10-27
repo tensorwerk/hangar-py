@@ -83,18 +83,27 @@ Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the
 process.
 """
-from typing import Dict, Union, Callable, Mapping, NamedTuple, Optional
+from typing import Callable, Dict, Mapping, NamedTuple, Optional, Union
 
 import numpy as np
+import pkg_resources
 
-from .hdf5_00 import HDF5_00_FileHandles, hdf5_00_decode, HDF5_00_DataHashSpec
-from .hdf5_01 import HDF5_01_FileHandles, hdf5_01_decode, HDF5_01_DataHashSpec
-from .numpy_10 import NUMPY_10_FileHandles, numpy_10_decode, NUMPY_10_DataHashSpec
-from .remote_50 import REMOTE_50_Handler, remote_50_decode, REMOTE_50_DataHashSpec
+from .hdf5_00 import (HDF5_00_DataHashSpec, HDF5_00_FileHandles,
+                      hdf5_00_decode, hdf5_00_heuristic_filter_opts)
+from .hdf5_01 import (HDF5_01_DataHashSpec, HDF5_01_FileHandles,
+                      hdf5_01_decode, hdf5_01_heuristic_filter_opts)
+from .numpy_10 import (NUMPY_10_DataHashSpec, NUMPY_10_FileHandles,
+                       numpy_10_decode, numpy_10_heuristic_filter_opts)
+from .remote_50 import (REMOTE_50_DataHashSpec, REMOTE_50_Handler,
+                        remote_50_decode, remote_50_heuristic_filter_opts)
+
+
+custom_backends = {}
+for entry_point in pkg_resources.iter_entry_points('hangar.backends'):
+    custom_backends[entry_point.name] = entry_point.load()
 
 
 # -------------------------- Parser Types and Mapping -------------------------
-
 
 _DataHashSpecs = Union[
     HDF5_00_DataHashSpec,
@@ -103,7 +112,6 @@ _DataHashSpecs = Union[
     REMOTE_50_DataHashSpec]
 
 _ParserMap = Mapping[bytes, Callable[[bytes], _DataHashSpecs]]
-
 BACKEND_DECODER_MAP: _ParserMap = {
     # LOCALS -> [00:50]
     b'00': hdf5_00_decode,
@@ -122,17 +130,30 @@ BACKEND_DECODER_MAP: _ParserMap = {
 _BeAccessors = Union[HDF5_00_FileHandles, HDF5_01_FileHandles,
                      NUMPY_10_FileHandles, REMOTE_50_Handler]
 _AccessorMap = Dict[str, _BeAccessors]
-
 BACKEND_ACCESSOR_MAP: _AccessorMap = {
     # LOCALS -> [0:50]
     '00': HDF5_00_FileHandles,
     '01': HDF5_01_FileHandles,
     '10': NUMPY_10_FileHandles,
-    '20': None,               # tiledb_20 - Reserved
     # REMOTES -> [50:100]
     '50': REMOTE_50_Handler,
-    '60': None,               # url_60 - Reserved
 }
+
+
+BACKEND_HEURISTIC_FILTER_OPTS_MAP = {
+    '00': hdf5_00_heuristic_filter_opts,
+    '01': hdf5_01_heuristic_filter_opts,
+    '10': numpy_10_heuristic_filter_opts,
+    '50': remote_50_heuristic_filter_opts,
+}
+
+
+for k, v in custom_backends.items():
+    fmt_code = getattr(v, '_FmtCode')
+    _DataHashSpecs = Union[_DataHashSpecs, getattr(v, f'{k.upper()}_DataHashSpec')]
+    BACKEND_DECODER_MAP[fmt_code.encode()] = getattr(v, f'{k.lower()}_decode')
+    BACKEND_HEURISTIC_FILTER_OPTS_MAP[fmt_code] = getattr(v, f'{k.lower()}_heuristic_filter_opts')
+    BACKEND_ACCESSOR_MAP[f'{fmt_code}'] = getattr(v, f'{k.upper()}_FileHandles')
 
 
 # ------------------------ Selector Functions ---------------------------------
@@ -164,9 +185,9 @@ def backend_decoder(db_val: bytes) -> _DataHashSpecs:
 BackendOpts = NamedTuple('BackendOpts', [('backend', str), ('opts', dict)])
 
 
-def backend_from_heuristics(array: np.ndarray,
-                            named_samples: bool,
-                            variable_shape: bool) -> str:
+def _backend_from_proto_heuristics(array: np.ndarray,
+                                   named_samples: bool,
+                                   variable_shape: bool) -> str:
     """Given a prototype array, attempt to select the appropriate backend.
 
     Parameters
@@ -185,7 +206,10 @@ def backend_from_heuristics(array: np.ndarray,
 
     TODO
     ----
-    Configuration of this entire module as the available backends fill out.
+    *  Need to have each backend report some type of score based on the array
+       prototype, otherwise this is going to be a mess.
+    *  At the current implemention, this will never actually pick one of the
+       custom backends / heuristics.
     """
     # uncompressed numpy memmap data is most appropriate for data whose shape is
     # likely small tabular row data (CSV or such...)
@@ -243,45 +267,10 @@ def backend_opts_from_heuristics(backend: str,
     In the current implementation, the `array` parameter is unused. Either come
     up with a use or remove it from the parameter list.
     """
-    if backend == '10':
-        opts = {}
-    elif backend == '00':
-        import h5py
-        opts = {
-            'default': {
-                'shuffle': None,
-                'complib': 'blosc:zstd',
-                'complevel': 3,
-            },
-            'backup': {
-                'shuffle': 'byte',
-                'complib': 'lzf',
-                'complevel': None,
-            },
-        }
-        hdf5BloscAvail = h5py.h5z.filter_avail(32001)
-        opts = opts['default'] if hdf5BloscAvail else opts['backup']
-    elif backend == '01':
-        import h5py
-        opts = {
-            'default': {
-                'shuffle': 'byte',
-                'complib': 'blosc:lz4hc',
-                'complevel': 5,
-            },
-            'backup': {
-                'shuffle': 'byte',
-                'complib': 'lzf',
-                'complevel': None,
-            },
-        }
-        hdf5BloscAvail = h5py.h5z.filter_avail(32001)
-        opts = opts['default'] if hdf5BloscAvail else opts['backup']
-    elif backend == '50':
-        opts = {}
-    else:
-        raise ValueError('Should not have been able to not select backend')
-
+    if backend not in BACKEND_HEURISTIC_FILTER_OPTS_MAP:
+        raise ValueError(f'Selected backend: {backend} is not available.')
+    func = BACKEND_HEURISTIC_FILTER_OPTS_MAP[backend]
+    opts = func(array)
     return opts
 
 
@@ -338,9 +327,9 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
         backend = backend_opts['backend']
         opts = {k: v for k, v in backend_opts.items() if k != 'backend'}
     elif backend_opts is None:
-        backend = backend_from_heuristics(array=prototype,
-                                          named_samples=named_samples,
-                                          variable_shape=variable_shape)
+        backend = _backend_from_proto_heuristics(array=prototype,
+                                                 named_samples=named_samples,
+                                                 variable_shape=variable_shape)
         opts = backend_opts_from_heuristics(backend=backend,
                                             array=prototype,
                                             named_samples=named_samples,

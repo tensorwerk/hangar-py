@@ -178,6 +178,33 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
     return raw_val
 
 
+# -------------------------- Filter Heuristics --------------------------------
+
+
+def numpy_10_heuristic_filter_opts(prototype: np.ndarray) -> dict:
+    """generate default filter options from a prototype array
+
+    Parameters
+    ----------
+    prototype : :class:`numpy.ndarray`
+        sample array of expected shape and datatype
+
+    Returns
+    -------
+    dict
+        mapping containing default filter opts that the numpy_10 storage manager
+        will accept.
+
+    TODO
+    ----
+    *  Implement at rest compression of the memmap file? Gzip or something?
+
+    *  Do something with the prototype arrays, or get rid of the argument, it's
+       just taking up space at this point.
+    """
+    opts = {}
+    return opts
+
 # ------------------------- Accessor Object -----------------------------------
 
 
