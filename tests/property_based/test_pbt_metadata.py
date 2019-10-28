@@ -10,7 +10,7 @@ st_valid_names = st.text(min_size=1, alphabet=string.ascii_letters + string.digi
 st_valid_ints = st.integers(min_value=0)
 st_valid_keys = st.one_of(st_valid_ints, st_valid_names)
 
-st_valid_values = st.text(min_size=1, alphabet=string.printable)
+st_valid_values = st.text(min_size=1, alphabet=string.printable + string.whitespace)
 
 
 @settings(max_examples=500)

@@ -22,6 +22,7 @@ valid_arrays_fixed = npst.arrays(np.float64,
 
 
 @given(key=st_valid_keys, val=valid_arrays_fixed)
+@settings(max_examples=500)
 def test_arrayset_fixed_key_values(key, val, w_checkout):
     w_checkout.arraysets['writtenaset'][key] = val
     out = w_checkout.arraysets['writtenaset'][key]

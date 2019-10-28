@@ -720,7 +720,7 @@ class TestVariableSizedArrayset(object):
         'test_shapes,max_shape',
         [[[(2, 5), (1, 10), (10, 1), (5, 2)], (10, 10)],
          [[(10,), (10,)], (10,)],
-         [[(10, 10, 10), (100, 10, 1), (10, 100, 1), (1, 100, 10), (1, 10, 100), (50, 2, 10)], (100, 100, 100)]])
+         [[(3, 3, 3), (27, 1, 1), (1, 27, 1), (1, 1, 27), (3, 9, 1), (9, 3, 1), (1, 3, 9), (1, 9, 3)], (27, 27, 27)]])
     @pytest.mark.parametrize("dtype1", [np.uint8, np.float32, np.int32])
     @pytest.mark.parametrize("dtype2", [np.uint8, np.float32, np.int32])
     @pytest.mark.parametrize('backend1', backend_params)
