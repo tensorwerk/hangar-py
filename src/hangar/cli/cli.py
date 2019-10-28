@@ -15,14 +15,13 @@ Why does this file exist, and why not put this in __main__?
 """
 import os
 import time
+from pathlib import Path
 
 import click
 import numpy as np
 
-from hangar import Repository
-from hangar import __version__
-
-from .utils import parse_custom_arguments
+from hangar import Repository, __version__
+from hangar.cli.utils import parse_custom_arguments
 
 
 pass_repo = click.make_pass_decorator(Repository, ensure=True)
@@ -55,6 +54,7 @@ def init(repo: Repository, name, email, overwrite):
 
 
 # -------------------------- Checkout Writer ----------------------------------
+
 
 @main.command()
 @click.argument('branchname', nargs=1, required=True)
@@ -538,7 +538,9 @@ def server(overwrite, ip, port, timeout):
 
 @main.command(name='import', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
 @click.argument('arrayset', required=True)
-@click.argument('path', required=True)
+@click.argument('path',
+                required=True,
+                type=click.Path(exists=True, dir_okay=True, file_okay=True, readable=True, resolve_path=True))
 @click.option('--branch', default=None, help='branch to import data')
 @click.option('--plugin', default=None, help='override auto-infered plugin')
 @click.option('--overwrite', is_flag=True,
@@ -550,48 +552,40 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
     Import file(s) at PATH to ARRAYSET in the staging area.
     """
     # TODO: ignore warning through env variable
-    import types
+    from types import GeneratorType
     from hangar import external
     from hangar.records.heads import get_staging_branch_head
+
     kwargs = parse_custom_arguments(ctx.args)
+    if branch is None:
+        branch = get_staging_branch_head(repo._env.branchenv)
+    elif branch not in repo.list_branches():
+        raise click.ClickException(f'Branch name: {branch} does not exist, Exiting.')
+    click.echo(f'Writing to branch: {branch}')
 
-    if branch is not None:
-        if branch in repo.list_branches():
-            branch_name = branch
-        else:
-            click.echo(f'Branch name: {branch} does not exist, Exiting.')
-            return None
-    else:
-        branch_name = get_staging_branch_head(repo._env.branchenv)
-    click.echo(f'Writing to branch: {branch_name}')
-
-    co = repo.checkout(write=True, branch=branch_name)
+    co = repo.checkout(write=True, branch=branch)
     try:
-        aset = co.arraysets.get(arrayset)
-        if os.path.isdir(path):
-            files = [os.path.join(path, fname) for fname in os.listdir(path)]
-        else:
-            files = [path]
-        with aset, click.progressbar(files) as filesBar:
-            for fpath in filesBar:
-                extension = os.path.splitext(fpath)[1].strip('.')
-                loaded = external.load(fpath, plugin=plugin, extension=extension, **kwargs)
-                if isinstance(loaded, types.GeneratorType):
-                    for arr, fname in loaded:
-                        if not overwrite and fname in aset:
-                            continue
-                        try:
-                            aset[fname] = arr
-                        except ValueError as e:
-                            click.echo(e)
-                else:
-                    arr, fname = loaded
-                    if not overwrite and fname in aset:
+        active_aset = co.arraysets.get(arrayset)
+        p = Path(path)
+        files = [f.resolve() for f in p.iterdir()] if p.is_dir() else [p.resolve()]
+        with active_aset as aset, click.progressbar(files) as filesBar:
+            for f in filesBar:
+                # handles single and multi-suffix files:
+                #   foo.png     -> png
+                #   foo.tar.bz2 -> tar.bz2
+                ext = ''.join(f.suffixes).strip('.')
+                loaded = external.load(f, plugin=plugin, extension=ext, **kwargs)
+                if not isinstance(loaded, GeneratorType):
+                    loaded = list([loaded])
+                for arr, fname in loaded:
+                    if (not overwrite) and (fname in aset):
                         continue
                     try:
                         aset[fname] = arr
                     except ValueError as e:
                         click.echo(e)
+    except ValueError as e:
+        raise click.ClickException(e)
     finally:
         co.close()
 

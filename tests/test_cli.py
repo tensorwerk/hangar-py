@@ -1,5 +1,6 @@
 from os import getcwd
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -732,6 +733,8 @@ class TestImport(object):
     @staticmethod
     def load(fpath, *args, **kwargs):
         data = np.random.random((5, 7)).astype(np.float64)
+        if isinstance(fpath, Path):
+            fpath = fpath.name
         return data, fpath
 
     def test_import(self, monkeypatch, written_repo_with_1_sample):
@@ -741,7 +744,10 @@ class TestImport(object):
         fpath = 'data.ext'
         aset_name = 'writtenaset'
 
-        with monkeypatch.context() as m:
+        with monkeypatch.context() as m, runner.isolated_filesystem():
+            with open('data.ext', 'w') as f:
+                f.write('test')
+
             m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['load'], ['ext'], 'load', self.load))
             # adding data
             res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
@@ -772,19 +778,37 @@ class TestImport(object):
     def test_import_wrong_args(self, monkeypatch, written_repo_with_1_sample):
         repo = written_repo_with_1_sample
         runner = CliRunner()
-        fpath = 'data.ext'
         aset_name = 'writtenaset'
 
         with monkeypatch.context() as m:
             m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['load'], ['ext'], 'load', self.load))
 
-            # invalid branch
-            res = runner.invoke(cli.import_data, [aset_name, fpath, '--branch', 'invalid'], obj=repo)
-            assert 'invalid does not exist' in res.stdout
+            with runner.isolated_filesystem():
 
-            # invalid plugin
-            res = runner.invoke(cli.import_data, [aset_name, fpath, '--plugin', 'invalid'], obj=repo)
-            assert str(res.exception) == 'Plugin invalid not found'
+                # invalid file
+                res = runner.invoke(cli.import_data, [aset_name, 'valid.ext'], obj=repo)
+                assert res.exit_code == 2
+                assert res.stdout.endswith('Invalid value for "PATH": Path "valid.ext" does not exist.\n')
+
+                with open('valid.ext', 'w') as f:
+                    f.write('empty')
+
+                with open('valid.ext.bz2', 'w') as f:
+                    f.write('empty')
+
+                res = runner.invoke(cli.import_data, [aset_name, 'valid.ext.bz2'], obj=repo)
+                assert res.exit_code == 1
+                assert res.stdout.endswith('No plugins found for the file extension ext.bz2 that could do load\n')
+
+                # invalid branch
+                res = runner.invoke(cli.import_data, [aset_name, 'valid.ext', '--branch', 'invalid'], obj=repo)
+                assert res.exit_code == 1
+                assert res.stdout.endswith('Branch name: invalid does not exist, Exiting.\n')
+
+                # invalid plugin
+                res = runner.invoke(cli.import_data, [aset_name, 'valid.ext', '--plugin', 'invalid'], obj=repo)
+                assert res.exit_code == 1
+                assert res.stdout.endswith('Plugin invalid not found\n')
 
     def test_import_generator_on_load(self, monkeypatch, written_repo_with_1_sample):
         repo = written_repo_with_1_sample
@@ -795,9 +819,13 @@ class TestImport(object):
         def load(fpath, *args, **kwargs):
             for i in range(10):
                 data, name = self.load(fpath, *args, **kwargs)
+                if isinstance(name, Path):
+                    name = name.name
                 yield data, f"{i}_{name}"
 
-        with monkeypatch.context() as m:
+        with monkeypatch.context() as m, runner.isolated_filesystem():
+            with open('data.ext', 'w') as f:
+                f.write('test')
             m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['load'], ['ext'], 'load', load))
             res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
             assert res.exit_code == 0
