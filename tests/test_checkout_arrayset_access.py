@@ -600,6 +600,73 @@ def test_writer_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(wr
     wco.close()
 
 
+def test_writer_co_aset_cm_not_allow_remove_aset(written_repo, array5by7):
+
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    asets = wco.arraysets
+    with asets as cm_asets:
+        with pytest.raises(PermissionError):
+            cm_asets.remove_aset('writtenaset')
+        with pytest.raises(PermissionError):
+            asets.remove_aset('writtenaset')
+
+        with pytest.raises(PermissionError):
+            del cm_asets['writtenaset']
+        with pytest.raises(PermissionError):
+            del asets['writtenaset']
+
+    assert np.allclose(wco['writtenaset', 0], array5by7)
+    assert np.allclose(wco['writtenaset', 1], array5by7 + 1)
+    assert np.allclose(wco['writtenaset', 2], array5by7 + 2)
+    wco.close()
+
+
+def test_writer_co_aset_instance_cm_not_allow_any_self_or_other_aset_remove(repo_with_20_samples):
+
+    wco = repo_with_20_samples.checkout(write=True)
+    asets = wco.arraysets
+    writtenaset = wco.arraysets['writtenaset']
+    second_aset = wco.arraysets['second_aset']
+
+    with second_aset:
+        with pytest.raises(PermissionError):
+            asets.remove_aset('writtenaset')
+        with pytest.raises(PermissionError):
+            asets.remove_aset('second_aset')
+        with pytest.raises(PermissionError):
+            del asets['writtenaset']
+        with pytest.raises(PermissionError):
+            del asets['second_aset']
+
+    with writtenaset:
+        with pytest.raises(PermissionError):
+            asets.remove_aset('writtenaset')
+        with pytest.raises(PermissionError):
+            asets.remove_aset('second_aset')
+        with pytest.raises(PermissionError):
+            del asets['writtenaset']
+        with pytest.raises(PermissionError):
+            del asets['second_aset']
+
+    with asets:
+        with pytest.raises(PermissionError):
+            asets.remove_aset('writtenaset')
+        with pytest.raises(PermissionError):
+            asets.remove_aset('second_aset')
+        with pytest.raises(PermissionError):
+            del asets['writtenaset']
+        with pytest.raises(PermissionError):
+            del asets['second_aset']
+
+    wco.close()
+
+
 # -------------------------- Reader Checkout ----------------------------------
 
 

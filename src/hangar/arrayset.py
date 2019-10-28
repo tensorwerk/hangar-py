@@ -1127,6 +1127,17 @@ class Arraysets(object):
 
 # ------------------------ Writer-Enabled Methods Only ------------------------------
 
+    def _any_is_conman(self) -> bool:
+        """Determine if self or any contains arrayset class is conman.
+
+        Returns
+        -------
+        bool
+            [description]
+        """
+        res = any([self._is_conman, *[x._is_conman for x in self._arraysets.values()]])
+        return res
+
     def __delitem__(self, key: str) -> str:
         """remove a arrayset and all data records if write-enabled process.
 
@@ -1145,8 +1156,11 @@ class Arraysets(object):
         Raises
         ------
         PermissionError
-            If this is a read-only checkout, no operation is permitted.
+            If any enclosed arrayset is opned in a connection manager.
         """
+        if self._any_is_conman():
+            raise PermissionError(
+                'Not allowed while any arraysets class is opened in a context manager')
         return self.remove_aset(key)
 
     def __enter__(self):
@@ -1278,6 +1292,8 @@ class Arraysets(object):
 
         Raises
         ------
+        PermissionError
+            If any enclosed arrayset is opned in a connection manager.
         ValueError
             If provided name contains any non ascii letter characters
             characters, or if the string is longer than 64 characters long.
@@ -1295,6 +1311,9 @@ class Arraysets(object):
         ValueError
             If the specified backend is not valid.
         """
+        if self._any_is_conman():
+            raise PermissionError(
+                'Not allowed while any arraysets class is opened in a context manager')
 
         # ------------- Checks for argument validity --------------------------
 
@@ -1391,9 +1410,15 @@ class Arraysets(object):
 
         Raises
         ------
+        PermissionError
+            If any enclosed arrayset is opned in a connection manager.
         KeyError
             If a arrayset does not exist with the provided name
         """
+        if self._any_is_conman():
+            raise PermissionError(
+                'Not allowed while any arraysets class is opened in a context manager')
+
         datatxn = TxnRegister().begin_writer_txn(self._dataenv)
         try:
             if aset_name not in self._arraysets:
