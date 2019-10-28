@@ -368,7 +368,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             data = chunks.deserialize_record(record)
             schema_hash = data.schema
             hasher = hashlib.blake2b(data.array, digest_size=20)
-            hasher.update(struct.pack(f'<{len(data.shape)}Q', *data.shape))
+            hasher.update(
+                struct.pack(f'<{len(data.array.shape)}QB', *data.array.shape,
+                            data.array.dtype.num))
             received_hash = hasher.hexdigest()
             if received_hash != data.digest:
                 msg = f'HASH MANGLED, received: {received_hash} != expected digest: {data.digest}'

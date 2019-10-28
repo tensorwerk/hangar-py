@@ -353,7 +353,9 @@ class HangarClient(object):
         for record in unpacked_records:
             data = chunks.deserialize_record(record)
             hasher = hashlib.blake2b(data.array, digest_size=20)
-            hasher.update(struct.pack(f'<{len(data.shape)}Q', *data.shape))
+            hasher.update(
+                struct.pack(f'<{len(data.array.shape)}QB', *data.array.shape,
+                            data.array.dtype.num))
             received_hash = hasher.hexdigest()
             if received_hash != data.digest:
                 raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {data.digest}')

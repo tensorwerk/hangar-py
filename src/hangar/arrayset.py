@@ -767,7 +767,7 @@ class ArraysetDataWriter(ArraysetDataReader):
                 self.__enter__()
 
             hasher = hashlib.blake2b(data, digest_size=20)
-            hasher.update(struct.pack(f'<{len(data.shape)}Q', *data.shape))
+            hasher.update(struct.pack(f'<{len(data.shape)}QB', *data.shape, data.dtype.num))
             full_hash = hasher.hexdigest()
             hashKey = hash_data_db_key_from_raw_key(full_hash)
 

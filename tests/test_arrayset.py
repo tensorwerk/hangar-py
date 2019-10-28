@@ -717,6 +717,78 @@ class TestDataWithFixedSizedArrayset(object):
 class TestVariableSizedArrayset(object):
 
     @pytest.mark.parametrize(
+        'test_shapes,max_shape',
+        [[[(2, 5), (1, 10), (10, 1), (5, 2)], (10, 10)],
+         [[(10,), (10,)], (10,)],
+         [[(10, 10, 10), (100, 10, 1), (10, 100, 1), (1, 100, 10), (1, 10, 100), (50, 2, 10)], (100, 100, 100)]])
+    @pytest.mark.parametrize("dtype1", [np.uint8, np.float32, np.int32])
+    @pytest.mark.parametrize("dtype2", [np.uint8, np.float32, np.int32])
+    @pytest.mark.parametrize('backend1', backend_params)
+    @pytest.mark.parametrize('backend2', backend_params)
+    def test_write_all_zeros_same_size_different_shape_does_not_store_as_identical_hashs(
+            self, written_repo, test_shapes, max_shape, dtype1, dtype2, backend1, backend2):
+        repo = written_repo
+        wco = repo.checkout(write=True)
+        aset1 = wco.arraysets.init_arrayset('aset1', shape=max_shape, dtype=dtype1, variable_shape=True, backend_opts=backend1)
+        aset2 = wco.arraysets.init_arrayset('aset2', shape=max_shape, dtype=dtype2, variable_shape=True, backend_opts=backend2)
+
+        arrdict1, arrdict2 = {}, {}
+        for idx, shape in enumerate(test_shapes):
+            arr1 = np.zeros(shape, dtype=dtype1)
+            arr2 = np.zeros(shape, dtype=dtype2)
+            arrdict1[idx] = arr1
+            arrdict2[idx] = arr2
+            aset1[idx] = arr1
+            aset2[idx] = arr2
+
+        for k, v in arrdict1.items():
+            # make sure they are good before committed
+            res = aset1[k]
+            assert res.dtype == v.dtype
+            assert res.shape == v.shape
+            assert np.allclose(res, v)
+        for k, v in arrdict2.items():
+            # make sure they are good before committed
+            res = aset2[k]
+            assert res.dtype == v.dtype
+            assert res.shape == v.shape
+            assert np.allclose(res, v)
+
+        wco.commit('first')
+
+        for k, v in arrdict1.items():
+            # make sure they are good before committed
+            res = aset1[k]
+            assert res.dtype == v.dtype
+            assert res.shape == v.shape
+            assert np.allclose(res, v)
+        for k, v in arrdict2.items():
+            # make sure they are good before committed
+            res = aset2[k]
+            assert res.dtype == v.dtype
+            assert res.shape == v.shape
+            assert np.allclose(res, v)
+
+        wco.close()
+        rco = repo.checkout()
+        naset1 = rco.arraysets['aset1']
+        naset2 = rco.arraysets['aset2']
+
+        for k, v in arrdict1.items():
+            # make sure they are good before committed
+            res = naset1[k]
+            assert res.dtype == v.dtype
+            assert res.shape == v.shape
+            assert np.allclose(res, v)
+        for k, v in arrdict2.items():
+            # make sure they are good before committed
+            res = naset2[k]
+            assert res.dtype == v.dtype
+            assert res.shape == v.shape
+            assert np.allclose(res, v)
+        rco.close()
+
+    @pytest.mark.parametrize(
         'test_shapes,shape',
         [[[(10, 10), (1, 10), (2, 2), (3, 5), (1, 1), (10, 1)], (10, 10)],
          [[(10,), (1,), (5,)], (10,)],
