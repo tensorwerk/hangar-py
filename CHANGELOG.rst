@@ -26,7 +26,8 @@ Improvements
   (`#146 <https://github.com/tensorwerk/hangar-py/pull/146>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added CLI options ``commit``, ``checkout``, ``arrayset create``, & ``arrayset remove``
   (`#150 <https://github.com/tensorwerk/hangar-py/pull/150>`__) `@rlizzo <https://github.com/rlizzo>`__
-
+* Plugin system revamp
+  (`#134 <https://github.com/tensorwerk/hangar-py/pull/134>`__) `@hhsecond <https://github.com/hhsecond>`__
 
 Bug Fixes
 ---------

@@ -374,6 +374,15 @@ class TestDataWithFixedSizedArrayset(object):
         assert np.allclose(aset['1'], array5by7)
         co.close()
 
+    def test_add_same_data_same_key_does_not_duplicate_hash(self, written_repo, array5by7):
+        co = written_repo.checkout(write=True)
+        aset = co.arraysets['writtenaset']
+        assert aset.add(array5by7, '1') == '1'
+        assert aset.add(array5by7, '1') == '1'
+        assert len(aset) == 1
+        assert len(aset._sspecs) == 1
+        co.close()
+
     def test_multiple_data_multiple_commit(self, written_repo, array5by7):
         co = written_repo.checkout(write=True)
         co.arraysets['writtenaset'].add(array5by7, '1')
