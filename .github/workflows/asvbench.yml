@@ -8,11 +8,13 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }}
     strategy:
-      max-parallel: 1
+      max-parallel: 4
+      fail-fast: false
       matrix:
-        python-version: [3.7]
+        os: [ubuntu-18.04, macOS-10.14]
+        python-version: [3.6, 3.7]
 
     steps:
     - uses: actions/checkout@v1
@@ -29,6 +31,17 @@ jobs:
       run: |
         cd asv_bench/
         asv machine --yes
-        asv continuous origin/master HEAD
-        asv compare origin/master HEAD
+        asv continuous origin/master HEAD | tee asv.log
+        ASV_COMPARE="$(asv compare origin/master HEAD)"
+        if [[ $(cat asv.log | grep "failed") ]]; then
+          echo "Benchmarks Run With Errors"
+          exit 1
+        elif [[ $(cat asv.log | grep "PERFORMANCE DECREASED") ]]; then
+          echo "$ASV_COMPARE"
+          echo "Benchmarks Decreased Performance"
+          exit 1
+        else
+          echo "$ASV_COMPARE"
+          echo "Benchmarks Run Without Errors"
+        fi
       shell: bash

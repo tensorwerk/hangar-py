@@ -22,18 +22,18 @@ class HDF5_00(object):
         self.repo.init('tester', 'foo@test.bar', remove_old=True)
         self.co = self.repo.checkout(write=True)
 
-        aint = np.hamming(200).reshape(200, 1)
-        bint = np.hamming(200).reshape(1, 200)
+        aint = np.hamming(100).reshape(100, 1)
+        bint = np.hamming(100).reshape(1, 100)
         cint = np.round(aint * bint * 1000).astype(np.uint16)
-        self.arrint = np.zeros((200, 200, 3), dtype=cint.dtype)
+        self.arrint = np.zeros((100, 100, 3), dtype=cint.dtype)
         self.arrint[:, :, 0] = cint
         self.arrint[:, :, 1] = cint + 1
         self.arrint[:, :, 2] = cint + 2
 
-        afloat = np.hamming(200).reshape(200, 1).astype(np.float32)
-        bfloat = np.hamming(200).reshape(1, 200).astype(np.float32)
+        afloat = np.hamming(100).reshape(100, 1).astype(np.float32)
+        bfloat = np.hamming(100).reshape(1, 100).astype(np.float32)
         cfloat = np.round(afloat * bfloat * 1000)
-        self.arrfloat = np.zeros((200, 200, 3), dtype=cfloat.dtype)
+        self.arrfloat = np.zeros((100, 100, 3), dtype=cfloat.dtype)
         self.arrfloat[:, :, 0] = cfloat
         self.arrfloat[:, :, 1] = cfloat + 1
         self.arrfloat[:, :, 2] = cfloat + 2
@@ -103,18 +103,18 @@ class NUMPY_10(object):
         self.repo.init('tester', 'foo@test.bar', remove_old=True)
         self.co = self.repo.checkout(write=True)
 
-        aint = np.hamming(200).reshape(200, 1)
-        bint = np.hamming(200).reshape(1, 200)
+        aint = np.hamming(100).reshape(100, 1)
+        bint = np.hamming(100).reshape(1, 100)
         cint = np.round(aint * bint * 1000).astype(np.uint16)
-        self.arrint = np.zeros((200, 200, 3), dtype=cint.dtype)
+        self.arrint = np.zeros((100, 100, 3), dtype=cint.dtype)
         self.arrint[:, :, 0] = cint
         self.arrint[:, :, 1] = cint + 1
         self.arrint[:, :, 2] = cint + 2
 
-        afloat = np.hamming(200).reshape(200, 1).astype(np.float32)
-        bfloat = np.hamming(200).reshape(1, 200).astype(np.float32)
+        afloat = np.hamming(100).reshape(100, 1).astype(np.float32)
+        bfloat = np.hamming(100).reshape(1, 100).astype(np.float32)
         cfloat = np.round(afloat * bfloat * 1000)
-        self.arrfloat = np.zeros((200, 200, 3), dtype=cfloat.dtype)
+        self.arrfloat = np.zeros((100, 100, 3), dtype=cfloat.dtype)
         self.arrfloat[:, :, 0] = cfloat
         self.arrfloat[:, :, 1] = cfloat + 1
         self.arrfloat[:, :, 2] = cfloat + 2
