@@ -63,7 +63,7 @@ def load(fpath: str,
     return func(fpath, **plugin_kwargs)
 
 
-def save(arr: np.ndarray, outdir: str, sample_n: str, extension: str,
+def save(arr: np.ndarray, outdir: str, sample_det: str, extension: str,
          plugin: str = None, **plugin_kwargs):
     """Wrapper plugin ``save`` methods which dump :class:`numpy.ndarray` to disk.
 
@@ -73,8 +73,9 @@ def save(arr: np.ndarray, outdir: str, sample_n: str, extension: str,
         Numpy array to be saved to file
     outdir : str
         Target directory
-    sample_n : str
-        Sample name from hangar
+    sample_det : str
+        Sample name and type of the sample name formatted as
+        ``sample_name_type:sample_name``
     extension : str
         Format of the file. This is used to infer which plugin to use in case
         plugin name is not provided. This cannot be ``None`` if ``plugin`` is
@@ -104,7 +105,7 @@ def save(arr: np.ndarray, outdir: str, sample_n: str, extension: str,
     if not pm.plugins_loaded:
         pm.reset_plugins()
     func = pm.get_plugin('save', plugin=plugin, extension=extension)
-    func(arr, outdir, sample_n, extension, **plugin_kwargs)
+    func(arr, outdir, sample_det, extension, **plugin_kwargs)
 
 
 def show(arr: np.ndarray, plugin: str = None,

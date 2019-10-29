@@ -8,6 +8,7 @@ from click.testing import CliRunner
 
 from hangar import Repository
 from hangar.cli import cli
+from hangar.external import PluginManager
 from conftest import backend_params
 
 # -------------------------------- test data ----------------------------------
@@ -28,7 +29,7 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  export      Export ARRAYSET sample data as it existed a STARTPOINT to some...\n'\
            '  fetch       Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data  Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
-           '  import      Import file(s) at PATH to ARRAYSET in the staging area.\n'\
+           '  import      Import file or directory of files at PATH to ARRAYSET in the...\n'\
            '  init        Initialize an empty repository at the current path\n'\
            '  log         Display commit graph starting at STARTPOINT (short-digest or...\n'\
            '  push        Upload local BRANCH commit history / data to REMOTE server.\n'\
@@ -702,7 +703,6 @@ def test_start_server(managed_tmpdir):
 
 
 # =========================== External Plugin =================================
-from hangar.external import PluginManager
 
 
 def monkeypatch_scan(provides, accepts, attribute, func):
@@ -723,6 +723,8 @@ def written_repo_with_1_sample(written_repo):
     co = written_repo.checkout(write=True)
     aset = co.arraysets[aset_name]
     aset['data'] = np.random.random(shape)
+    aset['123'] = np.random.random(shape)
+    aset[123] = np.random.random(shape)
     co.commit('added')
     co.close()
     yield written_repo
@@ -778,6 +780,7 @@ class TestImport(object):
     def test_import_wrong_args(self, monkeypatch, written_repo_with_1_sample):
         repo = written_repo_with_1_sample
         runner = CliRunner()
+
         aset_name = 'writtenaset'
 
         with monkeypatch.context() as m:
@@ -860,10 +863,41 @@ class TestExport(object):
             assert res.exit_code == 0
             assert self.save_msg in res.output
 
+            # with sample name and sample type
+            res = runner.invoke(
+                cli.export_data, [aset_name, '-o', str(tmp_path), '--sample', 'int:123', '--format', 'ext'], obj=repo)
+            assert res.exit_code == 0
+            assert os.path.join(tmp_path, 'int:123.ext') in res.output
+            res = runner.invoke(
+                cli.export_data, [aset_name, '-o', str(tmp_path), '--sample', 'str:123', '--format', 'ext'], obj=repo)
+            assert res.exit_code == 0
+            assert os.path.join(tmp_path, 'str:123.ext') in res.output
+            res = runner.invoke(
+                cli.export_data, [aset_name, '-o', str(tmp_path), '--sample', '123', '--format', 'ext'], obj=repo)
+            assert res.exit_code == 0
+            assert os.path.join(tmp_path, 'str:123.ext') in res.output
+
             # whole arrayset
             res = runner.invoke(
                 cli.export_data, [aset_name, '-o', str(tmp_path), '--format', 'ext'], obj=repo)
             assert res.exit_code == 0
+            assert os.path.join(tmp_path, 'str:data.ext') in res.output
+            assert os.path.join(tmp_path, 'str:123.ext') in res.output
+            assert os.path.join(tmp_path, 'int:123.ext') in res.output
+
+    def test_export_wrong_out_location(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
+
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
+
+            # single sample
+            res = runner.invoke(
+                cli.export_data, [aset_name, '-o', 'wrongpath', '--sample', 'data', '--format', 'ext'], obj=repo)
+            assert res.exit_code == 2
+            assert 'Invalid value for "-o"' in res.stdout
 
     def test_export_wrong_arg(self, monkeypatch, written_repo_with_1_sample, tmp_path):
         repo = written_repo_with_1_sample
@@ -874,7 +908,8 @@ class TestExport(object):
             m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
             res = runner.invoke(
                 cli.export_data, [aset_name, '-o', str(tmp_path), '--plugin', 'invalid'], obj=repo)
-            assert str(res.exception) == 'Plugin invalid not found'
+            assert res.exit_code == 1
+            assert 'Plugin invalid not found' in res.stdout
 
     def test_export_without_specifying_out(self, monkeypatch, written_repo_with_1_sample):
         import os
@@ -953,4 +988,15 @@ class TestShow(object):
             m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['show'], ['ext'], 'show', self.show))
             res = runner.invoke(
                 cli.view_data, [aset_name, 'data', '--format', 'wrong'], obj=repo)
-            assert 'No plugins found' in str(res.exception)
+            assert res.exit_code == 1
+            assert 'No plugins found' in res.stdout
+
+    def test_wrong_sample_name(self, monkeypatch, written_repo_with_1_sample):
+        repo = written_repo_with_1_sample
+        runner = CliRunner()
+        aset_name = 'writtenaset'
+        with monkeypatch.context() as m:
+            m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['show'], ['ext'], 'show', self.show))
+            res = runner.invoke(
+                cli.view_data, [aset_name, 'wrongsample', '--format', 'ext'], obj=repo)
+            assert "wrongsample not in aset" in res.stdout

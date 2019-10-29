@@ -21,7 +21,8 @@ import click
 import numpy as np
 
 from hangar import Repository, __version__
-from hangar.cli.utils import parse_custom_arguments
+
+from .utils import parse_custom_arguments, StrOrIntType
 
 
 pass_repo = click.make_pass_decorator(Repository, ensure=True)
@@ -548,8 +549,11 @@ def server(overwrite, ip, port, timeout):
 @pass_repo
 @click.pass_context
 def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite):
-    """
-    Import file(s) at PATH to ARRAYSET in the staging area.
+    """Import file or directory of files at PATH to ARRAYSET in the staging area.
+
+    If passing in a directory, all files in the directory will be imported, if
+    passing in a file, just that files specified will be
+    imported
     """
     # TODO: ignore warning through env variable
     from types import GeneratorType
@@ -570,13 +574,10 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
         files = [f.resolve() for f in p.iterdir()] if p.is_dir() else [p.resolve()]
         with active_aset as aset, click.progressbar(files) as filesBar:
             for f in filesBar:
-                # handles single and multi-suffix files:
-                #   foo.png     -> png
-                #   foo.tar.bz2 -> tar.bz2
-                ext = ''.join(f.suffixes).strip('.')
+                ext = ''.join(f.suffixes).strip('.')  # multi-suffix files (tar.bz2)
                 loaded = external.load(f, plugin=plugin, extension=ext, **kwargs)
                 if not isinstance(loaded, GeneratorType):
-                    loaded = list([loaded])
+                    loaded = [loaded]
                 for arr, fname in loaded:
                     if (not overwrite) and (fname in aset):
                         continue
@@ -584,19 +585,35 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
                         aset[fname] = arr
                     except ValueError as e:
                         click.echo(e)
-    except ValueError as e:
+    except (ValueError, KeyError) as e:
         raise click.ClickException(e)
     finally:
         co.close()
 
 
 @main.command(name='export', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
-@click.argument('arrayset', required=True)
+@click.argument('arrayset', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
-@click.option('-o', '--out', 'outdir', required=False, default=os.getcwd(), help="Directory to export data")
-@click.option('-s', '--sample', default=None, help='Sample name to export. You can optionally specify the type'
-                                                   ' of sample name after the colon (ex. `54:str` or `54:int`)')
-@click.option('-f', '--format', 'format_', required=False, help='File format of output file')
+@click.option('-o', '--out', 'outdir',
+              nargs=1,
+              required=False,
+              default=os.getcwd(),
+              type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True, resolve_path=True),
+              help="Directory to export data")
+@click.option('-s', '--sample',
+              nargs=1,
+              default=None,
+              type=StrOrIntType(),
+              help=('Sample name to export. Default implementation is to interpret all input '
+                    'names as string type. As an arrayset can contain samples with both ``str`` '
+                    'and ``int`` types, we allow you to specify ``name type`` of the sample. To '
+                    'identify a potentially ambiguous name, we allow you to prepend the type of '
+                    'sample name followed by a colon and then the sample name (ex. `` str:54 `` '
+                    'or `` int:54 ``). this can be done for any sample key.'))
+@click.option('-f', '--format', 'format_',
+              nargs=1,
+              required=False,
+              help='File format of output file')
 @click.option('--plugin', required=False, help='override auto-inferred plugin')
 @pass_repo
 @click.pass_context
@@ -604,7 +621,7 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
     """Export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
 
     Specifying which sample to be exported is possible by using the switch
-    `--sample` (without this, all the samples in the given arrayset will be
+    ``--sample`` (without this, all the samples in the given arrayset will be
     exported). Since hangar supports both int and str datatype for the sample
     name, specifying that while mentioning the sample name might be necessary
     at times. It is possible to do that by separating the name and type by a
@@ -612,17 +629,15 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
 
     Example:
 
-       1. if the sample name is string of numeric 10 - ``10:str`` or ``10``
+       1. if the sample name is string of numeric 10 - ``str:10`` or ``10``
 
-       2. if the sample name is ``sample1`` - ``sample1:str1`` or ``sample1``
+       2. if the sample name is ``sample1`` - ``str:sample1`` or ``sample1``
 
-       3. if the sample name is an int, let say 10 - ``10:int``
+       3. if the sample name is an int, let say 10 - ``int:10``
     """
-    # TODO: ignore warning through env variable
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
     from hangar import external
-
     kwargs = parse_custom_arguments(ctx.args)
 
     if startpoint in repo.list_branches():
@@ -632,37 +647,29 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
     else:
         branch_name = get_staging_branch_head(repo._env.branchenv)
         base_commit = get_branch_head_commit(repo._env.branchenv, branch_name)
-    co = repo.checkout(commit=base_commit)
 
+    co = repo.checkout(commit=base_commit)
     try:
         aset = co.arraysets.get(arrayset)
-        if sample:
-            sample, stype = sample.split(':') if ':' in sample else (sample, '')
-            sample = int(sample) if stype == 'int' else str(sample)
-            sampleNames = [sample]
-        else:
-            sampleNames = list(aset.keys())
-
+        sampleNames = [sample] if sample is not None else list(aset.keys())
         extension = format_.lstrip('.') if format_ else None
-        outdir = os.path.normpath(os.path.expanduser(outdir))
-        if not os.path.isdir(outdir):
-            click.echo(f"Directory {outdir} does not exist")
-            return
-
         with aset, click.progressbar(sampleNames) as sNamesBar:
             for sampleN in sNamesBar:
+                data = aset[sampleN]
+                formated_sampleN = f'{type(sampleN).__name__}:{sampleN}'
                 try:
-                    data = aset[sampleN]
-                    external.save(data, outdir, sampleN, extension, plugin, **kwargs)
-                except KeyError as e:
-                    click.echo(e)
+                    external.save(data, outdir, formated_sampleN, extension, plugin, **kwargs)
+                except Exception as e:
+                    raise click.ClickException(e)
+    except KeyError as e:
+        raise click.ClickException(e)
     finally:
         co.close()
 
 
 @main.command(name='view', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
-@click.argument('arrayset', type=str, required=True)
-@click.argument('sample', type=str, required=True)
+@click.argument('arrayset', nargs=1, type=str, required=True)
+@click.argument('sample', nargs=1, type=StrOrIntType(), required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
 @click.option('-f', '--format', 'format_', required=False, help='File format of output file')
 @click.option('--plugin', default=None, help='Plugin name to use instead of auto-inferred plugin')
@@ -671,7 +678,6 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
 def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plugin):
     """Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
     """
-    # TODO: ignore warning through env variable
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
     from hangar import external
@@ -684,20 +690,18 @@ def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plug
     else:
         branch_name = get_staging_branch_head(repo._env.branchenv)
         base_commit = get_branch_head_commit(repo._env.branchenv, branch_name)
+
     co = repo.checkout(commit=base_commit)
-
-    sample, stype = sample.split(':') if ':' in sample else (sample, '')
-    sample = int(sample) if stype == 'int' else str(sample)
-
-    extension = format_.lstrip('.') if format_ else None
-
     try:
         aset = co.arraysets.get(arrayset)
+        extension = format_.lstrip('.') if format_ else None
+        data = aset[sample]
         try:
-            data = aset[sample]
             external.show(data, plugin=plugin, extension=extension, **kwargs)
-        except KeyError as e:
-            click.echo(e)
+        except Exception as e:
+            raise click.ClickException(e)
+    except KeyError as e:
+        raise click.ClickException(e)
     finally:
         co.close()
 

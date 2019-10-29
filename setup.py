@@ -20,15 +20,6 @@ def read(*names, **kwargs):
         return fh.read()
 
 
-extra_require = {
-    'plugins': ['hangar_pil', 'hangar_matplotlib'],
-    'all': [],
-}
-
-for _, packages in extra_require.items():
-    extra_require['all'].extend(packages)
-
-
 setup(
     name='hangar',
     version='0.4.0b0',
@@ -82,7 +73,6 @@ setup(
         'wrapt',
         'xxhash',
     ],
-    extras_require=extra_require,
     entry_points={
         'console_scripts': ['hangar = hangar.cli:main']
     },

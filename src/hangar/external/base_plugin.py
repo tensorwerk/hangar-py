@@ -5,7 +5,7 @@ installables and should make itself discoverable using package meta data. A
 `detailed documentation <https://packaging.python.org/guides/creating-and-discovering-plugins/#using-package-metadata>`_
 can be found in the official python doc. But for a headstart and to avoid going
 through this somewhat complex process, we have made a `cookiecutter
-<https://github.com/tensorwerk/hangar-external-plugin-cookiecutter>`_ package.
+<https://github.com/tensorwerk/cookiecutter-hangar-external-plugin>`_ package.
 All the hangar plugins follow the naming standard similar to Flask plugins i.e
 `hangar_pluginName`
 """
@@ -28,6 +28,10 @@ class BasePlugin(object):
     then used by hangar as a key to save the data
     """
     def __init__(self, provides, accepts):
+        if not provides:
+            raise ValueError("Argument ``provides`` cannot be empty")
+        if not accepts:
+            raise ValueError("Argument ``accepts`` cannot be empty")
         self._provides = provides
         self._accepts = accepts
 
@@ -72,7 +76,7 @@ class BasePlugin(object):
         """
         raise NotImplementedError
 
-    def save(self, fname, arr, *args, **kwargs):
+    def save(self, arr, outdir, sample_detail, extension, *args, **kwargs):
         """Save data in a :class:`numpy.ndarray` to a specific file format on disk.
 
         If the plugin is developed for files like CSV, JSON, etc - where
@@ -80,6 +84,27 @@ class BasePlugin(object):
         whether the file exist already and weather it should modify / append
         the new data entry to the structure, instead of overwriting it or
         throwing an exception.
+
+        Note
+        ----
+        Name of the file and the whole path to save the data should be constructed
+        by this function. This can be done using the information gets as arguments
+        such as, ``outdir``, ``sample_detail`` and ``extension``. It has been
+        offloaded to this function instead of handling it before because, decisions
+        like whether the multiple data entry should go to a single file or mutltpile
+        file cannot be predicted before hand as are always data specific (and hence
+        plugin specific)
+
+        Note
+        ----
+        If the call to this function is initiated by the CLI, ``sample_detail`` argument
+        will be a string formatted as `sample_name_type:sample_name`. For example, if
+        the sample name is `sample1` (and type of sample name is `str`) then
+        ``sample_detail`` will be `str:sample1`. This is to avoid the ambiguity that
+        could arise by having both integer and string form of numerical as the sample
+        name (ex: if arrayset[123] and arrayset["123"] exist). Formatting
+        ``sample_detail`` to make a proper filename (not necessary) is upto the
+        plugin developer.
         """
         raise NotImplementedError
 

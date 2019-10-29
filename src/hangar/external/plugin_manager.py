@@ -65,7 +65,8 @@ class PluginManager(object):
         ----------
         method : str
             Which method to import from the plugin. Methods implemented by the
-            extension author should be publically announced in ``valid_provides``
+            extension author should be declared as arguments passed into the
+            BasePlugin superclass constructor
         plugin : str, optional
             Which plugin to load the method from. Cannot leave as ``None`` if
             ``extension`` is also ``None``
