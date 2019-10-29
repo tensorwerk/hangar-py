@@ -55,7 +55,7 @@
 
     // The Pythons you'd like to test against.  If not provided, defaults
     // to the current version of Python used to run `asv`.
-    "pythons": ["3.7"],
+    // "pythons": ["3.7"],
 
     // The list of conda channel names to be searched for benchmark
     // dependency packages in the specified order
@@ -132,7 +132,7 @@
     // `asv` will cache results of the recent builds in each
     // environment, making them faster to install next time.  This is
     // the number of builds to keep, per environment.
-    "build_cache_size": 2,
+    "build_cache_size": 1
 
     // The commits after which the regression search in `asv publish`
     // should start looking for regressions. Dictionary whose keys are

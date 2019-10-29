@@ -9,12 +9,12 @@ from hangar.utils import folder_size
 
 class HDF5_00(object):
 
-    params = [2_000]
+    params = [2_000, 5_000, 20_000]
     param_names = ['num_samples']
-    processes = 1
+    processes = 2
     number = 1
-    repeat = 1
-    warmup_time = 0.000001
+    repeat = (2, 4, 60)
+    warmup_time = 0
 
     def setup(self, num_samples):
         self.tmpdir = mkdtemp()
@@ -22,21 +22,17 @@ class HDF5_00(object):
         self.repo.init('tester', 'foo@test.bar', remove_old=True)
         self.co = self.repo.checkout(write=True)
 
-        aint = np.hamming(250).reshape(250, 1)
-        bint = np.hamming(250).reshape(1, 250)
+        aint = np.hamming(100).reshape(100, 1)
+        bint = np.hamming(100).reshape(1, 100)
         cint = np.round(aint * bint * 1000).astype(np.uint16)
-        self.arrint = np.zeros((250, 250, 3), dtype=cint.dtype)
-        self.arrint[:, :, 0] = cint
-        self.arrint[:, :, 1] = cint + 1
-        self.arrint[:, :, 2] = cint + 2
+        self.arrint = np.zeros((100, 100), dtype=cint.dtype)
+        self.arrint[:, :] = cint
 
-        afloat = np.hamming(250).reshape(250, 1).astype(np.float32)
-        bfloat = np.hamming(250).reshape(1, 250).astype(np.float32)
+        afloat = np.hamming(100).reshape(100, 1).astype(np.float32)
+        bfloat = np.hamming(100).reshape(1, 100).astype(np.float32)
         cfloat = np.round(afloat * bfloat * 1000)
-        self.arrfloat = np.zeros((250, 250, 3), dtype=cfloat.dtype)
-        self.arrfloat[:, :, 0] = cfloat
-        self.arrfloat[:, :, 1] = cfloat + 1
-        self.arrfloat[:, :, 2] = cfloat + 2
+        self.arrfloat = np.zeros((100, 100), dtype=cfloat.dtype)
+        self.arrfloat[:, :] = cfloat
         try:
             self.aset_int = self.co.arraysets.init_arrayset(
                 'aset_int', prototype=self.arrint, backend_opts='00')
@@ -90,12 +86,12 @@ class HDF5_00(object):
 
 class NUMPY_10(object):
 
-    params = [2_000]
+    params = [2_000, 5_000]
     param_names = ['num_samples']
-    processes = 1
+    processes = 2
     number = 1
-    repeat = 1
-    warmup_time = 0.0000001
+    repeat = (2, 4, 60)
+    warmup_time = 0
 
     def setup(self, num_samples):
         self.tmpdir = mkdtemp()
@@ -103,21 +99,17 @@ class NUMPY_10(object):
         self.repo.init('tester', 'foo@test.bar', remove_old=True)
         self.co = self.repo.checkout(write=True)
 
-        aint = np.hamming(250).reshape(250, 1)
-        bint = np.hamming(250).reshape(1, 250)
+        aint = np.hamming(100).reshape(100, 1)
+        bint = np.hamming(100).reshape(1, 100)
         cint = np.round(aint * bint * 1000).astype(np.uint16)
-        self.arrint = np.zeros((250, 250, 3), dtype=cint.dtype)
-        self.arrint[:, :, 0] = cint
-        self.arrint[:, :, 1] = cint + 1
-        self.arrint[:, :, 2] = cint + 2
+        self.arrint = np.zeros((100, 100), dtype=cint.dtype)
+        self.arrint[:, :] = cint
 
-        afloat = np.hamming(250).reshape(250, 1).astype(np.float32)
-        bfloat = np.hamming(250).reshape(1, 250).astype(np.float32)
+        afloat = np.hamming(100).reshape(100, 1).astype(np.float32)
+        bfloat = np.hamming(100).reshape(1, 100).astype(np.float32)
         cfloat = np.round(afloat * bfloat * 1000)
-        self.arrfloat = np.zeros((250, 250, 3), dtype=cfloat.dtype)
-        self.arrfloat[:, :, 0] = cfloat
-        self.arrfloat[:, :, 1] = cfloat + 1
-        self.arrfloat[:, :, 2] = cfloat + 2
+        self.arrfloat = np.zeros((100, 100), dtype=cfloat.dtype)
+        self.arrfloat[:, :] = cfloat
         try:
             self.aset_int = self.co.arraysets.init_arrayset(
                 'aset_int', prototype=self.arrint, backend_opts='10')

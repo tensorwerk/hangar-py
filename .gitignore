@@ -36,10 +36,9 @@ htmlcov
 .hypothesis
 
 # Performance Testing
-asv_bench/env/
-asv_bench/html/
-asv_bench/results/
-asv_bench/hangar-py/
+asv_bench/html
+asv_bench/env
+asv_bench/results
 
 # Translations
 *.mo
