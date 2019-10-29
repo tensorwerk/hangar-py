@@ -14,6 +14,9 @@ New Features
   (`#131 <https://github.com/tensorwerk/hangar-py/pull/131>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Ability to change the backend storage format and options applied to an ``arrayset`` after initialization.
   (`#133 <https://github.com/tensorwerk/hangar-py/pull/133>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added Benchmarking Suite to Test for Performance Regressions in PRs.
+  (`#155 <https://github.com/tensorwerk/hangar-py/pull/155>`__) `@rlizzo <https://github.com/rlizzo>`__
+
 
 Improvements
 ------------
