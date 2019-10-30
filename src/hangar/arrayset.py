@@ -5,6 +5,7 @@ from multiprocessing import cpu_count, get_context
 from typing import (
     Iterator, Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple)
 import json
+from contextlib import suppress
 
 
 import lmdb
@@ -491,6 +492,19 @@ class ArraysetDataReader(object):
             data = p.map(self.get, names)
         return data
 
+    def _self_destruct(self):
+        """WRITER METHOD ONLY.
+        """
+        currentdir = list(dir(self))
+        for attr in currentdir:
+            if attr == '__class__':
+                continue
+            try:
+                delattr(self, attr)
+            except (AttributeError, TypeError):
+                with suppress(Exception):
+                    setattr(self, attr, None)
+
 
 class ArraysetDataWriter(ArraysetDataReader):
     """Class implementing methods to write data to a arrayset.
@@ -589,6 +603,20 @@ class ArraysetDataWriter(ArraysetDataReader):
             Name of the sample removed from the arrayset (assuming operation successful)
         """
         return self.remove(key)
+
+    def _self_destruct(self):
+        """WRITER METHOD ONLY.
+        """
+        currentdir = list(dir(self))
+        super()._self_destruct()
+        for attr in currentdir:
+            if attr == '__class__':
+                continue
+            try:
+                delattr(self, attr)
+            except (AttributeError, TypeError):
+                with suppress(Exception):
+                    setattr(self, attr, None)
 
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
@@ -839,6 +867,7 @@ class ArraysetDataWriter(ArraysetDataReader):
         if not self._is_conman:
             self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
 
+        REMOVE_ALL = False
         dataKey = data_record_db_key_from_raw_key(self._asetn, name)
         try:
             isRecordDeleted = self._dataTxn.delete(dataKey)
@@ -849,12 +878,20 @@ class ArraysetDataWriter(ArraysetDataReader):
                 # if this is the last data piece existing in a arrayset, remove schema
                 asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self._asetn)
                 self._dataTxn.delete(asetSchemaKey)
+                REMOVE_ALL = True
         except KeyError as e:
             raise e
         finally:
-            if not self._is_conman:
+            if REMOVE_ALL is True:
+                # DANGER!
                 self._TxnRegister.commit_writer_txn(self._dataenv)
-
+                self._self_destruct()
+                def _exit(*args, **kwargs):
+                    return
+                self.__exit__ = _exit
+                return name
+            elif not self._is_conman:
+                self._TxnRegister.commit_writer_txn(self._dataenv)
         return name
 
 
@@ -932,17 +969,25 @@ class Arraysets(object):
             self.__delitem__ = None
             self.__setitem__ = None
 
+    def __clear_removed_asets(self):
+        for k in list(self._arraysets.keys()):
+            if self._arraysets[k].get is None:
+                del self._arraysets[k]
+
     def _open(self):
+        self.__clear_removed_asets()
         for v in self._arraysets.values():
             v._open()
 
     def _close(self):
+        self.__clear_removed_asets()
         for v in self._arraysets.values():
             v._close()
 
 # ------------- Methods Available To Both Read & Write Checkouts ------------------
 
     def _repr_pretty_(self, p, cycle):
+        self.__clear_removed_asets()
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Arrayset Names / Partial Remote References:\
@@ -952,6 +997,7 @@ class Arraysets(object):
         p.text(res)
 
     def __repr__(self):
+        self.__clear_removed_asets()
         res = f'{self.__class__}('\
               f'repo_pth={self._repo_pth}, '\
               f'arraysets={self._arraysets}, '\
@@ -1017,12 +1063,15 @@ class Arraysets(object):
             True if a arrayset with the provided name exists in the checkout,
             otherwise False.
         """
+        self.__clear_removed_asets()
         return True if key in self._arraysets else False
 
     def __len__(self) -> int:
+        self.__clear_removed_asets()
         return len(self._arraysets)
 
     def __iter__(self) -> Iterable[str]:
+        self.__clear_removed_asets()
         return iter(self._arraysets)
 
     @property
@@ -1042,6 +1091,7 @@ class Arraysets(object):
             samples in arrayset exist locally, True if some reference remote
             sources.
         """
+        self.__clear_removed_asets()
         res: Mapping[str, bool] = {}
         for asetn, aset in self._arraysets.items():
             res[asetn] = aset.contains_remote_references
@@ -1057,6 +1107,7 @@ class Arraysets(object):
             dict where keys are arrayset names and values are iterables of
             samples in the arrayset containing remote references
         """
+        self.__clear_removed_asets()
         res: Mapping[str, Iterable[Union[int, str]]] = {}
         for asetn, aset in self._arraysets.items():
             res[asetn] = aset.remote_reference_keys
@@ -1070,6 +1121,7 @@ class Arraysets(object):
         List[str]
             list of arrayset names
         """
+        self.__clear_removed_asets()
         return list(self._arraysets.keys())
 
     def values(self) -> Iterable[Union[ArraysetDataReader, ArraysetDataWriter]]:
@@ -1081,6 +1133,7 @@ class Arraysets(object):
             Generator of ArraysetData accessor objects (set to read or write mode
             as appropriate)
         """
+        self.__clear_removed_asets()
         for asetObj in self._arraysets.values():
             wr = cm_weakref_obj_proxy(asetObj)
             yield wr
@@ -1093,6 +1146,7 @@ class Arraysets(object):
         Iterable[Tuple[str, Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]]]
             returns two tuple of all all arrayset names/object pairs in the checkout.
         """
+        self.__clear_removed_asets()
         for asetN, asetObj in self._arraysets.items():
             wr = cm_weakref_obj_proxy(asetObj)
             yield (asetN, wr)
@@ -1118,6 +1172,7 @@ class Arraysets(object):
         KeyError
             If no arrayset with the given name exists in the checkout
         """
+        self.__clear_removed_asets()
         try:
             wr = cm_weakref_obj_proxy(self._arraysets[name])
             return wr
@@ -1135,6 +1190,7 @@ class Arraysets(object):
         bool
             [description]
         """
+        self.__clear_removed_asets()
         res = any([self._is_conman, *[x._is_conman for x in self._arraysets.values()]])
         return res
 
@@ -1164,6 +1220,7 @@ class Arraysets(object):
         return self.remove_aset(key)
 
     def __enter__(self):
+        self.__clear_removed_asets()
         self._is_conman = True
         for dskey in list(self._arraysets):
             self._arraysets[dskey].__enter__()
@@ -1212,6 +1269,7 @@ class Arraysets(object):
         KeyError
             If no arrayset with the given name exists in the checkout
         """
+        self.__clear_removed_asets()
         try:
             tmpconman = not self._is_conman
             if tmpconman:
@@ -1311,6 +1369,7 @@ class Arraysets(object):
         ValueError
             If the specified backend is not valid.
         """
+        self.__clear_removed_asets()
         if self._any_is_conman():
             raise PermissionError(
                 'Not allowed while any arraysets class is opened in a context manager')
@@ -1415,6 +1474,7 @@ class Arraysets(object):
         KeyError
             If a arrayset does not exist with the provided name
         """
+        self.__clear_removed_asets()
         if self._any_is_conman():
             raise PermissionError(
                 'Not allowed while any arraysets class is opened in a context manager')
