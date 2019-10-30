@@ -9,6 +9,7 @@ import json
 
 import lmdb
 import numpy as np
+import struct
 
 from .backends import BACKEND_ACCESSOR_MAP
 from .backends import backend_decoder
@@ -765,7 +766,9 @@ class ArraysetDataWriter(ArraysetDataReader):
             if tmpconman:
                 self.__enter__()
 
-            full_hash = hashlib.blake2b(data.tobytes(), digest_size=20).hexdigest()
+            hasher = hashlib.blake2b(data, digest_size=20)
+            hasher.update(struct.pack(f'<{len(data.shape)}QB', *data.shape, data.dtype.num))
+            full_hash = hasher.hexdigest()
             hashKey = hash_data_db_key_from_raw_key(full_hash)
 
             # check if data record already exists with given key
