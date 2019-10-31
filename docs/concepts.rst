@@ -4,28 +4,28 @@
 Hangar Core Concepts
 ####################
 
-This document provides a high level overview of the problems hangar is designed
+This document provides a high level overview of the problems Hangar is designed
 to solve and introduces the core concepts for beginning to use Hangar.
 
 ***************
 What Is Hangar?
 ***************
 
-At it's core hangar is designed to solve many of the same problems faced by
+At its core Hangar is designed to solve many of the same problems faced by
 traditional code version control system (ie. ``Git``), just adapted for
 numerical data:
 
-* Time travel through the historical evolution of a dataset.
+* Time travel through the historical evolution of a dataset
 * Zero-cost Branching to enable exploratory analysis and collaboration
 * Cheap Merging to build datasets over time (with multiple collaborators)
 * Completely abstracted organization and management of data files on disk
 * Ability to only retrieve a small portion of the data (as needed) while still
   maintaining complete historical record
 * Ability to push and pull changes directly to collaborators or a central
-  server (ie a truly distributed version control system)
+  server (ie. a truly distributed version control system)
 
 The ability of version control systems to perform these tasks for codebases is
-largely taken for granted by almost every developer today; However, we are
+largely taken for granted by almost every developer today; however, we are
 in-fact standing on the shoulders of giants, with decades of engineering which
 has resulted in these phenomenally useful tools. Now that a new era of
 "Data-Defined software" is taking hold, we find there is a strong need for
@@ -36,7 +36,7 @@ at large scale... Welcome to Hangar!
 Inspiration
 ***********
 
-The design of hangar was heavily influenced by the `Git <https://git-scm.org>`_
+The design of Hangar was heavily influenced by the `Git <https://git-scm.org>`_
 source-code version control system. As a Hangar user, many of the fundamental
 building blocks and commands can be thought of as interchangeable:
 
@@ -67,7 +67,7 @@ questions Hangar needs to uniquely solve:
 * How can we enable people to work on huge datasets in a local (laptop grade)
   development environment?
 
-We will show how hangar solves these questions in a high-level guide below.
+We will show how Hangar solves these questions in a high-level guide below.
 For a deep dive into the Hangar internals, we invite you to check out the
 :ref:`ref-hangar-under-the-hood` page.
 
@@ -94,7 +94,7 @@ Abstraction 1: What is a Dataset?
 =================================
 
 Let's get philosophical and talk about what a "Dataset" is. The word "Dataset"
-invokes some some meaning to humans; A dataset may have a canonical name (like
+invokes some meaning to humans; a dataset may have a canonical name (like
 "MNIST" or "CoCo"), it will have a source where it comes from, (ideally) it has
 a purpose for some real-world task, it will have people who build, aggregate,
 and nurture it, and most importantly a Dataset always contains pieces of some
@@ -105,7 +105,7 @@ which associate "Data" with some meaning in the real world; it is in the same
 vein which we associate a group of Data in a "Dataset" with some real world
 meaning.
 
-Our first abstraction is therefore the "Dataset": A collection of (potentially
+Our first abstraction is therefore the "Dataset": a collection of (potentially
 groups of) data pieces observing a common form among instances which act to
 describe something meaningful. *To describe some phenomenon, a dataset may
 require multiple pieces of information, each of a particular format, for each
@@ -129,7 +129,7 @@ When thinking about the group of CT scans in aggregate, we realize that
 though a single scan contains many disparate pieces of information stuck
 together, when thinking about the aggregation of every scan in the group,
 most of (if not all) of the same information fields are duplicated within
-each samples
+each samples.
 
 *A single scan is a bunch of disparate information stuck together, many of
 those put together makes a Dataset, but looking down from the top, we identify
@@ -144,7 +144,7 @@ A ``Dataset`` is made of one or more ``Arraysets`` (and optionally some
 making up an individual ``Sample``. It is important to remember that all data
 needed to fully describe a single ``sample`` in a ``Dataset`` may consist of
 information spread across any number of ``Arraysets``. To define a ``Arrayset``
-in Hangar, we need only provide:
+in Hangar, we only need to provide:
 
 * a name
 * a type
@@ -169,7 +169,7 @@ Additionally, samples in a ``arrayset`` can either be named, or unnamed
 Effective use of Hangar relies on having an understanding of what exactly a
 ``"Sample"`` is in a particular ``Arrayset``. The most effective way to find
 out is to ask: "What is the smallest piece of data which has a useful meaning
-to 'me' (or 'my' downstream processes". In the MNIST ``arrayset``, this would
+to 'me' (or 'my' downstream processes"). In the MNIST ``arrayset``, this would
 be a single digit image (a 28x28 array); for a medical ``arrayset`` it might be
 an entire (512x320x320) MRI volume scan for a particular patient; while for the
 NASDAQ Stock Ticker it might be an hours worth of price data points (or less,
@@ -234,7 +234,7 @@ Summary
         :ref:`ref-hangar-under-the-hood`.) using cryptographically secure
         algorithms.
       * Hangar is very much a young project, until penetration tests and
-        security reviews are performed, we will refrain from stating that hangar
+        security reviews are performed, we will refrain from stating that Hangar
         is fully "cryptographically secure". Security experts are welcome to
         contact us privately at `hangar.info@tensorwerk.com
         <hangar.info@tensorwerk.com>`__ to disclose any security issues.
@@ -406,12 +406,12 @@ fast transfer between a Hangar client/server.
         However, the bookeeping records transfered in a ``fetch`` / ``push`` /
         ``clone`` operation do not include information about where that piece
         of data existed on the client (or server) computer. Two synced
-        repositories can use completly different backends to store the data, in
+        repositories can use completely different backends to store the data, in
         completly different locations, and it does not matter - Hangar only
-        guarrentees that when collaborators ask for a data sample in some
+        guarantees that when collaborators ask for a data sample in some
         checkout, that they will be provided with identical arrays, not that
         they will come from the same place or be stored in the same way. Only
-        when data is actually retrieved is the "locating information" set for
+        when data is actually retrieved the "locating information" is set for
         that repository instance.
 
 Because Hangar makes no assumptions about how/where it should retrieve some
@@ -421,13 +421,13 @@ the Bookkeeping, it can decide what data it actually wants to materialize on
 it's local disk! These ``partial fetch`` / ``partial clone`` operations can
 materialize any desired data, whether it be for a few records at the head
 branch, for all data in a commit, or for the entire historical data. A future
-release will even include the ability to stream data directly to a hangar
+release will even include the ability to stream data directly to a Hangar
 checkout and materialize the data in memory without having to save it to disk
 at all!
 
 More importantly: **Since Bookkeeping describes all history, merging can be
 performed between branches which may contain partial (or even no) actual
-data**. Aka. You don't need data on disk to merge changes into it. It's an odd
+data.** Aka **you don't need data on disk to merge changes into it.** It's an odd
 concept which will be explained more in depth in the future.
 
 ..note ::
@@ -473,7 +473,7 @@ operations which can occur.
 
     An operation which removes some arrayset, a sample, or some metadata which
     existed in the parent of the commit under consideration. (Note: removing a
-    arrayset also removes all samples contained in it)
+    arrayset also removes all samples contained in it).
 
 :Mutation:
 
@@ -481,7 +481,7 @@ operations which can occur.
     or a arrayset schema, to a different value than what it had previously been
     created with (Note: a arrayset schema mutation is observed when a arrayset
     is removed, and a new arrayset with the same name is created with a
-    different dtype/shape, all in the same commit)
+    different dtype/shape, all in the same commit).
 
 Merging Changes
 ^^^^^^^^^^^^^^^

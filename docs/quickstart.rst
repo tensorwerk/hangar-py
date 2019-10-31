@@ -8,4 +8,4 @@ To use Hangar in a project::
 
 
 Please refer to the :ref:`ref-tutorial` for examples, or :ref:`ref-concepts` to
-review the core concepts of the Hangar system
+review the core concepts of the Hangar system.

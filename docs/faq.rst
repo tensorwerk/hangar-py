@@ -29,11 +29,11 @@ An absolute requirement of a system right this is to protect user data at all
 costs (I’ll refer to this as preserving data "integrity" from here). During our
 initial design of the system, we made the decision that preserving integrity
 comes above all other system parameters: including performance, disk size,
-complexity of the hangar core, and even features should we not be able to make
+complexity of the Hangar core, and even features should we not be able to make
 them absolutely safe for the user. And to be honest, the very first versions of
-hangar were quite slow and difficult to use as a result of this.
+Hangar were quite slow and difficult to use as a result of this.
 
-The initial versions of hangar (which we put together in ~2 weeks) had
+The initial versions of Hangar (which we put together in ~2 weeks) had
 essentially most of the features we have today. We’ve improved the API, made
 things clearer, and added some visualization/reporting utilities, but not much
 has changed. Essentially the entire development effort has been addressing
@@ -68,7 +68,7 @@ time I’ve developed Hangar where we lost data irrecoverably:
       - added some data
       - without committing, retrieved the same data again via the user facing API
       - overwrote some slice of the return array with new data and did some processing
-      - asked hangar for that same array key again, and instead of returning
+      - asked Hangar for that same array key again, and instead of returning
         the contents got a fatal RuntimeError raised by Hangar with the
         code/message indicating "'DATA CORRUPTION ERROR: Checksum {cksum} !=
         recorded for {hashVal}"
@@ -84,7 +84,7 @@ time I’ve developed Hangar where we lost data irrecoverably:
    subarray slice buffer.
 
    However, the nice part is that this was a real world proof that our system
-   design worked (and not just in tests). When you add data to a hangar
+   design worked (and not just in tests). When you add data to a Hangar
    checkout (or receive it on a fetch/clone operation) we calculate a hash
    digest of the data via ``blake2b`` (a cryptographically secure algorithm in the
    python standard library). While this allows us to cryptographically verify full
@@ -136,7 +136,7 @@ time I’ve developed Hangar where we lost data irrecoverably:
          ability to remove any data which had previously existed in some commit
          in the repo’s history
 
-   In addition, a hangar checkout object is not what it appears to be (at first
+   In addition, a Hangar checkout object is not what it appears to be (at first
    glance, use, or even during common introspection operations). If you try to
    operate on it after closing the checkout, or holding it while another
    checkout is started, you won’t be able to (there’s a whole lot of invisible
@@ -159,7 +159,7 @@ time I’ve developed Hangar where we lost data irrecoverably:
       >>> print(co)  # or any other operation
       PermissionError: Unable to operate on past checkout objects which have been closed. No operation occurred. Please use a new checkout.
 
-   The last bit i’ll leave you with is a note on context managers and performance
+   The last bit I’ll leave you with is a note on context managers and performance
    (how we handle record data safety and effectively
 
    .. seealso::
@@ -176,7 +176,7 @@ Two strategies exist:
 1. Use a remote server and Hangar’s built in ability to just push data to a
    remote! (tutorial coming soon, see :ref:`ref-api` for more details.
 
-2. A hangar repository is self contained in it’s .hangar directory. To back
+2. A Hangar repository is self contained in it’s .hangar directory. To back
    up the data, just copy/paste or rsync it to another machine! (edited)
 
 
