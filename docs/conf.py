@@ -25,6 +25,8 @@ if os.getenv('SPELLCHECK'):
     spelling_show_suggestions = True
     spelling_lang = 'en_US'
 
+nbsphinx_execute = 'never'
+
 autodoc_mock_imports = ['torch', 'tensorflow']
 autosummary_generate = True
 
