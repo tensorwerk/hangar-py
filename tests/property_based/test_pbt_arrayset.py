@@ -10,7 +10,7 @@ from hypothesis.extra import numpy as npst
 
 st_valid_names = st.text(
     min_size=1, max_size=32, alphabet=string.ascii_letters + string.digits + '_-.')
-st_valid_ints = st.integers(min_value=0, max_value=999_999)
+st_valid_ints = st.integers(min_value=0, max_value=99_999)
 st_valid_keys = st.one_of(st_valid_ints, st_valid_names)
 
 
@@ -29,7 +29,7 @@ valid_arrays_fixed = npst.arrays(np.float32,
 
 
 @given(key=st_valid_keys, val=valid_arrays_fixed)
-@settings(max_examples=200, deadline=3000.0)
+@settings(max_examples=100, deadline=3000.0)
 def test_arrayset_fixed_key_values(key, val, fixed_shape_repo_co_float32):
     co = fixed_shape_repo_co_float32
     co.arraysets['writtenaset'][key] = val
@@ -55,7 +55,7 @@ valid_arrays_var_float32 = npst.arrays(np.float32,
 
 
 @given(key=st_valid_keys, val=valid_arrays_var_float32)
-@settings(max_examples=200, deadline=3000.0)
+@settings(max_examples=100, deadline=3000.0)
 def test_arrayset_variable_shape_float32(key, val, variable_shape_repo_co_float32):
     co = variable_shape_repo_co_float32
     assert co.arraysets['writtenaset'].variable_shape is True
@@ -72,7 +72,7 @@ valid_arrays_var_uint8 = npst.arrays(np.uint8,
 
 
 @given(key=st_valid_keys, val=valid_arrays_var_uint8)
-@settings(max_examples=200)
+@settings(max_examples=100, deadline=3000.0)
 def test_arrayset_variable_shape_uint8(key, val, variable_shape_repo_co_uint8):
     co = variable_shape_repo_co_uint8
     assert co.arraysets['writtenaset'].variable_shape is True
