@@ -2,16 +2,16 @@
 
 Why does this file exist, and why not put this in __main__?
 
-    You might be tempted to import things from __main__ later, but that will cause
-    problems: the code will get executed twice:
+   You might be tempted to import things from __main__ later, but that will cause
+   problems: the code will get executed twice:
 
-    - When you run `python -mhangar` python will execute
-      ``__main__.py`` as a script. That means there won't be any
-      ``hangar.__main__`` in ``sys.modules``.
-    - When you import __main__ it will get executed again (as a module) because
-      there's no ``hangar.__main__`` in ``sys.modules``.
+      - When you run `python -mhangar` python will execute
+        ``__main__.py`` as a script. That means there won't be any
+        ``hangar.__main__`` in ``sys.modules``.
+      - When you import __main__ it will get executed again (as a module) because
+        there's no ``hangar.__main__`` in ``sys.modules``.
 
-    Also see (1) from http://click.pocoo.org/7/setuptools/#setuptools-integration
+Also see (1) from http://click.pocoo.org/7/setuptools/#setuptools-integration
 """
 import os
 import time
@@ -65,7 +65,7 @@ def checkout(repo: Repository, branchname):
 
     This method requires that no process currently holds the writer lock.
     In addition, it requires that the contents of the staging area are
-    "CLEAN" (no changes have been staged).
+    'CLEAN' (no changes have been staged).
     """
     try:
         co = repo.checkout(write=True, branch=branchname)
@@ -77,8 +77,8 @@ def checkout(repo: Repository, branchname):
 
 @main.command()
 @click.option('--message', '-m', multiple=True,
-              help='The commit message. If provided multiple times '
-                   'each argument gets converted into a new line.')
+              help=('The commit message. If provided multiple times '
+                    'each argument gets converted into a new line.'))
 @pass_repo
 def commit(repo: Repository, message):
     """Commits outstanding changes.
@@ -245,7 +245,7 @@ def fetch_records(repo: Repository, remote, branch):
     """Retrieve the commit history from REMOTE for BRANCH.
 
     This method does not fetch the data associated with the commits. See
-    `fetch-data` to download the tensor data corresponding to a commit.
+    ``fetch-data`` to download the tensor data corresponding to a commit.
     """
     bName = repo.remote.fetch(remote=remote, branch=branch)
     click.echo(f'Fetched branch Name: {bName}')
@@ -608,8 +608,8 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
                     'names as string type. As an arrayset can contain samples with both ``str`` '
                     'and ``int`` types, we allow you to specify ``name type`` of the sample. To '
                     'identify a potentially ambiguous name, we allow you to prepend the type of '
-                    'sample name followed by a colon and then the sample name (ex. `` str:54 `` '
-                    'or `` int:54 ``). this can be done for any sample key.'))
+                    'sample name followed by a colon and then the sample name (ex. ``str:54`` '
+                    'or ``int:54``). this can be done for any sample key.'))
 @click.option('-f', '--format', 'format_',
               nargs=1,
               required=False,

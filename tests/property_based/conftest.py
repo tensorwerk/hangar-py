@@ -23,7 +23,6 @@ def fixed_shape_repo_co_float32(managed_tmpdir, request) -> Repository:
     repo_obj._env._close_environments()
 
 
-
 @pytest.fixture(params=backend_params)
 def variable_shape_repo_co_float32(managed_tmpdir, request) -> Repository:
     repo_obj = Repository(path=managed_tmpdir, exists=False)

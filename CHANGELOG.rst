@@ -24,10 +24,12 @@ Improvements
   (`#144 <https://github.com/tensorwerk/hangar-py/pull/144>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added blosc compression to HDF5 backend by default on PyPi installations.
   (`#146 <https://github.com/tensorwerk/hangar-py/pull/146>`__) `@rlizzo <https://github.com/rlizzo>`__
-* Added CLI options ``commit``, ``checkout``, ``arrayset create``, & ``arrayset remove``
+* Added CLI options ``commit``, ``checkout``, ``arrayset create``, & ``arrayset remove``.
   (`#150 <https://github.com/tensorwerk/hangar-py/pull/150>`__) `@rlizzo <https://github.com/rlizzo>`__
-* Plugin system revamp
+* Plugin system revamp.
   (`#134 <https://github.com/tensorwerk/hangar-py/pull/134>`__) `@hhsecond <https://github.com/hhsecond>`__
+* Documentation Improvements and Typo-Fixes.
+  (`#156 <https://github.com/tensorwerk/hangar-py/pull/156>`__) `@alessiamarcolini <https://github.com/alessiamarcolini>`__
 
 Bug Fixes
 ---------

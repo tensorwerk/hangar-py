@@ -5,7 +5,7 @@ Hangar Under The Hood
 =====================
 
 
-At it's core, hangar is a content addressable data store whose design
+At its core, Hangar is a content addressable data store whose design
 requirements were inspired by the Git version control system.
 
 
@@ -32,7 +32,7 @@ and may not even be sure that the arrays were flushed to disk properly. These
 situations are a NO-GO from the start, and will always remain so.
 
 So, we come to the first design choice: **read and write actions are atomic**.
-Once data is added to a hangar repository, the numeric array along with the
+Once data is added to a Hangar repository, the numeric array along with the
 necessary book-keeping records will *always* occur transactionally, ensuring
 that when something unexpected happens, the data and records are committed to
 disk.
@@ -43,7 +43,7 @@ disk.
   shouldn't have to care about this or even know this exists. However, this
   is also why using the context-manager style arrayset interaction scheme can
   result in ~2x times speedup on writes/reads. We can just pass on most of the
-  work to the python ``contextlib`` package instead of having to begin and
+  work to the Python ``contextlib`` package instead of having to begin and
   commit/abort (depending on interaction mode) transactions with every call to
   an `add` or `get` method.
 
@@ -58,9 +58,9 @@ history. Hangar commits should be fast and use minimal disk space, duplicating
 data just doesn't make sense for such a system. And so we decided on
 implementing a content addressable data store backend.
 
-When a user requests to add data to a hangar repository, one of the first
+When a user requests to add data to a Hangar repository, one of the first
 operations which occur is to generate a hash of the array contents. If the hash
-does not match a piece of data already placed in the hangar repository, the
+does not match a piece of data already placed in the Hangar repository, the
 data is sent to the appropriate storage backend methods. On success, the
 backend sends back some arbitrary specification which can be used to retrieve
 that same piece of data from that particular backend. The record backend then
@@ -137,7 +137,7 @@ Records != Numbers
 *The form numerical data takes once dumped on disk is completely irrelevant to
 the specifications of records in the repository history.*
 
-Now, let's unpack this for a bit. We know from`Numbers == Numbers`_ that data
+Now, let's unpack this for a bit. We know from `Numbers == Numbers`_ that data
 is saved to disk in some arbitrary locations with some arbitrary backend. We
 also know from `Data Is Large, We Don't Waste Space`_ that the permanent
 repository information only contains a record which links a sample name to a
@@ -265,7 +265,7 @@ pointer is then updated to point to that commit as it's base.
     -------------------------------------
     '479b4cfff6219e3d' ->  ''
 
-Branches can be created as cheaply a single line of text can be written, and
+Branches can be created as cheaply as a single line of text can be written, and
 they simply require a "root" commit hash (or a branch name, in which case the
 branch's current HEAD commit will be used as the root HEAD). Likewise a branch
 can be merged with just a single write operation (once the merge logic has
