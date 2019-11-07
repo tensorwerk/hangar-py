@@ -719,24 +719,31 @@ def test_writer_co_aset_instance_cm_not_allow_any_aset_removal(repo_with_20_samp
     wco.close()
 
 
-def test_writer_co_aset_removes_all_samples_and_no_longer_exists(written_repo, array5by7):
+def test_writer_co_aset_removes_all_samples_and_arrayset_still_exists(written_repo, array5by7):
     wco = written_repo.checkout(write=True)
-
     array5by7[:] = 0
     wco.arraysets['writtenaset'][0] = array5by7
     wco.arraysets['writtenaset'][1] = array5by7 + 1
     wco.arraysets['writtenaset'][2] = array5by7 + 2
+    assert len(wco.arraysets) == 1
+    assert len(wco.arraysets['writtenaset']) == 3
 
     with wco.arraysets['writtenaset'] as wset:
         wset.remove(0)
         wset.remove(1)
         wset.remove(2)
         # Removed all samples, now the aset's gone
-        with pytest.raises(TypeError):
-            len(wset)
+        assert len(wset) == 0
+        assert len(wco.arraysets) == 1
+    assert len(wco.arraysets) == 1
+
+    del wco.arraysets['writtenaset']
+
     assert len(wco.arraysets) == 0
     with pytest.raises(ReferenceError):
         len(wset)
+    with pytest.raises(KeyError):
+        len(wco.arraysets['writtenaset'])
     wco.close()
 
 

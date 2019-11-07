@@ -6,7 +6,7 @@ import lmdb
 from .context import TxnRegister
 from .records import parsing
 from .records.queries import RecordQuery
-from .records.hasher import metadata_hash_digest
+from .records.hashmachine import metadata_hash_digest
 from .utils import is_suitable_user_key, is_ascii
 
 

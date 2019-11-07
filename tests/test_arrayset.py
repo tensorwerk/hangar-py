@@ -6,7 +6,6 @@ from itertools import permutations
 
 class TestArrayset(object):
 
-
     @pytest.mark.parametrize('name', [
         'invalid\n', '\ninvalid', 'inv name', 'inva@lid', 12, ' try', 'andthis ',
         'VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'])
@@ -424,12 +423,18 @@ class TestDataWithFixedSizedArrayset(object):
         new_array = np.zeros_like(array5by7)
         co.arraysets['writtenaset']['2'] = new_array
         co.arraysets['writtenaset']['3'] = new_array + 5
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['writtenaset']) == 3
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout(write=True)
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['writtenaset']) == 3
         co.arraysets['writtenaset'].remove('1')
         del co.arraysets['writtenaset']['3']
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['writtenaset']) == 1
         co.commit('this is a commit message')
         co.close()
 
@@ -438,6 +443,7 @@ class TestDataWithFixedSizedArrayset(object):
             co.arraysets['writtenaset']['1']
         with pytest.raises(KeyError):
             co.arraysets['writtenaset']['3']
+        assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 1
         assert np.allclose(co.arraysets['writtenaset']['2'], new_array)
         co.close()
@@ -447,29 +453,44 @@ class TestDataWithFixedSizedArrayset(object):
         co.arraysets['writtenaset'].add(array5by7, '1')
         new_array = np.zeros_like(array5by7)
         co.arraysets['writtenaset']['2'] = new_array
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['writtenaset']) == 2
         co.commit('this is a commit message')
         co.close()
 
         co = written_repo.checkout(write=True)
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['writtenaset']) == 2
         co.arraysets['writtenaset'].remove('1')
         co.arraysets['writtenaset'].remove('2')
-        co.commit('this is a commit message')
-        co.close()
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['writtenaset']) == 0
 
-        co = written_repo.checkout()
+        wset = co.arraysets['writtenaset']
+        del co.arraysets['writtenaset']
+
+        assert len(co.arraysets) == 0
         with pytest.raises(KeyError):
-            # removal of all data removes the arrayset
-            co.arraysets['writtenaset']
+            len(co.arraysets['writtenaset'])
+        with pytest.raises(ReferenceError):
+            len(wset)
+        co.commit('this is a commit message')
         co.close()
 
         # recreating same and verifying
         co = written_repo.checkout(write=True)
+        assert len(co.arraysets) == 0
         co.arraysets.init_arrayset('writtenaset', prototype=array5by7)
         co.arraysets['writtenaset']['1'] = array5by7
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['writtenaset']) == 1
         co.commit('this is a commit message')
         co.close()
+
         co = written_repo.checkout()
         assert np.allclose(co.arraysets['writtenaset']['1'], array5by7)
+        assert len(co.arraysets) == 1
+        assert len(co.arraysets['writtenaset']) == 1
         co.close()
 
     def test_remove_data_nonexistant_sample_key_raises(self, written_repo, array5by7):

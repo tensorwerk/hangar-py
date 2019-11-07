@@ -21,7 +21,7 @@ from .. import constants as c
 from ..context import Environments, TxnRegister
 from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting, hashs, heads, parsing, queries, summarize
-from ..records.hasher import array_hash_digest, metadata_hash_digest
+from ..records.hashmachine import array_hash_digest, metadata_hash_digest
 from ..utils import set_blosc_nthreads
 
 set_blosc_nthreads()

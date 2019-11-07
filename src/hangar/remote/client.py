@@ -19,7 +19,7 @@ from ..context import Environments, TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
-from ..records.hasher import array_hash_digest, metadata_hash_digest
+from ..records.hashmachine import array_hash_digest, metadata_hash_digest
 from ..records import parsing
 from ..records import queries
 from ..records import summarize
