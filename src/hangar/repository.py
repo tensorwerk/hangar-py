@@ -400,17 +400,24 @@ class Repository(object):
         print(ppbuf.getvalue())
         return None
 
-    def _details(self) -> None:  # pragma: no cover
+    def _details(self, *, line_limit=100, line_length=100) -> None:  # pragma: no cover
         """DEVELOPER USE ONLY: Dump some details about the underlying db structure to disk.
         """
-        print(summarize.details(self._env.branchenv).getvalue())
-        print(summarize.details(self._env.refenv).getvalue())
-        print(summarize.details(self._env.hashenv).getvalue())
-        print(summarize.details(self._env.labelenv).getvalue())
-        print(summarize.details(self._env.stageenv).getvalue())
-        print(summarize.details(self._env.stagehashenv).getvalue())
+        print(summarize.details(
+            self._env.branchenv, line_limit=line_limit, line_length=line_length).getvalue())
+        print(summarize.details(
+            self._env.refenv, line_limit=line_limit, line_length=line_length).getvalue())
+        print(summarize.details(
+            self._env.hashenv, line_limit=line_limit, line_length=line_length).getvalue())
+        print(summarize.details(
+            self._env.labelenv, line_limit=line_limit, line_length=line_length).getvalue())
+        print(summarize.details(
+            self._env.stageenv, line_limit=line_limit, line_length=line_length).getvalue())
+        print(summarize.details(
+            self._env.stagehashenv, line_limit=line_limit, line_length=line_length).getvalue())
         for commit, commitenv in self._env.cmtenv.items():
-            print(summarize.details(commitenv).getvalue())
+            print(summarize.details(
+                commitenv, line_limit=line_limit, line_length=line_length).getvalue())
         return
 
     def _ecosystem_details(self) -> dict:

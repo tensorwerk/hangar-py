@@ -1,10 +1,8 @@
 import logging
-import hashlib
 import os
 import tempfile
 import time
 from typing import Tuple, Sequence
-import struct
 
 import blosc
 import grpc
@@ -21,6 +19,7 @@ from ..context import Environments, TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
+from ..records.hasher import array_hash_digest, metadata_hash_digest
 from ..records import parsing
 from ..records import queries
 from ..records import summarize
@@ -352,11 +351,7 @@ class HangarClient(object):
         unpacked_records = chunks.deserialize_record_pack(uncompBytes)
         for record in unpacked_records:
             data = chunks.deserialize_record(record)
-            hasher = hashlib.blake2b(data.array, digest_size=20)
-            hasher.update(
-                struct.pack(f'<{len(data.array.shape)}QB', *data.array.shape,
-                            data.array.dtype.num))
-            received_hash = hasher.hexdigest()
+            received_hash = array_hash_digest(data.array)
             if received_hash != data.digest:
                 raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {data.digest}')
             received_data.append((received_hash, data.array))
@@ -462,7 +457,7 @@ class HangarClient(object):
         reply = self.stub.FetchLabel(request)
 
         uncompBlob = blosc.decompress(reply.blob)
-        received_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
+        received_hash = metadata_hash_digest(uncompBlob.decode())
         if received_hash != digest:
             raise RuntimeError(f'received_hash: {received_hash} != digest: {digest}')
         return (received_hash, uncompBlob)

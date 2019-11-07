@@ -1,16 +1,13 @@
-import hashlib
 import os
 import warnings
 from multiprocessing import cpu_count, get_context
 from typing import (
     Iterator, Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple)
-import json
 from contextlib import suppress
 
 
 import lmdb
 import numpy as np
-import struct
 
 from .backends import BACKEND_ACCESSOR_MAP
 from .backends import backend_decoder
@@ -18,6 +15,8 @@ from .backends import is_local_backend
 from .backends import parse_user_backend_opts
 from .context import TxnRegister
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
+from .records.hasher import schema_hash_digest
+from .records.hasher import array_hash_digest
 from .records.queries import RecordQuery
 from .records.parsing import hash_data_db_key_from_raw_key
 from .records.parsing import generate_sample_name
@@ -690,12 +689,13 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         # ----------- Determine schema format details -------------------------
 
-        backendHsh = hash(beopts.backend)
-        optsHsh = hash(json.dumps(beopts.opts))
-        schema_format = np.array(
-            (*proto.shape, proto.size, proto.dtype.num, backendHsh, optsHsh),
-            dtype=np.uint64)
-        schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
+        schema_hash = schema_hash_digest(shape=proto.shape,
+                                         size=proto.size,
+                                         dtype_num=proto.dtype.num,
+                                         named_samples=self.named_samples,
+                                         variable_shape=self.variable_shape,
+                                         backend_code=beopts.backend,
+                                         backend_opts=beopts.opts)
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.name)
         asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
@@ -794,9 +794,7 @@ class ArraysetDataWriter(ArraysetDataReader):
             if tmpconman:
                 self.__enter__()
 
-            hasher = hashlib.blake2b(data, digest_size=20)
-            hasher.update(struct.pack(f'<{len(data.shape)}QB', *data.shape, data.dtype.num))
-            full_hash = hasher.hexdigest()
+            full_hash = array_hash_digest(data)
             hashKey = hash_data_db_key_from_raw_key(full_hash)
 
             # check if data record already exists with given key
@@ -1410,12 +1408,14 @@ class Arraysets(object):
 
         # ----------- Determine schema format details -------------------------
 
-        backendHsh = hash(beopts.backend)
-        optsHsh = hash(json.dumps(beopts.opts))
-        schema_format = np.array(
-            (*prototype.shape, prototype.size, prototype.dtype.num, backendHsh, optsHsh),
-            dtype=np.uint64)
-        schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
+        schema_hash = schema_hash_digest(shape=prototype.shape,
+                                         size=prototype.size,
+                                         dtype_num=prototype.dtype.num,
+                                         named_samples=named_samples,
+                                         variable_shape=variable_shape,
+                                         backend_code=beopts.backend,
+                                         backend_opts=beopts.opts)
+
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(name)
         asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
