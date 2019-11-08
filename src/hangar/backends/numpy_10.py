@@ -43,7 +43,7 @@ Separators used
 
 *  ``SEP_KEY: ":"``
 *  ``SEP_HSH: "$"``
-*  ``SEP_SLC: "*"
+*  ``SEP_SLC: "*"``
 
 Examples
 --------

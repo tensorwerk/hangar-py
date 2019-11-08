@@ -42,8 +42,10 @@ def test_setting_backend_property_cannot_change_backend(repo, array5by7, backend
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_backend_opts_property_reports_correct_defaults(repo, array5by7, backend):
     from hangar.backends import backend_opts_from_heuristics
-    expected_opts = backend_opts_from_heuristics(backend, array5by7)
-
+    expected_opts = backend_opts_from_heuristics(backend,
+                                                 array5by7,
+                                                 named_samples=False,
+                                                 variable_shape=False)
     wco = repo.checkout(write=True)
     aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=backend)
     assert aset.backend_opts == expected_opts
@@ -97,17 +99,19 @@ def test_init_arrayset_with_backend_opts_works(repo, array5by7, backend):
     [np.random.randn(10), True, '10'],
     [np.random.randn(1000), True, '00'],
     [np.random.randn(1000), False, '00'],
-    [np.random.randn(999_999_999), True, '00'],
-    [np.random.randn(999_999_999), False, '01'],
+    [np.random.randn(9_999_999).astype(np.float16), False, '00'],
+    [np.random.randn(10_000_000).astype(np.float16), False, '00'],
+    [np.random.randn(10_000_001).astype(np.float16), False, '01'],
+    [np.random.randn(10_000_001).astype(np.float16), True, '00'],
     [np.random.randn(2, 2), True, '00'],
     [np.random.randn(2, 2), False, '01'],
-    [np.random.randn(5, 2), True, '00']
+    [np.random.randn(5, 2), True, '00'],
     [np.random.randn(5, 2), False, '01'],
 ])
 def test_heuristics_select_backend(repo, prototype, variable_shape, expected_backend):
 
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=prototype)
+    aset = wco.arraysets.init_arrayset('aset', prototype=prototype, variable_shape=variable_shape)
     assert aset.backend == expected_backend
     aset['0'] = prototype
     wco.commit('first commit')

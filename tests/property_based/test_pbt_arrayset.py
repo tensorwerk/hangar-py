@@ -3,7 +3,7 @@ import numpy as np
 
 import string
 
-from hypothesis import given, settings
+from hypothesis import given, settings, HealthCheck
 import hypothesis.strategies as st
 from hypothesis.extra import numpy as npst
 
@@ -29,9 +29,10 @@ valid_arrays_fixed = npst.arrays(np.float32,
 
 
 @given(key=st_valid_keys, val=valid_arrays_fixed)
-@settings(max_examples=100, deadline=3000.0)
+@settings(max_examples=100, deadline=3000.0, suppress_health_check=[HealthCheck.too_slow])
 def test_arrayset_fixed_key_values(key, val, fixed_shape_repo_co_float32):
     co = fixed_shape_repo_co_float32
+    assert co.arraysets['writtenaset'].variable_shape is False
     co.arraysets['writtenaset'][key] = val
     out = co.arraysets['writtenaset'][key]
     assert out.dtype == val.dtype
@@ -55,7 +56,7 @@ valid_arrays_var_float32 = npst.arrays(np.float32,
 
 
 @given(key=st_valid_keys, val=valid_arrays_var_float32)
-@settings(max_examples=100, deadline=3000.0)
+@settings(max_examples=100, deadline=3000.0, suppress_health_check=[HealthCheck.too_slow])
 def test_arrayset_variable_shape_float32(key, val, variable_shape_repo_co_float32):
     co = variable_shape_repo_co_float32
     assert co.arraysets['writtenaset'].variable_shape is True
@@ -72,7 +73,7 @@ valid_arrays_var_uint8 = npst.arrays(np.uint8,
 
 
 @given(key=st_valid_keys, val=valid_arrays_var_uint8)
-@settings(max_examples=100, deadline=3000.0)
+@settings(max_examples=100, deadline=3000.0, suppress_health_check=[HealthCheck.too_slow])
 def test_arrayset_variable_shape_uint8(key, val, variable_shape_repo_co_uint8):
     co = variable_shape_repo_co_uint8
     assert co.arraysets['writtenaset'].variable_shape is True

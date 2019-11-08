@@ -56,7 +56,7 @@ Technical Notes
 """
 import os
 import re
-from typing import NamedTuple, Match, Optional
+from typing import NamedTuple, Optional
 
 import numpy as np
 

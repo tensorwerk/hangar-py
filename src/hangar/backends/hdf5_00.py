@@ -166,7 +166,6 @@ Technical Notes
    operation). This is part of the reason that we only accept C ordered arrays
    as input to Hangar.
 """
-import math
 import os
 import re
 import time
@@ -636,7 +635,7 @@ class HDF5_00_FileHandles(object):
         elif rdcc_nbytes_val > CHUNK_MAX_RDCC_NBYTES:
             rdcc_nbytes_val = CHUNK_MAX_RDCC_NBYTES
 
-        rdcc_nslots_guess = math.ceil(rdcc_nbytes_val / chunk_nbytes) * 100
+        rdcc_nslots_guess = np.math.ceil(rdcc_nbytes_val / chunk_nbytes) * 100
         rdcc_nslots_prime_val = find_next_prime(rdcc_nslots_guess)
 
         # ---------------------------- File Creation --------------------------

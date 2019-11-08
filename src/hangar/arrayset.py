@@ -653,7 +653,10 @@ class ArraysetDataWriter(ArraysetDataReader):
             raise RuntimeError('Cannot call method inside arrayset context manager.')
 
         proto = np.zeros(self.shape, dtype=self.dtype)
-        beopts = parse_user_backend_opts(backend_opts=backend_opts, prototype=proto)
+        beopts = parse_user_backend_opts(backend_opts=backend_opts,
+                                         prototype=proto,
+                                         named_samples=self.named_samples,
+                                         variable_shape=self.variable_shape)
 
         # ----------- Determine schema format details -------------------------
 
@@ -936,7 +939,7 @@ class Arraysets(object):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Arrayset Names / Partial Remote References:\
-                \n      - '                            + '\n      - '.join(
+                \n      - ' + '\n      - '.join(
             f'{asetn} / {aset.contains_remote_references}'
             for asetn, aset in self._arraysets.items())
         p.text(res)

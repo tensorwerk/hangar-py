@@ -12,10 +12,10 @@ Storage Method
 ==============
 
 *  This module is meant to handle larger datasets which are of fixed size. IO
-   and significant compresion optimization is achieved by storing arrays at
+   and significant compression optimization is achieved by storing arrays at
    their appropriate top level index in the same shape they naturally assume
    and chunking over the entire subarray domain making up a sample (rather than
-   having the subdivide) chunks when the sample could be variably shaped.
+   having to subdivide chunks when the sample could be variably shaped.)
 
 *  Data is written to specific subarray indexes inside an HDF5 "dataset" in a
    single HDF5 File.
@@ -156,9 +156,9 @@ Technical Notes
 *  An optimization is performed in order to increase the read / write
    performance of fixed size datasets. Due to the way that we initialize an
    entire HDF5 file with all datasets pre-created (to the size of the fixed
-   subarray shape), and the fact we absolutly know the size / shape /
-   access-patern of the arrays, inneficient IO due to wasted chunk processesing
-   is not a concern. It is far more efficient for us to completly blow off the
+   subarray shape), and the fact we absolutely know the size / shape /
+   access-pattern of the arrays, inefficient IO due to wasted chunk processing
+   is not a concern. It is far more efficient for us to completely blow off the
    metadata chunk cache, and chunk each subarray as a single large item item.
    This tends to have significant effects on used disk space (larger chunks can
    be compressed together) as well as favoring shuffle filters (which reduce
@@ -168,7 +168,6 @@ Technical Notes
 *  Like all other backends at the time of writing, only 'C' ordered arrays
    are accepted by this method.
 """
-import math
 import os
 import re
 import time
@@ -380,7 +379,7 @@ class HDF5_01_FileHandles(object):
         ----------
         mode : str
             one of `r` or `a` for read only / read-write.
-        repote_operation : optional, kwarg only, bool
+        remote_operation : optional, kwarg only, bool
             if this hdf5 data is being created from a remote fetch operation, then
             we don't open any files for reading, and only open files for writing
             which exist in the remote data dir. (default is false, which means that
@@ -599,7 +598,7 @@ class HDF5_01_FileHandles(object):
         rdcc_nbytes_val = chunk_nbytes * COLLECTION_SIZE
         if rdcc_nbytes_val >= CHUNK_MAX_RDCC_NBYTES:
             rdcc_nbytes_val = CHUNK_MAX_RDCC_NBYTES
-        rdcc_nslots_guess = math.ceil(rdcc_nbytes_val / chunk_nbytes) * 100
+        rdcc_nslots_guess = np.math.ceil(rdcc_nbytes_val / chunk_nbytes) * 100
         rdcc_nslots_prime_val = find_next_prime(rdcc_nslots_guess)
 
         # ---------------------------- File Creation --------------------------
@@ -673,6 +672,7 @@ class HDF5_01_FileHandles(object):
             requested data.
         """
         dsetCol = f'/{hashVal.dataset}'
+        # if len(hashVal.shape) > 0:
         srcSlc = (self.slcExpr[int(hashVal.dataset_idx)], ...)
         destSlc = None
 
@@ -748,7 +748,7 @@ class HDF5_01_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        self.wFp[self.w_uid][f'/{self.hNextPath}'][self.hIdx, :] = array
+        self.wFp[self.w_uid][f'/{self.hNextPath}'][self.hIdx] = array
         hashVal = hdf5_01_encode(uid=self.w_uid,
                                  checksum=checksum,
                                  dataset=self.hNextPath,

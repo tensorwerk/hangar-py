@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from conftest import fixed_shape_backend_params
+from conftest import fixed_shape_backend_params, variable_shape_backend_params
 from itertools import permutations
 
 
