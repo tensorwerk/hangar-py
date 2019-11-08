@@ -15,8 +15,7 @@
    externals
    faq
    backends
-   contributing
-   codeofconduct
+   contributingindex
    authors
    changelog
 
