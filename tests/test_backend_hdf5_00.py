@@ -2,6 +2,7 @@ import pytest
 import h5py
 import numpy as np
 
+
 @pytest.mark.parametrize('clib,clibCode',
                          [('blosc:blosclz', 0), ('blosc:lz4', 1),
                           ('blosc:lz4hc', 2), ('blosc:zlib', 4),

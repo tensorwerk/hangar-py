@@ -1334,8 +1334,10 @@ class Arraysets(object):
                     f'shape: {prototype.shape}. Array rank > 31 dimensions not '
                     f'allowed AND all dimension sizes must be > 0.')
 
-            beopts = parse_user_backend_opts(backend_opts, prototype)
-
+            beopts = parse_user_backend_opts(backend_opts=backend_opts,
+                                             prototype=prototype,
+                                             named_samples=named_samples,
+                                             variable_shape=variable_shape)
         except (ValueError, LookupError) as e:
             raise e from None
 

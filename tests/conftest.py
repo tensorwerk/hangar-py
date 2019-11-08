@@ -13,7 +13,8 @@ from hangar import Repository
 import hangar
 
 
-backend_params = ['00', '10']
+variable_shape_backend_params = ['00', '10']
+fixed_shape_backend_params = ['00', '01', '10']
 
 
 @pytest.fixture()
@@ -41,7 +42,7 @@ def written_repo(repo):
     yield repo
 
 
-@pytest.fixture(params=backend_params)
+@pytest.fixture(params=fixed_shape_backend_params)
 def repo_with_20_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
     second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7, backend_opts=request.param)
@@ -56,7 +57,7 @@ def repo_with_20_samples(request, written_repo, array5by7):
     yield written_repo
 
 
-@pytest.fixture(params=backend_params)
+@pytest.fixture(params=fixed_shape_backend_params)
 def repo_with_1000_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
     aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
@@ -86,7 +87,7 @@ def dummy_repo(repo):
     return repo
 
 
-@pytest.fixture(params=backend_params)
+@pytest.fixture(params=variable_shape_backend_params)
 def variable_shape_written_repo(request, repo):
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(
@@ -115,7 +116,7 @@ def randomsizedarray():
     return np.random.random((a, b))
 
 
-@pytest.fixture(params=backend_params)
+@pytest.fixture(params=fixed_shape_backend_params)
 def written_two_cmt_repo(request, repo, array5by7):
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(

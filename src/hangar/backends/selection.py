@@ -88,6 +88,7 @@ from typing import Dict, Union, Callable, Mapping, NamedTuple, Optional
 import numpy as np
 
 from .hdf5_00 import HDF5_00_FileHandles, hdf5_00_decode, HDF5_00_DataHashSpec
+from .hdf5_01 import HDF5_01_FileHandles, hdf5_01_decode, HDF5_01_DataHashSpec
 from .numpy_10 import NUMPY_10_FileHandles, numpy_10_decode, NUMPY_10_DataHashSpec
 from .remote_50 import REMOTE_50_Handler, remote_50_decode, REMOTE_50_DataHashSpec
 
@@ -97,6 +98,7 @@ from .remote_50 import REMOTE_50_Handler, remote_50_decode, REMOTE_50_DataHashSp
 
 _DataHashSpecs = Union[
     HDF5_00_DataHashSpec,
+    HDF5_01_DataHashSpec,
     NUMPY_10_DataHashSpec,
     REMOTE_50_DataHashSpec]
 
@@ -105,6 +107,7 @@ _ParserMap = Mapping[bytes, Callable[[bytes], _DataHashSpecs]]
 BACKEND_DECODER_MAP: _ParserMap = {
     # LOCALS -> [00:50]
     b'00': hdf5_00_decode,
+    b'01': hdf5_01_decode,
     b'10': numpy_10_decode,
     b'20': None,               # tiledb_20 - Reserved
     # REMOTES -> [50:100]
@@ -116,12 +119,14 @@ BACKEND_DECODER_MAP: _ParserMap = {
 # ------------------------ Accessor Types and Mapping -------------------------
 
 
-_BeAccessors = Union[HDF5_00_FileHandles, NUMPY_10_FileHandles, REMOTE_50_Handler]
+_BeAccessors = Union[HDF5_00_FileHandles, HDF5_01_FileHandles,
+                     NUMPY_10_FileHandles, REMOTE_50_Handler]
 _AccessorMap = Dict[str, _BeAccessors]
 
 BACKEND_ACCESSOR_MAP: _AccessorMap = {
     # LOCALS -> [0:50]
     '00': HDF5_00_FileHandles,
+    '01': HDF5_01_FileHandles,
     '10': NUMPY_10_FileHandles,
     '20': None,               # tiledb_20 - Reserved
     # REMOTES -> [50:100]
@@ -159,13 +164,19 @@ def backend_decoder(db_val: bytes) -> _DataHashSpecs:
 BackendOpts = NamedTuple('BackendOpts', [('backend', str), ('opts', dict)])
 
 
-def backend_from_heuristics(array: np.ndarray) -> str:
+def backend_from_heuristics(array: np.ndarray,
+                            named_samples: bool,
+                            variable_shape: bool) -> str:
     """Given a prototype array, attempt to select the appropriate backend.
 
     Parameters
     ----------
     array : np.ndarray
         prototype array to determine the appropriate backend for.
+    named_samples : bool
+        If the samples in the arrayset have names associated with them.
+    variable_shape : bool
+        If this is a variable sized arrayset.
 
     Returns
     -------
@@ -176,12 +187,16 @@ def backend_from_heuristics(array: np.ndarray) -> str:
     ----
     Configuration of this entire module as the available backends fill out.
     """
-
     # uncompressed numpy memmap data is most appropriate for data whose shape is
     # likely small tabular row data (CSV or such...)
     if (array.ndim == 1) and (array.size < 400):
         backend = '10'
     # hdf5 is the default backend for larger array sizes.
+    elif (array.ndim == 1) and (array.size <= 10_000_000):
+        backend = '00'
+    # on fixed arrays sized arrays apply optimizations.
+    elif variable_shape is False:
+        backend = '01'
     else:
         backend = '00'
 
@@ -195,7 +210,10 @@ def is_local_backend(be_loc: _DataHashSpecs) -> bool:
         return True
 
 
-def backend_opts_from_heuristics(backend: str, array: np.ndarray) -> dict:
+def backend_opts_from_heuristics(backend: str,
+                                 array: np.ndarray,
+                                 named_samples: bool,
+                                 variable_shape: bool) -> dict:
     """Generate default backend opt args for a backend and array sample.
 
     Parameters
@@ -205,6 +223,10 @@ def backend_opts_from_heuristics(backend: str, array: np.ndarray) -> dict:
     array : np.ndarray
         sample (prototype) of the array data which the backend opts will be
         applied to
+    named_samples : bool
+        If the samples in the arrayset have names associated with them.
+    variable_shape : bool
+        If this is a variable sized arrayset.
 
     Returns
     -------
@@ -229,7 +251,23 @@ def backend_opts_from_heuristics(backend: str, array: np.ndarray) -> dict:
             'default': {
                 'shuffle': None,
                 'complib': 'blosc:zstd',
-                'complevel': 3,
+                'complevel': 4,
+            },
+            'backup': {
+                'shuffle': 'byte',
+                'complib': 'lzf',
+                'complevel': None,
+            },
+        }
+        hdf5BloscAvail = h5py.h5z.filter_avail(32001)
+        opts = opts['default'] if hdf5BloscAvail else opts['backup']
+    elif backend == '01':
+        import h5py
+        opts = {
+            'default': {
+                'shuffle': 'byte',
+                'complib': 'blosc:zstd',
+                'complevel': 6,
             },
             'backup': {
                 'shuffle': 'byte',
@@ -248,7 +286,9 @@ def backend_opts_from_heuristics(backend: str, array: np.ndarray) -> dict:
 
 
 def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
-                            prototype: np.ndarray) -> BackendOpts:
+                            prototype: np.ndarray,
+                            named_samples: bool,
+                            variable_shape: bool) -> BackendOpts:
     """Decide the backend and opts to apply given a users selection (or default `None` value)
 
     Parameters
@@ -262,6 +302,10 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
     prototype : np.ndarray
         Sample of the data array which will be save (same dtype and shape) to
         base the storage backend and opts on.
+    named_samples : bool
+        If the samples in the arrayset have names associated with them.
+    variable_shape : bool
+        If this is a variable sized arrayset.
 
     Returns
     -------
@@ -284,15 +328,23 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
             raise ValueError(f'Backend specifier: {backend_opts} not known')
         else:
             backend = backend_opts
-            opts = backend_opts_from_heuristics(backend, prototype)
+            opts = backend_opts_from_heuristics(backend=backend,
+                                                array=prototype,
+                                                named_samples=named_samples,
+                                                variable_shape=variable_shape)
     elif isinstance(backend_opts, dict):
         if backend_opts['backend'] not in BACKEND_ACCESSOR_MAP:
             raise ValueError(f'Backend specifier: {backend_opts} not known')
         backend = backend_opts['backend']
         opts = {k: v for k, v in backend_opts.items() if k != 'backend'}
     elif backend_opts is None:
-        backend = backend_from_heuristics(prototype)
-        opts = backend_opts_from_heuristics(backend, prototype)
+        backend = backend_from_heuristics(array=prototype,
+                                          named_samples=named_samples,
+                                          variable_shape=variable_shape)
+        opts = backend_opts_from_heuristics(backend=backend,
+                                            array=prototype,
+                                            named_samples=named_samples,
+                                            variable_shape=variable_shape)
     else:
         raise ValueError(f'Backend opts value: {backend_opts} is invalid')
 
