@@ -485,7 +485,7 @@ def test_writer_co_read_slice_select_aset_multiple_samples(written_repo, array5b
     assert np.allclose(o2.newaset, array10 + 1)
     wco.close()
 
-
+@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
 @pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 def test_writer_co_read_two_asets_one_invalid_fieldname_is_renamed(written_repo, array5by7, invalid_name):
     wco = written_repo.checkout(write=True)
@@ -520,7 +520,7 @@ def test_writer_co_read_two_asets_one_invalid_fieldname_is_renamed(written_repo,
 
     wco.close()
 
-
+@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
 @pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 @pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
 def test_writer_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
@@ -557,7 +557,7 @@ def test_writer_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array
 
     wco.close()
 
-
+@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
 @pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 @pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
 def test_writer_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
@@ -580,16 +580,28 @@ def test_writer_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array
     assert '_0' in out1._fields
     assert '_1' in out1._fields
     assert len(out1._fields) == 2
-    assert np.allclose(out1._0, array5by7) or np.allclose(out1._1, array5by7)
-    assert np.allclose(out1._0, array10) or np.allclose(out1._1, array10)
+    try:
+        assert np.allclose(out1._0, array5by7)
+    except ValueError:
+        assert np.allclose(out1._1, array5by7)
+    try:
+        assert np.allclose(out1._0, array10)
+    except ValueError:
+        assert np.allclose(out1._1, array10)
 
     out3 = wco[..., (0, 1, 2)]
     for idx, nt in enumerate(out3):
         assert '_0' in nt._fields
         assert '_1' in nt._fields
         assert len(nt._fields) == 2
-        assert np.allclose(nt._0, array5by7 + idx) or np.allclose(nt._1, array5by7 + idx)
-        assert np.allclose(nt._0, array10 + idx) or np.allclose(nt._1, array10 + idx)
+        try:
+            assert np.allclose(nt._0, array5by7 + idx)
+        except ValueError:
+            assert np.allclose(nt._1, array5by7 + idx)
+        try:
+            assert np.allclose(nt._0, array10 + idx)
+        except ValueError:
+            assert np.allclose(nt._1, array10 + idx)
     wco.close()
 
 
@@ -907,7 +919,7 @@ def test_reader_co_read_slice_select_aset_multiple_samples(written_repo, array5b
     assert np.allclose(o2.newaset, array10 + 1)
     rco.close()
 
-
+@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
 @pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 def test_reader_co_read_two_asets_one_invalid_fieldname_is_renamed(written_repo, array5by7, invalid_name):
     wco = written_repo.checkout(write=True)
@@ -945,7 +957,7 @@ def test_reader_co_read_two_asets_one_invalid_fieldname_is_renamed(written_repo,
 
     rco.close()
 
-
+@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
 @pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 @pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
 def test_reader_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
@@ -985,6 +997,7 @@ def test_reader_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array
     rco.close()
 
 
+@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
 @pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 @pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
 def test_reader_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
@@ -1010,14 +1023,26 @@ def test_reader_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array
     assert '_0' in out1._fields
     assert '_1' in out1._fields
     assert len(out1._fields) == 2
-    assert np.allclose(out1._0, array5by7) or np.allclose(out1._1, array5by7)
-    assert np.allclose(out1._0, array10) or np.allclose(out1._1, array10)
+    try:
+        assert np.allclose(out1._0, array5by7)
+    except ValueError:
+        assert np.allclose(out1._1, array5by7)
+    try:
+        assert np.allclose(out1._0, array10)
+    except ValueError:
+        assert np.allclose(out1._1, array10)
 
     out3 = rco[..., (0, 1, 2)]
     for idx, nt in enumerate(out3):
         assert '_0' in nt._fields
         assert '_1' in nt._fields
         assert len(nt._fields) == 2
-        assert np.allclose(nt._0, array5by7 + idx) or np.allclose(nt._1, array5by7 + idx)
-        assert np.allclose(nt._0, array10 + idx) or np.allclose(nt._1, array10 + idx)
+        try:
+            assert np.allclose(nt._0, array5by7 + idx)
+        except ValueError:
+            assert np.allclose(nt._1, array5by7 + idx)
+        try:
+            assert np.allclose(nt._0, array10 + idx)
+        except ValueError:
+            assert np.allclose(nt._1, array10 + idx)
     rco.close()
