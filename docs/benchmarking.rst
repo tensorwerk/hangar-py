@@ -1,0 +1,1 @@
+.. include:: ../asv_bench/README.rst
