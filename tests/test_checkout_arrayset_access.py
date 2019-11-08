@@ -486,6 +486,114 @@ def test_writer_co_read_slice_select_aset_multiple_samples(written_repo, array5b
     wco.close()
 
 
+@pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
+def test_writer_co_read_two_asets_one_invalid_fieldname_is_renamed(written_repo, array5by7, invalid_name):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset(invalid_name, prototype=array10)
+    array10[:] = 0
+    wco.arraysets[invalid_name][0] = array10
+    wco.arraysets[invalid_name][1] = array10 + 1
+    wco.arraysets[invalid_name][2] = array10 + 2
+
+    out1 = wco[('writtenaset', invalid_name), 0]
+    assert out1._fields == ('writtenaset', '_1')
+    assert np.allclose(out1.writtenaset, array5by7)
+    assert np.allclose(out1._1, array10)
+
+    out2 = wco[(invalid_name, 'writtenaset'), 1]
+    assert out2._fields == ('_0', 'writtenaset')
+    assert np.allclose(out2.writtenaset, array5by7 + 1)
+    assert np.allclose(out2._0, array10 + 1)
+
+    out3 = wco[('writtenaset', invalid_name), (0, 1, 2)]
+    for idx, nt in enumerate(out3):
+        assert nt._fields == ('writtenaset', '_1')
+        assert np.allclose(nt.writtenaset, array5by7 + idx)
+        assert np.allclose(nt._1, array10 + idx)
+
+    wco.close()
+
+
+@pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
+@pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
+def test_writer_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
+    wco = repo.checkout(write=True)
+    wco.arraysets.init_arrayset(invalid_name1, prototype=array5by7)
+
+    array5by7[:] = 0
+    wco.arraysets[invalid_name1][0] = array5by7
+    wco.arraysets[invalid_name1][1] = array5by7 + 1
+    wco.arraysets[invalid_name1][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset(invalid_name2, prototype=array10)
+    array10[:] = 0
+    wco.arraysets[invalid_name2][0] = array10
+    wco.arraysets[invalid_name2][1] = array10 + 1
+    wco.arraysets[invalid_name2][2] = array10 + 2
+
+    out1 = wco[(invalid_name1, invalid_name2), 0]
+    assert out1._fields == ('_0', '_1')
+    assert np.allclose(out1._0, array5by7)
+    assert np.allclose(out1._1, array10)
+
+    out2 = wco[(invalid_name2, invalid_name1), 1]
+    assert out2._fields == ('_0', '_1')
+    assert np.allclose(out2._1, array5by7 + 1)
+    assert np.allclose(out2._0, array10 + 1)
+
+    out3 = wco[(invalid_name1, invalid_name2), (0, 1, 2)]
+    for idx, nt in enumerate(out3):
+        assert nt._fields == ('_0', '_1')
+        assert np.allclose(nt._0, array5by7 + idx)
+        assert np.allclose(nt._1, array10 + idx)
+
+    wco.close()
+
+
+@pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
+@pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
+def test_writer_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
+    wco = repo.checkout(write=True)
+    wco.arraysets.init_arrayset(invalid_name1, prototype=array5by7)
+
+    array5by7[:] = 0
+    wco.arraysets[invalid_name1][0] = array5by7
+    wco.arraysets[invalid_name1][1] = array5by7 + 1
+    wco.arraysets[invalid_name1][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset(invalid_name2, prototype=array10)
+    array10[:] = 0
+    wco.arraysets[invalid_name2][0] = array10
+    wco.arraysets[invalid_name2][1] = array10 + 1
+    wco.arraysets[invalid_name2][2] = array10 + 2
+
+    out1 = wco[:, 0]
+    assert '_0' in out1._fields
+    assert '_1' in out1._fields
+    assert len(out1._fields) == 2
+    assert np.allclose(out1._0, array5by7) or np.allclose(out1._1, array5by7)
+    assert np.allclose(out1._0, array10) or np.allclose(out1._1, array10)
+
+    out3 = wco[..., (0, 1, 2)]
+    for idx, nt in enumerate(out3):
+        assert '_0' in nt._fields
+        assert '_1' in nt._fields
+        assert len(nt._fields) == 2
+        assert np.allclose(nt._0, array5by7 + idx) or np.allclose(nt._1, array5by7 + idx)
+        assert np.allclose(nt._0, array10 + idx) or np.allclose(nt._1, array10 + idx)
+    wco.close()
+
+
+
 # -------------------------- Reader Checkout ----------------------------------
 
 
@@ -797,4 +905,119 @@ def test_reader_co_read_slice_select_aset_multiple_samples(written_repo, array5b
     assert 'newaset' in o2._fields
     assert np.allclose(o2.writtenaset, array5by7 + 1)
     assert np.allclose(o2.newaset, array10 + 1)
+    rco.close()
+
+
+@pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
+def test_reader_co_read_two_asets_one_invalid_fieldname_is_renamed(written_repo, array5by7, invalid_name):
+    wco = written_repo.checkout(write=True)
+
+    array5by7[:] = 0
+    wco.arraysets['writtenaset'][0] = array5by7
+    wco.arraysets['writtenaset'][1] = array5by7 + 1
+    wco.arraysets['writtenaset'][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset(invalid_name, prototype=array10)
+    array10[:] = 0
+    wco.arraysets[invalid_name][0] = array10
+    wco.arraysets[invalid_name][1] = array10 + 1
+    wco.arraysets[invalid_name][2] = array10 + 2
+    wco.commit('yo')
+    wco.close()
+
+    rco = written_repo.checkout()
+    out1 = rco[('writtenaset', invalid_name), 0]
+    assert out1._fields == ('writtenaset', '_1')
+    assert np.allclose(out1.writtenaset, array5by7)
+    assert np.allclose(out1._1, array10)
+
+    out2 = rco[(invalid_name, 'writtenaset'), 1]
+    assert out2._fields == ('_0', 'writtenaset')
+    assert np.allclose(out2.writtenaset, array5by7 + 1)
+    assert np.allclose(out2._0, array10 + 1)
+
+    out3 = rco[('writtenaset', invalid_name), (0, 1, 2)]
+    for idx, nt in enumerate(out3):
+        assert nt._fields == ('writtenaset', '_1')
+        assert np.allclose(nt.writtenaset, array5by7 + idx)
+        assert np.allclose(nt._1, array10 + idx)
+
+    rco.close()
+
+
+@pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
+@pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
+def test_reader_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
+    wco = repo.checkout(write=True)
+    wco.arraysets.init_arrayset(invalid_name1, prototype=array5by7)
+
+    array5by7[:] = 0
+    wco.arraysets[invalid_name1][0] = array5by7
+    wco.arraysets[invalid_name1][1] = array5by7 + 1
+    wco.arraysets[invalid_name1][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset(invalid_name2, prototype=array10)
+    array10[:] = 0
+    wco.arraysets[invalid_name2][0] = array10
+    wco.arraysets[invalid_name2][1] = array10 + 1
+    wco.arraysets[invalid_name2][2] = array10 + 2
+    wco.commit('yo')
+    wco.close()
+
+    rco = repo.checkout()
+    out1 = rco[(invalid_name1, invalid_name2), 0]
+    assert out1._fields == ('_0', '_1')
+    assert np.allclose(out1._0, array5by7)
+    assert np.allclose(out1._1, array10)
+
+    out2 = rco[(invalid_name2, invalid_name1), 1]
+    assert out2._fields == ('_0', '_1')
+    assert np.allclose(out2._1, array5by7 + 1)
+    assert np.allclose(out2._0, array10 + 1)
+
+    out3 = rco[(invalid_name1, invalid_name2), (0, 1, 2)]
+    for idx, nt in enumerate(out3):
+        assert nt._fields == ('_0', '_1')
+        assert np.allclose(nt._0, array5by7 + idx)
+        assert np.allclose(nt._1, array10 + idx)
+    rco.close()
+
+
+@pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
+@pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
+def test_reader_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
+    wco = repo.checkout(write=True)
+    wco.arraysets.init_arrayset(invalid_name1, prototype=array5by7)
+
+    array5by7[:] = 0
+    wco.arraysets[invalid_name1][0] = array5by7
+    wco.arraysets[invalid_name1][1] = array5by7 + 1
+    wco.arraysets[invalid_name1][2] = array5by7 + 2
+
+    array10 = np.arange(10, dtype=np.float32)
+    wco.arraysets.init_arrayset(invalid_name2, prototype=array10)
+    array10[:] = 0
+    wco.arraysets[invalid_name2][0] = array10
+    wco.arraysets[invalid_name2][1] = array10 + 1
+    wco.arraysets[invalid_name2][2] = array10 + 2
+    wco.commit('yo')
+    wco.close()
+
+    rco = repo.checkout()
+    out1 = rco[:, 0]
+    assert '_0' in out1._fields
+    assert '_1' in out1._fields
+    assert len(out1._fields) == 2
+    assert np.allclose(out1._0, array5by7) or np.allclose(out1._1, array5by7)
+    assert np.allclose(out1._0, array10) or np.allclose(out1._1, array10)
+
+    out3 = rco[..., (0, 1, 2)]
+    for idx, nt in enumerate(out3):
+        assert '_0' in nt._fields
+        assert '_1' in nt._fields
+        assert len(nt._fields) == 2
+        assert np.allclose(nt._0, array5by7 + idx) or np.allclose(nt._1, array5by7 + idx)
+        assert np.allclose(nt._0, array10 + idx) or np.allclose(nt._1, array10 + idx)
     rco.close()
