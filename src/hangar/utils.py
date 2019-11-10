@@ -117,7 +117,7 @@ def symlink_rel(src: os.PathLike, dst: os.PathLike, *, is_dir=False):
     os.symlink(rel_path_src, dst, target_is_directory=is_dir)
 
 
-_SuitableCharRE = re.compile(r'[\w\.\-\_]+$\Z', flags=re.ASCII)
+_SuitableCharRE = re.compile(r'[\w\.\-\_]+\Z', flags=re.ASCII)
 
 
 def is_suitable_user_key(key: Union[str, int]) -> bool:

@@ -517,7 +517,6 @@ class HangarClient(object):
         responses = self.stub.FetchFindMissingHashRecords(cIter)
         for idx, response in enumerate(responses):
             if idx == 0:
-                commit = response.commit
                 hBytes, offset = bytearray(response.total_byte_size), 0
             size = len(response.hashs)
             hBytes[offset: offset + size] = response.hashs
@@ -550,7 +549,6 @@ class HangarClient(object):
         responses = self.stub.PushFindMissingHashRecords(cIter)
         for idx, response in enumerate(responses):
             if idx == 0:
-                commit = response.commit
                 hBytes, offset = bytearray(response.total_byte_size), 0
             size = len(response.hashs)
             hBytes[offset: offset + size] = response.hashs
@@ -573,7 +571,6 @@ class HangarClient(object):
         responses = self.stub.FetchFindMissingLabels(cIter)
         for idx, response in enumerate(responses):
             if idx == 0:
-                commit = response.commit
                 hBytes, offset = bytearray(response.total_byte_size), 0
             size = len(response.hashs)
             hBytes[offset: offset + size] = response.hashs
@@ -605,7 +602,6 @@ class HangarClient(object):
         responses = self.stub.PushFindMissingLabels(cIter)
         for idx, response in enumerate(responses):
             if idx == 0:
-                commit = response.commit
                 hBytes, offset = bytearray(response.total_byte_size), 0
             size = len(response.hashs)
             hBytes[offset: offset + size] = response.hashs

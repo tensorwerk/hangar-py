@@ -112,7 +112,8 @@ _FmtCode = '10'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
 _ShapeFmtRE = re.compile('[,\(\)\[\]]')
 # split up a formated parsed string into unique fields
-_SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+_patern = fr'\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}'
+_SplitDecoderRE = re.compile(fr'[{_patern}]')
 
 
 NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec',

@@ -12,7 +12,6 @@ from . import heads, parsing
 from .. import constants as c
 from ..context import TxnRegister
 from .parsing import DigestAndBytes
-from .queries import RecordQuery
 from ..utils import symlink_rel
 
 
@@ -450,6 +449,8 @@ def _commit_ref(stageenv: lmdb.Environment) -> DigestAndBytes:
         Serialized and compressed version of all staged record data along with
         digest of commit refs.
     """
+    from .queries import RecordQuery  # needed to avoid cyclic import
+
     querys = RecordQuery(dataenv=stageenv)
     allRecords = tuple(querys._traverse_all_records())
     res = parsing.commit_ref_db_val_from_raw_val(allRecords)

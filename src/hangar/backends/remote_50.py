@@ -65,9 +65,9 @@ from .. import constants as c
 # -------------------------------- Parser Implementation ----------------------
 
 _FmtCode = '50'
-# split up a formated parsed string into unique fields
-_SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
-
+# split up a formated parsed string into unique
+_patern = fr'\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}'
+_SplitDecoderRE = re.compile(fr'[{_patern}]')
 
 REMOTE_50_DataHashSpec = NamedTuple('REMOTE_50_DataHashSpec',
                                     [('backend', str), ('schema_hash', str)])

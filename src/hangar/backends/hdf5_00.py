@@ -186,9 +186,11 @@ try:
     _initialLevel = _logger.getEffectiveLevel()
     _logger.setLevel(logging.ERROR)
     import hdf5plugin
-    _logger.setLevel(_initialLevel)
+    assert 'blosc' in hdf5plugin.FILTERS
 except (ImportError, ModuleNotFoundError):  # pragma: no cover
     pass
+finally:
+    _logger.setLevel(_initialLevel)
 from xxhash import xxh64_hexdigest
 
 from .. import __version__
@@ -218,7 +220,8 @@ _FmtCode = '00'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
 _ShapeFmtRE: Pattern = re.compile('[,\(\)\[\]]')
 # split up a formated parsed string into unique fields
-_SplitDecoderRE: Pattern = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+_patern = fr'\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}'
+_SplitDecoderRE: Pattern = re.compile(fr'[{_patern}]')
 
 
 HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec', [

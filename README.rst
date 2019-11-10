@@ -11,6 +11,7 @@ Overview
       - |docs|
     * - tests
       - | |travis| |codecov|
+        | |lgtm|
     * - package
       - | |version| |wheel| |conda-forge|
         | |supported-versions| |supported-implementations|
@@ -26,6 +27,10 @@ Overview
 .. |codecov| image:: https://codecov.io/gh/tensorwerk/hangar-py/branch/master/graph/badge.svg
    :alt: Code Coverage
    :target: https://codecov.io/gh/tensorwerk/hangar-py
+
+.. |lgtm| image:: https://img.shields.io/lgtm/grade/python/g/tensorwerk/hangar-py.svg?logo=lgtm&logoWidth=18
+   :alt: Language grade: Python
+   :target: https://lgtm.com/projects/g/tensorwerk/hangar-py/context:python
 
 .. |version| image:: https://img.shields.io/pypi/v/hangar.svg
     :alt: PyPI Package latest release

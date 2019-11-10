@@ -100,7 +100,6 @@ def acquire_writer_lock(branchenv, writer_uuid):
             branchtxn.put(writerLockKey, requestWriterLockVal)
             success = True
         else:
-            success = False
             err = f'Cannot acquire the writer lock. Only one instance of a writer checkout '\
                 'can be active at a time. If the last checkout of this repository did '\
                 'not properly close, or a crash occurred, the lock must be manually freed '\
@@ -156,8 +155,7 @@ def release_writer_lock(branchenv, writer_uuid):
             warnings.warn('The lock is already available, no release is necessary.', UserWarning)
             success = True
         else:
-            success = False
-            err = f'FATAL ERROR: Requested release of writer lock: {currentLockVal} by '\
+            err = f'FATAL ERROR Requested release of writer lock: {currentLockVal} by '\
                   f'non-valid requestor: {requestWriterLockVal} -- How did this happen?'
             raise RuntimeError(err)
     finally:
@@ -377,7 +375,6 @@ def set_staging_branch_head(branchenv, branch_name):
         branchNameExists = branchtxn.get(requestedBranchKey, default=False)
         if branchNameExists is False:
             err = f'No branch with the name: {branch_name} exists, no-op performed'
-            success = False
             raise ValueError(err)
         else:
             branchtxn.put(headKey, requestedHeadVal)
