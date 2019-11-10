@@ -251,7 +251,7 @@ def backend_opts_from_heuristics(backend: str,
             'default': {
                 'shuffle': None,
                 'complib': 'blosc:zstd',
-                'complevel': 4,
+                'complevel': 3,
             },
             'backup': {
                 'shuffle': 'byte',

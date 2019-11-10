@@ -283,7 +283,7 @@ def test_add_new_schema_and_samples_and_change_old_backend(dummy_repo):
                '|       (max) shape: (50,) \n'\
                '|       variable shape: False \n'\
                '|       backend: 00 \n'\
-               "|       backend opts: {'shuffle': None, 'complib': 'blosc:zstd', 'complevel': 4} \n"\
+               "|       backend opts: {'shuffle': None, 'complib': 'blosc:zstd', 'complevel': 3} \n"\
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "dummy": 5 \n'\
