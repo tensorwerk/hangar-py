@@ -160,10 +160,47 @@ Technical Notes
    access-pattern of the arrays, inefficient IO due to wasted chunk processing
    is not a concern. It is far more efficient for us to completely blow off the
    metadata chunk cache, and chunk each subarray as a single large item item.
-   This tends to have significant effects on used disk space (larger chunks can
-   be compressed together) as well as favoring shuffle filters (which reduce
-   the raw amount of bytes we need to read from disk a compressed sample). For
-   large arrays, reads can be an order of magnitude faster than ``HDF5_00``.
+
+   This method of processing tends to have a number of significant effects as
+   compared to chunked storage methods:
+
+      1. **Compression rations improve** (by a non-trivial factor). This is
+         simply due to the fact that a larger amount of raw data is being passed
+         into the compressor at a time. While the exact improvement seen is
+         highly dependent on both the data size and compressor used, there
+         should be no case where compressing the full tensor uses more disk
+         space then chunking the tensor, compressing each chunk individually,
+         and then saving each chunk to disk.
+
+      2. **Read performance improves** (so long as a suitable compressor /
+         option set was chosen). Instead of issuing (potentially) many read
+         requests - one for each chunk - to the storage hardware, signifiantly
+         few IOPS are used to retrieve the entire set of compressed raw data
+         from disk. Fewer IOPS means much less time waiting on the hard disk.
+         Moreso, only a single decompression step is needed to reconstruct
+         the numeric array, completly decoupling performance from HDF5's
+         ability to parallelize internal filter pipeline operations.
+
+         Additionally, since the entire requested chunk is retrieved in a
+         single decompression pipeline run, there is no need for the HDF5 core
+         to initialize an intermediate buffer which holds data chunks as each
+         decompression operation completes. Futher, by preinitializing an empty
+         ``numpy.ndarray`` container and using the low level HDF5
+         ``read_direct`` method, the decompressed data buffer is passes
+         directly into the returned ``ndarray.__array_interface__.data``
+         field with no intermediate copy or processing steps.
+
+      3. **Shuffle filters are favored.**. With much more data to work with in
+         a single compression operation, the use of "byte shuffle" filters in
+         the compressor spec has been seen to both markedly decrease read time
+         and increase compression ratios. Shuffling can significantly reduce
+         disk space required to store some piece of data on disk, further
+         reducing the time spent waiting on hard disk IO while incuring a
+         negligible cost to decompression speed.
+
+   Taking all of these effects into account, there can be up to an order of
+   magnitude increase in read performance as compared to the subarray chunking
+   strategy employed by the ``HDF5_00`` backend.
 
 *  Like all other backends at the time of writing, only 'C' ordered arrays
    are accepted by this method.

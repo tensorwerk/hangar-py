@@ -148,7 +148,7 @@ def test_add_new_aset_schema_and_samples(dummy_repo):
                '|       (max) shape: (10, 10) \n'\
                '|       variable shape: False \n'\
                '|       backend: 01 \n'\
-               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:zstd', 'complevel': 6} \n"\
+               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:lz4hc', 'complevel': 5} \n"\
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "new_aset": 5 \n'\
@@ -198,7 +198,7 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(dummy_repo):
                '|       (max) shape: (10, 10) \n'\
                '|       variable shape: False \n'\
                '|       backend: 01 \n'\
-               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:zstd', 'complevel': 6} \n"\
+               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:lz4hc', 'complevel': 5} \n"\
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "new_aset": 5 \n'\
@@ -257,7 +257,7 @@ def test_add_new_schema_and_samples_and_change_old_backend(dummy_repo):
                '|       (max) shape: (10, 10) \n'\
                '|       variable shape: False \n'\
                '|       backend: 01 \n'\
-               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:zstd', 'complevel': 6} \n"\
+               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:lz4hc', 'complevel': 5} \n"\
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "new_aset": 5 \n'\
