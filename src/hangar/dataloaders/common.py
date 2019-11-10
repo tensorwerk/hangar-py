@@ -33,7 +33,7 @@ class GroupedAsets(object):
         if len(arraysets) == 0:
             raise ValueError('len(arraysets) cannot == 0')
 
-        aset_lens = set()
+        # aset_lens = set()
         all_keys = []
         all_remote_keys = []
         for aset in arraysets:
@@ -41,12 +41,12 @@ class GroupedAsets(object):
                 raise TypeError(f'Cannot load arraysets opened in `write-enabled` checkout.')
             self.arrayset_array.append(aset)
             self.arrayset_names.append(aset.name)
-            aset_lens.add(len(aset))
+            # aset_lens.add(len(aset))
             all_keys.append(set(aset.keys()))
             all_remote_keys.append(set(aset.remote_reference_keys))
 
-        if len(aset_lens) > 1:
-            warnings.warn('Arraysets do not contain equal number of samples', UserWarning)
+        # if len(aset_lens) > 1:
+        #     warnings.warn('Arraysets do not contain equal number of samples', UserWarning)
 
         common_keys = set.intersection(*all_keys)
         remote_keys = set.union(*all_remote_keys)
