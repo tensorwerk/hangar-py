@@ -235,6 +235,7 @@ class Environments(object):
     def _init_repo(self,
                    user_name: str,
                    user_email: str,
+                   description: str = None,
                    remove_old: bool = False) -> os.PathLike:
         """Create a new hangar repositiory at the specified environment path.
 
@@ -271,13 +272,17 @@ class Environments(object):
         os.makedirs(pjoin(self.repo_path, c.DIR_DATA))
         print(f'Hangar Repo initialized at: {self.repo_path}')
 
-        userConf = {'USER': {'name': user_name, 'email': user_email}}
+        if description:
+            userConf = {'name': user_name, 'email': user_email, 'description': description}
+        else:
+            userConf = {'name': user_name, 'email': user_email}
+        
         CFG = configparser.ConfigParser()
         CFG.read_dict(userConf)
         with open(pjoin(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
             CFG.write(f)
 
-        readmeTxt = readme_contents(user_name, user_email)
+        readmeTxt = readme_contents(user_name, user_email, description)
         with open(pjoin(self.repo_path, c.README_FILE_NAME), 'w') as f:
             f.write(readmeTxt.getvalue())
 
