@@ -1,15 +1,10 @@
-import hashlib
 import os
 import warnings
 from multiprocessing import cpu_count, get_context
-from typing import (
-    Iterator, Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple)
-import json
-
+from typing import Iterator, Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple
 
 import lmdb
 import numpy as np
-import struct
 
 from .backends import BACKEND_ACCESSOR_MAP
 from .backends import backend_decoder
@@ -17,6 +12,8 @@ from .backends import is_local_backend
 from .backends import parse_user_backend_opts
 from .context import TxnRegister
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
+from .records.hashmachine import schema_hash_digest
+from .records.hashmachine import array_hash_digest
 from .records.queries import RecordQuery
 from .records.parsing import hash_data_db_key_from_raw_key
 from .records.parsing import generate_sample_name
@@ -523,7 +520,6 @@ class ArraysetDataWriter(ArraysetDataReader):
             **kwargs:
                 See args of :class:`ArraysetDataReader`
         """
-
         super().__init__(*args, **kwargs)
 
         self._fs[self._dflt_backend].backend_opts = self._dflt_backend_opts
@@ -653,7 +649,6 @@ class ArraysetDataWriter(ArraysetDataReader):
         ValueError
             If the backend format code is not valid.
         """
-
         if self._is_conman:
             raise RuntimeError('Cannot call method inside arrayset context manager.')
 
@@ -662,12 +657,13 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         # ----------- Determine schema format details -------------------------
 
-        backendHsh = hash(beopts.backend)
-        optsHsh = hash(json.dumps(beopts.opts))
-        schema_format = np.array(
-            (*proto.shape, proto.size, proto.dtype.num, backendHsh, optsHsh),
-            dtype=np.uint64)
-        schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
+        schema_hash = schema_hash_digest(shape=proto.shape,
+                                         size=proto.size,
+                                         dtype_num=proto.dtype.num,
+                                         named_samples=self.named_samples,
+                                         variable_shape=self.variable_shape,
+                                         backend_code=beopts.backend,
+                                         backend_opts=beopts.opts)
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.name)
         asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
@@ -678,14 +674,15 @@ class ArraysetDataWriter(ArraysetDataReader):
             schema_default_backend=beopts.backend,
             schema_default_backend_opts=beopts.opts)
 
+        hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
         hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
-        hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-        hashSchemaVal = asetSchemaVal
-        dataTxn.put(asetSchemaKey, asetSchemaVal)
-        hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
-        TxnRegister().commit_writer_txn(self._dataenv)
-        TxnRegister().commit_writer_txn(self._hashenv)
+        try:
+            dataTxn.put(asetSchemaKey, asetSchemaVal)
+            hashTxn.put(hashSchemaKey, asetSchemaVal, overwrite=False)
+        finally:
+            TxnRegister().commit_writer_txn(self._dataenv)
+            TxnRegister().commit_writer_txn(self._hashenv)
 
         if beopts.backend not in self._fs:
             self._fs[beopts.backend] = BACKEND_ACCESSOR_MAP[beopts.backend](
@@ -766,11 +763,8 @@ class ArraysetDataWriter(ArraysetDataReader):
             if tmpconman:
                 self.__enter__()
 
-            hasher = hashlib.blake2b(data, digest_size=20)
-            hasher.update(struct.pack(f'<{len(data.shape)}QB', *data.shape, data.dtype.num))
-            full_hash = hasher.hexdigest()
+            full_hash = array_hash_digest(data)
             hashKey = hash_data_db_key_from_raw_key(full_hash)
-
             # check if data record already exists with given key
             dataRecKey = data_record_db_key_from_raw_key(self._asetn, name)
             existingDataRecVal = self._dataTxn.get(dataRecKey, default=False)
@@ -836,7 +830,8 @@ class ArraysetDataWriter(ArraysetDataReader):
         KeyError
             If a sample with the provided name does not exist in the arrayset.
         """
-        if not self._is_conman:
+        tmpconman = not self._is_conman
+        if tmpconman:
             self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
 
         dataKey = data_record_db_key_from_raw_key(self._asetn, name)
@@ -845,16 +840,11 @@ class ArraysetDataWriter(ArraysetDataReader):
             if isRecordDeleted is False:
                 raise KeyError(f'No sample {name} in {self._asetn}')
             del self._sspecs[name]
-            if len(self._sspecs) == 0:
-                # if this is the last data piece existing in a arrayset, remove schema
-                asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self._asetn)
-                self._dataTxn.delete(asetSchemaKey)
         except KeyError as e:
             raise e
         finally:
-            if not self._is_conman:
+            if tmpconman:
                 self._TxnRegister.commit_writer_txn(self._dataenv)
-
         return name
 
 
@@ -946,7 +936,7 @@ class Arraysets(object):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Arrayset Names / Partial Remote References:\
-                \n      - ' + '\n      - '.join(
+                \n      - '                            + '\n      - '.join(
             f'{asetn} / {aset.contains_remote_references}'
             for asetn, aset in self._arraysets.items())
         p.text(res)
@@ -1081,7 +1071,8 @@ class Arraysets(object):
             Generator of ArraysetData accessor objects (set to read or write mode
             as appropriate)
         """
-        for asetObj in self._arraysets.values():
+        for asetN in list(self._arraysets.keys()):
+            asetObj = self._arraysets[asetN]
             wr = cm_weakref_obj_proxy(asetObj)
             yield wr
 
@@ -1093,7 +1084,8 @@ class Arraysets(object):
         Iterable[Tuple[str, Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]]]
             returns two tuple of all all arrayset names/object pairs in the checkout.
         """
-        for asetN, asetObj in self._arraysets.items():
+        for asetN in list(self._arraysets.keys()):
+            asetObj = self._arraysets[asetN]
             wr = cm_weakref_obj_proxy(asetObj)
             yield (asetN, wr)
 
@@ -1127,6 +1119,17 @@ class Arraysets(object):
 
 # ------------------------ Writer-Enabled Methods Only ------------------------------
 
+    def _any_is_conman(self) -> bool:
+        """Determine if self or any contains arrayset class is conman.
+
+        Returns
+        -------
+        bool
+            [description]
+        """
+        res = any([self._is_conman, *[x._is_conman for x in self._arraysets.values()]])
+        return res
+
     def __delitem__(self, key: str) -> str:
         """remove a arrayset and all data records if write-enabled process.
 
@@ -1145,20 +1148,23 @@ class Arraysets(object):
         Raises
         ------
         PermissionError
-            If this is a read-only checkout, no operation is permitted.
+            If any enclosed arrayset is opned in a connection manager.
         """
+        if self._any_is_conman():
+            raise PermissionError(
+                'Not allowed while any arraysets class is opened in a context manager')
         return self.remove_aset(key)
 
     def __enter__(self):
         self._is_conman = True
-        for dskey in list(self._arraysets):
-            self._arraysets[dskey].__enter__()
+        for asetN in list(self._arraysets.keys()):
+            self._arraysets[asetN].__enter__()
         return self
 
     def __exit__(self, *exc):
         self._is_conman = False
-        for dskey in list(self._arraysets):
-            self._arraysets[dskey].__exit__(*exc)
+        for asetN in list(self._arraysets.keys()):
+            self._arraysets[asetN].__exit__(*exc)
 
     def multi_add(self, mapping: Mapping[str, np.ndarray]) -> str:
         """Add related samples to un-named arraysets with the same generated key.
@@ -1209,10 +1215,8 @@ class Arraysets(object):
             data_name = generate_sample_name()
             for k, v in mapping.items():
                 self._arraysets[k].add(v, bulkn=data_name)
-
         except KeyError as e:
             raise e from None
-
         finally:
             if tmpconman:
                 self.__exit__()
@@ -1278,6 +1282,8 @@ class Arraysets(object):
 
         Raises
         ------
+        PermissionError
+            If any enclosed arrayset is opened in a connection manager.
         ValueError
             If provided name contains any non ascii letter characters
             characters, or if the string is longer than 64 characters long.
@@ -1295,6 +1301,9 @@ class Arraysets(object):
         ValueError
             If the specified backend is not valid.
         """
+        if self._any_is_conman():
+            raise PermissionError(
+                'Not allowed while any arraysets class is opened in a context manager')
 
         # ------------- Checks for argument validity --------------------------
 
@@ -1332,12 +1341,14 @@ class Arraysets(object):
 
         # ----------- Determine schema format details -------------------------
 
-        backendHsh = hash(beopts.backend)
-        optsHsh = hash(json.dumps(beopts.opts))
-        schema_format = np.array(
-            (*prototype.shape, prototype.size, prototype.dtype.num, backendHsh, optsHsh),
-            dtype=np.uint64)
-        schema_hash = hashlib.blake2b(schema_format.tobytes(), digest_size=6).hexdigest()
+        schema_hash = schema_hash_digest(shape=prototype.shape,
+                                         size=prototype.size,
+                                         dtype_num=prototype.dtype.num,
+                                         named_samples=named_samples,
+                                         variable_shape=variable_shape,
+                                         backend_code=beopts.backend,
+                                         backend_opts=beopts.opts)
+
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(name)
         asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
             schema_hash=schema_hash,
@@ -1391,9 +1402,15 @@ class Arraysets(object):
 
         Raises
         ------
+        PermissionError
+            If any enclosed arrayset is opned in a connection manager.
         KeyError
             If a arrayset does not exist with the provided name
         """
+        if self._any_is_conman():
+            raise PermissionError(
+                'Not allowed while any arraysets class is opened in a context manager')
+
         datatxn = TxnRegister().begin_writer_txn(self._dataenv)
         try:
             if aset_name not in self._arraysets:

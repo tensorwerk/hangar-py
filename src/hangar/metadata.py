@@ -1,5 +1,4 @@
 import os
-import hashlib
 from typing import Optional, Union, Iterator, Tuple, Dict
 
 import lmdb
@@ -7,6 +6,7 @@ import lmdb
 from .context import TxnRegister
 from .records import parsing
 from .records.queries import RecordQuery
+from .records.hashmachine import metadata_hash_digest
 from .utils import is_suitable_user_key, is_ascii
 
 
@@ -363,7 +363,7 @@ class MetadataWriter(MetadataReader):
             if tmpconman:
                 self.__enter__()
 
-            val_hash = hashlib.blake2b(value.encode(), digest_size=20).hexdigest()
+            val_hash = metadata_hash_digest(value=value)
             hashKey = parsing.hash_meta_db_key_from_raw_key(val_hash)
             metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
             metaRecVal = parsing.metadata_record_db_val_from_raw_val(val_hash)

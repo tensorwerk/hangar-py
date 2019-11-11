@@ -66,7 +66,7 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
     return res
 
 
-def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no cover
+def details(env: lmdb.Environment, line_limit=100, line_length=100) -> StringIO:  # pragma: no cover
     """Print the details of an lmdb environment to stdout
 
     Parameters
@@ -75,6 +75,8 @@ def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no co
         environment handle to print records of
     line_limit : int, optional
         limit to the amount of record lines printed, by default 100
+    line_length : int, optional
+        limit the amount of text printed per line, by default 100
 
     Returns
     -------
@@ -101,7 +103,7 @@ def details(env: lmdb.Environment, line_limit=100) -> StringIO:  # pragma: no co
                     buf.write('...\n...\n...\n')
                 continue
             else:
-                if len(value) >= 100:
+                if len(value) >= line_length:
                     buf.write(f'{key} long binary\n')
                 else:
                     buf.write(f'{key} {value}\n')

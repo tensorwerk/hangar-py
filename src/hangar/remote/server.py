@@ -1,4 +1,3 @@
-import hashlib
 import os
 import tempfile
 import warnings
@@ -8,7 +7,6 @@ from concurrent import futures
 from os.path import join as pjoin
 import shutil
 import configparser
-import struct
 
 import blosc
 import grpc
@@ -23,6 +21,7 @@ from .. import constants as c
 from ..context import Environments, TxnRegister
 from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting, hashs, heads, parsing, queries, summarize
+from ..records.hashmachine import array_hash_digest, metadata_hash_digest
 from ..utils import set_blosc_nthreads
 
 set_blosc_nthreads()
@@ -367,11 +366,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         for record in unpacked_records:
             data = chunks.deserialize_record(record)
             schema_hash = data.schema
-            hasher = hashlib.blake2b(data.array, digest_size=20)
-            hasher.update(
-                struct.pack(f'<{len(data.array.shape)}QB', *data.array.shape,
-                            data.array.dtype.num))
-            received_hash = hasher.hexdigest()
+            received_hash = array_hash_digest(data.array)
             if received_hash != data.digest:
                 msg = f'HASH MANGLED, received: {received_hash} != expected digest: {data.digest}'
                 context.set_details(msg)
@@ -423,7 +418,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         req_digest = request.rec.digest
 
         uncompBlob = blosc.decompress(request.blob)
-        received_hash = hashlib.blake2b(uncompBlob, digest_size=20).hexdigest()
+        received_hash = metadata_hash_digest(uncompBlob.decode())
         if received_hash != req_digest:
             msg = f'HASH MANGED: received_hash: {received_hash} != digest: {req_digest}'
             context.set_details(msg)
