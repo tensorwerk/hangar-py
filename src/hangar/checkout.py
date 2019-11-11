@@ -7,6 +7,7 @@ from collections import namedtuple
 from uuid import uuid4
 
 import lmdb
+import warnings
 
 from .arrayset import Arraysets
 from .diff import ReaderUserDiff, WriterUserDiff
@@ -201,6 +202,95 @@ class ReaderCheckout(object):
             >>> out
             ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
 
+        .. warning::
+
+            It is possible for an :class:`~.arrayset.Arraysets` name to be an
+            invalid field name for a ``namedtuple`` object. The python docs state:
+
+                Any valid Python identifier may be used for a fieldname except for
+                names starting with an underscore. Valid identifiers consist of
+                letters, digits, and underscores but do not start with a digit or
+                underscore and cannot be a keyword such as class, for, return,
+                global, pass, or raise.
+
+            In addition, names must be unique, and cannot containing a period
+            (``.``) or dash (``-``) character. If a namedtuple would normally be
+            returned during some operation, and the field name is invalid, a
+            :class:`UserWarning` will be emitted indicating that any suspect fields
+            names will be replaced with the positional index as is customary in the
+            python standard library. The ``namedtuple`` docs explain this by
+            saying:
+
+                If rename is true, invalid fieldnames are automatically replaced with
+                positional names. For example, ['abc', 'def', 'ghi', 'abc'] is
+                converted to ['abc', '_1', 'ghi', '_3'], eliminating the keyword def
+                and the duplicate fieldname abc.
+
+            The next section demonstrates the implications and workarounds for this
+            issue
+
+        As an example, if we attempted to retrieve samples from arraysets with
+        the names: ``['raw', 'data.jpeg', '_garba-ge', 'try_2']``, two of the
+        four would be renamed:
+
+            >>> out = dset[('raw', 'data.jpeg', '_garba-ge', 'try_2'), '1']
+            >>> print(out)
+            ArraysetData(raw=array([0]), _1=array([1]), _2=array([2]), try_2==array([3]))
+            >>> print(out._fields)
+            ('raw', '_1', '_2', 'try_2')
+            >>> out.raw
+            array([0])
+            >>> out._2
+            array([4])
+
+        In cases where the input arraysets are explicitly specified, then, then
+        it is guarrenteed that the order of fields in the resulting tuple is
+        exactally what was requested in the input
+
+            >>> out = dset[('raw', 'data.jpeg', '_garba-ge', 'try_2'), '1']
+            >>> out._fields
+            ('raw', '_1', '_2', 'try_2')
+            >>> reorder = dset[('data.jpeg', 'try_2', 'raw', '_garba-ge'), '1']
+            >>> reorder._fields
+            ('_0', 'try_2', 'raw', '_3')
+
+        However, if an ``Ellipsis`` (``...``) or ``slice`` (``:``) syntax is
+        used to select arraysets, *the order in which arraysets are placed into
+        the namedtuple IS NOT predictable.* Should any arrayset have an invalid
+        field name, it will be renamed according to it's positional index, but
+        will not contain any identifying mark. At the moment, there is no
+        direct way to infer the arraayset name from this strcture alone. This
+        limitation will be addressed in a future release.
+
+        Do NOT rely on any observed patterns. For this corner-case, **the ONLY
+        guarrentee we provide is that structures returned from multi-sample
+        queries have the same order in every ``ArraysetData`` tuple returned in
+        that queries result list!** Should another query be made with
+        unspecified ordering, you should assume that the indices of the
+        arraysets in the namedtuple would have changed from the previous
+        result!!
+
+            >>> print(dset.arraysets.keys())
+            ('raw', 'data.jpeg', '_garba-ge', 'try_2']
+            >>> out = dset[:, '1']
+            >>> out._fields
+            ('_0', 'raw', '_2', 'try_2')
+            >>>
+            >>> # ordering in a single query is preserved
+            ...
+            >>> multi_sample = dset[..., ('1', '2')]
+            >>> multi_sample[0]._fields
+            ('try_2', '_1', 'raw', '_3')
+            >>> multi_sample[1]._fields
+            ('try_2', '_1', 'raw', '_3')
+            >>>
+            >>> # but it may change upon a later query
+            >>> multi_sample2 = dset[..., ('1', '2')]
+            >>> multi_sample2[0]._fields
+            ('_0', '_1', 'raw', 'try_2')
+            >>> multi_sample2[1]._fields
+            ('_0', '_1', 'raw', 'try_2')
+
         Parameters
         ----------
         index
@@ -239,6 +329,10 @@ class ReaderCheckout(object):
             key is returned values as an individual element in the
             List. The sample order is returned in the same order it wasw recieved.
 
+        Warns
+        -----
+        UserWarning
+            Arrayset names contains characters which are invalid as namedtuple fields.
 
         Notes
         -----
@@ -324,6 +418,10 @@ class ReaderCheckout(object):
             key is returned values as an individual element in the
             List. The sample order is returned in the same order it wasw recieved.
 
+        Warns
+        -----
+        UserWarning
+            Arrayset names contains characters which are invalid as namedtuple fields.
         """
         try:
             tmpconman = not self._is_conman
@@ -341,7 +439,15 @@ class ReaderCheckout(object):
             else:
                 raise TypeError(f'Arraysets: {arraysets} type: {type(arraysets)}')
             nAsets = len(arraysets)
-            ArraysetData = namedtuple('ArraysetData', [aset.name for aset in arraysets])
+            try:
+                aset_names = [aset.name for aset in arraysets]
+                ArraysetData = namedtuple('ArraysetData', aset_names)
+            except ValueError:
+                warnings.warn(
+                    'Arrayset names contains characters which are invalid as namedtuple fields. '
+                    'All suspect field names will be replaced by their positional names '
+                    '(ie "_0" for element 0, "_4" for element 4)', UserWarning)
+                ArraysetData = namedtuple('ArraysetData', aset_names, rename=True)
 
             # Sample Parsing
             if isinstance(samples, (str, int)):
@@ -790,6 +896,95 @@ class WriterCheckout(object):
             >>> out
             ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
 
+        .. warning::
+
+            It is possible for an :class:`~.arrayset.Arraysets` name to be an
+            invalid field name for a ``namedtuple`` object. The python docs state:
+
+                Any valid Python identifier may be used for a fieldname except for
+                names starting with an underscore. Valid identifiers consist of
+                letters, digits, and underscores but do not start with a digit or
+                underscore and cannot be a keyword such as class, for, return,
+                global, pass, or raise.
+
+            In addition, names must be unique, and cannot containing a period
+            (``.``) or dash (``-``) character. If a namedtuple would normally be
+            returned during some operation, and the field name is invalid, a
+            :class:`UserWarning` will be emitted indicating that any suspect fields
+            names will be replaced with the positional index as is customary in the
+            python standard library. The ``namedtuple`` docs explain this by
+            saying:
+
+                If rename is true, invalid fieldnames are automatically replaced with
+                positional names. For example, ['abc', 'def', 'ghi', 'abc'] is
+                converted to ['abc', '_1', 'ghi', '_3'], eliminating the keyword def
+                and the duplicate fieldname abc.
+
+            The next section demonstrates the implications and workarounds for this
+            issue
+
+        As an example, if we attempted to retrieve samples from arraysets with
+        the names: ``['raw', 'data.jpeg', '_garba-ge', 'try_2']``, two of the
+        four would be renamed:
+
+            >>> out = dset[('raw', 'data.jpeg', '_garba-ge', 'try_2'), '1']
+            >>> print(out)
+            ArraysetData(raw=array([0]), _1=array([1]), _2=array([2]), try_2==array([3]))
+            >>> print(out._fields)
+            ('raw', '_1', '_2', 'try_2')
+            >>> out.raw
+            array([0])
+            >>> out._2
+            array([4])
+
+        In cases where the input arraysets are explicitly specified, then, then
+        it is guarrenteed that the order of fields in the resulting tuple is
+        exactally what was requested in the input
+
+            >>> out = dset[('raw', 'data.jpeg', '_garba-ge', 'try_2'), '1']
+            >>> out._fields
+            ('raw', '_1', '_2', 'try_2')
+            >>> reorder = dset[('data.jpeg', 'try_2', 'raw', '_garba-ge'), '1']
+            >>> reorder._fields
+            ('_0', 'try_2', 'raw', '_3')
+
+        However, if an ``Ellipsis`` (``...``) or ``slice`` (``:``) syntax is
+        used to select arraysets, *the order in which arraysets are placed into
+        the namedtuple IS NOT predictable.* Should any arrayset have an invalid
+        field name, it will be renamed according to it's positional index, but
+        will not contain any identifying mark. At the moment, there is no
+        direct way to infer the arraayset name from this strcture alone. This
+        limitation will be addressed in a future release.
+
+        Do NOT rely on any observed patterns. For this corner-case, **the ONLY
+        guarrentee we provide is that structures returned from multi-sample
+        queries have the same order in every ``ArraysetData`` tuple returned in
+        that queries result list!** Should another query be made with
+        unspecified ordering, you should assume that the indices of the
+        arraysets in the namedtuple would have changed from the previous
+        result!!
+
+            >>> print(dset.arraysets.keys())
+            ('raw', 'data.jpeg', '_garba-ge', 'try_2']
+            >>> out = dset[:, '1']
+            >>> out._fields
+            ('_0', 'raw', '_2', 'try_2')
+            >>>
+            >>> # ordering in a single query is preserved
+            ...
+            >>> multi_sample = dset[..., ('1', '2')]
+            >>> multi_sample[0]._fields
+            ('try_2', '_1', 'raw', '_3')
+            >>> multi_sample[1]._fields
+            ('try_2', '_1', 'raw', '_3')
+            >>>
+            >>> # but it may change upon a later query
+            >>> multi_sample2 = dset[..., ('1', '2')]
+            >>> multi_sample2[0]._fields
+            ('_0', '_1', 'raw', 'try_2')
+            >>> multi_sample2[1]._fields
+            ('_0', '_1', 'raw', 'try_2')
+
         Parameters
         ----------
         index
@@ -827,6 +1022,10 @@ class WriterCheckout(object):
             key is returned values as an individual element in the
             List. The sample order is returned in the same order it wasw recieved.
 
+        Warns
+        -----
+        UserWarning
+            Arrayset names contains characters which are invalid as namedtuple fields.
 
         Notes
         -----
@@ -912,6 +1111,10 @@ class WriterCheckout(object):
             key is returned values as an individual element in the List. The
             sample order is returned in the same order it wasw recieved.
 
+        Warns
+        -----
+        UserWarning
+            Arrayset names contains characters which are invalid as namedtuple fields.
         """
         try:
             tmpconman = not self._is_conman
@@ -929,7 +1132,15 @@ class WriterCheckout(object):
             else:
                 raise TypeError(f'Arraysets: {arraysets} type: {type(arraysets)}')
             nAsets = len(arraysets)
-            ArraysetData = namedtuple('ArraysetData', [aset.name for aset in arraysets])
+            try:
+                aset_names = [aset.name for aset in arraysets]
+                ArraysetData = namedtuple('ArraysetData', aset_names)
+            except ValueError:
+                warnings.warn(
+                    'Arrayset names contains characters which are invalid as namedtuple fields. '
+                    'All suspect field names will be replaced by their positional names '
+                    '(ie "_0" for element 0, "_4" for element 4)', UserWarning)
+                ArraysetData = namedtuple('ArraysetData', aset_names, rename=True)
 
             # Sample Parsing
             if isinstance(samples, (str, int)):
@@ -1017,7 +1228,6 @@ class WriterCheckout(object):
             to be stored must reside as individual elements (``np.ndarray``) in
             a List or Tuple. The number of keys and the number of values must
             match exactally.
-
 
         Notes
         -----

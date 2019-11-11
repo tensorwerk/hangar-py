@@ -41,6 +41,10 @@ Bug Fixes
   (`#125 <https://github.com/tensorwerk/hangar-py/pull/125>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Fixed minor bug in types of values allowed for ``Arrayset`` names vs ``Sample`` names.
   (`#151 <https://github.com/tensorwerk/hangar-py/pull/151>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Fixed issue where using checkout object to access a sample in multiple arraysets would try to create
+  a ``namedtuple`` instance with invalid field names. Now incompatible field names are automatically
+  renamed with their positional index.
+  (`#161 <https://github.com/tensorwerk/hangar-py/pull/161>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 Breaking changes
