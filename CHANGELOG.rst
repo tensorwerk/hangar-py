@@ -33,6 +33,11 @@ Improvements
   (`#134 <https://github.com/tensorwerk/hangar-py/pull/134>`__) `@hhsecond <https://github.com/hhsecond>`__
 * Documentation Improvements and Typo-Fixes.
   (`#156 <https://github.com/tensorwerk/hangar-py/pull/156>`__) `@alessiamarcolini <https://github.com/alessiamarcolini>`__
+* Removed implicit removal of arrayset schema from checkout if every sample was removed from arrayset.
+  This could potentially result in dangling accessors which may or may not self-destruct (as expected)
+  in certain edge-cases.
+  (`#159 <https://github.com/tensorwerk/hangar-py/pull/159>`__) `@rlizzo <https://github.com/rlizzo>`__
+
 
 Bug Fixes
 ---------

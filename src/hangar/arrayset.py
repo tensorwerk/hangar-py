@@ -1283,7 +1283,7 @@ class Arraysets(object):
         Raises
         ------
         PermissionError
-            If any enclosed arrayset is opned in a connection manager.
+            If any enclosed arrayset is opened in a connection manager.
         ValueError
             If provided name contains any non ascii letter characters
             characters, or if the string is longer than 64 characters long.
