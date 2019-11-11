@@ -27,8 +27,9 @@ from .records.parsing import arrayset_record_schema_db_key_from_raw_key
 from .records.parsing import arrayset_record_schema_db_val_from_raw_val
 
 
-CompatibleArray = NamedTuple(
-    'CompatibleArray', [('compatible', bool), ('reason', str)])
+CompatibleArray = NamedTuple('CompatibleArray', [
+    ('compatible', bool),
+    ('reason', str)])
 
 
 class ArraysetDataReader(object):
@@ -304,18 +305,6 @@ class ArraysetDataReader(object):
             config settings used to set up filters
         """
         return self._dflt_backend_opts
-
-    @property
-    def sample_classes(self):
-        grouped_spec_names = defaultdict(list)
-        for name, bespec in self._sspecs.items():
-            grouped_spec_names[bespec].append(name)
-
-        grouped_data_names = {}
-        for spec, names in grouped_spec_names.items():
-            data = self._fs[spec.backend].read_data(spec)
-            grouped_data_names[tuple(data.tolist())] = names
-        return grouped_data_names
 
     def keys(self, local: bool = False) -> Iterator[Union[str, int]]:
         """generator which yields the names of every sample in the arrayset
