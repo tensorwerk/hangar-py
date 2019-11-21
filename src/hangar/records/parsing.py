@@ -827,6 +827,7 @@ def cmt_final_digest(parent_digest: str, spec_digest: str, refs_digest: str) -> 
     digest = _hash_func(joined_bytes)
     return digest
 
+
 """
 Commit Parent (ancestor) Lookup methods
 ---------------------------------------

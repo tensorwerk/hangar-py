@@ -5,7 +5,7 @@ import numpy as np
 
 param_shapes = [(1,), (1000,), (1, 1), (623, 3, 5), (2, 4, 5, 6, 1, 3)]
 param_dtypes = [np.uint8, np.float32, np.float64, np.int32]
-param_digest = ['digesta', 'digestaaaaaa', 'digestaaaaaaaaaaaaaaaaaaaaaaaaaa']
+param_digest = ['0=digesta', '0=digestaaaaaa', '2=digestaaaaaaaaaaaaaaaaaaaaaaaaaa']
 param_schema = ['schemaa', 'schemaaaaaaaaa', 'schemaaaaaaaaaaaaaaaa']
 
 
