@@ -37,6 +37,8 @@ Improvements
   This could potentially result in dangling accessors which may or may not self-destruct (as expected)
   in certain edge-cases.
   (`#159 <https://github.com/tensorwerk/hangar-py/pull/159>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added new backend optimized to increase speeds for fixed size arrayset access.
+  (`#160 <https://github.com/tensorwerk/hangar-py/pull/160>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 Bug Fixes

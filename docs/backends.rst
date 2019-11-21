@@ -25,5 +25,6 @@ Backend Specifications
    :titlesonly:
 
    ./backends/hdf5_00
+   ./backends/hdf5_01
    ./backends/numpy_10
    ./backends/remote_50

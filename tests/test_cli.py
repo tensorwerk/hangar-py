@@ -9,7 +9,7 @@ from click.testing import CliRunner
 from hangar import Repository
 from hangar.cli import cli
 from hangar.external import PluginManager
-from conftest import backend_params
+from conftest import fixed_shape_backend_params
 
 # -------------------------------- test data ----------------------------------
 
@@ -240,7 +240,7 @@ def test_clone(written_two_cmt_server_repo):
         assert new_repo.summary() == base_repo.summary()
 
 
-@pytest.mark.parametrize('backend', backend_params)
+@pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_push_fetch_records(server_instance, backend):
 
     runner = CliRunner()
@@ -277,7 +277,7 @@ def test_push_fetch_records(server_instance, backend):
 
 
 
-@pytest.mark.parametrize('backend', backend_params)
+@pytest.mark.parametrize('backend', fixed_shape_backend_params)
 @pytest.mark.parametrize('options', [
     ['origin', 'testbranch'],
     ['origin', 'master'],

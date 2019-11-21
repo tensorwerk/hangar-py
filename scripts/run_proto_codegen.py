@@ -1,5 +1,4 @@
 import os
-from os import remove
 from shutil import move
 
 from grpc_tools import protoc
@@ -46,4 +45,4 @@ with open(hangar_service_grpc_path_orig, 'w') as new_file:
             else:
                 newline = old_line
             new_file.writelines(newline)
-remove(hangar_service_grpc_path_old)
+os.remove(hangar_service_grpc_path_old)

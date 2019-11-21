@@ -1,8 +1,6 @@
 import os
 import tempfile
 import warnings
-import threading
-import time
 from concurrent import futures
 from os.path import join as pjoin
 import shutil
@@ -375,7 +373,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 reply = hangar_service_pb2.PushDataReply(error=err)
                 return reply
             received_data.append((received_hash, data.array))
-        saved_digests = self.CW.data(schema_hash, received_data)
+        _ = self.CW.data(schema_hash, received_data)  # returns saved)_digests
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
         return reply

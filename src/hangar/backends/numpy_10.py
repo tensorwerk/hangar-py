@@ -21,6 +21,11 @@ Storage Method
      4, 3)``. The first index in the array is referred to as a "collection
      index".
 
+Compression Options
+===================
+
+Does not accept any compression options. No compression is applied.
+
 Record Format
 =============
 
@@ -29,7 +34,7 @@ Fields Recorded for Each Array
 
 *  Format Code
 *  File UID
-*  Alder32 Checksum
+*  xxhash64_hexdigest
 *  Collection Index (0:COLLECTION_SIZE subarray selection)
 *  Subarray Shape
 
@@ -38,7 +43,6 @@ Separators used
 
 *  ``SEP_KEY: ":"``
 *  ``SEP_HSH: "$"``
-*  ``SEP_LST: " "``
 *  ``SEP_SLC: "*"``
 
 Examples
@@ -46,21 +50,21 @@ Examples
 
 1)  Adding the first piece of data to a file:
 
-    *  Array shape (Subarray Shape): (10)
-    *  File UID: "NJUUUK"
-    *  Alder32 Checksum: 900338819
-    *  Collection Index: 2
+    *  Array shape (Subarray Shape): (10, 10)
+    *  File UID: "K3ktxv"
+    *  xxhash64_hexdigest: 94701dd9f32626e2
+    *  Collection Index: 488
 
-    ``Record Data => '10:NJUUUK$900338819$2*10'``
+    ``Record Data =>  "10:K3ktxv$94701dd9f32626e2$488*10 10"``
 
-1)  Adding to a piece of data to a the middle of a file:
+2)  Adding to a piece of data to a the middle of a file:
 
     *  Array shape (Subarray Shape): (20, 2, 3)
     *  File UID: "Mk23nl"
-    *  Alder32 Checksum: 2546668575
+    *  xxhash64_hexdigest: 1363344b6c051b29
     *  Collection Index: 199
 
-    ``Record Data => "10:Mk23nl$2546668575$199*20 2 3"``
+    ``Record Data => "10:Mk23nl$1363344b6c051b29$199*20 2 3"``
 
 
 Technical Notes
@@ -73,11 +77,11 @@ Technical Notes
    open a memmap file and persist necessary header info to disk in ``.npy``
    format.
 
-*  On each write, an ``alder32`` checksum is calculated. This is not for use as
-   the primary hash algorithm, but rather stored in the local record format
-   itself to serve as a quick way to verify no disk corruption occurred. This is
-   required since numpy has no built in data integrity validation methods when
-   reading from disk.
+*  On each write, an ``xxhash64_hexdigest`` checksum is calculated. This is not
+   for use as the primary hash algorithm, but rather stored in the local record
+   format itself to serve as a quick way to verify no disk corruption occurred.
+   This is required since numpy has no built in data integrity validation
+   methods when reading from disk.
 """
 import os
 import re
@@ -108,7 +112,8 @@ _FmtCode = '10'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
 _ShapeFmtRE = re.compile('[,\(\)\[\]]')
 # split up a formated parsed string into unique fields
-_SplitDecoderRE = re.compile(fr'[\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}]')
+_patern = fr'\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}'
+_SplitDecoderRE = re.compile(fr'[{_patern}]')
 
 
 NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec',

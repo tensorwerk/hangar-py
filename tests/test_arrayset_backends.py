@@ -1,9 +1,9 @@
 import pytest
 import numpy as np
-from conftest import backend_params
+from conftest import fixed_shape_backend_params
 
 
-@pytest.mark.parametrize('backend', backend_params)
+@pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_backend_property_reports_correct_backend(repo, array5by7, backend):
 
     wco = repo.checkout(write=True)
@@ -19,7 +19,7 @@ def test_backend_property_reports_correct_backend(repo, array5by7, backend):
     rco.close()
 
 
-@pytest.mark.parametrize('backend', backend_params)
+@pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_setting_backend_property_cannot_change_backend(repo, array5by7, backend):
 
     wco = repo.checkout(write=True)
@@ -39,11 +39,13 @@ def test_setting_backend_property_cannot_change_backend(repo, array5by7, backend
     rco.close()
 
 
-@pytest.mark.parametrize('backend', backend_params)
+@pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_backend_opts_property_reports_correct_defaults(repo, array5by7, backend):
     from hangar.backends import backend_opts_from_heuristics
-    expected_opts = backend_opts_from_heuristics(backend, array5by7)
-
+    expected_opts = backend_opts_from_heuristics(backend,
+                                                 array5by7,
+                                                 named_samples=False,
+                                                 variable_shape=False)
     wco = repo.checkout(write=True)
     aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=backend)
     assert aset.backend_opts == expected_opts
@@ -57,7 +59,7 @@ def test_backend_opts_property_reports_correct_defaults(repo, array5by7, backend
     rco.close()
 
 
-@pytest.mark.parametrize('backend', backend_params)
+@pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by7, backend):
 
     wco = repo.checkout(write=True)
@@ -76,7 +78,7 @@ def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by
     rco.close()
 
 
-@pytest.mark.parametrize('backend', backend_params)
+@pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_init_arrayset_with_backend_opts_works(repo, array5by7, backend):
     expected_opts = {'foo': 'bar'}
     input_opts = {'backend': backend, **expected_opts}
@@ -93,16 +95,23 @@ def test_init_arrayset_with_backend_opts_works(repo, array5by7, backend):
     rco.close()
 
 
-@pytest.mark.parametrize('prototype,expected_backend', [
-    [np.random.randn(10), '10'],
-    [np.random.randn(1000), '00'],
-    [np.random.randn(2, 2), '00'],
-    [np.random.randn(5, 2), '00'],
+@pytest.mark.parametrize('prototype,variable_shape,expected_backend', [
+    [np.random.randn(10), True, '10'],
+    [np.random.randn(1000), True, '00'],
+    [np.random.randn(1000), False, '00'],
+    [np.random.randn(9_999_999).astype(np.float16), False, '00'],
+    [np.random.randn(10_000_000).astype(np.float16), False, '00'],
+    [np.random.randn(10_000_001).astype(np.float16), False, '01'],
+    [np.random.randn(10_000_001).astype(np.float16), True, '00'],
+    [np.random.randn(2, 2), True, '00'],
+    [np.random.randn(2, 2), False, '01'],
+    [np.random.randn(5, 2), True, '00'],
+    [np.random.randn(5, 2), False, '01'],
 ])
-def test_heuristics_select_backend(repo, prototype, expected_backend):
+def test_heuristics_select_backend(repo, prototype, variable_shape, expected_backend):
 
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=prototype)
+    aset = wco.arraysets.init_arrayset('aset', prototype=prototype, variable_shape=variable_shape)
     assert aset.backend == expected_backend
     aset['0'] = prototype
     wco.commit('first commit')
@@ -118,7 +127,7 @@ def test_heuristics_select_backend(repo, prototype, expected_backend):
 
 
 @pytest.mark.parametrize('prototype', [np.random.randn(10), np.random.randn(1000), np.random.randn(2, 2)])
-@pytest.mark.parametrize('backend', backend_params)
+@pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_manual_override_heuristics_select_backend(repo, prototype, backend):
 
     wco = repo.checkout(write=True)
@@ -145,8 +154,8 @@ def test_manual_override_heuristics_invalid_value_raises_error(repo):
     wco.close()
 
 
-@pytest.mark.parametrize('backendStart', backend_params)
-@pytest.mark.parametrize('backendEnd', backend_params)
+@pytest.mark.parametrize('backendStart', fixed_shape_backend_params)
+@pytest.mark.parametrize('backendEnd', fixed_shape_backend_params)
 def test_manual_change_backends_after_write_works(repo, array5by7, backendStart, backendEnd):
 
     wco = repo.checkout(write=True)
@@ -176,7 +185,7 @@ def test_manual_change_backends_after_write_works(repo, array5by7, backendStart,
     rco.close()
 
 
-@pytest.mark.parametrize('backendStart', backend_params)
+@pytest.mark.parametrize('backendStart', fixed_shape_backend_params)
 @pytest.mark.parametrize('backendFail', ['lmao', '000'])
 def test_manual_change_backend_to_invalid_fmt_code_fails(repo, array5by7, backendStart, backendFail):
 
@@ -203,8 +212,8 @@ def test_manual_change_backend_to_invalid_fmt_code_fails(repo, array5by7, backen
     nwco.close()
 
 
-@pytest.mark.parametrize('backendStart', backend_params)
-@pytest.mark.parametrize('backendEnd', backend_params)
+@pytest.mark.parametrize('backendStart', fixed_shape_backend_params)
+@pytest.mark.parametrize('backendEnd', fixed_shape_backend_params)
 def test_manual_change_backend_fails_while_in_cm(repo, array5by7, backendStart, backendEnd):
 
     wco = repo.checkout(write=True)

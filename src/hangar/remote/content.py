@@ -3,7 +3,7 @@ from typing import NamedTuple, Union, Sequence, Tuple, List, Optional
 import numpy as np
 
 from ..context import Environments, TxnRegister
-from ..backends import BACKEND_ACCESSOR_MAP, backend_from_heuristics, backend_opts_from_heuristics
+from ..backends import BACKEND_ACCESSOR_MAP, backend_opts_from_heuristics
 from ..records import parsing
 
 
@@ -133,7 +133,11 @@ class ContentWriter(object):
                     proto = np.zeros(
                         schema_val.schema_max_shape,
                         dtype=np.typeDict[schema_val.schema_dtype])
-                    backend_opts = backend_opts_from_heuristics(backend, proto)
+                    backend_opts = backend_opts_from_heuristics(
+                        backend=backend,
+                        array=proto,
+                        named_samples=schema_val.schema_is_named,
+                        variable_shape=schema_val.schema_is_var)
         else:
             backend = schema_val.schema_default_backend
             backend_opts = schema_val.schema_default_backend_opts

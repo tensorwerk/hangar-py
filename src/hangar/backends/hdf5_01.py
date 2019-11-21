@@ -1,15 +1,21 @@
-"""Local HDF5 Backend Implementation, Identifier: ``HDF5_00``
+"""Local HDF5 Backend Implementation, Identifier: ``HDF5_01``
 
 Backend Identifiers
 ===================
 
 *  Backend: ``0``
-*  Version: ``0``
-*  Format Code: ``00``
-*  Canonical Name: ``HDF5_00``
+*  Version: ``1``
+*  Format Code: ``01``
+*  Canonical Name: ``HDF5_01``
 
 Storage Method
 ==============
+
+*  This module is meant to handle larger datasets which are of fixed size. IO
+   and significant compression optimization is achieved by storing arrays at
+   their appropriate top level index in the same shape they naturally assume
+   and chunking over the entire subarray domain making up a sample (rather than
+   having to subdivide chunks when the sample could be variably shaped.)
 
 *  Data is written to specific subarray indexes inside an HDF5 "dataset" in a
    single HDF5 File.
@@ -21,10 +27,9 @@ Storage Method
 
    *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
 
-   *  ``shape: (COLLECTION_SIZE, *{schema_shape.size})``; ie ``(500, 10)`` or
-      ``(500, 300)``. The first index in the dataset is referred to as a
-      ``collection index``. See technical note below for detailed explanation
-      on why the flatten operaiton is performed.
+   *  ``shape: (COLLECTION_SIZE, *{schema_shape})``; ie ``(500, 10, 10)`` or
+      ``(500, 512, 512, 320)``. The first index in the dataset is referred to as a
+      ``collection index``.
 
 *  Compression Filters, Chunking Configuration/Options are applied globally for
    all ``datasets`` in a file at dataset creation time.
@@ -40,7 +45,7 @@ Compression Options
 
 Accepts dictionary containing keys
 
-*  ``backend`` == ``"00"``
+*  ``backend`` == ``"01"``
 *  ``complib``
 *  ``complevel``
 *  ``shuffle``
@@ -112,7 +117,7 @@ Examples
     *  Dataset Number: 16
     *  Collection Index: 105
 
-    ``Record Data => "00:rlUK3C$8067007c0f05c359$16 105*10 10"``
+    ``Record Data => "01:rlUK3C$8067007c0f05c359$16 105*10 10"``
 
 1)  Adding to a piece of data to a the middle of a file:
 
@@ -122,11 +127,14 @@ Examples
     *  Dataset Number: "3"
     *  Collection Index: 199
 
-    ``Record Data => "00:rlUK3C$b89f873d3d153a9c$8 199*20 2 3"``
+    ``Record Data => "01:rlUK3C$b89f873d3d153a9c$8 199*20 2 3"``
 
 
 Technical Notes
 ===============
+
+*  The majority of methods not directly related to "chunking" and the "raw data
+   chunk cache" are either identical to HDF5_00, or only slightly modified.
 
 *  Files are read only after initial creation/writes. Only a write-enabled
    checkout can open a HDF5 file in ``"w"`` or ``"a"`` mode, and writer
@@ -146,25 +154,56 @@ Technical Notes
    ``__get_state__()`` class methods.
 
 *  An optimization is performed in order to increase the read / write
-   performance of variable shaped datasets. Due to the way that we initialize
-   an entire HDF5 file with all datasets pre-created (to the size of the max
-   subarray shape), we need to ensure that storing smaller sized arrays (in a
-   variable sized Hangar Arrayset) would be effective. Because we use chunked
-   storage, certain dimensions which are incomplete could have potentially
-   required writes to chunks which do are primarily empty (worst case "C" index
-   ordering), increasing read / write speeds significantly.
+   performance of fixed size datasets. Due to the way that we initialize an
+   entire HDF5 file with all datasets pre-created (to the size of the fixed
+   subarray shape), and the fact we absolutely know the size / shape /
+   access-pattern of the arrays, inefficient IO due to wasted chunk processing
+   is not a concern. It is far more efficient for us to completely blow off the
+   metadata chunk cache, and chunk each subarray as a single large item item.
 
-   To overcome this, we create HDF5 datasets which have ``COLLECTION_SIZE``
-   first dimension size, and only ONE second dimension of size
-   ``schema_shape.size()`` (ie. product of all dimensions). For example an
-   array schema with shape (10, 10, 3) would be stored in a HDF5 dataset of
-   shape (COLLECTION_SIZE, 300). Chunk sizes are chosen to align on the first
-   dimension with a second dimension of size which fits the total data into L2
-   CPU Cache (< 256 KB). On write, we use the ``np.ravel`` function to
-   construct a "view" (not copy) of the array as a 1D array, and then on read
-   we reshape the array to the recorded size (a copyless "view-only"
-   operation). This is part of the reason that we only accept C ordered arrays
-   as input to Hangar.
+   This method of processing tends to have a number of significant effects as
+   compared to chunked storage methods:
+
+      1. **Compression rations improve** (by a non-trivial factor). This is
+         simply due to the fact that a larger amount of raw data is being passed
+         into the compressor at a time. While the exact improvement seen is
+         highly dependent on both the data size and compressor used, there
+         should be no case where compressing the full tensor uses more disk
+         space then chunking the tensor, compressing each chunk individually,
+         and then saving each chunk to disk.
+
+      2. **Read performance improves** (so long as a suitable compressor /
+         option set was chosen). Instead of issuing (potentially) many read
+         requests - one for each chunk - to the storage hardware, signifiantly
+         few IOPS are used to retrieve the entire set of compressed raw data
+         from disk. Fewer IOPS means much less time waiting on the hard disk.
+         Moreso, only a single decompression step is needed to reconstruct
+         the numeric array, completly decoupling performance from HDF5's
+         ability to parallelize internal filter pipeline operations.
+
+         Additionally, since the entire requested chunk is retrieved in a
+         single decompression pipeline run, there is no need for the HDF5 core
+         to initialize an intermediate buffer which holds data chunks as each
+         decompression operation completes. Futher, by preinitializing an empty
+         ``numpy.ndarray`` container and using the low level HDF5
+         ``read_direct`` method, the decompressed data buffer is passes
+         directly into the returned ``ndarray.__array_interface__.data``
+         field with no intermediate copy or processing steps.
+
+      3. **Shuffle filters are favored.**. With much more data to work with in
+         a single compression operation, the use of "byte shuffle" filters in
+         the compressor spec has been seen to both markedly decrease read time
+         and increase compression ratios. Shuffling can significantly reduce
+         disk space required to store some piece of data on disk, further
+         reducing the time spent waiting on hard disk IO while incuring a
+         negligible cost to decompression speed.
+
+   Taking all of these effects into account, there can be up to an order of
+   magnitude increase in read performance as compared to the subarray chunking
+   strategy employed by the ``HDF5_00`` backend.
+
+*  Like all other backends at the time of writing, only 'C' ordered arrays
+   are accepted by this method.
 """
 import os
 import re
@@ -204,19 +243,16 @@ set_blosc_nthreads()
 
 
 # contents of a single hdf5 file
-COLLECTION_SIZE = 250
+COLLECTION_SIZE = 100
 COLLECTION_COUNT = 100
-
-# chunking options for compression schemes
-CHUNK_MAX_NBYTES = 255_000  # < 256 KB to fit in L2 CPU Cache
-CHUNK_MAX_RDCC_NBYTES = 100_000_000
+CHUNK_MAX_RDCC_NBYTES = 500_000_000
 CHUNK_RDCC_W0 = 0.75
 
 
 # -------------------------------- Parser Implementation ----------------------
 
 
-_FmtCode = '00'
+_FmtCode = '01'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
 _ShapeFmtRE: Pattern = re.compile('[,\(\)\[\]]')
 # split up a formated parsed string into unique fields
@@ -224,7 +260,7 @@ _patern = fr'\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}'
 _SplitDecoderRE: Pattern = re.compile(fr'[{_patern}]')
 
 
-HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec', [
+HDF5_01_DataHashSpec = NamedTuple('HDF5_01_DataHashSpec', [
     ('backend', str),
     ('uid', str),
     ('checksum', str),
@@ -233,7 +269,7 @@ HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec', [
     ('shape', Tuple[int])])
 
 
-def hdf5_00_encode(uid: str, checksum: str, dataset: str, dataset_idx: int,
+def hdf5_01_encode(uid: str, checksum: str, dataset: str, dataset_idx: int,
                    shape: Tuple[int]) -> bytes:
     """converts the hdf5 data has spec to an appropriate db value
 
@@ -264,7 +300,7 @@ def hdf5_00_encode(uid: str, checksum: str, dataset: str, dataset_idx: int,
     return out_str.encode()
 
 
-def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
+def hdf5_01_decode(db_val: bytes) -> HDF5_01_DataHashSpec:
     """converts an hdf5 data hash db val into an hdf5 data python spec.
 
     Parameters
@@ -274,7 +310,7 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
 
     Returns
     -------
-    HDF5_00_DataHashSpec
+    HDF5_01_DataHashSpec
         hdf5 data hash specification containing `backend`, `schema`,
         `instance`, `dataset`, `dataset_idx`, `shape`
     """
@@ -285,7 +321,7 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
     # of none means split according to any whitespace, and discard empty strings
     # from the result. So long as c.SEP_LST = ' ' this will work
     shape = tuple(int(x) for x in shape_vs.split())
-    raw_val = HDF5_00_DataHashSpec(backend=_FmtCode,
+    raw_val = HDF5_01_DataHashSpec(backend=_FmtCode,
                                    uid=uid,
                                    checksum=checksum,
                                    dataset=dataset,
@@ -297,10 +333,10 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
 # ------------------------- Accessor Object -----------------------------------
 
 
-HDF5_00_MapTypes = MutableMapping[str, Union[h5py.File, Callable[[], h5py.File]]]
+HDF5_01_MapTypes = MutableMapping[str, Union[h5py.File, Callable[[], h5py.File]]]
 
 
-class HDF5_00_FileHandles(object):
+class HDF5_01_FileHandles(object):
     """Manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
@@ -314,9 +350,9 @@ class HDF5_00_FileHandles(object):
         self.schema_dtype: np.dtype = schema_dtype
         self._dflt_backend_opts: Optional[dict] = None
 
-        self.rFp: HDF5_00_MapTypes = {}
-        self.wFp: HDF5_00_MapTypes = {}
-        self.Fp: HDF5_00_MapTypes = ChainMap(self.rFp, self.wFp)
+        self.rFp: HDF5_01_MapTypes = {}
+        self.wFp: HDF5_01_MapTypes = {}
+        self.Fp: HDF5_01_MapTypes = ChainMap(self.rFp, self.wFp)
 
         self.mode: Optional[str] = None
         self.hIdx: Optional[int] = None
@@ -383,7 +419,7 @@ class HDF5_00_FileHandles(object):
         ----------
         mode : str
             one of `r` or `a` for read only / read-write.
-        repote_operation : optional, kwarg only, bool
+        remote_operation : optional, kwarg only, bool
             if this hdf5 data is being created from a remote fetch operation, then
             we don't open any files for reading, and only open files for writing
             which exist in the remote data dir. (default is false, which means that
@@ -560,37 +596,6 @@ class HDF5_00_FileHandles(object):
             raise ValueError(f'unknown value for opt arg `complib`: {complib}')
         return args
 
-    @staticmethod
-    def _chunk_opts(sample_array: np.ndarray, max_chunk_nbytes: int) -> Tuple[list, int]:
-        """Determine the chunk shape so each array chunk fits into configured nbytes.
-
-        Currently the chunk nbytes are not user configurable. Instead the constant
-        `HDF5_MAX_CHUNK_NBYTES` is sued to determine when to split.
-
-        Parameters
-        ----------
-        sample_array : `np.array`
-            Sample array whose shape and dtype should be used as the basis of the
-            chunk shape determination
-        max_chunk_nbytes : int
-            how many bytes the array chunks should be limited to.
-
-        Returns
-        -------
-        list
-            list of ints of length == rank of `sample_array` specifying chunk sizes
-            to split `sample_array` into nbytes
-        int
-            nbytes which the chunk will fit in. Will be <= `HDF5_MAX_CHUNK_NBYTES`
-        """
-        chunk_size = int(np.floor(max_chunk_nbytes / sample_array.itemsize))
-        if chunk_size > sample_array.size:
-            chunk_size = sample_array.size
-        chunk_shape = [chunk_size]
-        chunk_nbytes = np.zeros(shape=chunk_shape, dtype=sample_array.dtype).nbytes
-
-        return (chunk_shape, chunk_nbytes)
-
     def _create_schema(self, *, remote_operation: bool = False):
         """stores the shape and dtype as the schema of a arrayset.
 
@@ -628,16 +633,11 @@ class HDF5_00_FileHandles(object):
 
         # -------------------- Chunk & RDCC Vals ------------------------------
 
-        sample_array = np.zeros(self.schema_shape, dtype=self.schema_dtype)
-        chunk_shape, chunk_nbytes = self._chunk_opts(
-            sample_array=sample_array, max_chunk_nbytes=CHUNK_MAX_NBYTES)
-
-        rdcc_nbytes_val = sample_array.nbytes * COLLECTION_SIZE
-        if rdcc_nbytes_val < CHUNK_MAX_NBYTES:
-            rdcc_nbytes_val = CHUNK_MAX_NBYTES
-        elif rdcc_nbytes_val > CHUNK_MAX_RDCC_NBYTES:
+        chunk_shape = self.schema_shape
+        chunk_nbytes = np.dtype(self.schema_dtype).itemsize * np.prod(chunk_shape)
+        rdcc_nbytes_val = chunk_nbytes * COLLECTION_SIZE
+        if rdcc_nbytes_val >= CHUNK_MAX_RDCC_NBYTES:
             rdcc_nbytes_val = CHUNK_MAX_RDCC_NBYTES
-
         rdcc_nslots_guess = np.math.ceil(rdcc_nbytes_val / chunk_nbytes) * 100
         rdcc_nslots_prime_val = find_next_prime(rdcc_nslots_guess)
 
@@ -669,17 +669,16 @@ class HDF5_00_FileHandles(object):
         for dset_num in range(COLLECTION_COUNT):
             self.wFp[uid].create_dataset(
                 f'/{dset_num}',
-                shape=(COLLECTION_SIZE, sample_array.size),
-                dtype=sample_array.dtype,
-                maxshape=(COLLECTION_SIZE, sample_array.size),
+                shape=(COLLECTION_SIZE, *chunk_shape),
+                dtype=self.schema_dtype,
                 chunks=(1, *chunk_shape),
                 **optKwargs)
 
         # ---------------------- Attribute Config Vals ------------------------
 
         self.wFp[self.w_uid]['/'].attrs['HANGAR_VERSION'] = __version__
-        self.wFp[self.w_uid]['/'].attrs['schema_shape'] = sample_array.shape
-        self.wFp[self.w_uid]['/'].attrs['schema_dtype_num'] = sample_array.dtype.num
+        self.wFp[self.w_uid]['/'].attrs['schema_shape'] = self.schema_shape
+        self.wFp[self.w_uid]['/'].attrs['schema_dtype_num'] = np.dtype(self.schema_dtype).num
         self.wFp[self.w_uid]['/'].attrs['next_location'] = (0, 0)
         self.wFp[self.w_uid]['/'].attrs['collection_max_size'] = COLLECTION_SIZE
         self.wFp[self.w_uid]['/'].attrs['collection_total'] = COLLECTION_COUNT
@@ -699,12 +698,12 @@ class HDF5_00_FileHandles(object):
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
 
-    def read_data(self, hashVal: HDF5_00_DataHashSpec) -> np.ndarray:
+    def read_data(self, hashVal: HDF5_01_DataHashSpec) -> np.ndarray:
         """Read data from an hdf5 file handle at the specified locations
 
         Parameters
         ----------
-        hashVal : HDF5_00_DataHashSpec
+        hashVal : HDF5_01_DataHashSpec
             record specification parsed from its serialized store val in lmdb.
 
         Returns
@@ -712,15 +711,13 @@ class HDF5_00_FileHandles(object):
         np.array
             requested data.
         """
-        arrSize = int(np.prod(hashVal.shape))
-        dsetIdx = int(hashVal.dataset_idx)
         dsetCol = f'/{hashVal.dataset}'
-
-        srcSlc = (self.slcExpr[dsetIdx], self.slcExpr[0:arrSize])
+        # if len(hashVal.shape) > 0:
+        srcSlc = (self.slcExpr[int(hashVal.dataset_idx)], ...)
         destSlc = None
 
         if self.schema_dtype is not None:
-            destArr = np.empty((arrSize,), self.schema_dtype)
+            destArr = np.empty(hashVal.shape, self.schema_dtype)
             try:
                 self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
             except TypeError:
@@ -749,14 +746,13 @@ class HDF5_00_FileHandles(object):
                 else:
                     raise
 
-        out = destArr.reshape(hashVal.shape)
-        if xxh64_hexdigest(out) != hashVal.checksum:
+        if xxh64_hexdigest(destArr) != hashVal.checksum:
             # try casting to check if dtype does not match for all zeros case
-            out = out.astype(np.typeDict[self.Fp[hashVal.uid]['/'].attrs['schema_dtype_num']])
-            if xxh64_hexdigest(out) != hashVal.checksum:
+            destArr = destArr.astype(np.typeDict[self.Fp[hashVal.uid]['/'].attrs['schema_dtype_num']])
+            if xxh64_hexdigest(destArr) != hashVal.checksum:
                 raise RuntimeError(
-                    f'DATA CORRUPTION Checksum {xxh64_hexdigest(out)} != recorded {hashVal}')
-        return out
+                    f'DATA CORRUPTION Checksum {xxh64_hexdigest(destArr)} != recorded {hashVal}')
+        return destArr
 
     def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
         """verifies correctness of array data and performs write operation.
@@ -792,12 +788,8 @@ class HDF5_00_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        srcSlc = None
-        destSlc = (self.slcExpr[self.hIdx], self.slcExpr[0:array.size])
-        flat_arr = np.ravel(array)
-        self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(flat_arr, srcSlc, destSlc)
-
-        hashVal = hdf5_00_encode(uid=self.w_uid,
+        self.wFp[self.w_uid][f'/{self.hNextPath}'][self.hIdx] = array
+        hashVal = hdf5_01_encode(uid=self.w_uid,
                                  checksum=checksum,
                                  dataset=self.hNextPath,
                                  dataset_idx=self.hIdx,
