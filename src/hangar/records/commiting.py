@@ -685,7 +685,7 @@ def list_all_commits(refenv):
         with refTxn.cursor() as cursor:
             cursor.first()
             for k in cursor.iternext(keys=True, values=False):
-                commitKey = k.decode()[:40]
+                commitKey, *_ = k.decode().split(c.SEP_KEY)
                 commits.add(commitKey)
             cursor.close()
     finally:
