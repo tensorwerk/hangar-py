@@ -63,6 +63,11 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         self.data_dir = pjoin(self.repo_path, c.DIR_DATA)
         self.CW = ContentWriter(self.env)
 
+    def close(self):
+        for backend_accessor in self._rFs.values():
+            backend_accessor.close()
+        self.env._close_environments()
+
     # -------------------- Client Config --------------------------------------
 
     def PING(self, request, context):

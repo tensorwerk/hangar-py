@@ -58,11 +58,11 @@ def repo_with_20_samples(request, written_repo, array5by7):
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
-def repo_with_1000_samples(request, written_repo, array5by7):
+def repo_with_300_samples(request, written_repo, array5by7):
     co = written_repo.checkout(write=True)
     aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
     with aset:
-        for i in range(1000):
+        for i in range(300):
             array5by7[:] = i
             aset[i] = array5by7
     co.commit('1000 samples')
@@ -189,12 +189,11 @@ def server_instance(managed_tmpdir, worker_id):
     server.start()
     yield address
 
-    hangserver.env._close_environments()
+    hangserver.close()
     server.stop(0.1)
-    time.sleep(0.2)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
-        # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.3)
+        time.sleep(0.1)
 
 
 @pytest.fixture()

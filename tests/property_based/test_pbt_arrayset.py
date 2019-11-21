@@ -9,7 +9,7 @@ from hypothesis.extra import numpy as npst
 
 
 st_valid_names = st.text(
-    min_size=1, max_size=16, alphabet=string.ascii_letters + string.digits + '_-.')
+    min_size=1, max_size=8, alphabet=string.ascii_letters + string.digits + '_-.')
 st_valid_ints = st.integers(min_value=0, max_value=9_999)
 st_valid_keys = st.one_of(st_valid_ints, st_valid_names)
 

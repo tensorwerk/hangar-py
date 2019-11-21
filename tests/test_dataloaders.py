@@ -154,8 +154,8 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend(self, repo_with_1000_samples):
-        repo = repo_with_1000_samples
+    def test_lots_of_data_with_multiple_backend(self, repo_with_300_samples):
+        repo = repo_with_300_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         torch_dset = make_torch_dataset([aset])
@@ -169,8 +169,8 @@ class TestTorchDataLoader(object):
                        strict=True,
                        reason="multiprocess workers does not run on windows")
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self, repo_with_1000_samples):
-        repo = repo_with_1000_samples
+    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self, repo_with_300_samples):
+        repo = repo_with_300_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         torch_dset = make_torch_dataset([aset])
@@ -388,8 +388,8 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend(self, repo_with_1000_samples):
-        repo = repo_with_1000_samples
+    def test_lots_of_data_with_multiple_backend(self, repo_with_300_samples):
+        repo = repo_with_300_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         tf_dset = make_tf_dataset([aset])
