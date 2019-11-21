@@ -14,8 +14,12 @@ New Features
   (`#131 <https://github.com/tensorwerk/hangar-py/pull/131>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Ability to change the backend storage format and options applied to an ``arrayset`` after initialization.
   (`#133 <https://github.com/tensorwerk/hangar-py/pull/133>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added blosc compression to HDF5 backend by default on PyPi installations.
+  (`#146 <https://github.com/tensorwerk/hangar-py/pull/146>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added Benchmarking Suite to Test for Performance Regressions in PRs.
   (`#155 <https://github.com/tensorwerk/hangar-py/pull/155>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added new backend optimized to increase speeds for fixed size arrayset access.
+  (`#160 <https://github.com/tensorwerk/hangar-py/pull/160>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 Improvements
@@ -25,8 +29,6 @@ Improvements
   (`#130 <https://github.com/tensorwerk/hangar-py/pull/130>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Multiprocess Torch DataLoaders allowed on Linux and MacOS.
   (`#144 <https://github.com/tensorwerk/hangar-py/pull/144>`__) `@rlizzo <https://github.com/rlizzo>`__
-* Added blosc compression to HDF5 backend by default on PyPi installations.
-  (`#146 <https://github.com/tensorwerk/hangar-py/pull/146>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added CLI options ``commit``, ``checkout``, ``arrayset create``, & ``arrayset remove``.
   (`#150 <https://github.com/tensorwerk/hangar-py/pull/150>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Plugin system revamp.
@@ -37,8 +39,9 @@ Improvements
   This could potentially result in dangling accessors which may or may not self-destruct (as expected)
   in certain edge-cases.
   (`#159 <https://github.com/tensorwerk/hangar-py/pull/159>`__) `@rlizzo <https://github.com/rlizzo>`__
-* Added new backend optimized to increase speeds for fixed size arrayset access.
-  (`#160 <https://github.com/tensorwerk/hangar-py/pull/160>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added type codes to hash digests so that calculation function can be updated in the future without
+  breaking repos written in previous Hangar versions.
+  (`#165 <https://github.com/tensorwerk/hangar-py/pull/165>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 Bug Fixes

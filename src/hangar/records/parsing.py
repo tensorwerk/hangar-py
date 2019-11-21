@@ -805,7 +805,8 @@ def _hash_func(recs: bytes) -> str:
     return digest
 
 
-def cmt_final_digest(parent_digest: str, spec_digest: str, refs_digest: str) -> str:
+def cmt_final_digest(parent_digest: str, spec_digest: str, refs_digest: str,
+                     *, tcode: str = 'a') -> str:
     """Determine digest of commit based on digests of its parent, specs, and refs.
 
     Parameters
@@ -816,16 +817,26 @@ def cmt_final_digest(parent_digest: str, spec_digest: str, refs_digest: str) -> 
         digest of the user spec value
     refs_digest : str
         digest of the data record values
+    tcode : str, optional, kwarg-only
+        hash calculation type code. Included to allow future updates to change
+        hashing algorithm, kwarg-only, by default '0'
 
     Returns
     -------
     str
-        digest of the commit
+        digest of the commit with typecode prepended by '{tcode}='.
     """
-    sorted_digests = sorted([parent_digest, spec_digest, refs_digest])
-    joined_bytes = c.CMT_DIGEST_JOIN_KEY.join(sorted_digests).encode()
-    digest = _hash_func(joined_bytes)
+    if tcode == 'a':
+        sorted_digests = sorted([parent_digest, spec_digest, refs_digest])
+        joined_bytes = c.CMT_DIGEST_JOIN_KEY.join(sorted_digests).encode()
+        rawDigest = _hash_func(joined_bytes)
+        digest = f'a={rawDigest}'
+    else:
+        raise ValueError(
+            f'Invalid commit reference type code {tcode}. If encountered during '
+            f'normal operation, please report to hangar development team.')
     return digest
+
 
 """
 Commit Parent (ancestor) Lookup methods
@@ -954,7 +965,7 @@ def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> Dig
     refDigest = _commit_ref_joined_kv_digest(joined)
 
     pck = c.CMT_REC_JOIN_KEY.join(joined)
-    raw = blosc.compress(pck, typesize=1, clevel=9, shuffle=blosc.SHUFFLE, cname='zlib')
+    raw = blosc.compress(pck, typesize=1, clevel=8, shuffle=blosc.SHUFFLE, cname='zlib')
     res = DigestAndBytes(digest=refDigest, raw=raw)
     return res
 

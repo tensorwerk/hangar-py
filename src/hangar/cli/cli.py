@@ -530,7 +530,7 @@ def server(overwrite, ip, port, timeout):
                 raise SystemExit
     except (KeyboardInterrupt, SystemExit):
         click.echo(f'Server Stopped at Time: {time.asctime()}')
-        hangserver.env._close_environments()
+        hangserver.close()
         server.stop(0)
 
 
