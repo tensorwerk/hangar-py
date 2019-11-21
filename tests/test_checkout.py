@@ -6,6 +6,16 @@ from conftest import fixed_shape_backend_params
 
 class TestCheckout(object):
 
+    def test_write_checkout_specifying_commit_not_allowed_if_commit_exists(self, written_repo):
+        cmt_digest = written_repo.log(return_contents=True)['head']
+        with pytest.raises(ValueError):
+            written_repo.checkout(write=True, commit=cmt_digest)
+
+    def test_write_checkout_specifying_commit_not_allowed_if_commit_does_not_exists(self, written_repo):
+        cmt_digest = 'notrealcommit'
+        with pytest.raises(ValueError):
+            written_repo.checkout(write=True, commit=cmt_digest)
+
     def test_two_write_checkouts(self, repo):
         w1_checkout = repo.checkout(write=True)
         with pytest.raises(PermissionError):
