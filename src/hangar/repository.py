@@ -208,6 +208,9 @@ class Repository(object):
         ------
         ValueError
             If the value of `write` argument is not boolean
+        ValueError
+            If ``commit`` argument is set to any value when ``write=True``.
+            Only ``branch`` argument is allowed.
 
         Returns
         -------
@@ -218,6 +221,10 @@ class Repository(object):
         self.__verify_repo_initialized()
         try:
             if write is True:
+                if commit != '':
+                    raise ValueError(
+                        f'Only `branch` argument can be set if `write=True`. '
+                        f'Setting `commit={commit}` not allowed.')
                 if branch == '':
                     branch = heads.get_staging_branch_head(self._env.branchenv)
                 co = WriterCheckout(

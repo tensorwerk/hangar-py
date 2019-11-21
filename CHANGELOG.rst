@@ -52,6 +52,8 @@ Bug Fixes
   a ``namedtuple`` instance with invalid field names. Now incompatible field names are automatically
   renamed with their positional index.
   (`#161 <https://github.com/tensorwerk/hangar-py/pull/161>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Explicitly raise error if ``commit`` argument is set while checking out a repository with ``write=True``.
+  (`#166 <https://github.com/tensorwerk/hangar-py/pull/166>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 Breaking changes
