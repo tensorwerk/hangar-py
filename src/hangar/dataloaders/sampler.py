@@ -1,6 +1,7 @@
 from typing import Sequence, Union, List, Iterable
 
 import numpy as np
+import numpy.random
 
 from ..arrayset import ArraysetDataReader
 
@@ -93,32 +94,36 @@ class Sampler(object):
     def __iter__(self):
         raise NotImplementedError
 
-    # NOTE [ Lack of Default `__len__` in Python Abstract Base Classes ]
-    #
-    # Many times we have an abstract class representing a collection/iterable of
-    # data, e.g., `torch.utils.data.Sampler`, with its subclasses optionally
-    # implementing a `__len__` method. In such cases, we must make sure to not
-    # provide a default implementation, because both straightforward default
-    # implementations have their issues:
-    #
-    #   + `return NotImplemented`:
-    #     Calling `len(subclass_instance)` raises:
-    #       TypeError: 'NotImplementedType' object cannot be interpreted as an integer
-    #
-    #   + `raise NotImplementedError()`:
-    #     This prevents triggering some fallback behavior. E.g., the built-in
-    #     `list(X)` tries to call `len(X)` first, and executes a different code
-    #     path if the method is not found or `NotImplemented` is returned, while
-    #     raising an `NotImplementedError` will propagate and and make the call
-    #     fail where it could have use `__iter__` to complete the call.
-    #
-    # Thus, the only two sensible things to do are
-    #
-    #   + **not** provide a default `__len__`.
-    #
-    #   + raise a `TypeError` instead, which is what Python uses when users call
-    #     a method that is not defined on an object.
-    #     (@ssnl verifies that this works on at least Python 3.7.)
+    def __len__(self):
+        """
+        # NOTE [ Lack of Default `__len__` in Python Abstract Base Classes ]
+        #
+        # Many times we have an abstract class representing a collection/iterable of
+        # data, e.g., `torch.utils.data.Sampler`, with its subclasses optionally
+        # implementing a `__len__` method. In such cases, we must make sure to not
+        # provide a default implementation, because both straightforward default
+        # implementations have their issues:
+        #
+        #   + `return NotImplemented`:
+        #     Calling `len(subclass_instance)` raises:
+        #       TypeError: 'NotImplementedType' object cannot be interpreted as an integer
+        #
+        #   + `raise NotImplementedError()`:
+        #     This prevents triggering some fallback behavior. E.g., the built-in
+        #     `list(X)` tries to call `len(X)` first, and executes a different code
+        #     path if the method is not found or `NotImplemented` is returned, while
+        #     raising an `NotImplementedError` will propagate and and make the call
+        #     fail where it could have use `__iter__` to complete the call.
+        #
+        # Thus, the only two sensible things to do are
+        #
+        #   + **not** provide a default `__len__`.
+        #
+        #   + raise a `TypeError` instead, which is what Python uses when users call
+        #     a method that is not defined on an object.
+        #     (@ssnl verifies that this works on at least Python 3.7.)
+        """
+        raise TypeError
 
 
 class SequentialSampler(Sampler):
