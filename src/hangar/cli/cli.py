@@ -16,18 +16,21 @@ Also see (1) from http://click.pocoo.org/7/setuptools/#setuptools-integration
 import os
 import time
 from pathlib import Path
+import warnings
+from pkg_resources import iter_entry_points
 
 import click
 import numpy as np
 
-from hangar import Repository, __version__
-
-from .utils import parse_custom_arguments, StrOrIntType
+from hangar import Repository
+from hangar import __version__
+from hangar.cli.utils import with_plugins, parse_custom_arguments, StrOrIntType
 
 
 pass_repo = click.make_pass_decorator(Repository, ensure=True)
 
 
+@with_plugins(iter_entry_points('hangar.cli.plugins'))
 @click.group(no_args_is_help=True, add_help_option=True, invoke_without_command=True)
 @click.version_option(version=__version__, help='display current Hangar Version')
 @click.pass_context

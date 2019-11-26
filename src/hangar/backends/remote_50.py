@@ -103,6 +103,33 @@ def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
     return raw_val
 
 
+# -------------------------- Filter Heuristics --------------------------------
+
+
+def remote_50_heuristic_filter_opts(prototype: np.ndarray) -> dict:
+    """generate default filter options from a prototype array
+
+    Parameters
+    ----------
+    prototype : :class:`numpy.ndarray`
+        sample array of expected shape and datatype
+
+    Returns
+    -------
+    dict
+        mapping containing default filter opts that the remote_50 storage manager
+        will accept.
+
+    TODO
+    ----
+    * Is this even necessary? This method doesn't really even store anything,
+      it has no use for filter opts, but I'm including it now just to symetric
+      across all the backends.
+    """
+    opts = {}
+    return opts
+
+
 # ------------------------- Accessor Object -----------------------------------
 
 
