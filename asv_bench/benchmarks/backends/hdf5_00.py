@@ -10,7 +10,8 @@ from hangar.utils import folder_size
 class _WriterSuite_HDF5_00:
 
     processes = 2
-    repeat = 2
+    repeat = (2, 2, 10.0)
+    # repeat == tuple (min_repeat, max_repeat, max_time)
     number = 1
     warmup_time = 0
 
@@ -77,17 +78,17 @@ class _WriterSuite_HDF5_00:
         return folder_size(self.repo._env.repo_path, recurse=True)
 
 
-class Write_50by50_100_samples(_WriterSuite_HDF5_00):
+class Write_50by50by10_1_samples(_WriterSuite_HDF5_00):
     method = 'write'
-    sample_shape = (50, 50)
-    num_samples = 100
+    sample_shape = (50, 50, 10)
+    num_samples = 1
 
     time_write = _WriterSuite_HDF5_00.write
 
 
-class Write_50by50by50by10_100_samples(_WriterSuite_HDF5_00):
+class Write_50by50by10_100_samples(_WriterSuite_HDF5_00):
     method = 'write'
-    sample_shape = (50, 50, 50, 10)
+    sample_shape = (50, 50, 10)
     num_samples = 100
 
     time_write = _WriterSuite_HDF5_00.write
@@ -95,21 +96,24 @@ class Write_50by50by50by10_100_samples(_WriterSuite_HDF5_00):
 
 # ----------------------------- Reads -----------------------------------------
 
-
-class Read_50by50_250_samples(_WriterSuite_HDF5_00):
+class Read_50by50by10_1_samples(_WriterSuite_HDF5_00):
     method = 'read'
-    sample_shape = (50, 50)
-    num_samples = 250
-
+    sample_shape = (50, 50, 10)
+    num_samples = 1
     time_read = _WriterSuite_HDF5_00.read
-    track_repo_size = _WriterSuite_HDF5_00.size
-    track_repo_size.unit = 'bytes'
 
 
-class Read_50by50by50by10_250_samples(_WriterSuite_HDF5_00):
+class Read_50by50by10_100_samples(_WriterSuite_HDF5_00):
     method = 'read'
-    sample_shape = (50, 50, 50, 10)
-    num_samples = 250
+    sample_shape = (50, 50, 10)
+    num_samples = 100
+    time_read = _WriterSuite_HDF5_00.read
+
+
+class Read_50by50by10_300_samples(_WriterSuite_HDF5_00):
+    method = 'read'
+    sample_shape = (50, 50, 10)
+    num_samples = 300
 
     time_read = _WriterSuite_HDF5_00.read
     track_repo_size = _WriterSuite_HDF5_00.size

@@ -9,8 +9,8 @@ class MakeCommit(object):
     params = [(5_000, 20_000), (5_000, 20_000)]
     param_names = ['num_samples', 'num_metadata']
     processes = 2
-    number = 1
     repeat = 2
+    number = 1
     warmup_time = 0
 
     def setup(self, num_samples, num_metadata):

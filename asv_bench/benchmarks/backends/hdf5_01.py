@@ -7,10 +7,11 @@ from shutil import rmtree
 from hangar.utils import folder_size
 
 
-class _WriterSuite:
+class _WriterSuite_HDF5_01:
 
     processes = 2
-    repeat = 2
+    repeat = (2, 2, 10.0)
+    # repeat == tuple (min_repeat, max_repeat, max_time)
     number = 1
     warmup_time = 0
 
@@ -36,6 +37,8 @@ class _WriterSuite:
 
         try:
             aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend_opts='01')
+        except TypeError:
+            aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='01')
         except ValueError:
             # marks as skipped benchmark for commits which do not have this backend.
             raise NotImplementedError
@@ -75,40 +78,43 @@ class _WriterSuite:
         return folder_size(self.repo._env.repo_path, recurse=True)
 
 
-class Write_50by50_100_samples(_WriterSuite):
+class Write_50by50by10_1_samples(_WriterSuite_HDF5_01):
     method = 'write'
-    sample_shape = (50, 50)
+    sample_shape = (50, 50, 10)
+    num_samples = 1
+
+    time_write = _WriterSuite_HDF5_01.write
+
+
+class Write_50by50by10_100_samples(_WriterSuite_HDF5_01):
+    method = 'write'
+    sample_shape = (50, 50, 10)
     num_samples = 100
 
-    time_write = _WriterSuite.write
-
-
-class Write_50by50by50by10_100_samples(_WriterSuite):
-    method = 'write'
-    sample_shape = (50, 50, 50, 10)
-    num_samples = 100
-
-    time_write = _WriterSuite.write
+    time_write = _WriterSuite_HDF5_01.write
 
 
 # ----------------------------- Reads -----------------------------------------
 
-
-class Read_50by50_250_samples(_WriterSuite):
+class Read_50by50by10_1_samples(_WriterSuite_HDF5_01):
     method = 'read'
-    sample_shape = (50, 50)
-    num_samples = 250
-
-    time_read = _WriterSuite.read
-    track_repo_size = _WriterSuite.size
-    track_repo_size.unit = 'bytes'
+    sample_shape = (50, 50, 10)
+    num_samples = 1
+    time_read = _WriterSuite_HDF5_01.read
 
 
-class Read_50by50by50by10_250_samples(_WriterSuite):
+class Read_50by50by10_100_samples(_WriterSuite_HDF5_01):
     method = 'read'
-    sample_shape = (50, 50, 50, 10)
-    num_samples = 250
+    sample_shape = (50, 50, 10)
+    num_samples = 100
+    time_read = _WriterSuite_HDF5_01.read
 
-    time_read = _WriterSuite.read
-    track_repo_size = _WriterSuite.size
+
+class Read_50by50by10_300_samples(_WriterSuite_HDF5_01):
+    method = 'read'
+    sample_shape = (50, 50, 10)
+    num_samples = 300
+
+    time_read = _WriterSuite_HDF5_01.read
+    track_repo_size = _WriterSuite_HDF5_01.size
     track_repo_size.unit = 'bytes'
