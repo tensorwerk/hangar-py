@@ -52,3 +52,14 @@ Or use pip on the local package if you want to install all dependencies
 automatically in a development environment::
 
     pip install -e .
+
+
+Source installation in Google colab
+-----------------------------------
+Google colab comes with an older version of ``h5py`` pre-installed which is not
+compatible with hangar. If you need to install hangar from the source in 
+google colab, make sure to uninstall the existing ``h5py`` ::
+
+    !pip uninstall h5py
+
+Then follow the Source Installation steps given above.
