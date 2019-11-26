@@ -12,14 +12,15 @@ from hangar.utils import folder_size
 
 class _WriterSuite:
 
-    params = [('hdf5_00', 'hdf5_01', 'numpy_10'), ((50, 50), (50, 50, 50))]
-    param_names = ['backend', 'sample_shape']
+    params = ['hdf5_00', 'hdf5_01', 'numpy_10']
+    param_names = ['backend']
     processes = 2
-    repeat = 2
+    repeat = (2, 2, 20.0)
+    # repeat == tuple (min_repeat, max_repeat, max_time)
     number = 1
     warmup_time = 0
 
-    def setup(self, backend, sample_shape):
+    def setup(self, backend):
 
         # self.method
         self.backend_code = {
@@ -29,18 +30,16 @@ class _WriterSuite:
         }
         # self.num_samples
 
+        self.sample_shape = (50, 50, 25)
+
         self.tmpdir = mkdtemp()
         self.repo = Repository(path=self.tmpdir, exists=False)
         self.repo.init('tester', 'foo@test.bar', remove_old=True)
         self.co = self.repo.checkout(write=True)
 
-        if (backend == 'numpy_10') and (len(sample_shape) > 2):
-            # comes after co because teardown needs self.co and self.repo to exist
-            raise NotImplementedError
-
         component_arrays = []
-        ndims = len(sample_shape)
-        for idx, shape in enumerate(sample_shape):
+        ndims = len(self.sample_shape)
+        for idx, shape in enumerate(self.sample_shape):
             layout = [1 for i in range(ndims)]
             layout[idx] = shape
             component = np.hamming(shape).reshape(*layout) * 100
@@ -67,19 +66,19 @@ class _WriterSuite:
         else:
             self.arr = arr
 
-    def teardown(self, backend, sample_shape):
+    def teardown(self, backend):
         self.co.close()
         self.repo._env._close_environments()
         rmtree(self.tmpdir)
 
-    def read(self, backend, sample_shape):
+    def read(self, backend):
         aset = self.co.arraysets['aset']
         ks = list(aset.keys())
         with aset as cm_aset:
             for i in ks:
                 arr = cm_aset[i]
 
-    def write(self, backend, sample_shape):
+    def write(self, backend):
         arr = self.arr
         aset = self.co.arraysets['aset']
         with aset as cm_aset:
@@ -87,23 +86,23 @@ class _WriterSuite:
                 arr += 1
                 cm_aset[i] = arr
 
-    def size(self, backend, sample_shape):
+    def size(self, backend):
         return folder_size(self.repo._env.repo_path, recurse=True)
 
 
 # ----------------------------- Writes ----------------------------------------
 
 
-class Write_500_samples(_WriterSuite):
+class Write_50by50by25_300_samples(_WriterSuite):
     method = 'write'
-    num_samples = 500
+    num_samples = 300
     time_write = _WriterSuite.write
 
 
 # ----------------------------- Reads -----------------------------------------
 
 
-class Read_2000_samples(_WriterSuite):
+class Read_50by50by25_3000_samples(_WriterSuite):
     method = 'read'
-    num_samples = 2000
+    num_samples = 3000
     time_read = _WriterSuite.read
