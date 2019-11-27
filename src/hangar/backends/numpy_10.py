@@ -88,15 +88,15 @@ import re
 from collections import ChainMap
 from functools import partial
 from os.path import join as pjoin
-from os.path import splitext as psplitext
 from typing import MutableMapping, NamedTuple, Tuple, Optional
 from xxhash import xxh64_hexdigest
+from pathlib import Path
 
 import numpy as np
 from numpy.lib.format import open_memmap
 
 from .. import constants as c
-from ..utils import random_string, symlink_rel
+from ..utils import random_string
 
 
 # ----------------------------- Configuration ---------------------------------
@@ -169,7 +169,7 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
     # if the data is of empty shape -> shape_vs = '' str.split() default value
     # of none means split according to any whitespace, and discard empty strings
     # from the result. So long as c.SEP_LST = ' ' this will work
-    shape = tuple(int(x) for x in shape_vs.split())
+    shape = tuple(map(int, shape_vs.split()))
     raw_val = NUMPY_10_DataHashSpec(backend=_FmtCode,
                                     uid=uid,
                                     checksum=checksum,
@@ -200,12 +200,11 @@ class NUMPY_10_FileHandles(object):
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
 
-        self.STAGEDIR = pjoin(self.repo_path, c.DIR_DATA_STAGE, _FmtCode)
-        self.REMOTEDIR = pjoin(self.repo_path, c.DIR_DATA_REMOTE, _FmtCode)
-        self.DATADIR = pjoin(self.repo_path, c.DIR_DATA, _FmtCode)
-        self.STOREDIR = pjoin(self.repo_path, c.DIR_DATA_STORE, _FmtCode)
-        if not os.path.isdir(self.DATADIR):
-            os.makedirs(self.DATADIR)
+        self.STAGEDIR: Path = Path(pjoin(self.repo_path, c.DIR_DATA_STAGE, _FmtCode))
+        self.REMOTEDIR: Path = Path(pjoin(self.repo_path, c.DIR_DATA_REMOTE, _FmtCode))
+        self.DATADIR: Path = Path(pjoin(self.repo_path, c.DIR_DATA, _FmtCode))
+        self.STOREDIR: Path = Path(pjoin(self.repo_path, c.DIR_DATA_STORE, _FmtCode))
+        self.DATADIR.mkdir(exist_ok=True)
 
     def __enter__(self):
         return self
@@ -240,21 +239,19 @@ class NUMPY_10_FileHandles(object):
         self.mode = mode
         if self.mode == 'a':
             process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
-            if not os.path.isdir(process_dir):
-                os.makedirs(process_dir)
-
-            process_uids = [psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.npy')]
-            for uid in process_uids:
-                file_pth = pjoin(process_dir, f'{uid}.npy')
-                self.rFp[uid] = partial(open_memmap, file_pth, 'r')
+            process_dir.mkdir(exist_ok=True)
+            for uidpth in process_dir.iterdir():
+                if uidpth.suffix == '.npy':
+                    file_pth = pjoin(self.DATADIR, uidpth.name)
+                    self.rFp[uidpth.stem] = partial(open_memmap, file_pth, 'r')
 
         if not remote_operation:
-            if not os.path.isdir(self.STOREDIR):
+            if not self.STOREDIR.is_dir():
                 return
-            store_uids = [psplitext(x)[0] for x in os.listdir(self.STOREDIR) if x.endswith('.npy')]
-            for uid in store_uids:
-                file_pth = pjoin(self.STOREDIR, f'{uid}.npy')
-                self.rFp[uid] = partial(open_memmap, file_pth, 'r')
+            for uidpth in self.STOREDIR.iterdir():
+                if uidpth.suffix == '.npy':
+                    file_pth = pjoin(self.DATADIR, uidpth.name)
+                    self.rFp[uidpth.stem] = partial(open_memmap, file_pth, 'r')
 
     def close(self, *args, **kwargs):
         """Close any open file handles.
@@ -291,10 +288,10 @@ class NUMPY_10_FileHandles(object):
         if not os.path.isdir(process_dir):
             return
 
-        process_uids = (psplitext(x)[0] for x in os.listdir(process_dir) if x.endswith('.npy'))
-        for process_uid in process_uids:
-            remove_link_pth = pjoin(process_dir, f'{process_uid}.npy')
-            remove_data_pth = pjoin(data_dir, f'{process_uid}.npy')
+        process_uidfns = (x for x in os.listdir(process_dir) if x.endswith('.npy'))
+        for process_uidfn in process_uidfns:
+            remove_link_pth = pjoin(process_dir, process_uidfn)
+            remove_data_pth = pjoin(data_dir, process_uidfn)
             os.remove(remove_link_pth)
             os.remove(remove_data_pth)
         os.rmdir(process_dir)
@@ -320,11 +317,8 @@ class NUMPY_10_FileHandles(object):
         self.w_uid = uid
         self.hIdx = 0
 
-        if remote_operation:
-            symlink_file_path = pjoin(self.REMOTEDIR, f'{uid}.npy')
-        else:
-            symlink_file_path = pjoin(self.STAGEDIR, f'{uid}.npy')
-        symlink_rel(file_path, symlink_file_path)
+        process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
+        Path(pjoin(process_dir, f'{uid}.npy')).touch()
 
     def read_data(self, hashVal: NUMPY_10_DataHashSpec) -> np.ndarray:
         """Read data from disk written in the numpy_00 fmtBackend
@@ -372,8 +366,8 @@ class NUMPY_10_FileHandles(object):
             res = self.Fp[hashVal.uid][srcSlc]
         except KeyError:
             process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
-            file_pth = pjoin(process_dir, f'{hashVal.uid}.npy')
-            if os.path.islink(file_pth):
+            if Path(pjoin(process_dir, f'{hashVal.uid}.npy')).is_file():
+                file_pth = pjoin(self.DATADIR, f'{hashVal.uid}.npy')
                 self.rFp[hashVal.uid] = open_memmap(file_pth, 'r')
                 res = self.Fp[hashVal.uid][srcSlc]
             else:
