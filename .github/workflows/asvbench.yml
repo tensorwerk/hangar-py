@@ -30,16 +30,14 @@ jobs:
         cd asv_bench/
         asv machine --yes
         asv continuous origin/master HEAD | tee asv.log
-        ASV_COMPARE="$(asv compare origin/master HEAD)"
+        asv compare origin/master HEAD
         if [[ $(cat asv.log | grep "failed") ]]; then
           echo "Benchmarks Run With Errors"
           exit 1
         elif [[ $(cat asv.log | grep "PERFORMANCE DECREASED") ]]; then
-          echo "$ASV_COMPARE"
           echo "Benchmarks Decreased Performance"
           exit 1
         else
-          echo "$ASV_COMPARE"
           echo "Benchmarks Run Without Errors"
         fi
       shell: bash

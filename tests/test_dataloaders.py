@@ -15,6 +15,14 @@ except ImportError:
     skipTorch = True
 
 
+@pytest.mark.skipif(skipTorch is False,
+                    reason='pytorch installed for test requiring it to not be')
+def test_no_torch_installed_raises_error_on_dataloader_import():
+    with pytest.raises(ImportError, match='Could not import torch'):
+        from hangar import make_torch_dataset
+        make_torch_dataset(None)
+
+
 @pytest.mark.skipif(skipTorch is True,
                     reason='pytorch is not installed in the test environment.')
 class TestTorchDataLoader(object):
@@ -256,6 +264,14 @@ try:
     skipTF = False
 except ImportError:
     skipTF = True
+
+
+@pytest.mark.skipif(skipTF is False,
+                    reason='tensorflow installed for test requiring it to not be')
+def test_no_tf_installed_raises_error_on_dataloader_import():
+    with pytest.raises(ImportError, match='Could not import tensorflow'):
+        from hangar import make_tf_dataset
+        make_tf_dataset(None)
 
 
 @pytest.mark.skipif(

@@ -2,8 +2,16 @@
 Change Log
 ==========
 
-.. `In-Progress`_
-.. ==============
+`In-Progress`_
+==============
+
+
+Bug Fixes
+---------
+
+* Backend data stores no longer use file symlinks, improving compatibility with some types file systems.
+  (`#171 <https://github.com/tensorwerk/hangar-py/pull/171>`__) `@rlizzo <https://github.com/rlizzo>`__
+
 
 
 `v0.4.0`_ (2019-11-21)

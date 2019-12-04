@@ -4,11 +4,10 @@ from typing import Sequence
 import random
 
 from .common import GroupedAsets
-from ..utils import LazyImporter
 
 try:
-    tf = LazyImporter('tensorflow')
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
+    import tensorflow as tf
+except (ImportError, ModuleNotFoundError):
     raise ImportError(
         'Could not import "tensorflow" library. Ensure library is '
         'installed correctly to use tensorflow dataloader functions')

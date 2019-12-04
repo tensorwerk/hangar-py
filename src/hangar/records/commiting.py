@@ -1,10 +1,10 @@
 import os
 import tempfile
 import time
-from os.path import join as pjoin
 import shutil
 from contextlib import contextmanager
 import configparser
+from pathlib import Path
 
 import lmdb
 
@@ -12,7 +12,6 @@ from . import heads, parsing
 from .. import constants as c
 from ..context import TxnRegister
 from .parsing import DigestAndBytes
-from ..utils import symlink_rel
 
 
 """
@@ -496,7 +495,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
                                   master_branch=merge_master,
                                   dev_branch=merge_dev)
 
-    user_info_pth = pjoin(repo_path, c.CONFIG_USER_NAME)
+    user_info_pth = Path(repo_path, c.CONFIG_USER_NAME)
     CFG = configparser.ConfigParser()
     CFG.read(user_info_pth)
 
@@ -626,40 +625,22 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
         staging area)
 
     """
-    store_dir = pjoin(repo_path, c.DIR_DATA_STORE)
+    store_dir = Path(repo_path, c.DIR_DATA_STORE)
 
-    if not remote_operation:
-        process_dir = pjoin(repo_path, c.DIR_DATA_STAGE)
-    else:
-        process_dir = pjoin(repo_path, c.DIR_DATA_REMOTE)
+    type_dir = c.DIR_DATA_REMOTE if remote_operation else c.DIR_DATA_STAGE
+    process_dir = Path(repo_path, type_dir)
 
-    dirs_to_make, symlinks_to_make = [], []
-    for root, dirs, files in os.walk(process_dir):
-        for d in dirs:
-            if root == process_dir:
-                # top level backend codes
-                dirs_to_make.append(os.path.relpath(pjoin(root, d), process_dir))
-            else:
-                # directory symlinks to create
-                store_dir_pth = pjoin(store_dir, os.path.relpath(pjoin(root, d), process_dir))
-                link_dir_pth = os.path.normpath(pjoin(root, os.readlink(pjoin(root, d))))
-                symlinks_to_make.append((link_dir_pth, store_dir_pth))
+    store_fps = []
+    for be_pth in process_dir.iterdir():
+        if be_pth.is_dir():
+            for fpth in be_pth.iterdir():
+                if fpth.is_file() and not fpth.stem.startswith('.'):
+                    store_fps.append(store_dir.joinpath(be_pth.name, fpth.name))
 
-        for f in files:
-            store_file_pth = pjoin(store_dir, os.path.relpath(pjoin(root, f), process_dir))
-            link_file_pth = os.path.normpath(pjoin(root, os.readlink(pjoin(root, f))))
-            symlinks_to_make.append((link_file_pth, store_file_pth))
-
-    for d in dirs_to_make:
-        dpth = pjoin(store_dir, d)
-        if not os.path.isdir(dpth):
-            os.makedirs(dpth)
-    for src, dest in symlinks_to_make:
-        if os.path.isdir(src):
-            is_dir_link = True
-        else:
-            is_dir_link = False
-        symlink_rel(src, dest, is_dir=is_dir_link)
+    for fpth in store_fps:
+        if not fpth.parent.is_dir():
+            fpth.parent.mkdir()
+        fpth.touch()
 
     # reset before releasing control.
     shutil.rmtree(process_dir)
