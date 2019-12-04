@@ -31,16 +31,16 @@ matrix:
         - PATH=/c/Python37:/c/Python37/Scripts:$PATH
         - TOXENV=py37-cover-ml,report
       before_install:
-        - choco install python --version 3.7.3
+        - choco install python --version 3.7.5
         - python -m pip install --upgrade pip
       after_success:
         - codecov
     - os: osx
-      osx_image: xcode9.4
+      osx_image: xcode11.2
       language: generic
       env:
-        - TR_PYTHON_VERSION=3.7.2
-        - PYENV_VERSION=3.7.2
+        - TR_PYTHON_VERSION=3.7.5
+        - PYENV_VERSION=3.7.5
         - TOXENV=py37-cover-ml,report
       addons:
         homebrew:
@@ -72,10 +72,10 @@ matrix:
         - PATH=/c/Python36:/c/Python36/Scripts:$PATH
         - TOXENV=py36-nocov
       before_install:
-        - choco install python --version 3.6.2
+        - choco install python --version 3.6.8
         - python -m pip install --upgrade pip
     - os: osx
-      osx_image: xcode9.4
+      osx_image: xcode11.2
       language: generic
       env:
         - TR_PYTHON_VERSION=3.6.8
