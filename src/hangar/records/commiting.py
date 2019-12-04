@@ -1,7 +1,6 @@
 import os
 import tempfile
 import time
-from os.path import join as pjoin
 import shutil
 from contextlib import contextmanager
 import configparser
@@ -496,7 +495,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
                                   master_branch=merge_master,
                                   dev_branch=merge_dev)
 
-    user_info_pth = pjoin(repo_path, c.CONFIG_USER_NAME)
+    user_info_pth = Path(repo_path, c.CONFIG_USER_NAME)
     CFG = configparser.ConfigParser()
     CFG.read(user_info_pth)
 
@@ -626,17 +625,17 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
         staging area)
 
     """
-    store_dir = pjoin(repo_path, c.DIR_DATA_STORE)
+    store_dir = Path(repo_path, c.DIR_DATA_STORE)
 
     type_dir = c.DIR_DATA_REMOTE if remote_operation else c.DIR_DATA_STAGE
-    process_dir = Path(pjoin(repo_path, type_dir))
+    process_dir = Path(repo_path, type_dir)
 
     store_fps = []
     for be_pth in process_dir.iterdir():
         if be_pth.is_dir():
             for fpth in be_pth.iterdir():
                 if fpth.is_file() and not fpth.stem.startswith('.'):
-                    store_fps.append(Path(pjoin(store_dir, be_pth.name, fpth.name)))
+                    store_fps.append(store_dir.joinpath(be_pth.name, fpth.name))
 
     for fpth in store_fps:
         if not fpth.parent.is_dir():

@@ -87,7 +87,6 @@ import os
 import re
 from collections import ChainMap
 from functools import partial
-from os.path import join as pjoin
 from typing import MutableMapping, NamedTuple, Tuple, Optional
 from xxhash import xxh64_hexdigest
 from pathlib import Path
@@ -200,10 +199,10 @@ class NUMPY_10_FileHandles(object):
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
 
-        self.STAGEDIR: Path = Path(pjoin(self.repo_path, c.DIR_DATA_STAGE, _FmtCode))
-        self.REMOTEDIR: Path = Path(pjoin(self.repo_path, c.DIR_DATA_REMOTE, _FmtCode))
-        self.DATADIR: Path = Path(pjoin(self.repo_path, c.DIR_DATA, _FmtCode))
-        self.STOREDIR: Path = Path(pjoin(self.repo_path, c.DIR_DATA_STORE, _FmtCode))
+        self.STAGEDIR: Path = Path(self.repo_path, c.DIR_DATA_STAGE, _FmtCode)
+        self.REMOTEDIR: Path = Path(self.repo_path, c.DIR_DATA_REMOTE, _FmtCode)
+        self.DATADIR: Path = Path(self.repo_path, c.DIR_DATA, _FmtCode)
+        self.STOREDIR: Path = Path(self.repo_path, c.DIR_DATA_STORE, _FmtCode)
         self.DATADIR.mkdir(exist_ok=True)
 
     def __enter__(self):
@@ -242,7 +241,7 @@ class NUMPY_10_FileHandles(object):
             process_dir.mkdir(exist_ok=True)
             for uidpth in process_dir.iterdir():
                 if uidpth.suffix == '.npy':
-                    file_pth = pjoin(self.DATADIR, uidpth.name)
+                    file_pth = self.DATADIR.joinpath(uidpth.name)
                     self.rFp[uidpth.stem] = partial(open_memmap, file_pth, 'r')
 
         if not remote_operation:
@@ -250,7 +249,7 @@ class NUMPY_10_FileHandles(object):
                 return
             for uidpth in self.STOREDIR.iterdir():
                 if uidpth.suffix == '.npy':
-                    file_pth = pjoin(self.DATADIR, uidpth.name)
+                    file_pth = self.DATADIR.joinpath(uidpth.name)
                     self.rFp[uidpth.stem] = partial(open_memmap, file_pth, 'r')
 
     def close(self, *args, **kwargs):
@@ -282,18 +281,16 @@ class NUMPY_10_FileHandles(object):
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
         """
-        data_dir = pjoin(repo_path, c.DIR_DATA, _FmtCode)
+        data_dir = Path(repo_path, c.DIR_DATA, _FmtCode)
         PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
-        process_dir = pjoin(repo_path, PDIR, _FmtCode)
-        if not os.path.isdir(process_dir):
+        process_dir = Path(repo_path, PDIR, _FmtCode)
+        if not process_dir.is_dir():
             return
 
-        process_uidfns = (x for x in os.listdir(process_dir) if x.endswith('.npy'))
-        for process_uidfn in process_uidfns:
-            remove_link_pth = pjoin(process_dir, process_uidfn)
-            remove_data_pth = pjoin(data_dir, process_uidfn)
-            os.remove(remove_link_pth)
-            os.remove(remove_data_pth)
+        for uidpth in process_dir.iterdir():
+            if uidpth.suffix == '.npy':
+                os.remove(process_dir.joinpath(uidpth.name))
+                os.remove(data_dir.joinpath(uidpth.name))
         os.rmdir(process_dir)
 
     def _create_schema(self, *, remote_operation: bool = False):
@@ -308,7 +305,7 @@ class NUMPY_10_FileHandles(object):
             symlink in the stage data directory.)
         """
         uid = random_string()
-        file_path = pjoin(self.DATADIR, f'{uid}.npy')
+        file_path = self.DATADIR.joinpath(f'{uid}.npy')
         m = open_memmap(file_path,
                         mode='w+',
                         dtype=self.schema_dtype,
@@ -318,7 +315,7 @@ class NUMPY_10_FileHandles(object):
         self.hIdx = 0
 
         process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
-        Path(pjoin(process_dir, f'{uid}.npy')).touch()
+        Path(process_dir, f'{uid}.npy').touch()
 
     def read_data(self, hashVal: NUMPY_10_DataHashSpec) -> np.ndarray:
         """Read data from disk written in the numpy_00 fmtBackend
@@ -366,8 +363,8 @@ class NUMPY_10_FileHandles(object):
             res = self.Fp[hashVal.uid][srcSlc]
         except KeyError:
             process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
-            if Path(pjoin(process_dir, f'{hashVal.uid}.npy')).is_file():
-                file_pth = pjoin(self.DATADIR, f'{hashVal.uid}.npy')
+            if Path(process_dir, f'{hashVal.uid}.npy').is_file():
+                file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.npy')
                 self.rFp[hashVal.uid] = open_memmap(file_pth, 'r')
                 res = self.Fp[hashVal.uid][srcSlc]
             else:

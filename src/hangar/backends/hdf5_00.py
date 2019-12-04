@@ -171,7 +171,6 @@ import re
 import time
 import logging
 from collections import ChainMap
-from os.path import join as pjoin
 from pathlib import Path
 from functools import partial
 from typing import (
@@ -328,10 +327,10 @@ class HDF5_00_FileHandles(object):
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
 
-        self.STAGEDIR: Path = Path(pjoin(self.path, c.DIR_DATA_STAGE, _FmtCode))
-        self.REMOTEDIR: Path = Path(pjoin(self.path, c.DIR_DATA_REMOTE, _FmtCode))
-        self.STOREDIR: Path = Path(pjoin(self.path, c.DIR_DATA_STORE, _FmtCode))
-        self.DATADIR: Path = Path(pjoin(self.path, c.DIR_DATA, _FmtCode))
+        self.STAGEDIR: Path = Path(self.path, c.DIR_DATA_STAGE, _FmtCode)
+        self.REMOTEDIR: Path = Path(self.path, c.DIR_DATA_REMOTE, _FmtCode)
+        self.STOREDIR: Path = Path(self.path, c.DIR_DATA_STORE, _FmtCode)
+        self.DATADIR: Path = Path(self.path, c.DIR_DATA, _FmtCode)
         self.DATADIR.mkdir(exist_ok=True)
 
     def __enter__(self):
@@ -395,7 +394,7 @@ class HDF5_00_FileHandles(object):
             process_dir.mkdir(exist_ok=True)
             for uidpth in process_dir.iterdir():
                 if uidpth.suffix == '.hdf5':
-                    file_pth = pjoin(self.DATADIR, uidpth.name)
+                    file_pth = self.DATADIR.joinpath(uidpth.name)
                     self.rFp[uidpth.stem] = partial(
                         h5py.File, file_pth, 'r', swmr=True, libver='latest')
 
@@ -404,7 +403,7 @@ class HDF5_00_FileHandles(object):
                 return
             for uidpth in self.STOREDIR.iterdir():
                 if uidpth.suffix == '.hdf5':
-                    file_pth = pjoin(self.DATADIR, uidpth.name)
+                    file_pth = self.DATADIR.joinpath(uidpth.name)
                     self.rFp[uidpth.stem] = partial(
                         h5py.File, file_pth, 'r', swmr=True, libver='latest')
 
@@ -457,18 +456,16 @@ class HDF5_00_FileHandles(object):
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
         """
-        data_dir = pjoin(repo_path, c.DIR_DATA, _FmtCode)
+        data_dir = Path(repo_path, c.DIR_DATA, _FmtCode)
         PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
-        process_dir = pjoin(repo_path, PDIR, _FmtCode)
-        if not os.path.isdir(process_dir):
+        process_dir = Path(repo_path, PDIR, _FmtCode)
+        if not process_dir.is_dir():
             return
 
-        process_uidfns = (x for x in os.listdir(process_dir) if x.endswith('.hdf5'))
-        for process_uidfn in process_uidfns:
-            remove_link_pth = pjoin(process_dir, process_uidfn)
-            remove_data_pth = pjoin(data_dir, process_uidfn)
-            os.remove(remove_link_pth)
-            os.remove(remove_data_pth)
+        for uidpth in process_dir.iterdir():
+            if uidpth.suffix == '.hdf5':
+                os.remove(process_dir.joinpath(uidpth.name))
+                os.remove(data_dir.joinpath(uidpth.name))
         os.rmdir(process_dir)
 
     @staticmethod
@@ -643,7 +640,7 @@ class HDF5_00_FileHandles(object):
         # ---------------------------- File Creation --------------------------
 
         uid = random_string()
-        file_path = pjoin(self.DATADIR, f'{uid}.hdf5')
+        file_path = self.DATADIR.joinpath(f'{uid}.hdf5')
         self.wFp[uid] = h5py.File(file_path,
                                   mode='w',
                                   libver='latest',
@@ -657,7 +654,7 @@ class HDF5_00_FileHandles(object):
         self.hMaxSize = COLLECTION_SIZE
 
         process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
-        Path(pjoin(process_dir, f'{uid}.hdf5')).touch()
+        Path(process_dir, f'{uid}.hdf5').touch()
 
         # ----------------------- Dataset Creation ----------------------------
 
@@ -724,8 +721,8 @@ class HDF5_00_FileHandles(object):
                 self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
             except KeyError:
                 process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
-                if Path(pjoin(process_dir, f'{hashVal.uid}.hdf5')).is_file():
-                    file_pth = pjoin(self.DATADIR, f'{hashVal.uid}.hdf5')
+                if Path(process_dir, f'{hashVal.uid}.hdf5').is_file():
+                    file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.hdf5')
                     self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
                     self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
                 else:
@@ -738,8 +735,8 @@ class HDF5_00_FileHandles(object):
                 destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
             except KeyError:
                 process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
-                if Path(pjoin(process_dir, f'{hashVal.uid}.hdf5')).is_file():
-                    file_pth = pjoin(self.DATADIR, f'{hashVal.uid}.hdf5')
+                if Path(process_dir, f'{hashVal.uid}.hdf5').is_file():
+                    file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.hdf5')
                     self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
                     destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
                 else:
