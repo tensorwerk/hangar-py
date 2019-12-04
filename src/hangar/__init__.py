@@ -5,16 +5,16 @@ from functools import partial
 from .repository import Repository
 
 
-def raise_ImportError(message, *args, **kwargs):  # pragma: no cover
+def raise_ImportError(message, *args, **kwargs):
     raise ImportError(message)
 
 
-try:                 # pragma: no cover
+try:
     from .dataloaders.tfloader import make_tf_dataset
-except ImportError:  # pragma: no cover
+except ImportError:
     make_tf_dataset = partial(raise_ImportError, "Could not import tensorflow. Install dependencies")
 
-try:                 # pragma: no cover
+try:
     from .dataloaders.torchloader import make_torch_dataset
-except ImportError:  # pragma: no cover
+except ImportError:
     make_torch_dataset = partial(raise_ImportError, "Could not import torch. Install dependencies")

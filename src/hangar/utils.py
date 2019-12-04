@@ -8,9 +8,6 @@ from io import StringIO
 from functools import partial
 from itertools import tee, filterfalse
 from typing import Union, Any
-import importlib
-import types
-from pathlib import Path
 
 import blosc
 import wrapt
@@ -19,27 +16,7 @@ from . import __version__
 from .constants import DIR_HANGAR
 
 
-class LazyImporter(types.ModuleType):
-    """Lazily import a module. `_load` adds the attributes of
-    importing module to `LazyLoader` instance. Hence `__getattr__` of `LazyLoader` will
-    be invoked only once. We might need to extend the `LazyLoader` class to have
-    functions like `__dir__` later.
-    """
-
-    def __init__(self, name: str):
-        super(LazyImporter, self).__init__(name)
-
-    def _import_module(self):
-        module = importlib.import_module(self.__name__)
-        self.__dict__.update(module.__dict__)
-        return module
-
-    def __getattr__(self, item):
-        module = self._import_module()  # this happens only once
-        return getattr(module, item)
-
-
-def set_blosc_nthreads() -> int:
+def set_blosc_nthreads() -> int:  # pragma: no cover
     """set the blosc library to two less than the core count on the system.
 
     If less than 2 cores are ncores-2, we set the value to two.
@@ -62,15 +39,15 @@ def set_blosc_nthreads() -> int:
     return nUsed
 
 
-def random_string(n: int = 6) -> str:
-    """Generate a case random string of ascii letters and digits of some length.
+def random_string(n: int = 8) -> str:
+    """Generate a random string of lowercase ascii letters and digits.
 
     Parameters
     ----------
     n: int, optional
         The number of characters which the output string will have. Default = 6
     """
-    letters = ''.join([string.ascii_letters, string.digits])
+    letters = ''.join([string.ascii_lowercase, string.digits])
     return ''.join(random.choice(letters) for i in range(n))
 
 

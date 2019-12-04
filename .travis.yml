@@ -1,6 +1,7 @@
 matrix:
   include:
-    - os: linux
+    - name: "Build Docs"
+      os: linux
       dist: xenial
       language: python
       python: '3.7'
@@ -12,8 +13,10 @@ matrix:
       addons:
         apt_packages:
           - pandoc
-    # cover
-    - os: linux
+
+    # Cover 3.7 ML
+    - name: "Linux Python 3.7 ML COVER: Run tests"
+      os: linux
       dist: xenial
       language: python
       python: '3.7'
@@ -24,7 +27,8 @@ matrix:
         - TOXENV=py37-cover-ml,report
       after_success:
         - codecov
-    - name: "Win Python 3.7: Run tests"
+
+    - name: "Win Python 3.7 ML COVER: Run tests"
       os: windows
       language: shell
       env:
@@ -35,7 +39,9 @@ matrix:
         - python -m pip install --upgrade pip
       after_success:
         - codecov
-    - os: osx
+
+    - name: "OSX Python 3.7 ML COVER: Run tests"
+      os: osx
       osx_image: xcode11.2
       language: generic
       env:
@@ -55,8 +61,10 @@ matrix:
         - directories:
           - $HOME/.cache/pip
           - $HOME/.cache/pyenv
-    # nocov
-    - os: linux
+
+    # Cover 3.6 No ML
+    - name: "Linux Python 3.6 COVER: Run tests"
+      os: linux
       dist: xenial
       language: python
       python: '3.6'
@@ -64,34 +72,44 @@ matrix:
       env:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
-        - TOXENV=py36-nocov
-    - name: "Win Python 3.6: Run tests"
+        - TOXENV=py36-cover,report
+      after_success:
+        - codecov
+
+    - name: "Win Python 3.6 COVER: Run tests"
       os: windows
       language: shell
       env:
         - PATH=/c/Python36:/c/Python36/Scripts:$PATH
-        - TOXENV=py36-nocov
+        - TOXENV=py36-cover,report
       before_install:
         - choco install python --version 3.6.8
         - python -m pip install --upgrade pip
-    - os: osx
+      after_success:
+        - codecov
+
+    - name: "OSX Python 3.6 COVER: Run tests"
+      os: osx
       osx_image: xcode11.2
       language: generic
       env:
         - TR_PYTHON_VERSION=3.6.8
         - PYENV_VERSION=3.6.8
-        - TOXENV=py36-nocov
+        - TOXENV=py36-cover,report
       addons:
         homebrew:
           packages:
             - openssl
             - readline
             - xl
+      after_success:
+        - codecov
       cache:
         - pip
         - directories:
           - $HOME/.cache/pip
           - $HOME/.cache/pyenv
+
 before_install:
   - |
     if [ "$TRAVIS_OS_NAME" == "osx" ]; then
