@@ -304,6 +304,7 @@ class Repository(object):
     def init(self,
              user_name: str,
              user_email: str,
+             description: str = None,
              *,
              remove_old: bool = False) -> os.PathLike:
         """Initialize a Hangar repository at the specified directory path.
@@ -327,7 +328,7 @@ class Repository(object):
             initialized on disk.
         """
         pth = self._env._init_repo(
-            user_name=user_name, user_email=user_email, remove_old=remove_old)
+            user_name=user_name, user_email=user_email, remove_old=remove_old, description=description)
         return pth
 
     def log(self,

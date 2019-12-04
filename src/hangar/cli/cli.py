@@ -42,16 +42,17 @@ def main(ctx):  # pragma: no cover
 @main.command()
 @click.option('--name', prompt='User Name', help='first and last name of user')
 @click.option('--email', prompt='User Email', help='email address of the user')
+@click.option('--description', prompt='Description', help='description', default=False)
 @click.option('--overwrite', is_flag=True, default=False,
               help='overwrite a repository if it exists at the current path')
 @pass_repo
-def init(repo: Repository, name, email, overwrite):
+def init(repo: Repository, name, email, overwrite, description=None):
     """Initialize an empty repository at the current path
     """
     if repo.initialized and (not overwrite):
         click.echo(f'Repo already exists at: {repo.path}')
     else:
-        repo.init(user_name=name, user_email=email, remove_old=overwrite)
+        repo.init(user_name=name, user_email=email, remove_old=overwrite, description=description)
 
 
 # -------------------------- Checkout Writer ----------------------------------
