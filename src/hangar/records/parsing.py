@@ -168,7 +168,7 @@ def repo_head_db_val_from_raw_val(branch_name: str) -> bytes:
 
 # --------------------- db -> raw -----------------------------------
 
-def repo_head_raw_val_from_db_val(db_val: str) -> bytes:
+def repo_head_raw_val_from_db_val(db_val: bytes) -> str:
     raw_val = db_val.decode().replace(c.K_BRANCH, '', 1)
     return raw_val
 

@@ -6,6 +6,11 @@ from hashlib import blake2b
 import numpy as np
 
 
+def hash_type_code_from_digest(digest: str) -> str:
+    type_code, digest = digest.split('=')
+    return type_code
+
+
 # ---------------------------- Arrayset Data ----------------------------------
 
 

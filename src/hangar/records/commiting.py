@@ -274,7 +274,7 @@ def get_commit_ref(refenv, commit_hash):
 
     if calculatedDigest != commit_hash:
         raise IOError(
-            f'DATA CORRUPTION ERROR: on retrieval of stored references for '
+            f'Data Corruption Detected. On retrieval of stored references for '
             f'commit_hash: {commit_hash} validation of commit record/contents '
             f'integrity failed. Calculated digest: {calculatedDigest} != '
             f'expected: {commit_hash}. Please alert the Hangar development team to '
@@ -308,7 +308,7 @@ def unpack_commit_ref(refenv, cmtrefenv, commit_hash):
         try:
             cursor.close()
         except Exception as e:
-            msg = 'could not close cursor cmttxn: {cmttxn} commit_hash: {commit_hash}'
+            msg = f'could not close cursor cmttxn {cmttxn} commit_hash {commit_hash}'
             e.args = (*e.args, msg)
             raise e
     finally:

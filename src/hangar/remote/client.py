@@ -561,7 +561,7 @@ class HangarClient(object):
         return s_mis_hsh_sch
 
     def fetch_find_missing_labels(self, commit):
-        c_hash_keys = hashs.HashQuery(self.env.labelenv).list_all_hash_keys_db()
+        c_hash_keys = hashs.HashQuery(self.env.labelenv).gen_all_hash_keys_db()
         c_hashset = set(map(parsing.hash_meta_raw_key_from_db_key, c_hash_keys))
         c_hashs_raw = [chunks.serialize_ident(digest, '') for digest in c_hashset]
         raw_pack = chunks.serialize_record_pack(c_hashs_raw)

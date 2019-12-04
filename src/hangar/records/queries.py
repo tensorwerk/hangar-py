@@ -160,23 +160,23 @@ class RecordQuery(object):
         nrecs = len(self._traverse_arrayset_schema_records())
         return nrecs
 
-    def data_hashes(self) -> Set[RawDataRecordVal]:
+    def data_hashes(self) -> List[str]:
         """Find all data hashes contained within all arraysets
 
-        Note: this method does not remove any duplicates which may be present,
-        if de-dup is required, process it downstream
+        Note: this method does not deduplicate values
 
         Returns
         -------
-        list
+        List[str]
             all hash values for all data pieces in the commit
         """
         arraysets = self.arrayset_names()
-        all_hashes = set()
+        all_hashes = []
         for arrayset in arraysets:
             recs = self._traverse_arrayset_data_records(arrayset)
-            data_val_rec = set(map(parsing.data_record_raw_val_from_db_val, recs.values()))
-            all_hashes.update(data_val_rec)
+            data_rec = map(parsing.data_record_raw_val_from_db_val, recs.values())
+            data_val_rec = map(lambda x: x.data_hash, data_rec)
+            all_hashes.extend(data_val_rec)
         return all_hashes
 
 # ------------------------ process arrayset data records ----------------------
