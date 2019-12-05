@@ -126,12 +126,27 @@ def test_cannot_operate_without_repo_init(managed_tmpdir):
         repo.version
     with pytest.raises(RuntimeError):
         repo.writer_lock_held
+    with pytest.raises(RuntimeError):
+        repo.size_human
+    with pytest.raises(RuntimeError):
+        repo.size_nbytes
 
     assert repo._env.repo_is_initialized is False
 
 
+def test_check_repo_size(repo_with_20_samples):
+    from hangar.utils import parse_bytes, folder_size
+
+    expected_nbytes = folder_size(repo_with_20_samples._repo_path, recurse=True)
+    nbytes = repo_with_20_samples.size_nbytes
+    assert expected_nbytes == nbytes
+
+    format_nbytes = repo_with_20_samples.size_human
+    # account for rounding when converting int to str.
+    assert nbytes * 0.95 <= parse_bytes(format_nbytes) <= nbytes * 1.05
+
+
 def test_force_release_writer_lock(managed_tmpdir, monkeypatch):
-    from hangar.records import heads
 
     repo = Repository(path=managed_tmpdir, exists=False)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
