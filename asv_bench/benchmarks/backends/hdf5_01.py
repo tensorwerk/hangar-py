@@ -10,7 +10,7 @@ from hangar.utils import folder_size
 class _WriterSuite_HDF5_01:
 
     processes = 2
-    repeat = (2, 2, 10.0)
+    repeat = (2, 2, 20.0)
     # repeat == tuple (min_repeat, max_repeat, max_time)
     number = 1
     warmup_time = 0
@@ -38,7 +38,10 @@ class _WriterSuite_HDF5_01:
         try:
             aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend_opts='01')
         except TypeError:
-            aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='01')
+            try:
+                aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='01')
+            except ValueError:
+                raise NotImplementedError
         except ValueError:
             # marks as skipped benchmark for commits which do not have this backend.
             raise NotImplementedError
