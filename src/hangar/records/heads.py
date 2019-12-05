@@ -100,10 +100,10 @@ def acquire_writer_lock(branchenv, writer_uuid):
             branchtxn.put(writerLockKey, requestWriterLockVal)
             success = True
         else:
-            err = f'Cannot acquire the writer lock. Only one instance of a writer checkout '\
-                'can be active at a time. If the last checkout of this repository did '\
-                'not properly close, or a crash occurred, the lock must be manually freed '\
-                'before another writer can be instantiated.'
+            err = 'Cannot acquire the writer lock. Only one instance of a writer checkout '\
+                  'can be active at a time. If the last checkout of this repository did '\
+                  'not properly close, or a crash occurred, the lock must be manually freed '\
+                  'before another writer can be instantiated.'
             raise PermissionError(err)
     finally:
         TxnRegister().commit_writer_txn(branchenv)

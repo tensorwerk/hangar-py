@@ -8,6 +8,7 @@ from io import StringIO
 from functools import partial
 from itertools import tee, filterfalse
 from typing import Union, Any
+import types
 
 import blosc
 import wrapt
@@ -77,6 +78,36 @@ def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
     setattr(wr, '__exit__', partial(obj.__class__.__exit__, wr))
     obj_proxy = wrapt.ObjectProxy(wr)
     return obj_proxy
+
+
+def tb_params_last_called(tb: types.TracebackType):
+    """Get parameters of the last called function before an exception was raised.
+
+    Parameters
+    ----------
+    tb : types.TracebackType
+        traceback object returned as the third item from sys.exc_info() corresponding
+        to an exception raised in the last stack frame.
+
+    Returns
+    -------
+    object
+        parameters passed to the last function called before the exception was thrown.
+    """
+    while tb.tb_next:
+        tb = tb.tb_next
+    frame = tb.tb_frame
+    code = frame.f_code
+    argcount = code.co_argcount
+    if code.co_flags & 4:  # *args
+        argcount += 1
+    if code.co_flags & 8:  # **kwargs
+        argcount += 1
+    names = code.co_varnames[:argcount]
+    params = {}
+    for name in names:
+        params[name] = frame.f_locals.get(name, '<deleted>')
+    return params
 
 
 _SuitableCharRE = re.compile(r'[\w\.\-\_]+\Z', flags=re.ASCII)

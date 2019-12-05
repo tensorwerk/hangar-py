@@ -755,12 +755,16 @@ class Repository(object):
             printed to stdout.
         """
         self.__verify_repo_initialized()
-        integrity.run_verification(
-            branchenv=self._env.branchenv,
-            hashenv=self._env.hashenv,
-            labelenv=self._env.labelenv,
-            refenv=self._env.refenv,
-            repo_path=self._env.repo_path)
+        heads.acquire_writer_lock(self._env.branchenv, 'VERIFY_PROCESS')
+        try:
+            integrity.run_verification(
+                branchenv=self._env.branchenv,
+                hashenv=self._env.hashenv,
+                labelenv=self._env.labelenv,
+                refenv=self._env.refenv,
+                repo_path=self._env.repo_path)
+        finally:
+            heads.release_writer_lock(self._env.branchenv, 'VERIFY_PROCESS')
         return True
 
     def force_release_writer_lock(self) -> bool:
