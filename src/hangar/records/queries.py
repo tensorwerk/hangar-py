@@ -201,28 +201,6 @@ class RecordQuery(object):
             recs = zip(data_rec_keys, data_rec_vals)
         return recs
 
-    def arrayset_data_names(self, arrayset_name):
-        """Find all data names contained within a arrayset.
-
-        If you need both names, and hash values, call the `arrayset_data_records`
-        function. The underlying cost of searching the db is identical, this just provides
-        a pretty filter on top.
-
-        Parameters
-        ----------
-        arrayset_name : str
-            name of the arrayset to retrieve names for
-
-        Returns
-        -------
-        list of str
-            list of data names contained in the arrayset
-        """
-        recs = self._traverse_arrayset_data_records(arrayset_name)
-        data_key_rec = map(parsing.data_record_raw_key_from_db_key, recs.keys())
-        data_names = list(map(lambda x: x.data_name, data_key_rec))
-        return data_names
-
     def arrayset_data_hashes(self, arrayset_name: str) -> Set[RawDataRecordVal]:
         """Find all data hashes contained within a particular arrayset
 
@@ -336,26 +314,6 @@ class RecordQuery(object):
         return odict
 
 # --------------------------- process metadata ------------------------------------------
-
-    def metadata_names(self) -> List[str]:
-        """Find all metadata names contained within checkout
-
-        If you need both names, and hash values, call the `metadata_records` function. The
-        underlying cost of searching the db is identical, this just provides a pretty
-        filter on top.
-
-        Returns
-        -------
-        List[str]
-            list of metadata names contained in the checkout
-        """
-        recs = self._traverse_metadata_records()
-        if len(recs) > 0:
-            meta_key_rec = map(parsing.metadata_record_raw_key_from_db_key, recs.keys())
-            meta_names = list(map(lambda x: x.meta_name, meta_key_rec))
-        else:
-            meta_names = []
-        return meta_names
 
     def metadata_records(self) -> Iterable[RawMetaTuple]:
         """returns all the metadata record specs for all metadata keys

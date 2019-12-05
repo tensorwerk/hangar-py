@@ -18,8 +18,8 @@ def diverse_repo(repo):
 
     sample_trimg = np.arange(50).reshape(5, 10).astype(np.uint8)
     sample_trlabel = np.array([0], dtype=np.int64)
-    sample_vimg = np.zeros(50).reshape(5, 10).astype(np.uint8)
-    sample_vlabel = np.array([1], dtype=np.int64)
+    sample_vimg = np.zeros(50).reshape(5, 10).astype(np.uint16)
+    sample_vlabel = np.array([1], dtype=np.int32)
 
     co.close()
     repo.create_branch('dev')
@@ -133,8 +133,8 @@ class TestVerifyCommitRefDigests(object):
                                                  labelenv=diverse_repo._env.labelenv,
                                                  refenv=diverse_repo._env.refenv)
 
-        with diverse_repo._env.hashenv.begin(write=True) as txn:
-            txn.put(key_removed, val_removed)
+            with diverse_repo._env.hashenv.begin(write=True) as txn:
+                txn.put(key_removed, val_removed)
 
 
 class TestVerifyCommitTree(object):
@@ -285,3 +285,85 @@ class TestBranchIntegrity(object):
                 match='Brach commit map compromised. Staging head refers to branch name'
         ):
             _verify_branch_integrity(diverse_repo._env.branchenv, diverse_repo._env.refenv)
+
+
+def test_data_digest_modification_is_caught(diverse_repo):
+    from hangar.records import hashs
+    from hangar.diagnostics.integrity import _verify_array_integrity
+
+    hq = hashs.HashQuery(diverse_repo._env.hashenv)
+    keys_to_replace = list(hq.gen_all_hash_keys_db())
+    replacer_key = keys_to_replace.pop()
+    for kreplaced in keys_to_replace:
+        with diverse_repo._env.hashenv.begin(write=True) as txn:
+            replacer_val = txn.get(replacer_key)
+            vreplaced = txn.get(kreplaced)
+            txn.put(kreplaced, replacer_val)
+
+        with pytest.raises(RuntimeError, match='Data corruption detected for array. Expected digest'):
+            _verify_array_integrity(hashenv=diverse_repo._env.hashenv,
+                                    repo_path=diverse_repo._env.repo_path)
+
+        with diverse_repo._env.hashenv.begin(write=True) as txn:
+            txn.put(kreplaced, vreplaced)
+
+
+def test_data_digest_remote_location_warns(diverse_repo):
+    from hangar.records import hashs
+    from hangar.diagnostics.integrity import _verify_array_integrity
+
+    hq = hashs.HashQuery(diverse_repo._env.hashenv)
+    replace_key = list(hq.gen_all_hash_keys_db())[0]
+    with diverse_repo._env.hashenv.begin(write=True) as txn:
+        txn.put(replace_key, b'50:ekaearar')
+
+    with pytest.warns(RuntimeWarning, match='Can not verify integrity of partially fetched array'):
+        _verify_array_integrity(hashenv=diverse_repo._env.hashenv,
+                                repo_path=diverse_repo._env.repo_path)
+
+
+def test_schema_digest_modification_is_caught(diverse_repo):
+    from hangar.records import hashs
+    from hangar.diagnostics.integrity import _verify_schema_integrity
+
+    hq = hashs.HashQuery(diverse_repo._env.hashenv)
+    keys_to_replace = list(hq.gen_all_schema_keys_db())
+    replacer_key = keys_to_replace.pop()
+    for kreplaced in keys_to_replace:
+        with diverse_repo._env.hashenv.begin(write=True) as txn:
+            replacer_val = txn.get(replacer_key)
+            vreplaced = txn.get(kreplaced)
+            txn.put(kreplaced, replacer_val)
+
+        with pytest.raises(RuntimeError, match='Data corruption detected for schema. Expected digest'):
+            _verify_schema_integrity(hashenv=diverse_repo._env.hashenv)
+
+        with diverse_repo._env.hashenv.begin(write=True) as txn:
+            txn.put(kreplaced, vreplaced)
+
+
+def test_metadata_digest_modification_is_caught(diverse_repo):
+    from hangar.records import hashs
+    from hangar.diagnostics.integrity import _verify_metadata_integrity
+
+    hq = hashs.HashQuery(diverse_repo._env.labelenv)
+    keys_to_replace = list(hq.gen_all_hash_keys_db())
+    replacer_key = keys_to_replace.pop()
+    for kreplaced in keys_to_replace:
+        with diverse_repo._env.labelenv.begin(write=True) as txn:
+            replacer_val = txn.get(replacer_key)
+            vreplaced = txn.get(kreplaced)
+            txn.put(kreplaced, replacer_val)
+
+        with pytest.raises(RuntimeError, match='Data corruption detected for metadata. Expected'):
+            _verify_metadata_integrity(labelenv=diverse_repo._env.labelenv)
+
+        with diverse_repo._env.labelenv.begin(write=True) as txn:
+            txn.put(kreplaced, vreplaced)
+
+
+def test_internal_parsing_error_catches_exception(diverse_repo):
+    from hangar.diagnostics.integrity import _verify_metadata_integrity
+
+    with pytest.raises(RuntimeError, match='Corruption detected during _verify_metadata_integrity'):
+        _verify_metadata_integrity(labelenv=diverse_repo._env.hashenv)

@@ -49,7 +49,7 @@ class HashQuery(object):
                             continue
                         else:
                             hashsExist = False
-                elif values and not keys:
+                elif values and not keys:  # pragma: no cover
                     while hashsExist:
                         hashRecKey, hashRecVal = cursor.item()
                         if hashRecKey.startswith(startHashRangeKey):
@@ -67,7 +67,7 @@ class HashQuery(object):
                             continue
                         else:
                             hashsExist = False
-                else:
+                else:  # pragma: no cover
                     raise ValueError(f'Both keys and values argument cannot be False')
         finally:
             TxnRegister().abort_reader_txn(self._hashenv)
@@ -108,7 +108,7 @@ class HashQuery(object):
                             continue
                         else:
                             schemasExist = False
-                elif values and not keys:
+                elif values and not keys:  # pragma: no cover
                     while schemasExist:
                         schemaRecKey, schemaRecVal = cursor.item()
                         if schemaRecKey.startswith(startSchemaRangeKey):
@@ -126,7 +126,7 @@ class HashQuery(object):
                             continue
                         else:
                             schemasExist = False
-                else:
+                else:  # pragma: no cover
                     raise ValueError(f'Both keys and values argument cannot be False')
         finally:
             TxnRegister().abort_reader_txn(self._hashenv)

@@ -1,12 +1,17 @@
 from functools import partial
 import warnings
 from typing import Sequence
+import importlib.util
 import random
 
 from .common import GroupedAsets
+from ..utils import LazyLoader
 
 try:
-    import tensorflow as tf
+    tfExists = importlib.util.find_spec('tensorflow')
+    if not tfExists:
+        raise ModuleNotFoundError
+    tf = LazyLoader('tf', globals(), 'tensorflow')
 except (ImportError, ModuleNotFoundError):
     raise ImportError(
         'Could not import "tensorflow" library. Ensure library is '

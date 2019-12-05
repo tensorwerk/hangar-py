@@ -11,6 +11,8 @@ New Features
 
 * Added ``repo.size_nbytes`` and ``repo.size_human`` to report disk usage of a repository on disk.
   (`#174 <https://github.com/tensorwerk/hangar-py/pull/174>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added method to traverse the entire repository history and cryptographically verify integrity.
+  (`#173 <https://github.com/tensorwerk/hangar-py/pull/173>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 Bug Fixes

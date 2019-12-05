@@ -2,6 +2,7 @@ import os
 import tempfile
 import warnings
 import sys
+from contextlib import closing
 
 import lmdb
 import numpy as np
@@ -15,15 +16,16 @@ from ..utils import tb_params_last_called
 
 
 def report_corruption_risk_on_parsing_error(func):
-    """Decorator adding try/except block formating non-explicitly raised exceptions.
+    """Decorator adding try/except handeling non-explicit exceptions.
 
-    Explicitly raised RuntimeErrors generally point to corrupted data identified
-    by a cryptographic hash mismatch. However, in order to get to the point where
-    such quantities can be processes, a non-trivial amount of parsing machinary
-    must be run. Should any error be thrown in the parse machinary due to corrupted
-    values, this method raises the exception in a useful form; providing traceback
-    context, likely root cause (displayed to users), and the offending arguments
-    passed to the function which threw the error.
+    Explicitly raised RuntimeErrors generally point to corrupted data
+    identified by a cryptographic hash mismatch. However, in order to get to
+    the point where such quantities can be processes, a non-trivial amount of
+    parsing machinary must be run. Should any error be thrown in the parse
+    machinary due to corrupted values, this method raises the exception in a
+    useful form; providing traceback context, likely root cause (displayed to
+    users), and the offending arguments passed to the function which threw the
+    error.
     """
     def wrapped(*args, **kwargs):
         try:
@@ -45,16 +47,17 @@ def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: os.PathLike):
     narrays, nremote = hq.num_arrays(), 0
     array_kvs = hq.gen_all_hash_keys_raw_array_vals_parsed()
     try:
-        backends = {}
+        bes = {}
         for digest, spec in tqdm(array_kvs, total=narrays, desc='verifying arrays'):
-            if spec.backend not in backends:
-                backends[spec.backend] = BACKEND_ACCESSOR_MAP[spec.backend](repo_path, None, None)
-                backends[spec.backend].open(mode='r')
+            if spec.backend not in bes:
+                bes[spec.backend] = BACKEND_ACCESSOR_MAP[spec.backend](repo_path, None, None)
+                bes[spec.backend].open(mode='r')
             if is_local_backend(spec) is False:
                 nremote += 1
-            o = backends[spec.backend].read_data(spec)
+                continue
+            arr = bes[spec.backend].read_data(spec)
             tcode = hashmachine.hash_type_code_from_digest(digest)
-            calc_digest = hashmachine.array_hash_digest(array=o, tcode=tcode)
+            calc_digest = hashmachine.array_hash_digest(array=arr, tcode=tcode)
             if calc_digest != digest:
                 raise RuntimeError(
                     f'Data corruption detected for array. Expected digest `{digest}` '
@@ -65,8 +68,8 @@ def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: os.PathLike):
                 f'For complete proof, fetch all remote data locally. Did not verify '
                 f'{nremote}/{narrays} arrays', RuntimeWarning)
     finally:
-        for be in backends.keys():
-            backends[be].close()
+        for be in bes.keys():
+            bes[be].close()
 
 
 @report_corruption_risk_on_parsing_error
@@ -160,17 +163,15 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
             for cmt in tqdm(all_commits, desc='verifying commit ref digests'):
                 with tempfile.TemporaryDirectory() as tempD:
                     tmpDF = os.path.join(tempD, f'{cmt}.lmdb')
-                    tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-                    try:
-                        commiting.unpack_commit_ref(refenv, tmpDB, cmt)
-                        rq = queries.RecordQuery(tmpDB)
-                        meta_digests = set(rq.metadata_hashes())
-                        array_data_digests = set(rq.data_hashes())
-                        schema_digests = set(rq.schema_hashes())
-                    except IOError as e:
-                        raise RuntimeError(str(e)) from e
-                    finally:
-                        tmpDB.close()
+                    with closing(lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)) as tmpDB:
+                        try:
+                            commiting.unpack_commit_ref(refenv, tmpDB, cmt)
+                            rq = queries.RecordQuery(tmpDB)
+                            meta_digests = set(rq.metadata_hashes())
+                            array_data_digests = set(rq.data_hashes())
+                            schema_digests = set(rq.schema_hashes())
+                        except IOError as e:
+                            raise RuntimeError(str(e)) from e
 
                 for datadigest in array_data_digests:
                     dbk = parsing.hash_data_db_key_from_raw_key(datadigest)
