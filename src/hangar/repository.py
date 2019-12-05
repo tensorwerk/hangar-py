@@ -10,7 +10,13 @@ from .context import Environments
 from .diagnostics import graphing, ecosystem
 from .records import heads, parsing, summarize, vcompat
 from .checkout import ReaderCheckout, WriterCheckout
-from .utils import is_valid_directory_path, is_suitable_user_key, is_ascii
+from .utils import (
+    is_valid_directory_path,
+    is_suitable_user_key,
+    is_ascii,
+    folder_size,
+    format_bytes
+)
 
 
 class Repository(object):
@@ -177,6 +183,41 @@ class Repository(object):
             True if repository has been initialized.
         """
         return self._env.repo_is_initialized
+
+    @property
+    def size_nbytes(self) -> int:
+        """Disk space used by the repository returned in number of bytes.
+
+            >>> repo.size_nbytes
+            1234567890
+            >>> print(type(repo.size_nbytes))
+            <class 'int'>
+
+        Returns
+        -------
+        int
+            number of bytes used by the repository on disk.
+        """
+        self.__verify_repo_initialized()
+        return folder_size(self._repo_path, recurse=True)
+
+    @property
+    def size_human(self) -> str:
+        """Disk space used by the repository returned in human readable string.
+
+            >>> repo.size_human
+            '1.23 GB'
+            >>> print(type(repo.size_human))
+            <class 'str'>
+
+        Returns
+        -------
+        str
+            disk space used by the repository formated in human readable text.
+        """
+        self.__verify_repo_initialized()
+        nbytes = folder_size(self._repo_path, recurse=True)
+        return format_bytes(nbytes)
 
     def checkout(self,
                  write: bool = False,
