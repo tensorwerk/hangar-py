@@ -14,14 +14,38 @@ from ..records import commiting, hashmachine, hashs, parsing, queries, heads
 from ..utils import tb_params_last_called
 
 
+def report_corruption_risk_on_parsing_error(func):
+    """Decorator adding try/except block formating non-explicitly raised exceptions.
+
+    Explicitly raised RuntimeErrors generally point to corrupted data identified
+    by a cryptographic hash mismatch. However, in order to get to the point where
+    such quantities can be processes, a non-trivial amount of parsing machinary
+    must be run. Should any error be thrown in the parse machinary due to corrupted
+    values, this method raises the exception in a useful form; providing traceback
+    context, likely root cause (displayed to users), and the offending arguments
+    passed to the function which threw the error.
+    """
+    def wrapped(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except RuntimeError as e:
+            raise e
+        except Exception as e:
+            raise RuntimeError(
+                f'Corruption detected during {func.__name__}. Most likely this is the '
+                f'result of unparsable record values. Exception msg `{str(e)}`. Params '
+                f'`{tb_params_last_called(sys.exc_info()[2])}`') from e
+    return wrapped
+
+
+@report_corruption_risk_on_parsing_error
 def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: os.PathLike):
 
+    hq = hashs.HashQuery(hashenv)
+    narrays, nremote = hq.num_arrays(), 0
+    array_kvs = hq.gen_all_hash_keys_raw_array_vals_parsed()
     try:
-        hq = hashs.HashQuery(hashenv)
-        array_kvs = hq.gen_all_hash_keys_raw_array_vals_parsed()
-        narrays = hq.num_arrays()
         backends = {}
-        nremote = 0
         for digest, spec in tqdm(array_kvs, total=narrays, desc='verifying arrays'):
             if spec.backend not in backends:
                 backends[spec.backend] = BACKEND_ACCESSOR_MAP[spec.backend](repo_path, None, None)
@@ -40,76 +64,56 @@ def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: os.PathLike):
                 'Can not verify integrity of partially fetched array data references. '
                 f'For complete proof, fetch all remote data locally. Did not verify '
                 f'{nremote}/{narrays} arrays', RuntimeWarning)
-    except RuntimeError as e:
-        raise e
-    except Exception as e:
-        raise RuntimeError(
-            f'Corruption detected while verifying array integrity. Most likely this is '
-            f'the result of unparsable record values. Exception msg `{str(e)}`. Params '
-            f'`{tb_params_last_called(sys.exc_info()[2])}`') from e
     finally:
         for be in backends.keys():
             backends[be].close()
 
 
+@report_corruption_risk_on_parsing_error
 def _verify_schema_integrity(hashenv: lmdb.Environment):
 
-    try:
-        hq = hashs.HashQuery(hashenv)
-        schema_kvs = hq.gen_all_schema_keys_raw_vals_parsed()
-        nschemas = hq.num_schemas()
-        for digest, val in tqdm(schema_kvs, total=nschemas, desc='verifying schemas'):
-            tcode = hashmachine.hash_type_code_from_digest(digest)
-            calc_digest = hashmachine.schema_hash_digest(
-                shape=val.schema_max_shape,
-                size=np.prod(val.schema_max_shape),
-                dtype_num=val.schema_dtype,
-                named_samples=val.schema_is_named,
-                variable_shape=val.schema_is_var,
-                backend_code=val.schema_default_backend,
-                backend_opts=val.schema_default_backend_opts,
-                tcode=tcode)
-            if calc_digest != digest:
-                raise RuntimeError(
-                    f'Data corruption detected for schema. Expected digest `{digest}` '
-                    f'currently mapped to spec `{val}`. Found digest `{calc_digest}`')
-    except RuntimeError as e:
-        raise e
-    except Exception as e:
-        raise RuntimeError(
-            f'Corruption detected while verifying schema integrity. Most likely this is '
-            f'the result of unparsable record values. Exception msg `{str(e)}`. Params '
-            f'`{tb_params_last_called(sys.exc_info()[2])}`') from e
+    hq = hashs.HashQuery(hashenv)
+    schema_kvs = hq.gen_all_schema_keys_raw_vals_parsed()
+    nschemas = hq.num_schemas()
+    for digest, val in tqdm(schema_kvs, total=nschemas, desc='verifying schemas'):
+        tcode = hashmachine.hash_type_code_from_digest(digest)
+        calc_digest = hashmachine.schema_hash_digest(
+            shape=val.schema_max_shape,
+            size=np.prod(val.schema_max_shape),
+            dtype_num=val.schema_dtype,
+            named_samples=val.schema_is_named,
+            variable_shape=val.schema_is_var,
+            backend_code=val.schema_default_backend,
+            backend_opts=val.schema_default_backend_opts,
+            tcode=tcode)
+        if calc_digest != digest:
+            raise RuntimeError(
+                f'Data corruption detected for schema. Expected digest `{digest}` '
+                f'currently mapped to spec `{val}`. Found digest `{calc_digest}`')
 
 
+@report_corruption_risk_on_parsing_error
 def _verify_metadata_integrity(labelenv: lmdb.Environment):
 
-    try:
-        mhq = hashs.HashQuery(labelenv)
-        meta_kvs = mhq.gen_all_hash_keys_raw_meta_vals_parsed()
-        nmeta = mhq.num_meta()
-        for digest, val in tqdm(meta_kvs, total=nmeta, desc='verifying metadata'):
-            tcode = hashmachine.hash_type_code_from_digest(digest)
-            calc_digest = hashmachine.metadata_hash_digest(value=val, tcode=tcode)
-            if calc_digest != digest:
-                raise RuntimeError(
-                    f'Data corruption detected for metadata. Expected digest `{digest}` '
-                    f'currently mapped to spec `{val}`. Found digest `{calc_digest}`')
-    except RuntimeError as e:
-        raise e
-    except Exception as e:
-        raise RuntimeError(
-            f'Corruption detected while verifying metadata integrity. Most likely this is '
-            f'the result of unparsable record values. Exception msg `{str(e)}`. Params '
-            f'`{tb_params_last_called(sys.exc_info()[2])}`') from e
+    mhq = hashs.HashQuery(labelenv)
+    meta_kvs = mhq.gen_all_hash_keys_raw_meta_vals_parsed()
+    nmeta = mhq.num_meta()
+    for digest, val in tqdm(meta_kvs, total=nmeta, desc='verifying metadata'):
+        tcode = hashmachine.hash_type_code_from_digest(digest)
+        calc_digest = hashmachine.metadata_hash_digest(value=val, tcode=tcode)
+        if calc_digest != digest:
+            raise RuntimeError(
+                f'Data corruption detected for metadata. Expected digest `{digest}` '
+                f'currently mapped to spec `{val}`. Found digest `{calc_digest}`')
 
 
+@report_corruption_risk_on_parsing_error
 def _verify_commit_tree_integrity(refenv: lmdb.Environment):
 
+    initialCmt = None
+    all_commits = set(commiting.list_all_commits(refenv))
+    reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
-        initialCmt = None
-        all_commits = set(commiting.list_all_commits(refenv))
-        reftxn = TxnRegister().begin_reader_txn(refenv)
         for cmt in tqdm(all_commits, desc='verifying commit trees'):
             pKey = parsing.commit_parent_db_key_from_raw_key(cmt)
             pVal = reftxn.get(pKey, default=False)
@@ -139,25 +143,19 @@ def _verify_commit_tree_integrity(refenv: lmdb.Environment):
                         f'with no parents) found. First `{initialCmt}`, second `{cmt}`')
                 else:
                     initialCmt = cmt
-    except RuntimeError as e:
-        raise e
-    except Exception as e:
-        raise RuntimeError(
-            f'Corruption detected while verifying commit tree integrity. Most likely this is '
-            f'the result of unparsable record values. Exception msg `{str(e)}`. Params '
-            f'`{tb_params_last_called(sys.exc_info()[2])}`') from e
     finally:
         TxnRegister().abort_reader_txn(refenv)
 
 
+@report_corruption_risk_on_parsing_error
 def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                                      labelenv: lmdb.Environment,
                                      refenv: lmdb.Environment):
 
+    all_commits = commiting.list_all_commits(refenv)
+    datatxn = TxnRegister().begin_reader_txn(hashenv, buffer=True)
+    labeltxn = TxnRegister().begin_reader_txn(labelenv, buffer=True)
     try:
-        all_commits = commiting.list_all_commits(refenv)
-        datatxn = TxnRegister().begin_reader_txn(hashenv, buffer=True)
-        labeltxn = TxnRegister().begin_reader_txn(labelenv, buffer=True)
         with datatxn.cursor() as cur, labeltxn.cursor() as labcur:
             for cmt in tqdm(all_commits, desc='verifying commit ref digests'):
                 with tempfile.TemporaryDirectory() as tempD:
@@ -200,47 +198,33 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                             f'Data corruption detected in commit refs. Commit `{cmt}` '
                             f'references metadata digest `{datadigest}` which does not '
                             f'exist in label hash db.')
-    except RuntimeError as e:
-        raise e
-    except Exception as e:
-        raise RuntimeError(
-            f'Corruption detected while verifying commit ref digest existance. Most likely '
-            f'this is the result of unparsable record values. Exception msg `{str(e)}`. '
-            f' Params `{tb_params_last_called(sys.exc_info()[2])}`') from e
     finally:
         TxnRegister().abort_reader_txn(labelenv)
         TxnRegister().abort_reader_txn(hashenv)
 
 
+@report_corruption_risk_on_parsing_error
 def _verify_branch_integrity(branchenv: lmdb.Environment, refenv: lmdb.Environment):
 
-    try:
-        branch_names = heads.get_branch_names(branchenv)
-        if len(branch_names) < 1:
-            raise RuntimeError(
-                f'Branch map compromised. Repo must contain atleast one branch. '
-                f'Found {len(branch_names)} branches.')
-
-        for bname in tqdm(branch_names, desc='verifying branches'):
-            bhead = heads.get_branch_head_commit(branchenv=branchenv, branch_name=bname)
-            exists = commiting.check_commit_hash_in_history(refenv=refenv, commit_hash=bhead)
-            if exists is False:
-                raise RuntimeError(
-                    f'Branch commit map compromised. Branch name `{bname}` references '
-                    f'commit digest `{bhead}` which does not exist in refs db.')
-
-        staging_bname = heads.get_staging_branch_head(branchenv)
-        if staging_bname not in branch_names:
-            raise RuntimeError(
-                f'Brach commit map compromised. Staging head refers to branch name '
-                f'`{staging_bname}` which does not exist in the branch db.')
-    except RuntimeError as e:
-        raise e
-    except Exception as e:
+    branch_names = heads.get_branch_names(branchenv)
+    if len(branch_names) < 1:
         raise RuntimeError(
-            f'Corruption detected while verifying branch integrity. Most likely this is '
-            f'the result of unparsable record values. Exception msg `{str(e)}`. Params '
-            f'`{tb_params_last_called(sys.exc_info()[2])}`') from e
+            f'Branch map compromised. Repo must contain atleast one branch. '
+            f'Found {len(branch_names)} branches.')
+
+    for bname in tqdm(branch_names, desc='verifying branches'):
+        bhead = heads.get_branch_head_commit(branchenv=branchenv, branch_name=bname)
+        exists = commiting.check_commit_hash_in_history(refenv=refenv, commit_hash=bhead)
+        if exists is False:
+            raise RuntimeError(
+                f'Branch commit map compromised. Branch name `{bname}` references '
+                f'commit digest `{bhead}` which does not exist in refs db.')
+
+    staging_bname = heads.get_staging_branch_head(branchenv)
+    if staging_bname not in branch_names:
+        raise RuntimeError(
+            f'Brach commit map compromised. Staging head refers to branch name '
+            f'`{staging_bname}` which does not exist in the branch db.')
 
 
 def run_verification(branchenv: lmdb.Environment,
