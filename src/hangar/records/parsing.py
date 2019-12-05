@@ -234,26 +234,35 @@ The following records can be parsed:
 # ------------------- named tuple classes used ----------------------
 
 
-RawDataRecordKey = NamedTuple('RawDataRecordKey', [
-    ('aset_name', str),
-    ('data_name', Union[str, int])])
-RawDataRecordKey.__doc__ = 'Represents a Data Sample Record Key'
+class RawDataRecordKey(NamedTuple):
+    """Represents a Data Sample Record Key"""
+    aset_name: str = None
+    data_name: Union[str, int] = None
+    subsample: str = None
 
 
-RawDataRecordVal = NamedTuple('RawDataRecordVal', [
-    ('data_hash', str)])
-RawDataRecordVal.__doc__ = 'Represents a Data Sample Record Hash Value'
+class RawDataSubsampleRecordKey(NamedTuple):
+    aset: str
+    sample: Union[str, int]
+    subsample: Union[str, int]
 
 
-RawArraysetSchemaVal = NamedTuple('RawArraysetSchemaVal', [
-    ('schema_hash', str),
-    ('schema_dtype', int),
-    ('schema_is_var', bool),
-    ('schema_max_shape', tuple),
-    ('schema_is_named', bool),
-    ('schema_default_backend', str),
-    ('schema_default_backend_opts', dict)])
-RawArraysetSchemaVal.__doc__ = 'Information Specifying a Arrayset Schema'
+class RawDataRecordVal(NamedTuple):
+    """Represents a Data Sample Record Hash Value"""
+    data_hash: str
+
+
+class RawArraysetSchemaVal(NamedTuple):
+    """Information Specifying a Arrayset Schema"""
+    schema_hash: str
+    schema_dtype: int
+    schema_is_var: bool
+    schema_max_shape: tuple
+    schema_is_named: bool
+    schema_default_backend: str
+    schema_default_backend_opts: dict
+    schema_contains_subsamples: bool
+
 
 """
 Parsing functions to convert lmdb data record keys/vals to/from python vars
@@ -277,10 +286,20 @@ def data_record_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_STGARR)) -> Ra
         Tuple containing the record aset_name, data_name
     """
     key = db_key.decode()
-    aset_name, data_name = key[_SPLT:].split(SEP_KEY)
-    if data_name[0] == K_INT:
-        data_name = int(data_name[1:])
-    return RawDataRecordKey(aset_name, data_name)
+    aset_name, *data_name = key[_SPLT:].split(SEP_KEY)
+    if len(data_name) == 1:
+        if data_name[0][0] == K_INT:
+            sample = int(data_name[0][1:])
+        else:
+            sample = data_name[0]
+        return RawDataRecordKey(aset_name, sample)
+    else:
+        sample, subsample = data_name
+        if sample[0] == K_INT:
+            sample = int(sample[1:])
+        if subsample[0] == K_INT:
+            subsample = int(subsample[1:])
+        return RawDataRecordKey(aset_name, sample, subsample)
 
 
 def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
@@ -302,15 +321,17 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
 # -------------------- raw (python) -> db -----------------------------
 
 
-def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int]) -> bytes:
+def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int], *, subsample: Union[str, int] = None) -> bytes:
     """converts a python record spec into the appropriate lmdb key
 
     Parameters
     ----------
     aset_name : string
         name of the arrayset for the record
-    data_name : Union[string, int]
+    data_name : Union[str, int]
         name of the data sample for the record
+    subsample : Union[str, int], optional
+        name of the subsample for the record, default = None
 
     Returns
     -------
@@ -318,9 +339,19 @@ def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int]) 
         Byte encoded db record key
     """
     if isinstance(data_name, int):
-        record_key = f'{K_STGARR}{aset_name}{SEP_KEY}{K_INT}{data_name}'.encode()
+        data_part = f'{SEP_KEY}{K_INT}{data_name}'
     else:
-        record_key = f'{K_STGARR}{aset_name}{SEP_KEY}{data_name}'.encode()
+        data_part = f'{SEP_KEY}{data_name}'
+
+    if isinstance(subsample, int):
+        subsample_part = f'{SEP_KEY}{K_INT}{subsample}'
+    elif isinstance(subsample, str):
+        subsample_part = f'{SEP_KEY}{subsample}'
+
+    if subsample is None:
+        record_key = f'{K_STGARR}{aset_name}{data_part}'.encode()
+    else:
+        record_key = f'{K_STGARR}{aset_name}{data_part}{subsample_part}'.encode()
     return record_key
 
 
@@ -368,7 +399,8 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
                                                schema_is_var, schema_max_shape,
                                                schema_dtype, schema_is_named,
                                                schema_default_backend,
-                                               schema_default_backend_opts):
+                                               schema_default_backend_opts,
+                                               schema_contains_subsamples):
     """Format the db_value which includes all details of the arrayset schema.
 
     Parameters
@@ -392,6 +424,8 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         backend specification for the schema default backend.
     schema_default_backend_opts : dict
         filter options for the default schema backend writer.
+    schema_contains_subsamples: bool
+        **TODO**
 
     Returns
     -------
@@ -406,6 +440,7 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         'schema_is_named': schema_is_named,
         'schema_default_backend': schema_default_backend,
         'schema_default_backend_opts': schema_default_backend_opts,
+        'schema_contains_subsamples': schema_contains_subsamples,
     }
     db_schema_val = json.dumps(schema_val, separators=(',', ':')).encode()
     return db_schema_val
@@ -462,11 +497,16 @@ Functions to convert metadata records to/from python objects
 -------------------------------------------------------------
 """
 
-MetadataRecordKey = NamedTuple('MetadataRecordKey', [('meta_name', Union[str, int])])
-MetadataRecordKey.__doc__ = 'Represents a Metadata Sample Record Key'
 
-MetadataRecordVal = NamedTuple('MetadataRecordVal', [('meta_hash', str)])
-MetadataRecordVal.__doc__ = 'Represents a Metadata Sample Record Hash Value'
+class MetadataRecordKey(NamedTuple):
+    """Represents a Metadata Sample Record Key"""
+    meta_name: Union[str, int]
+
+
+class MetadataRecordVal(NamedTuple):
+    """Represents a Metadata Sample Record Hash Value"""
+    meta_hash: str
+
 
 # -------------------- db -> raw (python) -----------------------------
 
@@ -694,38 +734,37 @@ The parsers defined in this section handle commit (ref) records
 """
 
 
-CommitAncestorSpec = NamedTuple('CommitAncestorSpec', [
-    ('is_merge_commit', bool),
-    ('master_ancestor', str),
-    ('dev_ancestor', str),
-])
+class CommitAncestorSpec(NamedTuple):
+    is_merge_commit: bool
+    master_ancestor: str
+    dev_ancestor: str
 
-CommitUserSpec = NamedTuple('CommitUserSpec', [
-    ('commit_time', float),
-    ('commit_message', str),
-    ('commit_user', str),
-    ('commit_email', str),
-])
 
-DigestAndUserSpec = NamedTuple('DigestAndUserSpec', [
-    ('digest', str),
-    ('user_spec', CommitUserSpec)
-])
+class CommitUserSpec(NamedTuple):
+    commit_time: float
+    commit_message: str
+    commit_user: str
+    commit_email: str
 
-DigestAndAncestorSpec = NamedTuple('DigestAndAncestorSpec', [
-    ('digest', str),
-    ('ancestor_spec', CommitAncestorSpec)
-])
 
-DigestAndBytes = NamedTuple('DigestAndBytes', [
-    ('digest', str),
-    ('raw', bytes),
-])
+class DigestAndUserSpec(NamedTuple):
+    digest: str
+    user_spec: CommitUserSpec
 
-DigestAndDbRefs = NamedTuple('DigestAndDbRefs', [
-    ('digest', str),
-    ('db_kvs', Tuple[Tuple[bytes, bytes]])
-])
+
+class DigestAndAncestorSpec(NamedTuple):
+    digest: str
+    ancestor_spec: CommitAncestorSpec
+
+
+class DigestAndBytes(NamedTuple):
+    digest: str
+    raw: bytes
+
+
+class DigestAndDbRefs(NamedTuple):
+    digest: str
+    db_kvs: Tuple[Tuple[bytes, bytes]]
 
 
 def _hash_func(recs: bytes) -> str:

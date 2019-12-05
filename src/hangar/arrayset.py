@@ -1,7 +1,11 @@
+from collections import defaultdict
+from contextlib import contextmanager
 import os
 import warnings
 from multiprocessing import cpu_count, get_context
+from types import MappingProxyType
 from typing import Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple
+from weakref import proxy
 
 import lmdb
 import numpy as np
@@ -27,9 +31,109 @@ from .records.parsing import (
 )
 from .records.queries import RecordQuery
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
+from .aset_subsample import SubsampleReader, SubsampleWriter
 
 CompatibleArray = NamedTuple(
     'CompatibleArray', [('compatible', bool), ('reason', str)])
+
+
+class AsetTxn(object):
+
+    def __init__(self, dataenv, hashenv, stagehashenv):
+        self._is_conman: bool = False
+
+        self.stagehashenv = stagehashenv
+        self.dataenv = dataenv
+        self.hashenv = hashenv
+
+        self._TxnRegister = TxnRegister()
+        self.hashTxn: Optional[lmdb.Transaction] = None
+        self.dataTxn: Optional[lmdb.Transaction] = None
+        self.stageHashTxn: Optional[lmdb.Transaction] = None
+
+    @property
+    def is_conman(self):
+        return self._is_conman
+
+    def open_read(self):
+        if not self._is_conman:
+            self._is_conman = True
+            self.hashTxn = self._TxnRegister.begin_reader_txn(self.hashenv)
+            self.dataTxn = self._TxnRegister.begin_reader_txn(self.dataenv)
+        return self
+
+    def close_read(self):
+        if self._is_conman:
+            self.hashTxn = self._TxnRegister.abort_reader_txn(self.hashenv)
+            self.dataTxn = self._TxnRegister.abort_reader_txn(self.dataenv)
+            self._is_conman = False
+
+    def open_write(self):
+        if not self._is_conman:
+            self._is_conman = True
+            self.hashTxn = self._TxnRegister.begin_writer_txn(self.hashenv)
+            self.dataTxn = self._TxnRegister.begin_writer_txn(self.dataenv)
+            self.stageHashTxn = self._TxnRegister.begin_writer_txn(self.stagehashenv)
+        return self
+
+    def close_write(self):
+        if self._is_conman:
+            self.hashTxn = self._TxnRegister.commit_writer_txn(self.hashenv)
+            self.dataTxn = self._TxnRegister.commit_writer_txn(self.dataenv)
+            self.stageHashTxn = self._TxnRegister.commit_writer_txn(self.stagehashenv)
+            self._is_conman = False
+
+    @contextmanager
+    def read(self):
+        try:
+            tmpconman = not self._is_conman
+            yield self.open_read()
+        finally:
+            if tmpconman:
+                self.close_read()
+
+    @contextmanager
+    def write(self):
+        try:
+            tmpconman = not self._is_conman
+            yield self.open_write()
+        finally:
+            if tmpconman:
+                self.close_write()
+
+
+def sample_keys_and_specs(txnctx, asetn, contains_subsamples):
+    if contains_subsamples:
+        sspecs = defaultdict(dict)
+    else:
+        sspecs = {}
+
+    with txnctx.read() as ctx:
+        hashTxn = ctx.hashTxn
+        used_bes = set()
+        asetNamesSpec = RecordQuery(ctx.dataenv).arrayset_data_records(asetn)
+        for asetNames, dataSpec in asetNamesSpec:
+            hashKey = hash_data_db_key_from_raw_key(dataSpec.data_hash)
+            hash_ref = hashTxn.get(hashKey)
+            be_loc = backend_decoder(hash_ref)
+            if contains_subsamples:
+                sspecs[asetNames.data_name].update({asetNames.subsample: be_loc})
+            else:
+                sspecs[asetNames.data_name] = be_loc
+            used_bes.add(be_loc.backend)
+
+    return (sspecs, used_bes)
+
+
+# def reader_sspecs_setup(sspecs, )
+
+
+# if not all([is_local_backend(be) for be in used_bes]):
+#     self._contains_partial_remote_data = True
+#     warnings.warn(
+#         f'Arrayset: {self._asetn} contains `reference-only` samples, with '
+#         f'actual data residing on a remote server. A `fetch-data` '
+#         f'operation is required to access these samples.', UserWarning)
 
 
 class ArraysetDataReader(object):
@@ -52,11 +156,11 @@ class ArraysetDataReader(object):
                  isVar: bool,
                  varMaxShape: list,
                  varDtypeNum: int,
-                 dataenv: lmdb.Environment,
-                 hashenv: lmdb.Environment,
                  mode: str,
                  default_schema_backend: str,
                  default_backend_opts: str,
+                 contains_subsamples: bool,
+                 aset_txn_ctx: AsetTxn,
                  *args, **kwargs):
         """Developer documentation for init method
 
@@ -81,10 +185,6 @@ class ArraysetDataReader(object):
             schema size (max) of the arrayset data
         varDtypeNum : int
             datatype numeric code of the arrayset data
-        dataenv : lmdb.Environment
-            environment of the arrayset references to read
-        hashenv : lmdb.Environment
-            environment of the repository hash records
         mode : str, optional
             mode to open the file handles in. 'r' for read only, 'a' for read/write, defaults
             to 'r'
@@ -99,25 +199,33 @@ class ArraysetDataReader(object):
         self._dflt_schema_hash = default_schema_hash
         self._dflt_backend = default_schema_backend
         self._dflt_backend_opts = default_backend_opts
+        self._contains_subsamples = contains_subsamples
 
-        self._is_conman: bool = False
         self._index_expr_factory = np.s_
         self._index_expr_factory.maketuple = False
         self._contains_partial_remote_data: bool = False
+        self._txnctx = aset_txn_ctx
 
         # -------------- Sample backend specification parsing -----------------
 
         self._sspecs = {}
-        _TxnRegister = TxnRegister()
-        hashTxn = _TxnRegister.begin_reader_txn(hashenv)
-        try:
+        if self._contains_subsamples:
+            sspecs = defaultdict(dict)
+        else:
+            sspecs = {}
+
+        with self._txnctx.read() as ctx:
+            hashTxn = ctx.hashTxn
             used_bes = set()
-            asetNamesSpec = RecordQuery(dataenv).arrayset_data_records(self._asetn)
+            asetNamesSpec = RecordQuery(ctx.dataenv).arrayset_data_records(self._asetn)
             for asetNames, dataSpec in asetNamesSpec:
                 hashKey = hash_data_db_key_from_raw_key(dataSpec.data_hash)
                 hash_ref = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hash_ref)
-                self._sspecs[asetNames.data_name] = be_loc
+                if self._contains_subsamples:
+                    sspecs[asetNames.data_name].update({asetNames.subsample: be_loc})
+                else:
+                    sspecs[asetNames.data_name] = be_loc
                 used_bes.add(be_loc.backend)
 
             if not all([is_local_backend(be) for be in used_bes]):
@@ -126,8 +234,6 @@ class ArraysetDataReader(object):
                     f'Arrayset: {self._asetn} contains `reference-only` samples, with '
                     f'actual data residing on a remote server. A `fetch-data` '
                     f'operation is required to access these samples.', UserWarning)
-        finally:
-            _TxnRegister.abort_reader_txn(hashenv)
 
         # ------------------------ backend setup ------------------------------
 
@@ -142,13 +248,41 @@ class ArraysetDataReader(object):
                     schema_dtype=np.typeDict[self._schema_dtype_num])
                 self._fs[be].open(mode=self._mode)
 
+        be_fs_proxy = MappingProxyType(self._fs)
+        if self._contains_subsamples:
+            for k, v in sspecs.items():
+                if self._mode == 'r':
+                    self._sspecs[k] = SubsampleReader(
+                        asetn=self._asetn,
+                        samplen=k,
+                        be_handles=be_fs_proxy,
+                        specs=v,
+                        dflt_backend=self._dflt_backend)
+                else:
+                    self._sspecs[k] = SubsampleWriter(
+                        aset_txn_ctx=proxy(self._txnctx),
+                        asetn=self._asetn,
+                        samplen=k,
+                        be_handles=be_fs_proxy,
+                        specs=v,
+                        dflt_backend=self._dflt_backend)
+        else:
+            self._sspecs = sspecs
+
+        if self._mode == 'r':
+            self._txnctx = None
+
     def __enter__(self):
-        self._is_conman = True
+        # self._is_conman = True
         return self
 
     def __exit__(self, *exc):
-        self._is_conman = False
+        # self._is_conman = False
         return
+
+    @property
+    def _is_conman(self):
+        return self._txnctx.is_conman
 
     def __getitem__(self, key: Union[str, int]) -> np.ndarray:
         """Retrieve a sample with a given key, convenience method for dict style access.
@@ -206,7 +340,10 @@ class ArraysetDataReader(object):
                 \n    Named Samples            : {bool(self._samples_are_named)}\
                 \n    Access Mode              : {self._mode}\
                 \n    Number of Samples        : {self.__len__()}\
-                \n    Partial Remote Data Refs : {bool(self._contains_partial_remote_data)}\n'
+                \n    Partial Remote Data Refs : {bool(self._contains_partial_remote_data)}\
+                \n    Contains Subsamples      : {bool(self._contains_subsamples)}\n'
+        if self._contains_subsamples:
+            res += f'    Number of Subsamples     : {self.num_subsamples}\n'
         p.text(res)
 
     def __repr__(self):
@@ -305,6 +442,20 @@ class ArraysetDataReader(object):
             config settings used to set up filters
         """
         return self._dflt_backend_opts
+
+    @property
+    def contains_subsamples(self) -> bool:
+        return self._contains_subsamples
+
+    @property
+    def num_subsamples(self) -> int:
+        if not self.contains_subsamples:
+            raise RuntimeError(f'Arrayset {self._asetn} does not contain subsamples')
+
+        total = 0
+        for sample in self._sspecs.values():
+            total += len(sample)
+        return total
 
     def keys(self, local: bool = False) -> Iterable[Union[str, int]]:
         """generator which yields the names of every sample in the arrayset
@@ -433,12 +584,16 @@ class ArraysetDataReader(object):
         KeyError
             if the arrayset does not contain data with the provided name
         """
-        try:
-            spec = self._sspecs[name]
-            data = self._fs[spec.backend].read_data(spec)
-            return data
-        except KeyError:
-            raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in aset: {self._asetn}')
+        if not self._contains_subsamples:
+            try:
+                spec = self._sspecs[name]
+                res = self._fs[spec.backend].read_data(spec)
+                return res
+            except KeyError:
+                raise KeyError(f'HANGAR KEY ERROR:: data: {name} not in aset: {self._asetn}')
+        else:
+            res = proxy(self._sspecs[name])
+            return res
 
     def get_batch(self,
                   names: Iterable[Union[str, int]],
@@ -504,9 +659,7 @@ class ArraysetDataWriter(ArraysetDataReader):
 
     """
 
-    def __init__(self,
-                 stagehashenv: lmdb.Environment,
-                 *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         """Developer documentation for init method.
 
         Extends the functionality of the ArraysetDataReader class. The __init__
@@ -515,39 +668,23 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         Parameters
         ----------
-            stagehashenv : lmdb.Environment
-                db where the newly added staged hash data records are stored
-            default_schema_backend : str
-                backend code to act as default where new data samples are added.
-            **kwargs:
+            *args
+                None
+            **kwargs
                 See args of :class:`ArraysetDataReader`
         """
         super().__init__(*args, **kwargs)
 
         self._fs[self._dflt_backend].backend_opts = self._dflt_backend_opts
 
-        self._stagehashenv = stagehashenv
-        self._dataenv: lmdb.Environment = kwargs['dataenv']
-        self._hashenv: lmdb.Environment = kwargs['hashenv']
-
-        self._TxnRegister = TxnRegister()
-        self._hashTxn: Optional[lmdb.Transaction] = None
-        self._dataTxn: Optional[lmdb.Transaction] = None
-
     def __enter__(self):
-        self._is_conman = True
-        self._hashTxn = self._TxnRegister.begin_writer_txn(self._hashenv)
-        self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
-        self._stageHashTxn = self._TxnRegister.begin_writer_txn(self._stagehashenv)
+        self._txnctx.open_write()
         for k in self._fs.keys():
             self._fs[k].__enter__()
         return self
 
     def __exit__(self, *exc):
-        self._is_conman = False
-        self._hashTxn = self._TxnRegister.commit_writer_txn(self._hashenv)
-        self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
-        self._stageHashTxn = self._TxnRegister.commit_writer_txn(self._stagehashenv)
+        self._txnctx.close_write()
         for k in self._fs.keys():
             self._fs[k].__exit__(*exc)
 
@@ -677,17 +814,13 @@ class ArraysetDataWriter(ArraysetDataReader):
             schema_dtype=proto.dtype.num,
             schema_is_named=self.named_samples,
             schema_default_backend=beopts.backend,
-            schema_default_backend_opts=beopts.opts)
+            schema_default_backend_opts=beopts.opts,
+            schema_contains_subsamples=self._contains_subsamples)
 
         hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-        dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
-        hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
-        try:
-            dataTxn.put(asetSchemaKey, asetSchemaVal)
-            hashTxn.put(hashSchemaKey, asetSchemaVal, overwrite=False)
-        finally:
-            TxnRegister().commit_writer_txn(self._dataenv)
-            TxnRegister().commit_writer_txn(self._hashenv)
+        with self._txnctx.write() as ctx:
+            ctx.dataTxn.put(asetSchemaKey, asetSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, asetSchemaVal, overwrite=False)
 
         if beopts.backend not in self._fs:
             self._fs[beopts.backend] = BACKEND_ACCESSOR_MAP[beopts.backend](
@@ -701,6 +834,10 @@ class ArraysetDataWriter(ArraysetDataReader):
         self._dflt_backend = beopts.backend
         self._dflt_backend_opts = beopts.opts
         self._dflt_schema_hash = schema_hash
+        # TODO: Is this efficient? Safe to use values and set directly?
+        if self._contains_subsamples:
+            for k in self._sspecs.keys():
+                self._sspecs[k]._dflt_backend = self._dflt_backend
         return
 
     def add(self, data: np.ndarray, name: Union[str, int] = None,
@@ -742,6 +879,19 @@ class ArraysetDataWriter(ArraysetDataReader):
             If the datatype of the input data does not match the specified data type of
             the arrayset
         """
+        if self._contains_subsamples:
+            if name in self._sspecs:
+                return self._sspecs[name].update(data)
+            else:
+                be_fs_proxy = MappingProxyType(self._fs)
+                self._sspecs[name] = SubsampleWriter(
+                    aset_txn_ctx=proxy(self._txnctx),
+                    asetn=self._asetn,
+                    samplen=name,
+                    be_handles=be_fs_proxy,
+                    specs={},
+                    dflt_backend=self._dflt_backend)
+                return self._sspecs[name].update(data)
 
         # ------------------------ argument type checking ---------------------
 
@@ -763,16 +913,12 @@ class ArraysetDataWriter(ArraysetDataReader):
 
         # --------------------- add data to storage backend -------------------
 
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__enter__()
-
+        with self._txnctx.write() as ctx:
             full_hash = array_hash_digest(data)
             hashKey = hash_data_db_key_from_raw_key(full_hash)
             # check if data record already exists with given key
             dataRecKey = data_record_db_key_from_raw_key(self._asetn, name)
-            existingDataRecVal = self._dataTxn.get(dataRecKey, default=False)
+            existingDataRecVal = ctx.dataTxn.get(dataRecKey, default=False)
             if existingDataRecVal:
                 # check if data record already with same key & hash value
                 existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
@@ -780,22 +926,18 @@ class ArraysetDataWriter(ArraysetDataReader):
                     return name
 
             # write new data if data hash does not exist
-            existingHashVal = self._hashTxn.get(hashKey, default=False)
+            existingHashVal = ctx.hashTxn.get(hashKey, default=False)
             if existingHashVal is False:
                 hashVal = self._fs[self._dflt_backend].write_data(data)
-                self._hashTxn.put(hashKey, hashVal)
-                self._stageHashTxn.put(hashKey, hashVal)
+                ctx.hashTxn.put(hashKey, hashVal)
+                ctx.stageHashTxn.put(hashKey, hashVal)
                 self._sspecs[name] = backend_decoder(hashVal)
             else:
                 self._sspecs[name] = backend_decoder(existingHashVal)
 
             # add the record to the db
             dataRecVal = data_record_db_val_from_raw_val(full_hash)
-            self._dataTxn.put(dataRecKey, dataRecVal)
-
-        finally:
-            if tmpconman:
-                self.__exit__()
+            ctx.dataTxn.put(dataRecKey, dataRecVal)
 
         return name
 
@@ -835,22 +977,21 @@ class ArraysetDataWriter(ArraysetDataReader):
         KeyError
             If a sample with the provided name does not exist in the arrayset.
         """
-        tmpconman = not self._is_conman
-        if tmpconman:
-            self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
-
-        dataKey = data_record_db_key_from_raw_key(self._asetn, name)
-        try:
-            isRecordDeleted = self._dataTxn.delete(dataKey)
-            if isRecordDeleted is False:
-                raise KeyError(f'No sample {name} in {self._asetn}')
+        if self._contains_subsamples:
+            subsamples = self._sspecs[name]
+            for k in tuple(subsamples.keys()):
+                subsamples.pop(k)
             del self._sspecs[name]
-        except KeyError as e:
-            raise e
-        finally:
-            if tmpconman:
-                self._TxnRegister.commit_writer_txn(self._dataenv)
-        return name
+            return subsamples
+
+        else:
+            with self._txnctx.write() as ctx:
+                dataKey = data_record_db_key_from_raw_key(self._asetn, name)
+                isRecordDeleted = ctx.dataTxn.delete(dataKey)
+                if isRecordDeleted is False:
+                    raise KeyError(f'No sample {name} in {self._asetn}')
+                del self._sspecs[name]
+            return name
 
 
 """
@@ -941,7 +1082,7 @@ class Arraysets(object):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
                 \n    Arrayset Names / Partial Remote References:\
-                \n      - ' + '\n      - '.join(
+                \n      - '                            + '\n      - '.join(
             f'{asetn} / {aset.contains_remote_references}'
             for asetn, aset in self._arraysets.items())
         p.text(res)
@@ -1235,6 +1376,7 @@ class Arraysets(object):
                       prototype: np.ndarray = None,
                       named_samples: bool = True,
                       variable_shape: bool = False,
+                      contains_subsamples: bool = False,
                       *,
                       backend_opts: Optional[Union[str, dict]] = None) -> ArraysetDataWriter:
         """Initializes a arrayset in the repository.
@@ -1275,6 +1417,8 @@ class Arraysets(object):
             added to the arrayset can then have dimension sizes <= to this
             initial specification (so long as they have the same rank as what
             was specified) defaults to False.
+        contains_subsamples : bool, optional
+            **NEED DESCRIPTION**
         backend_opts : Optional[Union[str, dict]], optional
             ADVANCED USERS ONLY, backend format code and filter opts to apply
             to arrayset data. If None, automatically infered and set based on
@@ -1364,21 +1508,20 @@ class Arraysets(object):
             schema_dtype=prototype.dtype.num,
             schema_is_named=named_samples,
             schema_default_backend=beopts.backend,
-            schema_default_backend_opts=beopts.opts)
+            schema_default_backend_opts=beopts.opts,
+            schema_contains_subsamples=contains_subsamples)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
-        dataTxn = TxnRegister().begin_writer_txn(self._dataenv)
-        hashTxn = TxnRegister().begin_writer_txn(self._hashenv)
-        hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-        hashSchemaVal = asetSchemaVal
-        dataTxn.put(asetSchemaKey, asetSchemaVal)
-        hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
-        TxnRegister().commit_writer_txn(self._dataenv)
-        TxnRegister().commit_writer_txn(self._hashenv)
+        txnctx = AsetTxn(self._dataenv, self._hashenv, self._stagehashenv)
+        with txnctx.write() as ctx:
+            hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
+            hashSchemaVal = asetSchemaVal
+            ctx.dataTxn.put(asetSchemaKey, asetSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
 
         self._arraysets[name] = ArraysetDataWriter(
-            stagehashenv=self._stagehashenv,
+            aset_txn_ctx=txnctx,
             repo_pth=self._repo_pth,
             aset_name=name,
             default_schema_hash=schema_hash,
@@ -1386,11 +1529,10 @@ class Arraysets(object):
             isVar=variable_shape,
             varMaxShape=prototype.shape,
             varDtypeNum=prototype.dtype.num,
-            hashenv=self._hashenv,
-            dataenv=self._dataenv,
             mode='a',
             default_schema_backend=beopts.backend,
-            default_backend_opts=beopts.opts)
+            default_backend_opts=beopts.opts,
+            contains_subsamples=contains_subsamples)
 
         return self.get(name)
 
@@ -1476,11 +1618,11 @@ class Arraysets(object):
         """
 
         arraysets = {}
+        txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
         query = RecordQuery(stageenv)
         stagedSchemaSpecs = query.schema_specs()
         for asetName, schemaSpec in stagedSchemaSpecs.items():
             arraysets[asetName] = ArraysetDataWriter(
-                stagehashenv=stagehashenv,
                 repo_pth=repo_pth,
                 aset_name=asetName,
                 default_schema_hash=schemaSpec.schema_hash,
@@ -1488,11 +1630,11 @@ class Arraysets(object):
                 isVar=schemaSpec.schema_is_var,
                 varMaxShape=schemaSpec.schema_max_shape,
                 varDtypeNum=schemaSpec.schema_dtype,
-                hashenv=hashenv,
-                dataenv=stageenv,
                 mode='a',
                 default_schema_backend=schemaSpec.schema_default_backend,
-                default_backend_opts=schemaSpec.schema_default_backend_opts)
+                default_backend_opts=schemaSpec.schema_default_backend_opts,
+                contains_subsamples=schemaSpec.schema_contains_subsamples,
+                aset_txn_ctx=txnctx)
 
         return cls('a', repo_pth, arraysets, hashenv, stageenv, stagehashenv)
 
@@ -1521,6 +1663,7 @@ class Arraysets(object):
             arraysets initialized in read mode via :class:`.arrayset.ArraysetDataReader`.
         """
         arraysets = {}
+        txnctx = AsetTxn(cmtrefenv, hashenv, None)
         query = RecordQuery(cmtrefenv)
         cmtSchemaSpecs = query.schema_specs()
         for asetName, schemaSpec in cmtSchemaSpecs.items():
@@ -1532,10 +1675,10 @@ class Arraysets(object):
                 isVar=schemaSpec.schema_is_var,
                 varMaxShape=schemaSpec.schema_max_shape,
                 varDtypeNum=schemaSpec.schema_dtype,
-                dataenv=cmtrefenv,
-                hashenv=hashenv,
                 mode='r',
                 default_schema_backend=schemaSpec.schema_default_backend,
-                default_backend_opts=schemaSpec.schema_default_backend_opts)
+                default_backend_opts=schemaSpec.schema_default_backend_opts,
+                contains_subsamples=schemaSpec.schema_contains_subsamples,
+                aset_txn_ctx=txnctx)
 
         return cls('r', repo_pth, arraysets, None, None, None)

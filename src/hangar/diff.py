@@ -28,54 +28,66 @@ from .txnctx import TxnRegister
 # ------------------------- Differ Types --------------------------------------
 
 
-HistoryDiffStruct = NamedTuple('HistoryDiffStruct', [('masterHEAD', str),
-                                                     ('devHEAD', str),
-                                                     ('ancestorHEAD', str),
-                                                     ('canFF', bool)])
+class HistoryDiffStruct(NamedTuple):
+    masterHEAD: str
+    devHEAD: str
+    ancestorHEAD: str
+    canFF: bool
 
-Changes = NamedTuple('Changes', [
-    ('schema', dict),
-    ('samples', list),
-    ('metadata', list),
-])
 
-DiffOutDB = NamedTuple('DiffOutDB', [
-    ('added', Set[Tuple[bytes, bytes]]),
-    ('deleted', Set[Tuple[bytes, bytes]]),
-    ('mutated', Set[Tuple[bytes, bytes]]),
-])
+class Changes(NamedTuple):
+    schema: dict
+    samples: dict
+    metadata: dict
 
-DiffOut = NamedTuple('DiffOut', [
-    ('added', Changes),
-    ('deleted', Changes),
-    ('mutated', Changes),
-])
+
+class DiffOutDB(NamedTuple):
+    added: Set[Tuple[bytes, bytes]]
+    deleted: Set[Tuple[bytes, bytes]]
+    mutated: Set[Tuple[bytes, bytes]]
+
+
+class DiffOut(NamedTuple):
+    added: Changes
+    deleted: Changes
+    mutated: Changes
+
 
 ConflictKeys = Union[str, RawDataRecordKey, MetadataRecordKey]
 
-Conflicts = NamedTuple('Conflicts', [
-    ('t1', Iterable[ConflictKeys]),
-    ('t21', Iterable[ConflictKeys]),
-    ('t22', Iterable[ConflictKeys]),
-    ('t3', Iterable[ConflictKeys]),
-    ('conflict', bool),
-])
-Conflicts.__doc__ = 'Four types of conflicts are accessible through this object.'
-Conflicts.t1.__doc__ = 'Addition of key in master AND dev with different values.'
-Conflicts.t21.__doc__ = 'Removed key in master, mutated value in dev.'
-Conflicts.t22.__doc__ = 'Removed key in dev, mutated value in master.'
-Conflicts.t3.__doc__ = 'Mutated key in both master AND dev to different values.'
-Conflicts.conflict.__doc__ = 'Bool indicating if any type of conflict is present.'
 
-DiffAndConflictsDB = NamedTuple('DiffAndConflictsDB', [
-    ('diff', DiffOutDB),
-    ('conflict', Conflicts),
-])
+class Conflicts(NamedTuple):
+    """Four types of conflicts are accessible through this object.
 
-DiffAndConflicts = NamedTuple('DiffAndConflicts', [
-    ('diff', DiffOut),
-    ('conflict', Conflicts),
-])
+    Attributes
+    ----------
+    t1
+        Addition of key in master AND dev with different values.
+    t21
+        Removed key in master, mutated value in dev.
+    t22
+        Removed key in dev, mutated value in master.
+    t3
+        Mutated key in both master AND dev to different values.
+    conflict
+        Bool indicating if any type of conflict is present.
+    """
+    t1: Iterable[ConflictKeys]
+    t21: Iterable[ConflictKeys]
+    t22: Iterable[ConflictKeys]
+    t3: Iterable[ConflictKeys]
+    conflict: bool
+
+
+class DiffAndConflictsDB(NamedTuple):
+    diff: DiffOutDB
+    conflict: Conflicts
+
+
+class DiffAndConflicts(NamedTuple):
+    diff: DiffOut
+    conflict: Conflicts
+
 
 # ------------------------------- Differ Methods ------------------------------
 

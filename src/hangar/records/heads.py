@@ -24,10 +24,10 @@ from .parsing import (
 from ..constants import K_REMOTES, K_BRANCH
 from ..txnctx import TxnRegister
 
-BranchHead = NamedTuple('BranchHead', [
-    ('name', str),
-    ('digest', str)
-])
+
+class BranchHead(NamedTuple):
+    name: str
+    digest: str
 
 
 """
