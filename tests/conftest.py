@@ -20,7 +20,7 @@ fixed_shape_backend_params = ['00', '01', '10']
 @pytest.fixture()
 def managed_tmpdir(monkeypatch, tmp_path):
     monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
-    hangar.context.TxnRegisterSingleton._instances = {}
+    hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
 

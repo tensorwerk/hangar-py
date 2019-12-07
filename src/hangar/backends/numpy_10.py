@@ -38,13 +38,6 @@ Fields Recorded for Each Array
 *  Collection Index (0:COLLECTION_SIZE subarray selection)
 *  Subarray Shape
 
-Separators used
----------------
-
-*  ``SEP_KEY: ":"``
-*  ``SEP_HSH: "$"``
-*  ``SEP_SLC: "*"``
-
 Examples
 --------
 
@@ -55,7 +48,7 @@ Examples
     *  xxhash64_hexdigest: 94701dd9f32626e2
     *  Collection Index: 488
 
-    ``Record Data =>  "10:K3ktxv$94701dd9f32626e2$488*10 10"``
+    ``Record Data =>  "10:K3ktxv:94701dd9f32626e2:488:10 10"``
 
 2)  Adding to a piece of data to a the middle of a file:
 
@@ -64,7 +57,7 @@ Examples
     *  xxhash64_hexdigest: 1363344b6c051b29
     *  Collection Index: 199
 
-    ``Record Data => "10:Mk23nl$1363344b6c051b29$199*20 2 3"``
+    ``Record Data => "10:Mk23nl:1363344b6c051b29:199:20 2 3"``
 
 
 Technical Notes
@@ -87,16 +80,15 @@ import os
 import re
 from collections import ChainMap
 from functools import partial
-from typing import MutableMapping, NamedTuple, Tuple, Optional
-from xxhash import xxh64_hexdigest
 from pathlib import Path
+from typing import MutableMapping, NamedTuple, Tuple, Optional
 
 import numpy as np
 from numpy.lib.format import open_memmap
+from xxhash import xxh64_hexdigest
 
-from .. import constants as c
+from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..utils import random_string
-
 
 # ----------------------------- Configuration ---------------------------------
 
@@ -108,27 +100,27 @@ COLLECTION_SIZE = 1000
 # -------------------------------- Parser Implementation ----------------------
 
 _FmtCode = '10'
-# match and remove the following characters: '['   ']'   '('   ')'   ','
-_ShapeFmtRE = re.compile('[,\(\)\[\]]')
-# split up a formated parsed string into unique fields
-_patern = fr'\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}'
-_SplitDecoderRE = re.compile(fr'[{_patern}]')
+# # match and remove the following characters: '['   ']'   '('   ')'   ','
+_SRe = re.compile('[,\(\)\[\]]')
 
 
-NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec',
-                                   [('backend', str), ('uid', str),
-                                    ('checksum', str), ('collection_idx', int),
-                                    ('shape', Tuple[int])])
+NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec', [
+    ('backend', str),
+    ('uid', str),
+    ('checksum', str),
+    ('collection_idx', int),
+    ('shape', Tuple[int])
+])
 
 
-def numpy_10_encode(uid: str, checksum: str, collection_idx: int, shape: tuple) -> bytes:
+def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> bytes:
     """converts the numpy data spect to an appropriate db value
 
     Parameters
     ----------
     uid : str
         file name (schema uid) of the np file to find this data piece in.
-    checksum : int
+    cksum : int
         xxhash64_hexdigest checksum of the data as computed on that local machine.
     collection_idx : int
         collection first axis index in which this data piece resides.
@@ -142,11 +134,7 @@ def numpy_10_encode(uid: str, checksum: str, collection_idx: int, shape: tuple) 
     bytes
         hash data db value recording all input specifications
     """
-    out_str = f'{_FmtCode}{c.SEP_KEY}'\
-              f'{uid}{c.SEP_HSH}{checksum}{c.SEP_HSH}'\
-              f'{collection_idx}{c.SEP_SLC}'\
-              f'{_ShapeFmtRE.sub("", str(shape))}'
-    return out_str.encode()
+    return f'10:{uid}:{cksum}:{collection_idx}:{_SRe.sub("", str(shape))}'.encode()
 
 
 def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
@@ -163,18 +151,9 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
         numpy data hash specification containing `backend`, `schema`, and
         `uid`, `collection_idx` and `shape` fields.
     """
-    db_str = db_val.decode()
-    _, uid, checksum, collection_idx, shape_vs = _SplitDecoderRE.split(db_str)
-    # if the data is of empty shape -> shape_vs = '' str.split() default value
-    # of none means split according to any whitespace, and discard empty strings
-    # from the result. So long as c.SEP_LST = ' ' this will work
+    _, uid, cksum, collection_idx, shape_vs = db_val.decode().split(':')
     shape = tuple(map(int, shape_vs.split()))
-    raw_val = NUMPY_10_DataHashSpec(backend=_FmtCode,
-                                    uid=uid,
-                                    checksum=checksum,
-                                    collection_idx=int(collection_idx),
-                                    shape=shape)
-    return raw_val
+    return NUMPY_10_DataHashSpec('10', uid, cksum, int(collection_idx), shape)
 
 
 # ------------------------- Accessor Object -----------------------------------
@@ -199,10 +178,10 @@ class NUMPY_10_FileHandles(object):
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
 
-        self.STAGEDIR: Path = Path(self.repo_path, c.DIR_DATA_STAGE, _FmtCode)
-        self.REMOTEDIR: Path = Path(self.repo_path, c.DIR_DATA_REMOTE, _FmtCode)
-        self.DATADIR: Path = Path(self.repo_path, c.DIR_DATA, _FmtCode)
-        self.STOREDIR: Path = Path(self.repo_path, c.DIR_DATA_STORE, _FmtCode)
+        self.STAGEDIR: Path = Path(self.repo_path, DIR_DATA_STAGE, _FmtCode)
+        self.REMOTEDIR: Path = Path(self.repo_path, DIR_DATA_REMOTE, _FmtCode)
+        self.DATADIR: Path = Path(self.repo_path, DIR_DATA, _FmtCode)
+        self.STOREDIR: Path = Path(self.repo_path, DIR_DATA_STORE, _FmtCode)
         self.DATADIR.mkdir(exist_ok=True)
 
     def __enter__(self):
@@ -281,9 +260,9 @@ class NUMPY_10_FileHandles(object):
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
         """
-        data_dir = Path(repo_path, c.DIR_DATA, _FmtCode)
-        PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
-        process_dir = Path(repo_path, PDIR, _FmtCode)
+        data_dir = Path(repo_path, DIR_DATA, _FmtCode)
+        pdir = DIR_DATA_STAGE if not remote_operation else DIR_DATA_REMOTE
+        process_dir = Path(repo_path, pdir, _FmtCode)
         if not process_dir.is_dir():
             return
 
@@ -404,7 +383,7 @@ class NUMPY_10_FileHandles(object):
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][destSlc] = array
         hashVal = numpy_10_encode(uid=self.w_uid,
-                                  checksum=checksum,
+                                  cksum=checksum,
                                   collection_idx=self.hIdx,
                                   shape=array.shape)
         return hashVal

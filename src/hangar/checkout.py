@@ -1,19 +1,21 @@
 import atexit
 import os
+import warnings
 import weakref
+from collections import namedtuple
 from contextlib import suppress
 from functools import partial
-from collections import namedtuple
 from uuid import uuid4
 
 import lmdb
-import warnings
 
 from .arrayset import Arraysets
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
-from .records import commiting, hashs, heads
+from .records import commiting
+from .records import hashs
+from .records import heads
 from .utils import cm_weakref_obj_proxy
 
 

@@ -2,12 +2,14 @@ import os
 import time
 from io import StringIO
 
-import numpy as np
 import lmdb
+import numpy as np
 
-from . import heads, commiting, queries
-from ..context import TxnRegister
+from .commiting import get_commit_ancestors_graph, get_commit_spec, tmp_cmt_env
+from .heads import get_staging_branch_head, get_branch_head_commit
+from .queries import RecordQuery
 from ..diff import DiffOut, Changes
+from ..txnctx import TxnRegister
 from ..utils import format_bytes, file_size, folder_size, unique_everseen
 
 
@@ -41,17 +43,17 @@ def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
     if commit_hash is not None:
         head_commit = commit_hash
     elif branch_name is not None:
-        head_commit = heads.get_branch_head_commit(branchenv=branchenv, branch_name=branch_name)
+        head_commit = get_branch_head_commit(branchenv=branchenv, branch_name=branch_name)
     else:
-        head_branch = heads.get_staging_branch_head(branchenv)
-        head_commit = heads.get_branch_head_commit(branchenv, head_branch)
+        head_branch = get_staging_branch_head(branchenv)
+        head_commit = get_branch_head_commit(branchenv, head_branch)
 
-    ancestors = commiting.get_commit_ancestors_graph(
+    ancestors = get_commit_ancestors_graph(
         refenv=refenv, starting_commit=head_commit)
 
     commitSpecs = {}
     for commit in ancestors.keys():
-        commitSpecs[commit] = dict(commiting.get_commit_spec(refenv, commit_hash=commit)._asdict())
+        commitSpecs[commit] = dict(get_commit_spec(refenv, commit_hash=commit)._asdict())
 
     cmtTimeSorter = [(k, v['commit_time']) for k, v in commitSpecs.items()]
     cmtTimeSorter.sort(key=lambda t: t[1], reverse=True)
@@ -133,18 +135,18 @@ def summary(env, *, branch='', commit='') -> StringIO:
     if commit != '':
         cmt = commit
     elif branch != '':
-        cmt = heads.get_branch_head_commit(env.branchenv, branch)
+        cmt = get_branch_head_commit(env.branchenv, branch)
     else:
-        headBranch = heads.get_staging_branch_head(env.branchenv)
-        cmt = heads.get_branch_head_commit(env.branchenv, headBranch)
+        headBranch = get_staging_branch_head(env.branchenv)
+        cmt = get_branch_head_commit(env.branchenv, headBranch)
 
-    spec = commiting.get_commit_spec(env.refenv, cmt)._asdict()
+    spec = get_commit_spec(env.refenv, cmt)._asdict()
     if cmt == '':
         print('No commits made')
         return {}
 
-    with commiting.tmp_cmt_env(env.refenv, cmt) as cmtrefenv:
-        query = queries.RecordQuery(cmtrefenv)
+    with tmp_cmt_env(env.refenv, cmt) as cmtrefenv:
+        query = RecordQuery(cmtrefenv)
 
         nbytes = folder_size(env.repo_path, recurse=True)
         humanBytes = format_bytes(nbytes)

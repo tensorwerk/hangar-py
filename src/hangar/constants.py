@@ -10,7 +10,7 @@ CMT_KV_JOIN_KEY = SEP_LST.encode()
 CMT_DIGEST_JOIN_KEY = ''
 CMT_REC_JOIN_KEY = SEP_HSH.encode()
 
-K_INT = f'#'
+K_INT = f'#'  # must be length 1 value
 K_BRANCH = f'branch{SEP_KEY}'
 K_HEAD = 'head'
 K_REMOTES = f'remote{SEP_KEY}'

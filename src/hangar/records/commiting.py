@@ -1,18 +1,42 @@
+import configparser
 import os
+import shutil
 import tempfile
 import time
-import shutil
 from contextlib import contextmanager
-import configparser
 from pathlib import Path
 
 import lmdb
 
-from . import heads, parsing
-from .. import constants as c
-from ..context import TxnRegister
-from .parsing import DigestAndBytes
-
+from .heads import (
+    get_branch_head_commit,
+    get_staging_branch_head,
+    set_branch_head_commit,
+    set_staging_branch_head,
+)
+from .parsing import (
+    cmt_final_digest,
+    commit_parent_db_key_from_raw_key,
+    commit_parent_db_val_from_raw_val,
+    commit_parent_raw_key_from_db_key,
+    commit_parent_raw_val_from_db_val,
+    commit_ref_db_key_from_raw_key,
+    commit_ref_db_val_from_raw_val,
+    commit_ref_raw_val_from_db_val,
+    commit_spec_db_key_from_raw_key,
+    commit_spec_db_val_from_raw_val,
+    commit_spec_raw_val_from_db_val,
+    DigestAndBytes,
+)
+from ..constants import (
+    CONFIG_USER_NAME,
+    DIR_DATA_REMOTE,
+    DIR_DATA_STAGE,
+    DIR_DATA_STORE,
+    LMDB_SETTINGS,
+    SEP_KEY,
+)
+from ..txnctx import TxnRegister
 
 """
 Reading commit specifications and parents.
@@ -43,12 +67,12 @@ def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> st
         if no expanded commit digest is found starting with the short version.
     """
     reftxn = TxnRegister().begin_reader_txn(refenv)
-    commitParentStart = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+    commitParentStart = commit_parent_db_key_from_raw_key(commit_hash)
     with reftxn.cursor() as cursor:
         shortHashExists = cursor.set_range(commitParentStart)
         if shortHashExists is True:
             commitKey = cursor.key()
-            commit_key = parsing.commit_parent_raw_key_from_db_key(commitKey)
+            commit_key = commit_parent_raw_key_from_db_key(commitKey)
             if commit_key.startswith(commit_hash) is False:
                 raise KeyError(f'No expanded commit hash found for short: {commit_hash}')
             cursor.next()
@@ -57,7 +81,7 @@ def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> st
             if nextHashExist is False:
                 return commit_key
             nextCommitKey = cursor.key()
-            next_commit_key = parsing.commit_parent_raw_key_from_db_key(nextCommitKey)
+            next_commit_key = commit_parent_raw_key_from_db_key(nextCommitKey)
             if next_commit_key.startswith(commit_hash) is True:
                 raise KeyError(f'Non unique short commit hash: {commit_hash}')
             else:
@@ -83,7 +107,7 @@ def check_commit_hash_in_history(refenv, commit_hash):
     """
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
-        commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+        commitParentKey = commit_parent_db_key_from_raw_key(commit_hash)
         commitParentVal = reftxn.get(commitParentKey, default=False)
         isCommitInHistory = True if commitParentVal is not False else False
     finally:
@@ -113,7 +137,7 @@ def get_commit_spec(refenv, commit_hash):
     """
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
-        parentCommitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
+        parentCommitSpecKey = commit_spec_db_key_from_raw_key(commit_hash)
         parentCommitSpecVal = reftxn.get(parentCommitSpecKey, default=False)
     finally:
         TxnRegister().abort_reader_txn(refenv)
@@ -121,7 +145,7 @@ def get_commit_spec(refenv, commit_hash):
     if parentCommitSpecVal is False:
         raise ValueError(f'No commit exists with the hash: {commit_hash}')
 
-    parentCommitSpec = parsing.commit_spec_raw_val_from_db_val(parentCommitSpecVal)
+    parentCommitSpec = commit_spec_raw_val_from_db_val(parentCommitSpecVal)
     return parentCommitSpec.user_spec
 
 
@@ -149,7 +173,7 @@ def get_commit_ancestors(refenv, commit_hash):
 
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
-        parentCommitKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+        parentCommitKey = commit_parent_db_key_from_raw_key(commit_hash)
         parentCommitVal = reftxn.get(parentCommitKey, default=False)
     finally:
         TxnRegister().abort_reader_txn(refenv)
@@ -157,7 +181,7 @@ def get_commit_ancestors(refenv, commit_hash):
     if parentCommitVal is False:
         raise ValueError(f'No commit exists with the hash: {commit_hash}')
 
-    parentCommitAncestors = parsing.commit_parent_raw_val_from_db_val(parentCommitVal)
+    parentCommitAncestors = commit_parent_raw_val_from_db_val(parentCommitVal)
     return parentCommitAncestors.ancestor_spec
 
 
@@ -248,9 +272,9 @@ def get_commit_ref(refenv, commit_hash):
     """
     reftxn = TxnRegister().begin_reader_txn(refenv)
     try:
-        cmtRefKey = parsing.commit_ref_db_key_from_raw_key(commit_hash)
-        cmtSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
-        cmtParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
+        cmtRefKey = commit_ref_db_key_from_raw_key(commit_hash)
+        cmtSpecKey = commit_spec_db_key_from_raw_key(commit_hash)
+        cmtParentKey = commit_parent_db_key_from_raw_key(commit_hash)
 
         cmtRefVal = reftxn.get(cmtRefKey, default=False)
         cmtSpecVal = reftxn.get(cmtSpecKey, default=False)
@@ -263,11 +287,11 @@ def get_commit_ref(refenv, commit_hash):
     if (cmtRefVal is False) or (cmtSpecVal is False) or (cmtParentVal is False):
         raise ValueError(f'No commit exists with the hash: {commit_hash}')
 
-    commitRefs = parsing.commit_ref_raw_val_from_db_val(cmtRefVal)
-    commitSpecs = parsing.commit_spec_raw_val_from_db_val(cmtSpecVal)
-    commitParent = parsing.commit_parent_raw_val_from_db_val(cmtParentVal)
+    commitRefs = commit_ref_raw_val_from_db_val(cmtRefVal)
+    commitSpecs = commit_spec_raw_val_from_db_val(cmtSpecVal)
+    commitParent = commit_parent_raw_val_from_db_val(cmtParentVal)
 
-    calculatedDigest = parsing.cmt_final_digest(
+    calculatedDigest = cmt_final_digest(
         parent_digest=commitParent.digest,
         spec_digest=commitSpecs.digest,
         refs_digest=commitRefs.digest)
@@ -336,7 +360,7 @@ def tmp_cmt_env(refenv: lmdb.Environment, commit_hash: str):
     tempD = tempfile.mkdtemp()
     try:
         tmpDF = os.path.join(tempD, 'test.lmdb')
-        tmpDB = lmdb.open(path=tmpDF, sync=False, writemap=True, **c.LMDB_SETTINGS)
+        tmpDB = lmdb.open(path=tmpDF, sync=False, writemap=True, **LMDB_SETTINGS)
         unpack_commit_ref(refenv, tmpDB, commit_hash)
         yield tmpDB
     finally:
@@ -391,14 +415,14 @@ def _commit_ancestors(branchenv: lmdb.Environment,
         appropriately based on the repo state and any specified arguments.
     """
     if not is_merge_commit:
-        masterBranch = heads.get_staging_branch_head(branchenv)
-        master_ancestor = heads.get_branch_head_commit(branchenv, masterBranch)
+        masterBranch = get_staging_branch_head(branchenv)
+        master_ancestor = get_branch_head_commit(branchenv, masterBranch)
         dev_ancestor = ''
     else:
-        master_ancestor = heads.get_branch_head_commit(branchenv, master_branch)
-        dev_ancestor = heads.get_branch_head_commit(branchenv, dev_branch)
+        master_ancestor = get_branch_head_commit(branchenv, master_branch)
+        dev_ancestor = get_branch_head_commit(branchenv, dev_branch)
 
-    commitParentVal = parsing.commit_parent_db_val_from_raw_val(
+    commitParentVal = commit_parent_db_val_from_raw_val(
         master_ancestor=master_ancestor,
         dev_ancestor=dev_ancestor,
         is_merge_commit=is_merge_commit)
@@ -427,10 +451,10 @@ def _commit_spec(message: str, user: str, email: str) -> DigestAndBytes:
         Formatted value for the specification field of the commit and digest of
         spec.
     """
-    spec_db = parsing.commit_spec_db_val_from_raw_val(commit_time=time.time(),
-                                                      commit_message=message,
-                                                      commit_user=user,
-                                                      commit_email=email)
+    spec_db = commit_spec_db_val_from_raw_val(commit_time=time.time(),
+                                              commit_message=message,
+                                              commit_user=user,
+                                              commit_email=email)
     return spec_db
 
 
@@ -452,7 +476,7 @@ def _commit_ref(stageenv: lmdb.Environment) -> DigestAndBytes:
 
     querys = RecordQuery(dataenv=stageenv)
     allRecords = tuple(querys._traverse_all_records())
-    res = parsing.commit_ref_db_val_from_raw_val(allRecords)
+    res = commit_ref_db_val_from_raw_val(allRecords)
     return res
 
 
@@ -495,7 +519,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
                                   master_branch=merge_master,
                                   dev_branch=merge_dev)
 
-    user_info_pth = Path(repo_path, c.CONFIG_USER_NAME)
+    user_info_pth = Path(repo_path, CONFIG_USER_NAME)
     CFG = configparser.ConfigParser()
     CFG.read(user_info_pth)
 
@@ -507,13 +531,13 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     cmtSpec = _commit_spec(message=message, user=USER_NAME, email=USER_EMAIL)
     cmtRefs = _commit_ref(stageenv=stageenv)
 
-    commit_hash = parsing.cmt_final_digest(parent_digest=cmtParent.digest,
-                                           spec_digest=cmtSpec.digest,
-                                           refs_digest=cmtRefs.digest)
+    commit_hash = cmt_final_digest(parent_digest=cmtParent.digest,
+                                   spec_digest=cmtSpec.digest,
+                                   refs_digest=cmtRefs.digest)
 
-    commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit_hash)
-    commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit_hash)
-    commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit_hash)
+    commitSpecKey = commit_spec_db_key_from_raw_key(commit_hash)
+    commitParentKey = commit_parent_db_key_from_raw_key(commit_hash)
+    commitRefKey = commit_ref_db_key_from_raw_key(commit_hash)
 
     reftxn = TxnRegister().begin_writer_txn(refenv)
     try:
@@ -526,11 +550,11 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
     # possible separate function
     move_process_data_to_store(repo_path)
     if is_merge_commit is False:
-        headBranchName = heads.get_staging_branch_head(branchenv)
-        heads.set_branch_head_commit(branchenv, headBranchName, commit_hash)
+        headBranchName = get_staging_branch_head(branchenv)
+        set_branch_head_commit(branchenv, headBranchName, commit_hash)
     else:
-        heads.set_staging_branch_head(branchenv=branchenv, branch_name=merge_master)
-        heads.set_branch_head_commit(branchenv, merge_master, commit_hash)
+        set_staging_branch_head(branchenv=branchenv, branch_name=merge_master)
+        set_branch_head_commit(branchenv, merge_master, commit_hash)
 
     return commit_hash
 
@@ -625,9 +649,9 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
         staging area)
 
     """
-    store_dir = Path(repo_path, c.DIR_DATA_STORE)
+    store_dir = Path(repo_path, DIR_DATA_STORE)
 
-    type_dir = c.DIR_DATA_REMOTE if remote_operation else c.DIR_DATA_STAGE
+    type_dir = DIR_DATA_REMOTE if remote_operation else DIR_DATA_STAGE
     process_dir = Path(repo_path, type_dir)
 
     store_fps = []
@@ -666,7 +690,7 @@ def list_all_commits(refenv):
         with refTxn.cursor() as cursor:
             cursor.first()
             for k in cursor.iternext(keys=True, values=False):
-                commitKey, *_ = k.decode().split(c.SEP_KEY)
+                commitKey, *_ = k.decode().split(SEP_KEY)
                 commits.add(commitKey)
             cursor.close()
     finally:

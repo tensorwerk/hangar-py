@@ -10,19 +10,19 @@ from tqdm import tqdm
 
 from .. import constants as c
 from ..backends import BACKEND_ACCESSOR_MAP, is_local_backend
-from ..context import TxnRegister
+from ..txnctx import TxnRegister
 from ..records import commiting, hashmachine, hashs, parsing, queries, heads
 from ..utils import tb_params_last_called
 
 
 def report_corruption_risk_on_parsing_error(func):
-    """Decorator adding try/except handeling non-explicit exceptions.
+    """Decorator adding try/except handling non-explicit exceptions.
 
     Explicitly raised RuntimeErrors generally point to corrupted data
     identified by a cryptographic hash mismatch. However, in order to get to
     the point where such quantities can be processes, a non-trivial amount of
-    parsing machinary must be run. Should any error be thrown in the parse
-    machinary due to corrupted values, this method raises the exception in a
+    parsing machinery must be run. Should any error be thrown in the parse
+    machinery due to corrupted values, this method raises the exception in a
     useful form; providing traceback context, likely root cause (displayed to
     users), and the offending arguments passed to the function which threw the
     error.

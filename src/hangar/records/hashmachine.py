@@ -1,7 +1,7 @@
-import struct
 import json
-from typing import Tuple
+import struct
 from hashlib import blake2b
+from typing import Tuple
 
 import numpy as np
 

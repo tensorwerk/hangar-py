@@ -1,12 +1,34 @@
 import lmdb
+from typing import Iterable, List, Tuple
 
-from . import parsing
-from .. import constants as c
-from ..context import TxnRegister
-from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
+from .parsing import (
+    arrayset_record_schema_raw_key_from_db_key,
+    arrayset_record_schema_raw_val_from_db_val,
+    hash_data_raw_key_from_db_key,
+    hash_meta_raw_val_from_db_val,
+    hash_schema_raw_key_from_db_key,
+    RawArraysetSchemaVal,
+)
+from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder, _DataHashSpecs
+from ..constants import K_HASH, K_SCHEMA
+from ..txnctx import TxnRegister
 
 
 class HashQuery(object):
+    """Traverse and query contents contained in ``hashenv`` and ``labelenv`` dbs
+
+    These methods operate on the databases which store the mapping of some data
+    digest to it's location on disk (or value in the case of metadata and
+    schemas). These databases are not specific to a particular commit; the
+    records are for every piece of data stored in every commit across history.
+
+    There are relatively few procedures which require traversal and mapping
+    across data records in this manner. The two most notable use cases are:
+
+        1. Remote client-server negotiation operations
+        2. Verifying the integrity of a repositories historical provenance, commit
+        contents, and data stored on disk.
+    """
 
     def __init__(self, hashenv: lmdb.Environment):
         self._hashenv = hashenv
@@ -33,7 +55,8 @@ class HashQuery(object):
             Tuple of bytes corresponding to ``(keys, values)`` if
             ``keys=True`` and ``values=True``.
         """
-        startHashRangeKey = f'{c.K_HASH}'.encode()
+        startHashRangeKey = f'{K_HASH}'.encode()
+        len_RangeKey = len(startHashRangeKey)
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             with hashtxn.cursor() as cursor:
@@ -42,8 +65,8 @@ class HashQuery(object):
                 # (rather then if/else checking on every iteration of loop)
                 if keys and not values:
                     while hashsExist:
-                        hashRecKey, hashRecVal = cursor.item()
-                        if hashRecKey.startswith(startHashRangeKey):
+                        hashRecKey = cursor.key()
+                        if hashRecKey[:len_RangeKey] == startHashRangeKey:
                             yield hashRecKey
                             hashsExist = cursor.next()
                             continue
@@ -52,7 +75,7 @@ class HashQuery(object):
                 elif values and not keys:  # pragma: no cover
                     while hashsExist:
                         hashRecKey, hashRecVal = cursor.item()
-                        if hashRecKey.startswith(startHashRangeKey):
+                        if hashRecKey[:len_RangeKey] == startHashRangeKey:
                             yield hashRecVal
                             hashsExist = cursor.next()
                             continue
@@ -61,7 +84,7 @@ class HashQuery(object):
                 elif keys and values:
                     while hashsExist:
                         hashRecKey, hashRecVal = cursor.item()
-                        if hashRecKey.startswith(startHashRangeKey):
+                        if hashRecKey[:len_RangeKey] == startHashRangeKey:
                             yield (hashRecKey, hashRecVal)
                             hashsExist = cursor.next()
                             continue
@@ -92,7 +115,8 @@ class HashQuery(object):
             Tuple of bytes corresponding to ``(keys, values)`` if
             ``keys=True`` and ``values=True``.
         """
-        startSchemaRangeKey = f'{c.K_SCHEMA}'.encode()
+        startSchemaRangeKey = f'{K_SCHEMA}'.encode()
+        len_RangeKey = len(startSchemaRangeKey)
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             with hashtxn.cursor() as cursor:
@@ -101,8 +125,8 @@ class HashQuery(object):
                 # (rather then if/else checking on every iteration of loop)
                 if keys and not values:
                     while schemasExist:
-                        schemaRecKey, schemaRecVal = cursor.item()
-                        if schemaRecKey.startswith(startSchemaRangeKey):
+                        schemaRecKey = cursor.key()
+                        if schemaRecKey[:len_RangeKey] == startSchemaRangeKey:
                             yield schemaRecKey
                             schemasExist = cursor.next()
                             continue
@@ -111,7 +135,7 @@ class HashQuery(object):
                 elif values and not keys:  # pragma: no cover
                     while schemasExist:
                         schemaRecKey, schemaRecVal = cursor.item()
-                        if schemaRecKey.startswith(startSchemaRangeKey):
+                        if schemaRecKey[:len_RangeKey] == startSchemaRangeKey:
                             yield schemaRecVal
                             schemasExist = cursor.next()
                             continue
@@ -120,7 +144,7 @@ class HashQuery(object):
                 elif keys and values:
                     while schemasExist:
                         schemaRecKey, schemaRecVal = cursor.item()
-                        if schemaRecKey.startswith(startSchemaRangeKey):
+                        if schemaRecKey[:len_RangeKey] == startSchemaRangeKey:
                             yield (schemaRecKey, schemaRecVal)
                             schemasExist = cursor.next()
                             continue
@@ -131,62 +155,56 @@ class HashQuery(object):
         finally:
             TxnRegister().abort_reader_txn(self._hashenv)
 
-    def list_all_hash_keys_raw(self):
+    def list_all_hash_keys_raw(self) -> List[str]:
         recs = self._traverse_all_hash_records(keys=True, values=False)
-        out = list(map(parsing.hash_data_raw_key_from_db_key, recs))
+        out = list(map(hash_data_raw_key_from_db_key, recs))
         return out
 
-    def gen_all_hash_keys_db(self):
+    def gen_all_hash_keys_db(self) -> Iterable[bytes]:
         recs = self._traverse_all_hash_records(keys=True, values=False)
         return recs
 
-    def num_arrays(self):
+    def num_arrays(self) -> int:
         num_total = self._hashenv.stat()['entries']
         remaining = num_total - self.num_schemas()
         return remaining
 
-    def list_all_schema_keys_raw(self):
+    def list_all_schema_keys_raw(self) -> List[str]:
         recs = self._traverse_all_schema_records(keys=True, values=False)
-        out = list(map(parsing.hash_schema_raw_key_from_db_key, recs))
+        out = list(map(hash_schema_raw_key_from_db_key, recs))
         return out
 
-    def gen_all_schema_keys_db(self):
+    def gen_all_schema_keys_db(self) -> Iterable[bytes]:
         recs = self._traverse_all_schema_records(keys=True, values=False)
         return recs
 
-    def num_schemas(self):
+    def num_schemas(self) -> int:
         recs = tuple(self._traverse_all_schema_records(keys=True, values=False))
         return len(recs)
 
-    def num_meta(self):
+    def num_meta(self) -> int:
         n = self._hashenv.stat()['entries']
         return n
 
-    def gen_all_hash_keys_raw_array_vals_parsed(self):
+    def gen_all_hash_keys_raw_array_vals_parsed(self) -> Iterable[Tuple[str, _DataHashSpecs]]:
         recs = self._traverse_all_hash_records(keys=True, values=True)
-        func_raw_key = parsing.hash_data_raw_key_from_db_key
-        func_parsed_val = backend_decoder
         for dbk, dbv in recs:
-            rawk = func_raw_key(dbk)
-            rawv = func_parsed_val(dbv)
+            rawk = hash_data_raw_key_from_db_key(dbk)
+            rawv = backend_decoder(dbv)
             yield (rawk, rawv)
 
-    def gen_all_hash_keys_raw_meta_vals_parsed(self):
+    def gen_all_hash_keys_raw_meta_vals_parsed(self) -> Iterable[Tuple[str, str]]:
         recs = self._traverse_all_hash_records(keys=True, values=True)
-        func_raw_key = parsing.hash_data_raw_key_from_db_key
-        func_parsed_val = parsing.hash_meta_raw_val_from_db_val
         for dbk, dbv in recs:
-            rawk = func_raw_key(dbk)
-            rawv = func_parsed_val(dbv)
+            rawk = hash_data_raw_key_from_db_key(dbk)
+            rawv = hash_meta_raw_val_from_db_val(dbv)
             yield (rawk, rawv)
 
-    def gen_all_schema_keys_raw_vals_parsed(self):
+    def gen_all_schema_keys_raw_vals_parsed(self) -> Iterable[Tuple[str, RawArraysetSchemaVal]]:
         recs = self._traverse_all_schema_records(keys=True, values=True)
-        func_raw_key = parsing.arrayset_record_schema_raw_key_from_db_key
-        func_parsed_val = parsing.arrayset_record_schema_raw_val_from_db_val
         for dbk, dbv in recs:
-            rawk = func_raw_key(dbk)
-            rawv = func_parsed_val(dbv)
+            rawk = arrayset_record_schema_raw_key_from_db_key(dbk)
+            rawv = arrayset_record_schema_raw_val_from_db_val(dbv)
             yield (rawk, rawv)
 
 

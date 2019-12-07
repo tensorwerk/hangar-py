@@ -3,8 +3,8 @@ import weakref
 import warnings
 from typing import Union, Optional, List
 
-from . import merger
-from . import constants as c
+from .merger import select_merge_algorithm
+from .constants import DIR_HANGAR
 from .remotes import Remotes
 from .context import Environments
 from .diagnostics import graphing, ecosystem, integrity
@@ -56,7 +56,7 @@ class Repository(object):
         except (TypeError, NotADirectoryError, PermissionError) as e:
             raise e from None
 
-        repo_pth = os.path.join(usr_path, c.DIR_HANGAR)
+        repo_pth = os.path.join(usr_path, DIR_HANGAR)
         if exists is False:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', UserWarning)
@@ -492,7 +492,7 @@ class Repository(object):
             Hash of the commit which is written if possible.
         """
         self.__verify_repo_initialized()
-        commit_hash = merger.select_merge_algorithm(
+        commit_hash = select_merge_algorithm(
             message=message,
             branchenv=self._env.branchenv,
             stageenv=self._env.stageenv,
@@ -713,14 +713,14 @@ class Repository(object):
             repositories which:
 
             1. store significant quantities of data on disk.
-            2. have a very large numer of commits in their history.
+            2. have a very large number of commits in their history.
 
             As a brief explanation for why these are the driving factors behind
             processing time:
 
             1. Every single piece of data in the repositories history must be read
                from disk, cryptographically hashed, and compared to the expected
-               value. There is no exception to this rule; regardless of when a pieece
+               value. There is no exception to this rule; regardless of when a piece
                of data was added / removed from an arrayset, or for how many (or how
                few) commits some sample exists in. The integrity of the commit tree at
                any point after some piece of data is added to the repo can only be
@@ -733,7 +733,7 @@ class Repository(object):
                how many commits some piece of data is referenced in.
 
             2. Each commit reference (defining names / contents of a commit) must be
-               decompressed and parsed into a useable data structure. We scan across
+               decompressed and parsed into a usable data structure. We scan across
                all data digests referenced in the commit and ensure that the
                corresponding data piece is known to hangar (and validated as
                unchanged). The commit refs (along with the corresponding user records,

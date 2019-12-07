@@ -1,173 +1,44 @@
+import configparser
 import os
 import platform
 import shutil
 import tempfile
 import warnings
-from collections import Counter
 from os.path import join as pjoin
 from typing import MutableMapping, Optional
 
 import lmdb
-import configparser
 
-from . import constants as c
 from . import __version__
-
-
-class TxnRegisterSingleton(type):
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(TxnRegisterSingleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-
-class TxnRegister(metaclass=TxnRegisterSingleton):
-    """Singleton to manage transaction thread safety in lmdb databases.
-
-    This is essentailly a reference counting transaction register, lots of room
-    for improvement here.
-    """
-
-    def __init__(self):
-        self.WriterAncestors = Counter()
-        self.ReaderAncestors = Counter()
-        self.WriterTxn: MutableMapping[lmdb.Environment, lmdb.Transaction] = {}
-        self.ReaderTxn: MutableMapping[lmdb.Environment, lmdb.Transaction] = {}
-
-    def begin_writer_txn(self, lmdbenv: lmdb.Environment,
-                         buffer: bool = False) -> lmdb.Transaction:
-        """Start a write enabled transaction on the given environment
-
-        If multiple write transactions are requested for the same handle, only
-        one instance of the transaction handle will be returened, and will not
-        close until all operations on that handle have requested to close
-
-        Parameters
-        ----------
-        lmdbenv : lmdb.Environment
-            the environment to open the transaction on
-        buffer : bool, optional
-            if buffer objects should be used (the default is False, which does
-            not use buffers)
-
-        Returns
-        -------
-        lmdb.Transaction
-            transaction handle to perform operations on
-        """
-        if self.WriterAncestors[lmdbenv] == 0:
-            self.WriterTxn[lmdbenv] = lmdbenv.begin(write=True, buffers=buffer)
-        self.WriterAncestors[lmdbenv] += 1
-        return self.WriterTxn[lmdbenv]
-
-    def begin_reader_txn(self, lmdbenv: lmdb.Environment,
-                         buffer: bool = False) -> lmdb.Transaction:
-        """Start a reader only txn for the given environment
-
-        If there a read-only transaction for the same environment already exists
-        then the same reader txn handle will be returned, and will not close
-        until all operations on that handle have said they are finished.
-
-        Parameters
-        ----------
-        lmdbenv : lmdb.Environment
-            the environment to start the transaction in.
-        buffer : bool, optional
-            weather a buffer transaction should be used (the default is False,
-            which means no buffers are returned)
-
-        Returns
-        -------
-        lmdb.Transaction
-            handle to the lmdb transaction.
-        """
-        if self.ReaderAncestors[lmdbenv] == 0:
-            self.ReaderTxn[lmdbenv] = lmdbenv.begin(write=False, buffers=buffer)
-        self.ReaderAncestors[lmdbenv] += 1
-        return self.ReaderTxn[lmdbenv]
-
-    def commit_writer_txn(self, lmdbenv: lmdb.Environment) -> bool:
-        """Commit changes made in a write-enable transaction handle
-
-        As multiple objects can have references to the same open transaction handle,
-        the data is not actually committed until all open transactions have called
-        the commit method.
-
-        Parameters
-        ----------
-        lmdbenv : lmdb.Environment
-            the environment handle used to open the transaction
-
-        Raises
-        ------
-        RuntimeError
-            If the internal reference counting gets out of sync
-
-        Returns
-        -------
-        bool
-            True if this operation actually committed, otherwise false
-            if other objects have references to the same (open) handle
-        """
-        ancestors = self.WriterAncestors[lmdbenv]
-        if ancestors == 0:
-            msg = f'hash ancestors are zero but commit called on {lmdbenv}'
-            raise RuntimeError(msg)
-        elif ancestors == 1:
-            self.WriterTxn[lmdbenv].commit()
-            self.WriterTxn.__delitem__(lmdbenv)
-            ret = True
-        else:
-            ret = False
-        self.WriterAncestors[lmdbenv] -= 1
-        return ret
-
-    def abort_reader_txn(self, lmdbenv: lmdb.Environment) -> bool:
-        """Request to close a read-only transaction handle
-
-        As multiple objects can have references to the same open transaction
-        handle, the transaction is not actuall aborted until all open transactions
-        have called the abort method
-
-
-        Parameters
-        ----------
-        lmdbenv : lmdb.Environment
-            the environment handle used to open the transaction
-
-        Raises
-        ------
-        RuntimeError
-            If the internal reference counting gets out of sync.
-
-        Returns
-        -------
-        bool
-            True if this operation actually aborted the transaction,
-            otherwise False if other objects have references to the same (open)
-            handle.
-        """
-        ancestors = self.ReaderAncestors[lmdbenv]
-        if ancestors == 0:
-            raise RuntimeError(f'hash ancestors are zero but abort called')
-        elif ancestors == 1:
-            self.ReaderTxn[lmdbenv].abort()
-            self.ReaderTxn.__delitem__(lmdbenv)
-            ret = True
-        else:
-            ret = False
-        self.ReaderAncestors[lmdbenv] -= 1
-        return ret
-
-
-"""
-Todo, refactor to avoid the need for these imports to be below TxnRegister,
-if they aren't right now, we get circular imports...
-"""
-
-from .records import commiting, heads, parsing, vcompat  # noqa: E402
-from .utils import readme_contents  # noqa: E402
+from .constants import (
+    CONFIG_USER_NAME,
+    DIR_DATA_REMOTE,
+    DIR_DATA_STAGE,
+    DIR_DATA_STORE,
+    DIR_DATA,
+    LMDB_BRANCH_NAME,
+    LMDB_HASH_NAME,
+    LMDB_META_NAME,
+    LMDB_REF_NAME,
+    LMDB_SETTINGS,
+    LMDB_STAGE_HASH_NAME,
+    LMDB_STAGE_REF_NAME,
+    README_FILE_NAME,
+)
+from .records.commiting import unpack_commit_ref
+from .records.heads import (
+    create_branch,
+    get_branch_head_commit,
+    get_staging_branch_head,
+    set_staging_branch_head,
+)
+from .records.parsing import repo_version_raw_spec_from_raw_string
+from .records.vcompat import (
+    is_repo_software_version_compatible,
+    set_repository_software_version,
+    startup_check_repo_version,
+)
+from .utils import readme_contents
 
 
 class Environments(object):
@@ -217,14 +88,14 @@ class Environments(object):
         RuntimeError If the repository version is not compatible with the
         current software.
         """
-        if not os.path.isfile(pjoin(self.repo_path, c.LMDB_BRANCH_NAME)):
+        if not os.path.isfile(pjoin(self.repo_path, LMDB_BRANCH_NAME)):
             msg = f'No repository exists at {self.repo_path}, please use `repo.init()` method'
             warnings.warn(msg, UserWarning)
             return False
 
-        repo_ver = vcompat.startup_check_repo_version(self.repo_path)
-        curr_ver = parsing.repo_version_raw_spec_from_raw_string(v_str=__version__)
-        if not vcompat.is_repo_software_version_compatible(repo_ver, curr_ver):
+        repo_ver = startup_check_repo_version(self.repo_path)
+        curr_ver = repo_version_raw_spec_from_raw_string(v_str=__version__)
+        if not is_repo_software_version_compatible(repo_ver, curr_ver):
             msg = f'repository written version: {repo_ver} is not comatible '\
                   f'with the current Hangar software version: {curr_ver}'
             raise RuntimeError(msg)
@@ -259,32 +130,32 @@ class Environments(object):
             If a hangar repository exists at the specified path, and `remove_old`
             was not set to ``True``.
         """
-        if os.path.isfile(pjoin(self.repo_path, c.LMDB_BRANCH_NAME)):
+        if os.path.isfile(pjoin(self.repo_path, LMDB_BRANCH_NAME)):
             if remove_old is True:
                 shutil.rmtree(self.repo_path)
             else:
                 raise OSError(f'Hangar Directory: {self.repo_path} already exists')
 
-        os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STORE))
-        os.makedirs(pjoin(self.repo_path, c.DIR_DATA_STAGE))
-        os.makedirs(pjoin(self.repo_path, c.DIR_DATA_REMOTE))
-        os.makedirs(pjoin(self.repo_path, c.DIR_DATA))
+        os.makedirs(pjoin(self.repo_path, DIR_DATA_STORE))
+        os.makedirs(pjoin(self.repo_path, DIR_DATA_STAGE))
+        os.makedirs(pjoin(self.repo_path, DIR_DATA_REMOTE))
+        os.makedirs(pjoin(self.repo_path, DIR_DATA))
         print(f'Hangar Repo initialized at: {self.repo_path}')
 
         userConf = {'USER': {'name': user_name, 'email': user_email}}
         CFG = configparser.ConfigParser()
         CFG.read_dict(userConf)
-        with open(pjoin(self.repo_path, c.CONFIG_USER_NAME), 'w') as f:
+        with open(pjoin(self.repo_path, CONFIG_USER_NAME), 'w') as f:
             CFG.write(f)
 
         readmeTxt = readme_contents(user_name, user_email)
-        with open(pjoin(self.repo_path, c.README_FILE_NAME), 'w') as f:
+        with open(pjoin(self.repo_path, README_FILE_NAME), 'w') as f:
             f.write(readmeTxt.getvalue())
 
         self._open_environments()
-        vcompat.set_repository_software_version(branchenv=self.branchenv, ver_str=__version__)
-        heads.create_branch(self.branchenv, 'master', '')
-        heads.set_staging_branch_head(self.branchenv, 'master')
+        set_repository_software_version(branchenv=self.branchenv, ver_str=__version__)
+        create_branch(self.branchenv, 'master', '')
+        set_staging_branch_head(self.branchenv, 'master')
         return self.repo_path
 
     def checkout_commit(self, branch_name: str = '', commit: str = '') -> str:
@@ -308,11 +179,11 @@ class Environments(object):
             commit_hash = commit
             txt = f' * Checking out COMMIT: {commit_hash}'
         elif branch_name != '':
-            commit_hash = heads.get_branch_head_commit(self.branchenv, branch_name)
+            commit_hash = get_branch_head_commit(self.branchenv, branch_name)
             txt = f' * Checking out BRANCH: {branch_name} with current HEAD: {commit_hash}'
         else:
-            head_branch = heads.get_staging_branch_head(self.branchenv)
-            commit_hash = heads.get_branch_head_commit(self.branchenv, head_branch)
+            head_branch = get_staging_branch_head(self.branchenv)
+            commit_hash = get_branch_head_commit(self.branchenv, head_branch)
             txt = f'\n Neither BRANCH or COMMIT specified.'\
                   f'\n * Checking out writing HEAD BRANCH: {head_branch}'
         print(txt)
@@ -326,14 +197,14 @@ class Environments(object):
         if platform.system() != 'Windows':
             with tempfile.TemporaryDirectory() as tempD:
                 tmpDF = os.path.join(tempD, f'{commit_hash}.lmdb')
-                tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-                commiting.unpack_commit_ref(self.refenv, tmpDB, commit_hash)
+                tmpDB = lmdb.open(path=tmpDF, **LMDB_SETTINGS)
+                unpack_commit_ref(self.refenv, tmpDB, commit_hash)
                 self.cmtenv[commit_hash] = tmpDB
         else:
             tempD = tempfile.mkdtemp()
             tmpDF = os.path.join(tempD, f'{commit_hash}.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-            commiting.unpack_commit_ref(self.refenv, tmpDB, commit_hash)
+            tmpDB = lmdb.open(path=tmpDF, **LMDB_SETTINGS)
+            unpack_commit_ref(self.refenv, tmpDB, commit_hash)
             self.cmtenv[commit_hash] = tmpDB
 
         return commit_hash
@@ -344,19 +215,19 @@ class Environments(object):
         If any commits are checked out (in an unpacked state), read those in as
         well.
         """
-        ref_pth = pjoin(self.repo_path, c.LMDB_REF_NAME)
-        hash_pth = pjoin(self.repo_path, c.LMDB_HASH_NAME)
-        stage_pth = pjoin(self.repo_path, c.LMDB_STAGE_REF_NAME)
-        branch_pth = pjoin(self.repo_path, c.LMDB_BRANCH_NAME)
-        label_pth = pjoin(self.repo_path, c.LMDB_META_NAME)
-        stagehash_pth = pjoin(self.repo_path, c.LMDB_STAGE_HASH_NAME)
+        ref_pth = pjoin(self.repo_path, LMDB_REF_NAME)
+        hash_pth = pjoin(self.repo_path, LMDB_HASH_NAME)
+        stage_pth = pjoin(self.repo_path, LMDB_STAGE_REF_NAME)
+        branch_pth = pjoin(self.repo_path, LMDB_BRANCH_NAME)
+        label_pth = pjoin(self.repo_path, LMDB_META_NAME)
+        stagehash_pth = pjoin(self.repo_path, LMDB_STAGE_HASH_NAME)
 
-        self.refenv = lmdb.open(path=ref_pth, **c.LMDB_SETTINGS)
-        self.hashenv = lmdb.open(path=hash_pth, **c.LMDB_SETTINGS)
-        self.stageenv = lmdb.open(path=stage_pth, **c.LMDB_SETTINGS)
-        self.branchenv = lmdb.open(path=branch_pth, **c.LMDB_SETTINGS)
-        self.labelenv = lmdb.open(path=label_pth, **c.LMDB_SETTINGS)
-        self.stagehashenv = lmdb.open(path=stagehash_pth, **c.LMDB_SETTINGS)
+        self.refenv = lmdb.open(path=ref_pth, **LMDB_SETTINGS)
+        self.hashenv = lmdb.open(path=hash_pth, **LMDB_SETTINGS)
+        self.stageenv = lmdb.open(path=stage_pth, **LMDB_SETTINGS)
+        self.branchenv = lmdb.open(path=branch_pth, **LMDB_SETTINGS)
+        self.labelenv = lmdb.open(path=label_pth, **LMDB_SETTINGS)
+        self.stagehashenv = lmdb.open(path=stagehash_pth, **LMDB_SETTINGS)
 
     def _close_environments(self):
 

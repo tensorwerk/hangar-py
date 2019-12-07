@@ -55,22 +55,18 @@ Technical Notes
    operation
 """
 import os
-import re
 from typing import NamedTuple, Optional
 
 import numpy as np
 
-from .. import constants as c
-
 # -------------------------------- Parser Implementation ----------------------
 
-_FmtCode = '50'
-# split up a formated parsed string into unique
-_patern = fr'\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}'
-_SplitDecoderRE = re.compile(fr'[{_patern}]')
 
-REMOTE_50_DataHashSpec = NamedTuple('REMOTE_50_DataHashSpec',
-                                    [('backend', str), ('schema_hash', str)])
+_FmtCode = '50'
+REMOTE_50_DataHashSpec = NamedTuple('REMOTE_50_DataHashSpec', [
+    ('backend', str),
+    ('schema_hash', str)
+])
 
 
 def remote_50_encode(schema_hash: str = '') -> bytes:
@@ -81,7 +77,7 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
     bytes
         hash data db value
     """
-    return f'{_FmtCode}{c.SEP_KEY}{schema_hash}'.encode()
+    return f'50:{schema_hash}'.encode()
 
 
 def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
@@ -97,10 +93,8 @@ def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
     REMOTE_50_DataHashSpec
         hash specification containing an identifies: `backend`, `schema_hash`
     """
-    db_str = db_val.decode()
-    _, schema_hash = _SplitDecoderRE.split(db_str)
-    raw_val = REMOTE_50_DataHashSpec(backend=_FmtCode, schema_hash=schema_hash)
-    return raw_val
+    schema_hash = db_val.decode()[3:]
+    return REMOTE_50_DataHashSpec('50', schema_hash)
 
 
 # ------------------------- Accessor Object -----------------------------------

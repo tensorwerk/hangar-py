@@ -15,7 +15,8 @@ from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
 from .header_manipulator_client_interceptor import header_adder_interceptor
 from .. import constants as c
-from ..context import Environments, TxnRegister
+from ..context import Environments
+from ..txnctx import TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs

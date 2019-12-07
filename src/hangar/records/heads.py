@@ -1,12 +1,28 @@
-from collections import defaultdict
 import warnings
+from collections import defaultdict
 from typing import NamedTuple
 
 import lmdb
 
-from . import parsing
-from ..context import TxnRegister
-
+from .parsing import (
+    remote_db_key_from_raw_key,
+    remote_db_val_from_raw_val,
+    remote_raw_key_from_db_key,
+    remote_raw_val_from_db_val,
+    repo_branch_head_db_key_from_raw_key,
+    repo_branch_head_db_val_from_raw_val,
+    repo_branch_head_raw_key_from_db_key,
+    repo_branch_head_raw_val_from_db_val,
+    repo_head_db_key,
+    repo_head_db_val_from_raw_val,
+    repo_head_raw_val_from_db_val,
+    repo_writer_lock_db_key,
+    repo_writer_lock_db_val_from_raw_val,
+    repo_writer_lock_force_release_sentinal,
+    repo_writer_lock_sentinal_db_val,
+)
+from ..constants import K_REMOTES, K_BRANCH
+from ..txnctx import TxnRegister
 
 BranchHead = NamedTuple('BranchHead', [
     ('name', str),
@@ -37,8 +53,8 @@ def writer_lock_held(branchenv):
     bool
         True if the lock is available to take, False if it is currently held.
     """
-    writerLockKey = parsing.repo_writer_lock_db_key()
-    writerLockSentinalVal = parsing.repo_writer_lock_sentinal_db_val()
+    writerLockKey = repo_writer_lock_db_key()
+    writerLockSentinalVal = repo_writer_lock_sentinal_db_val()
     branchtxn = TxnRegister().begin_reader_txn(branchenv)
     try:
         currentWriterLockVal = branchtxn.get(writerLockKey)
@@ -83,9 +99,9 @@ def acquire_writer_lock(branchenv, writer_uuid):
         If the lock can not be acquired
 
     """
-    writerLockKey = parsing.repo_writer_lock_db_key()
-    writerLockSentinalVal = parsing.repo_writer_lock_sentinal_db_val()
-    requestWriterLockVal = parsing.repo_writer_lock_db_val_from_raw_val(writer_uuid)
+    writerLockKey = repo_writer_lock_db_key()
+    writerLockSentinalVal = repo_writer_lock_sentinal_db_val()
+    requestWriterLockVal = repo_writer_lock_db_val_from_raw_val(writer_uuid)
 
     branchtxn = TxnRegister().begin_writer_txn(branchenv)
     try:
@@ -136,10 +152,10 @@ def release_writer_lock(branchenv, writer_uuid):
     RuntimeError
         if the request uuid does not match the lock value.
     """
-    writerLockKey = parsing.repo_writer_lock_db_key()
-    forceReleaseSentinal = parsing.repo_writer_lock_force_release_sentinal()
-    lockSentinalVal = parsing.repo_writer_lock_sentinal_db_val()
-    requestWriterLockVal = parsing.repo_writer_lock_db_val_from_raw_val(writer_uuid)
+    writerLockKey = repo_writer_lock_db_key()
+    forceReleaseSentinal = repo_writer_lock_force_release_sentinal()
+    lockSentinalVal = repo_writer_lock_sentinal_db_val()
+    requestWriterLockVal = repo_writer_lock_db_val_from_raw_val(writer_uuid)
 
     txn = TxnRegister().begin_writer_txn(branchenv)
     try:
@@ -210,8 +226,8 @@ def create_branch(branchenv, name, base_commit) -> BranchHead:
                   '(`master`) branch before new branches can be created'
             raise RuntimeError(msg)
 
-    branchHeadKey = parsing.repo_branch_head_db_key_from_raw_key(name)
-    branchHeadVal = parsing.repo_branch_head_db_val_from_raw_val(base_commit)
+    branchHeadKey = repo_branch_head_db_key_from_raw_key(name)
+    branchHeadVal = repo_branch_head_db_val_from_raw_val(base_commit)
 
     branchtxn = TxnRegister().begin_writer_txn(branchenv)
     try:
@@ -307,7 +323,7 @@ def remove_branch(branchenv: lmdb.Environment,
 
     branchtxn = TxnRegister().begin_writer_txn(branchenv)
     try:
-        branchHeadKey = parsing.repo_branch_head_db_key_from_raw_key(name)
+        branchHeadKey = repo_branch_head_db_key_from_raw_key(name)
         branchtxn.delete(branchHeadKey)
     finally:
         TxnRegister().commit_writer_txn(branchenv)
@@ -331,13 +347,13 @@ def get_staging_branch_head(branchenv):
     str
         name of the staging HEAD branch
     """
-    headKey = parsing.repo_head_db_key()
+    headKey = repo_head_db_key()
     txn = TxnRegister().begin_reader_txn(branchenv)
     try:
         headBranchVal = txn.get(headKey)
     finally:
         TxnRegister().abort_reader_txn(branchenv)
-    headBranch = parsing.repo_head_raw_val_from_db_val(headBranchVal)
+    headBranch = repo_head_raw_val_from_db_val(headBranchVal)
     return headBranch
 
 
@@ -366,9 +382,9 @@ def set_staging_branch_head(branchenv, branch_name):
     ValueError
         If the specified branch name does not exist.
     """
-    headKey = parsing.repo_head_db_key()
-    requestedHeadVal = parsing.repo_head_db_val_from_raw_val(branch_name)
-    requestedBranchKey = parsing.repo_branch_head_db_key_from_raw_key(branch_name)
+    headKey = repo_head_db_key()
+    requestedHeadVal = repo_head_db_val_from_raw_val(branch_name)
+    requestedBranchKey = repo_branch_head_db_key_from_raw_key(branch_name)
 
     branchtxn = TxnRegister().begin_writer_txn(branchenv)
     try:
@@ -408,7 +424,7 @@ def get_branch_head_commit(branchenv, branch_name):
     ValueError
         if `branch_name` does not exist in the repository
     """
-    requestedBranchKey = parsing.repo_branch_head_db_key_from_raw_key(branch_name)
+    requestedBranchKey = repo_branch_head_db_key_from_raw_key(branch_name)
     branchtxn = TxnRegister().begin_reader_txn(branchenv)
     try:
         branchNameVal = branchtxn.get(requestedBranchKey, default=False)
@@ -418,7 +434,7 @@ def get_branch_head_commit(branchenv, branch_name):
     finally:
         TxnRegister().abort_reader_txn(branchenv)
 
-    commit_hash = parsing.repo_branch_head_raw_val_from_db_val(branchNameVal)
+    commit_hash = repo_branch_head_raw_val_from_db_val(branchNameVal)
     return commit_hash
 
 
@@ -456,8 +472,8 @@ def set_branch_head_commit(branchenv, branch_name, commit_hash):
 
     branchtxn = TxnRegister().begin_writer_txn(branchenv)
     try:
-        branchHeadKey = parsing.repo_branch_head_db_key_from_raw_key(branch_name)
-        branchHeadVal = parsing.repo_branch_head_db_val_from_raw_val(commit_hash)
+        branchHeadKey = repo_branch_head_db_key_from_raw_key(branch_name)
+        branchHeadVal = repo_branch_head_db_val_from_raw_val(commit_hash)
         branchtxn.put(branchHeadKey, branchHeadVal)
     finally:
         TxnRegister().commit_writer_txn(branchenv)
@@ -478,7 +494,7 @@ def get_branch_names(branchenv):
     list of str
         list of branch names active in the repository.
     """
-    branchStartKey = parsing.c.K_BRANCH.encode()  # TODO: This is odd, why??
+    branchStartKey = K_BRANCH.encode()  # TODO: This is odd, why??
     branchNames = []
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
@@ -488,7 +504,7 @@ def get_branch_names(branchenv):
             while branchRangeExists:
                 branchKey = cursor.key()
                 if branchKey.startswith(branchStartKey):
-                    name = parsing.repo_branch_head_raw_key_from_db_key(branchKey)
+                    name = repo_branch_head_raw_key_from_db_key(branchKey)
                     branchNames.append(name)
                     branchRangeExists = cursor.next()
                 else:
@@ -547,8 +563,8 @@ def add_remote(branchenv: lmdb.Environment, name: str, address: str) -> bool:
     bool
         True if the new reference was saved, False if not.
     """
-    dbKey = parsing.remote_db_key_from_raw_key(name)
-    dbVal = parsing.remote_db_val_from_raw_val(address)
+    dbKey = remote_db_key_from_raw_key(name)
+    dbVal = remote_db_val_from_raw_val(address)
 
     branchTxn = TxnRegister().begin_writer_txn(branchenv)
     try:
@@ -579,7 +595,7 @@ def get_remote_address(branchenv: lmdb.Environment, name: str) -> str:
     str
         IP:PORT of the recorded remote server.
     """
-    dbKey = parsing.remote_db_key_from_raw_key(name)
+    dbKey = remote_db_key_from_raw_key(name)
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
         dbVal = branchTxn.get(dbKey, default=False)
@@ -590,7 +606,7 @@ def get_remote_address(branchenv: lmdb.Environment, name: str) -> str:
         msg = f'No remote with the name: {name} exists in the repo.'
         raise KeyError(msg)
     else:
-        remote_address = parsing.remote_raw_val_from_db_val(dbVal)
+        remote_address = remote_raw_val_from_db_val(dbVal)
         return remote_address
 
 
@@ -614,7 +630,7 @@ def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
     str
         IP:PORT of the remote with provided name (which was removed)
     """
-    dbKey = parsing.remote_db_key_from_raw_key(name)
+    dbKey = remote_db_key_from_raw_key(name)
     branchTxn = TxnRegister().begin_writer_txn(branchenv)
     try:
         dbVal = branchTxn.pop(dbKey)
@@ -625,7 +641,7 @@ def remove_remote(branchenv: lmdb.Environment, name: str) -> str:
         msg = f'No remote with the name: {name} exists in the repo.'
         raise ValueError(msg)
 
-    remote_address = parsing.remote_raw_val_from_db_val(dbVal)
+    remote_address = remote_raw_val_from_db_val(dbVal)
     return remote_address
 
 
@@ -642,7 +658,7 @@ def get_remote_names(branchenv):
     list of str
         list of remote names active in the repository.
     """
-    remoteStartKey = parsing.c.K_REMOTES.encode()  # TODO: This is odd, why??
+    remoteStartKey = K_REMOTES.encode()  # TODO: This is odd, why??
     remoteNames = []
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
@@ -652,7 +668,7 @@ def get_remote_names(branchenv):
             while remoteRangeExists:
                 remoteKey = cursor.key()
                 if remoteKey.startswith(remoteStartKey):
-                    name = parsing.remote_raw_key_from_db_key(remoteKey)
+                    name = remote_raw_key_from_db_key(remoteKey)
                     remoteNames.append(name)
                     remoteRangeExists = cursor.next()
                 else:

@@ -3,12 +3,17 @@ from os.path import join as pjoin
 
 import lmdb
 
-from . import parsing
-from .parsing import VersionSpec
-from .. import constants as c
-from ..context import TxnRegister
+from .parsing import (
+    repo_version_db_key,
+    repo_version_db_val_from_raw_val,
+    repo_version_raw_spec_from_raw_string,
+    repo_version_raw_string_from_raw_spec,
+    repo_version_raw_val_from_db_val,
+    VersionSpec,
+)
+from ..constants import LMDB_SETTINGS, LMDB_BRANCH_NAME
+from ..txnctx import TxnRegister
 from ..utils import pairwise
-
 
 """
 Repository version finding methods
@@ -38,9 +43,9 @@ def set_repository_software_version(branchenv: lmdb.Environment, ver_str: str,
     bool
         True if successful, False otherwise
     """
-    versionKey = parsing.repo_version_db_key()
-    ver_spec = parsing.repo_version_raw_spec_from_raw_string(v_str=ver_str)
-    versionVal = parsing.repo_version_db_val_from_raw_val(v_spec=ver_spec)
+    versionKey = repo_version_db_key()
+    ver_spec = repo_version_raw_spec_from_raw_string(v_str=ver_str)
+    versionVal = repo_version_db_val_from_raw_val(v_spec=ver_spec)
     branchTxn = TxnRegister().begin_writer_txn(branchenv)
     try:
         success = branchTxn.put(versionKey, versionVal, overwrite=overwrite)
@@ -67,7 +72,7 @@ def get_repository_software_version_spec(branchenv: lmdb.Environment) -> Version
     KeyError
         If no version key is set for the repository
     """
-    versionKey = parsing.repo_version_db_key()
+    versionKey = repo_version_db_key()
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
         versionVal = branchTxn.get(versionKey, default=False)
@@ -77,7 +82,7 @@ def get_repository_software_version_spec(branchenv: lmdb.Environment) -> Version
     if versionVal is False:
         raise KeyError('No version string is set for the repository')
     else:
-        version_val = parsing.repo_version_raw_val_from_db_val(versionVal)
+        version_val = repo_version_raw_val_from_db_val(versionVal)
         return version_val
 
 
@@ -99,7 +104,7 @@ def get_repository_software_version_str(branchenv: lmdb.Environment) -> str:
     KeyError
         If no version key is set for the repository
     """
-    versionKey = parsing.repo_version_db_key()
+    versionKey = repo_version_db_key()
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
         versionVal = branchTxn.get(versionKey, default=False)
@@ -109,8 +114,8 @@ def get_repository_software_version_str(branchenv: lmdb.Environment) -> str:
     if versionVal is False:
         raise KeyError('No version string is set for the repository')
     else:
-        ver_spec = parsing.repo_version_raw_val_from_db_val(versionVal)
-        ver_Str = parsing.repo_version_raw_string_from_raw_spec(ver_spec)
+        ver_spec = repo_version_raw_val_from_db_val(versionVal)
+        ver_Str = repo_version_raw_string_from_raw_spec(ver_spec)
         return ver_Str
 
 
@@ -140,14 +145,14 @@ def startup_check_repo_version(repo_path: os.PathLike) -> VersionSpec:
         If for whatever reason, the branch file does not exist on disk.
         Execution should not reach this point.
     """
-    brch_fp = pjoin(repo_path, c.LMDB_BRANCH_NAME)
+    brch_fp = pjoin(repo_path, LMDB_BRANCH_NAME)
     if not os.path.isfile(brch_fp):
         msg = f'Hangar Internal Error, startup_check_repo_version did not find '\
               f'brch db at: {brch_fp}. Execution should never reach this point. '\
               f'Please report this error to Hangar developers.'
         raise RuntimeError(msg)
 
-    branchenv = lmdb.open(path=brch_fp, readonly=True, create=False, **c.LMDB_SETTINGS)
+    branchenv = lmdb.open(path=brch_fp, readonly=True, create=False, **LMDB_SETTINGS)
     spec = get_repository_software_version_spec(branchenv=branchenv)
     branchenv.close()
     return spec
