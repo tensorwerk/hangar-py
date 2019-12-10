@@ -1,14 +1,30 @@
 import json
-from itertools import cycle
-from time import sleep
-from time import perf_counter
-from random import randint
-from typing import Union, NamedTuple, Tuple, Iterable
 from hashlib import blake2b
+from itertools import cycle
+from random import randint
+from time import perf_counter, sleep
+from typing import Union, NamedTuple, Tuple, Iterable
 
 import blosc
 
-from .. import constants as c
+from ..constants import (
+    CMT_DIGEST_JOIN_KEY,
+    CMT_KV_JOIN_KEY,
+    CMT_REC_JOIN_KEY,
+    K_BRANCH,
+    K_HASH,
+    K_HEAD,
+    K_INT,
+    K_REMOTES,
+    K_SCHEMA,
+    K_STGARR,
+    K_STGMETA,
+    K_VERSION,
+    K_WLOCK,
+    SEP_CMT,
+    SEP_KEY,
+    WLOCK_SENTINAL,
+)
 
 cycle_list = [str(c).rjust(5, '0') for c in range(99_999)]
 NAME_CYCLER = cycle(cycle_list)
@@ -56,8 +72,7 @@ def repo_version_raw_spec_from_raw_string(v_str: str) -> VersionSpec:
         NamedTuple containing int fileds of `major`, `minor`, `micro` version.
     """
     smajor, sminor, smicro = v_str.split('.')
-    res = VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro[0]))
-    return res
+    return VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro[0]))
 
 
 def repo_version_raw_string_from_raw_spec(v_spec: VersionSpec) -> str:
@@ -76,8 +91,7 @@ def repo_version_raw_string_from_raw_spec(v_spec: VersionSpec) -> str:
     str
         concatenated string with '.' between each major, minor, micro
     """
-    res = f'{v_spec.major}.{v_spec.minor}.{v_spec.micro}'
-    return res
+    return f'{v_spec.major}.{v_spec.minor}.{v_spec.micro}'
 
 
 # ------------------------- db version key is fixed -----------------
@@ -91,8 +105,7 @@ def repo_version_db_key() -> bytes:
     bytes
         db formatted key to use to get/set the repository software version.
     """
-    db_key = c.K_VERSION.encode()
-    return db_key
+    return K_VERSION.encode()
 
 
 # ------------------------ raw -> db --------------------------------
@@ -112,8 +125,7 @@ def repo_version_db_val_from_raw_val(v_spec: VersionSpec) -> bytes:
     bytes
         db formatted specification of version
     """
-    db_val = f'{v_spec.major}{c.SEP_KEY}{v_spec.minor}{c.SEP_KEY}{v_spec.micro}'
-    return db_val.encode()
+    return f'{v_spec.major}{SEP_KEY}{v_spec.minor}{SEP_KEY}{v_spec.micro}'.encode()
 
 
 # ---------------------------- db -> raw ----------------------------
@@ -133,9 +145,8 @@ def repo_version_raw_val_from_db_val(db_val: bytes) -> VersionSpec:
         NamedTuple containing major, minor, micro fields as ints.
     """
     db_str = db_val.decode()
-    smajor, sminor, smicro = db_str.split(c.SEP_KEY)
-    res = VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro))
-    return res
+    smajor, sminor, smicro = db_str.split(SEP_KEY)
+    return VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro))
 
 
 """
@@ -154,23 +165,20 @@ def repo_head_db_key() -> bytes:
     bytestring
         lmdb key to query while looking up the head staging branch name
     """
-    db_key = c.K_HEAD.encode()
-    return db_key
+    return K_HEAD.encode()
 
 
 # --------------------- raw -> db -----------------------------------
 
 
 def repo_head_db_val_from_raw_val(branch_name: str) -> bytes:
-    db_val = f'{c.K_BRANCH}{branch_name}'.encode()
-    return db_val
+    return f'{K_BRANCH}{branch_name}'.encode()
 
 
 # --------------------- db -> raw -----------------------------------
 
-def repo_head_raw_val_from_db_val(db_val: str) -> bytes:
-    raw_val = db_val.decode().replace(c.K_BRANCH, '', 1)
-    return raw_val
+def repo_head_raw_val_from_db_val(db_val: bytes) -> str:
+    return db_val.decode()[len(K_BRANCH):]
 
 
 """
@@ -182,22 +190,18 @@ Methods working with branch names / head commit values
 
 
 def repo_branch_head_db_key_from_raw_key(branch_name: str) -> bytes:
-    db_key = f'{c.K_BRANCH}{branch_name}'.encode()
-    return db_key
+    return f'{K_BRANCH}{branch_name}'.encode()
 
 
 def repo_branch_head_db_val_from_raw_val(commit_hash: str) -> bytes:
-    db_val = f'{commit_hash}'.encode()
-    return db_val
+    return f'{commit_hash}'.encode()
 
 
 # ---------------- db -> raw -----------------------------------
 
 
 def repo_branch_head_raw_key_from_db_key(db_key: bytes) -> str:
-    key_str = db_key.decode()
-    branch_name = key_str.replace(c.K_BRANCH, '', 1)
-    return branch_name
+    return db_key.decode()[len(K_BRANCH):]
 
 
 def repo_branch_head_raw_val_from_db_val(db_val: bytes) -> str:
@@ -217,13 +221,11 @@ Methods working with writer lock key/values
 
 
 def repo_writer_lock_db_key() -> bytes:
-    db_key = f'{c.K_WLOCK}'.encode()
-    return db_key
+    return K_WLOCK.encode()
 
 
 def repo_writer_lock_sentinal_db_val() -> bytes:
-    db_val = f'{c.WLOCK_SENTINAL}'.encode()
-    return db_val
+    return WLOCK_SENTINAL.encode()
 
 
 def repo_writer_lock_force_release_sentinal() -> str:
@@ -234,16 +236,14 @@ def repo_writer_lock_force_release_sentinal() -> str:
 
 
 def repo_writer_lock_db_val_from_raw_val(lock_uuid: str) -> bytes:
-    db_val = f'{lock_uuid}'.encode()
-    return db_val
+    return f'{lock_uuid}'.encode()
 
 
 # -------------------------- db -> raw ------------------------------
 
 
-def repo_writer_lock_raw_val_from_db_val(db_val: str) -> bytes:
-    lock_uuid = db_val.decode()
-    return lock_uuid
+def repo_writer_lock_raw_val_from_db_val(db_val: bytes) -> str:
+    return db_val.decode()
 
 
 """
@@ -295,7 +295,7 @@ Parsing functions to convert lmdb data record keys/vals to/from python vars
 # -------------------- db -> raw (python) -----------------------------
 
 
-def data_record_raw_key_from_db_key(db_key: bytes) -> RawDataRecordKey:
+def data_record_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_STGARR)) -> RawDataRecordKey:
     """Convert and split a lmdb record key & value into python objects
 
     Parameters
@@ -309,9 +309,9 @@ def data_record_raw_key_from_db_key(db_key: bytes) -> RawDataRecordKey:
         Tuple containing the record aset_name, data_name
     """
     key = db_key.decode()
-    aset_name, data_name = key.replace(c.K_STGARR, '', 1).split(c.SEP_KEY)
-    if data_name.startswith(c.K_INT):
-        data_name = int(data_name.lstrip(c.K_INT))
+    aset_name, data_name = key[_SPLT:].split(SEP_KEY)
+    if data_name[0] == K_INT:
+        data_name = int(data_name[1:])
     return RawDataRecordKey(aset_name, data_name)
 
 
@@ -328,8 +328,7 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
     RawDataRecordVal
         Tuple containing the record data_hash
     """
-    data_hash = db_val.decode()
-    return RawDataRecordVal(data_hash)
+    return RawDataRecordVal(db_val.decode())
 
 
 # -------------------- raw (python) -> db -----------------------------
@@ -351,9 +350,9 @@ def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int]) 
         Byte encoded db record key
     """
     if isinstance(data_name, int):
-        record_key = f'{c.K_STGARR}{aset_name}{c.SEP_KEY}{c.K_INT}{data_name}'.encode()
+        record_key = f'{K_STGARR}{aset_name}{SEP_KEY}{K_INT}{data_name}'.encode()
     else:
-        record_key = f'{c.K_STGARR}{aset_name}{c.SEP_KEY}{data_name}'.encode()
+        record_key = f'{K_STGARR}{aset_name}{SEP_KEY}{data_name}'.encode()
     return record_key
 
 
@@ -370,8 +369,7 @@ def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
     bytestring
         Byte encoded db record val.
     """
-    record_val = f'{data_hash}'.encode()
-    return record_val
+    return f'{data_hash}'.encode()
 
 
 """
@@ -395,8 +393,7 @@ def arrayset_record_schema_db_key_from_raw_key(aset_name):
     bytestring
         the db_key which can be used to query the schema
     """
-    db_schema_key = f'{c.K_SCHEMA}{aset_name}'.encode()
-    return db_schema_key
+    return f'{K_SCHEMA}{aset_name}'.encode()
 
 
 def arrayset_record_schema_db_val_from_raw_val(schema_hash,
@@ -448,16 +445,14 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
 
 # -------------- db schema -> raw schema -------------------------------
 
-def arrayset_record_schema_raw_key_from_db_key(db_key: bytes) -> str:
-    aset_name = db_key.decode().replace(c.K_SCHEMA, '', 1)
-    return aset_name
+def arrayset_record_schema_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_SCHEMA)) -> str:
+    return db_key.decode()[_SPLT:]
 
 
 def arrayset_record_schema_raw_val_from_db_val(db_val: bytes) -> RawArraysetSchemaVal:
     schema_spec = json.loads(db_val)
     schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
-    raw_val = RawArraysetSchemaVal(**schema_spec)
-    return raw_val
+    return RawArraysetSchemaVal(**schema_spec)
 
 
 """
@@ -467,8 +462,7 @@ Functions to convert total aset count records to/from python objects
 
 
 def arrayset_record_count_range_key(aset_name: str) -> bytes:
-    dv_key = f'{c.K_STGARR}{aset_name}{c.SEP_KEY}'.encode()
-    return dv_key
+    return f'{K_STGARR}{aset_name}{SEP_KEY}'.encode()
 
 
 """
@@ -492,8 +486,7 @@ def metadata_range_key() -> bytes:
     bytes
         db key to access the metadata count at
     """
-    db_key = c.K_STGMETA.encode()
-    return db_key
+    return K_STGMETA.encode()
 
 
 """
@@ -510,7 +503,7 @@ MetadataRecordVal.__doc__ = 'Represents a Metadata Sample Record Hash Value'
 # -------------------- db -> raw (python) -----------------------------
 
 
-def metadata_record_raw_key_from_db_key(db_key: bytes) -> MetadataRecordKey:
+def metadata_record_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_STGMETA)) -> MetadataRecordKey:
     """Convert and split a lmdb record key & value into python objects
 
     Parameters
@@ -523,9 +516,9 @@ def metadata_record_raw_key_from_db_key(db_key: bytes) -> MetadataRecordKey:
     MetadataRecordKey
         the metadata name
     """
-    meta_name = db_key.decode().replace(c.K_STGMETA, '', 1)
-    if meta_name.startswith(c.K_INT):
-        meta_name = int(meta_name.lstrip(c.K_INT))
+    meta_name = db_key.decode()[_SPLT:]
+    if meta_name[0] == K_INT:
+        meta_name = int(meta_name[1:])
     return MetadataRecordKey(meta_name)
 
 
@@ -542,8 +535,7 @@ def metadata_record_raw_val_from_db_val(db_val: bytes) -> MetadataRecordVal:
     MetadataRecordVal
         containing the metadata hash
     """
-    meta_hash = db_val.decode()
-    return MetadataRecordVal(meta_hash)
+    return MetadataRecordVal(db_val.decode())
 
 
 # -------------------- raw (python) -> db -----------------------------
@@ -563,9 +555,9 @@ def metadata_record_db_key_from_raw_key(meta_name: Union[str, int]) -> bytes:
         Byte encoded db record key
     """
     if isinstance(meta_name, int):
-        record_key = f'{c.K_STGMETA}{c.K_INT}{meta_name}'.encode()
+        record_key = f'{K_STGMETA}{K_INT}{meta_name}'.encode()
     else:
-        record_key = f'{c.K_STGMETA}{meta_name}'.encode()
+        record_key = f'{K_STGMETA}{meta_name}'.encode()
     return record_key
 
 
@@ -582,8 +574,7 @@ def metadata_record_db_val_from_raw_val(meta_hash: str) -> bytes:
     bytes
         Byte encoded db record val.
     """
-    record_val = meta_hash.encode()
-    return record_val
+    return meta_hash.encode()
 
 
 """
@@ -614,31 +605,22 @@ Data Hash parsing functions used to convert db key/val to raw pyhon obj
 
 
 def hash_schema_db_key_from_raw_key(schema_hash: str) -> bytes:
-    key = f'{c.K_SCHEMA}{schema_hash}'
-    db_key = key.encode()
-    return db_key
+    return f'{K_SCHEMA}{schema_hash}'.encode()
 
 
 def hash_data_db_key_from_raw_key(data_hash: str) -> bytes:
-    key = f'{c.K_HASH}{data_hash}'
-    db_key = key.encode()
-    return db_key
+    return f'{K_HASH}{data_hash}'.encode()
 
 
 # ----------------------------- db -> raw (python) ----------------------------
 
 
-def hash_schema_raw_key_from_db_key(db_key: bytes) -> str:
-    raw_key = db_key.decode()
-    data_hash = raw_key.replace(c.K_SCHEMA, '', 1)
-    return data_hash
+def hash_schema_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_SCHEMA)) -> str:
+    return db_key.decode()[_SPLT:]
 
 
-def hash_data_raw_key_from_db_key(db_key: bytes) -> str:
-    # may be uncesessary
-    raw_key = db_key.decode()
-    data_hash = raw_key.replace(c.K_HASH, '', 1)
-    return data_hash
+def hash_data_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_HASH)) -> str:
+    return db_key.decode()[_SPLT:]
 
 
 """
@@ -650,26 +632,22 @@ Metadata/Label Hash parsing functions used to convert db key/val to raw pyhon ob
 
 
 def hash_meta_db_key_from_raw_key(meta_hash: str) -> bytes:
-    db_key = f'{c.K_HASH}{meta_hash}'.encode()
-    return db_key
+    return f'{K_HASH}{meta_hash}'.encode()
 
 
 def hash_meta_db_val_from_raw_val(meta_val: str) -> bytes:
-    db_val = f'{meta_val}'.encode()
-    return db_val
+    return f'{meta_val}'.encode()
 
 
 # ----------------------------- db -> raw (python) ----------------------------
 
 
-def hash_meta_raw_key_from_db_key(db_key: bytes) -> str:
-    data_hash = db_key.decode().replace(c.K_HASH, '', 1)
-    return data_hash
+def hash_meta_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_HASH)) -> str:
+    return db_key.decode()[_SPLT:]
 
 
 def hash_meta_raw_val_from_db_val(db_val: bytes) -> str:
-    meta_val = db_val.decode()
-    return meta_val
+    return db_val.decode()
 
 
 # -------------------- Remote Work --------------------------------------------
@@ -688,12 +666,10 @@ def remote_db_key_from_raw_key(remote_name: str) -> bytes:
     bytes
         db key allowing access to address value at the name of the remote
     """
-    raw_key = f'{c.K_REMOTES}{remote_name}'
-    db_key = raw_key.encode()
-    return db_key
+    return f'{K_REMOTES}{remote_name}'.encode()
 
 
-def remote_raw_key_from_db_key(db_key: bytes) -> str:
+def remote_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_REMOTES)) -> str:
     """Get the remote name from a remote db key
 
     Parameters
@@ -706,9 +682,7 @@ def remote_raw_key_from_db_key(db_key: bytes) -> str:
     str
         name of the remote
     """
-    raw_key = db_key.decode()
-    remote_name = raw_key[len(c.K_REMOTES):]
-    return remote_name
+    return db_key.decode()[_SPLT:]
 
 
 def remote_db_val_from_raw_val(grpc_address: str) -> bytes:
@@ -724,8 +698,7 @@ def remote_db_val_from_raw_val(grpc_address: str) -> bytes:
     bytes
         formated representation of the grpc address suitable for storage in lmdb.
     """
-    db_val = grpc_address.encode()
-    return db_val
+    return grpc_address.encode()
 
 
 def remote_raw_val_from_db_val(db_val: bytes) -> str:
@@ -742,8 +715,7 @@ def remote_raw_val_from_db_val(db_val: bytes) -> str:
     str
         IP:PORT where the grpc server can be accessed.
     """
-    raw_val = db_val.decode()
-    return raw_val
+    return db_val.decode()
 
 
 """
@@ -801,8 +773,7 @@ def _hash_func(recs: bytes) -> str:
     str
         hexdigest of the joined tuple data
     """
-    digest = blake2b(recs, digest_size=20).hexdigest()
-    return digest
+    return blake2b(recs, digest_size=20).hexdigest()
 
 
 def cmt_final_digest(parent_digest: str, spec_digest: str, refs_digest: str,
@@ -828,7 +799,7 @@ def cmt_final_digest(parent_digest: str, spec_digest: str, refs_digest: str,
     """
     if tcode == 'a':
         sorted_digests = sorted([parent_digest, spec_digest, refs_digest])
-        joined_bytes = c.CMT_DIGEST_JOIN_KEY.join(sorted_digests).encode()
+        joined_bytes = CMT_DIGEST_JOIN_KEY.join(sorted_digests).encode()
         rawDigest = _hash_func(joined_bytes)
         digest = f'a={rawDigest}'
     else:
@@ -847,29 +818,26 @@ Commit Parent (ancestor) Lookup methods
 
 
 def commit_parent_db_key_from_raw_key(commit_hash: str) -> bytes:
-    db_key = f'{commit_hash}'.encode()
-    return db_key
+    return f'{commit_hash}'.encode()
 
 
 def commit_parent_db_val_from_raw_val(master_ancestor: str,
                                       dev_ancestor: str = '',
                                       is_merge_commit: bool = False) -> DigestAndBytes:
     if is_merge_commit:
-        str_val = f'{master_ancestor}{c.SEP_CMT}{dev_ancestor}'
+        str_val = f'{master_ancestor}{SEP_CMT}{dev_ancestor}'
     else:
         str_val = f'{master_ancestor}'
     db_val = str_val.encode()
     digest = _hash_func(db_val)
-    res = DigestAndBytes(digest=digest, raw=db_val)
-    return res
+    return DigestAndBytes(digest=digest, raw=db_val)
 
 
 # ------------------------------- db -> raw -----------------------------------
 
 
 def commit_parent_raw_key_from_db_key(db_key: bytes) -> str:
-    commit_hash = db_key.decode()
-    return commit_hash
+    return db_key.decode()
 
 
 def commit_parent_raw_val_from_db_val(db_val: bytes) -> DigestAndAncestorSpec:
@@ -890,7 +858,7 @@ def commit_parent_raw_val_from_db_val(db_val: bytes) -> DigestAndAncestorSpec:
     parentValDigest = _hash_func(db_val)
 
     commit_str = db_val.decode()
-    commit_ancestors = commit_str.split(c.SEP_CMT)
+    commit_ancestors = commit_str.split(SEP_CMT)
     if len(commit_ancestors) == 1:
         is_merge_commit = False
         master_ancestor = commit_ancestors[0]
@@ -901,8 +869,7 @@ def commit_parent_raw_val_from_db_val(db_val: bytes) -> DigestAndAncestorSpec:
         dev_ancestor = commit_ancestors[1]
 
     ancestorSpec = CommitAncestorSpec(is_merge_commit, master_ancestor, dev_ancestor)
-    res = DigestAndAncestorSpec(digest=parentValDigest, ancestor_spec=ancestorSpec)
-    return res
+    return DigestAndAncestorSpec(digest=parentValDigest, ancestor_spec=ancestorSpec)
 
 
 """
@@ -912,8 +879,7 @@ Commit reference key and values.
 
 
 def commit_ref_db_key_from_raw_key(commit_hash: str) -> bytes:
-    commit_ref_key = f'{commit_hash}{c.SEP_KEY}ref'.encode()
-    return commit_ref_key
+    return f'{commit_hash}{SEP_KEY}ref'.encode()
 
 
 def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
@@ -942,9 +908,8 @@ def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
         calculated digest of the commit ref record component
     """
     joined_db_kvs = sorted(map(_hash_func, joined_db_kvs))
-    joined_digests = c.CMT_DIGEST_JOIN_KEY.join(joined_db_kvs).encode()
-    ref_digest = _hash_func(joined_digests)
-    return ref_digest
+    joined_digests = CMT_DIGEST_JOIN_KEY.join(joined_db_kvs).encode()
+    return _hash_func(joined_digests)
 
 
 def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> DigestAndBytes:
@@ -961,13 +926,11 @@ def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> Dig
         `raw` serialized and compressed representation of the object. `digest`
         digest of the joined db kvs.
     """
-    joined = tuple(map(c.CMT_KV_JOIN_KEY.join, db_kvs))
+    joined = tuple(map(CMT_KV_JOIN_KEY.join, db_kvs))
     refDigest = _commit_ref_joined_kv_digest(joined)
-
-    pck = c.CMT_REC_JOIN_KEY.join(joined)
-    raw = blosc.compress(pck, typesize=1, clevel=8, shuffle=blosc.SHUFFLE, cname='zlib')
-    res = DigestAndBytes(digest=refDigest, raw=raw)
-    return res
+    pck = CMT_REC_JOIN_KEY.join(joined)
+    raw = blosc.compress(pck, typesize=1, clevel=8, shuffle=blosc.NOSHUFFLE, cname='zstd')
+    return DigestAndBytes(digest=refDigest, raw=raw)
 
 
 def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> DigestAndDbRefs:
@@ -986,19 +949,18 @@ def commit_ref_raw_val_from_db_val(commit_db_val: bytes) -> DigestAndDbRefs:
         time of that commit. key/value pairs are already in sorted order.
     """
     uncomp_db_raw = blosc.decompress(commit_db_val)
-    # if a commit has nothing in it (completly empty), the return from query == ()
+    # if a commit has nothing in it (completely empty), the return from query == ()
     # the stored data is b'' from which the hash is calculated. We manually set these
     # values as the expected unpacking routine will not work correctly.
     if uncomp_db_raw == b'':
         refsDigest = _hash_func(b'')
         raw_db_kv_list = ()
     else:
-        raw_joined_kvs_list = uncomp_db_raw.split(c.CMT_REC_JOIN_KEY)
+        raw_joined_kvs_list = uncomp_db_raw.split(CMT_REC_JOIN_KEY)
         refsDigest = _commit_ref_joined_kv_digest(raw_joined_kvs_list)
         raw_db_kv_list = tuple(map(tuple, map(bytes.split, raw_joined_kvs_list)))
 
-    res = DigestAndDbRefs(digest=refsDigest, db_kvs=raw_db_kv_list)
-    return res
+    return DigestAndDbRefs(digest=refsDigest, db_kvs=raw_db_kv_list)
 
 
 """
@@ -1008,8 +970,7 @@ Commit spec reference keys and values
 
 
 def commit_spec_db_key_from_raw_key(commit_hash: str) -> bytes:
-    commit_spec_key = f'{commit_hash}{c.SEP_KEY}spec'.encode()
-    return commit_spec_key
+    return f'{commit_hash}{SEP_KEY}spec'.encode()
 
 
 def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
@@ -1045,8 +1006,7 @@ def commit_spec_db_val_from_raw_val(commit_time: float, commit_message: str,
     digest = _hash_func(db_spec_val)
     comp_raw = blosc.compress(
         db_spec_val, typesize=8, clevel=9, shuffle=blosc.SHUFFLE, cname='zlib')
-    res = DigestAndBytes(digest=digest, raw=comp_raw)
-    return res
+    return DigestAndBytes(digest=digest, raw=comp_raw)
 
 
 def commit_spec_raw_val_from_db_val(db_val: bytes) -> DigestAndUserSpec:
@@ -1054,5 +1014,4 @@ def commit_spec_raw_val_from_db_val(db_val: bytes) -> DigestAndUserSpec:
     digest = _hash_func(uncompressed_db_val)
     commit_spec = json.loads(uncompressed_db_val)
     user_spec = CommitUserSpec(**commit_spec)
-    res = DigestAndUserSpec(digest=digest, user_spec=user_spec)
-    return res
+    return DigestAndUserSpec(digest=digest, user_spec=user_spec)

@@ -1,22 +1,31 @@
-import os
-import time
 import logging
+import os
 import tempfile
+import time
 import warnings
-from typing import List, NamedTuple, Optional, Sequence
-from contextlib import closing
 from collections import defaultdict
+from contextlib import closing
+from typing import List, NamedTuple, Optional, Sequence
 
 import grpc
 import lmdb
 from tqdm import tqdm
 
-from . import constants as c
-from .context import TxnRegister, Environments
+from .backends import backend_decoder
+from .constants import LMDB_SETTINGS
+from .context import Environments
+from .txnctx import TxnRegister
+from .records.commiting import (
+    check_commit_hash_in_history,
+    move_process_data_to_store,
+    unpack_commit_ref,
+)
+from .records import heads
+from .records import parsing
+from .records import queries
+from .records import summarize
 from .remote.client import HangarClient
 from .remote.content import ContentWriter, ContentReader
-from .backends import backend_decoder
-from .records import heads, summarize, commiting, queries, parsing
 from .utils import is_suitable_user_key
 
 logger = logging.getLogger(__name__)
@@ -332,7 +341,7 @@ class Remotes(object):
             cmt = heads.get_branch_head_commit(self._env.branchenv, branch_name=branch)
         else:
             cmt = commit
-            cmtExist = commiting.check_commit_hash_in_history(self._env.refenv, commit)
+            cmtExist = check_commit_hash_in_history(self._env.refenv, commit)
             if not cmtExist:
                 raise ValueError(f'specified commit: {commit} does not exist in the repo.')
 
@@ -352,7 +361,7 @@ class Remotes(object):
         with tempfile.TemporaryDirectory() as tempD:
             # share unpacked ref db between dependent methods
             tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
+            tmpDB = lmdb.open(path=tmpDF, **LMDB_SETTINGS)
             try:
                 allHashs = set()
                 # all history argument
@@ -362,14 +371,12 @@ class Remotes(object):
                             notEmpty = curs.first()
                             while notEmpty:
                                 notEmpty = curs.delete()
-                    commiting.unpack_commit_ref(self._env.refenv, tmpDB, commit)
-                    # arrayset_names option
-                    if arrayset_names is not None:
-                        for asetn in arrayset_names:
-                            cmtData_hashs = queries.RecordQuery(tmpDB).arrayset_data_hashes(asetn)
-                            allHashs.update(cmtData_hashs)
-                    else:
-                        cmtData_hashs = queries.RecordQuery(tmpDB).data_hashes()
+                    unpack_commit_ref(self._env.refenv, tmpDB, commit)
+                    # handle arrayset_names option
+                    if arrayset_names is None:
+                        arrayset_names = queries.RecordQuery(tmpDB).arrayset_names()
+                    for asetn in arrayset_names:
+                        cmtData_hashs = queries.RecordQuery(tmpDB).arrayset_data_hashes(asetn)
                         allHashs.update(cmtData_hashs)
             finally:
                 tmpDB.close()
@@ -408,7 +415,7 @@ class Remotes(object):
                     pbar.update(len(saved_digests))
                     hashes = hashes.difference(set(saved_digests))
 
-        commiting.move_process_data_to_store(self._repo_path, remote_operation=True)
+        move_process_data_to_store(self._repo_path, remote_operation=True)
         return commits
 
     def push(self, remote: str, branch: str,
@@ -498,7 +505,7 @@ class Remotes(object):
             m_schema_hashs = defaultdict(set)
             with tempfile.TemporaryDirectory() as tempD:
                 tmpDF = os.path.join(tempD, 'test.lmdb')
-                tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
+                tmpDB = lmdb.open(path=tmpDF, **LMDB_SETTINGS)
                 for commit in tqdm(m_commits, desc='counting objects'):
                     # share unpacked ref db between dependent methods
                     with tmpDB.begin(write=True) as txn:
@@ -506,7 +513,7 @@ class Remotes(object):
                             notEmpty = curs.first()
                             while notEmpty:
                                 notEmpty = curs.delete()
-                    commiting.unpack_commit_ref(self._env.refenv, tmpDB, commit)
+                    unpack_commit_ref(self._env.refenv, tmpDB, commit)
                     # schemas
                     schema_res = client.push_find_missing_schemas(commit, tmpDB=tmpDB)
                     m_schemas.update(schema_res.schema_digests)

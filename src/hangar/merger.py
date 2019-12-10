@@ -16,8 +16,21 @@ import os
 import lmdb
 
 from .diff import WriterUserDiff, diff_envs, find_conflicts
-from .records import commiting, hashs, heads
-from .records.commiting import tmp_cmt_env
+from .records.commiting import (
+    tmp_cmt_env,
+    replace_staging_area_with_commit,
+    replace_staging_area_with_refs,
+    commit_records,
+)
+from .records.hashs import clear_stage_hash_records, delete_in_process_data
+from .records.heads import (
+    get_staging_branch_head,
+    get_branch_head_commit,
+    set_staging_branch_head,
+    set_branch_head_commit,
+    release_writer_lock,
+    acquire_writer_lock,
+)
 
 
 def select_merge_algorithm(message: str,
@@ -74,7 +87,7 @@ def select_merge_algorithm(message: str,
     str
         commit hash of the merge if this was a successful operation.
     """
-    current_head = heads.get_staging_branch_head(branchenv)
+    current_head = get_staging_branch_head(branchenv)
     wDiffer = WriterUserDiff(stageenv=stageenv,
                              branchenv=branchenv,
                              refenv=refenv,
@@ -87,13 +100,13 @@ def select_merge_algorithm(message: str,
         raise e from None
 
     try:
-        heads.acquire_writer_lock(branchenv=branchenv, writer_uuid=writer_uuid)
+        acquire_writer_lock(branchenv=branchenv, writer_uuid=writer_uuid)
     except PermissionError as e:
         raise e from None
 
     try:
-        mHEAD = heads.get_branch_head_commit(branchenv, branch_name=master_branch)
-        dHEAD = heads.get_branch_head_commit(branchenv, branch_name=dev_branch)
+        mHEAD = get_branch_head_commit(branchenv, branch_name=master_branch)
+        dHEAD = get_branch_head_commit(branchenv, branch_name=dev_branch)
         branchHistory = wDiffer._determine_ancestors(mHEAD=mHEAD, dHEAD=dHEAD)
 
         if branchHistory.canFF is True:
@@ -126,7 +139,7 @@ def select_merge_algorithm(message: str,
 
     finally:
         if writer_uuid == 'MERGE_PROCESS':
-            heads.release_writer_lock(branchenv=branchenv, writer_uuid=writer_uuid)
+            release_writer_lock(branchenv=branchenv, writer_uuid=writer_uuid)
 
     return success
 
@@ -170,15 +183,15 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
         updated to.
     """
     try:
-        commiting.replace_staging_area_with_commit(
+        replace_staging_area_with_commit(
             refenv=refenv, stageenv=stageenv, commit_hash=new_masterHEAD)
 
-        outBranchName = heads.set_branch_head_commit(
+        outBranchName = set_branch_head_commit(
             branchenv=branchenv, branch_name=master_branch, commit_hash=new_masterHEAD)
-        heads.set_staging_branch_head(branchenv=branchenv, branch_name=master_branch)
+        set_staging_branch_head(branchenv=branchenv, branch_name=master_branch)
 
-        hashs.delete_in_process_data(repo_path=repo_path)
-        hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
+        delete_in_process_data(repo_path=repo_path)
+        clear_stage_hash_records(stagehashenv=stagehashenv)
 
     except ValueError as e:
         raise e from None
@@ -263,10 +276,10 @@ def _three_way_merge(message: str,
                 for kv in cur.iternext(keys=True, values=True):
                     dbcont.append(kv)
 
-    hashs.delete_in_process_data(repo_path=repo_path)
-    commiting.replace_staging_area_with_refs(stageenv=stageenv, sorted_content=dbcont)
+    delete_in_process_data(repo_path=repo_path)
+    replace_staging_area_with_refs(stageenv=stageenv, sorted_content=dbcont)
 
-    commit_hash = commiting.commit_records(
+    commit_hash = commit_records(
         message=message,
         branchenv=branchenv,
         stageenv=stageenv,
@@ -276,5 +289,5 @@ def _three_way_merge(message: str,
         merge_master=master_branch,
         merge_dev=dev_branch)
 
-    hashs.clear_stage_hash_records(stagehashenv=stagehashenv)
+    clear_stage_hash_records(stagehashenv=stagehashenv)
     return commit_hash

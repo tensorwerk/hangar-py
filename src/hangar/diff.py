@@ -1,26 +1,31 @@
 from itertools import starmap
-from typing import Iterable
-from typing import List
-from typing import NamedTuple
-from typing import Set
-from typing import Tuple
-from typing import Union
+from typing import Iterable, List, NamedTuple, Set, Tuple, Union
 
 import lmdb
 
-from .context import TxnRegister
-from .records import commiting
-from .records import heads
-from .records.commiting import tmp_cmt_env
-from .records.parsing import MetadataRecordKey
-from .records.parsing import RawDataRecordKey
-from .records.parsing import arrayset_record_schema_raw_key_from_db_key
-from .records.parsing import arrayset_record_schema_raw_val_from_db_val
-from .records.parsing import data_record_raw_key_from_db_key
-from .records.parsing import data_record_raw_val_from_db_val
-from .records.parsing import metadata_record_raw_key_from_db_key
-from .records.parsing import metadata_record_raw_val_from_db_val
+from .records.commiting import (
+    check_commit_hash_in_history,
+    get_commit_ancestors_graph,
+    get_commit_ref,
+    get_commit_spec,
+    tmp_cmt_env,
+)
+from .records.heads import (
+    get_branch_head_commit,
+    get_branch_names,
+)
+from .records.parsing import (
+    arrayset_record_schema_raw_key_from_db_key,
+    arrayset_record_schema_raw_val_from_db_val,
+    data_record_raw_key_from_db_key,
+    data_record_raw_val_from_db_val,
+    metadata_record_raw_key_from_db_key,
+    metadata_record_raw_val_from_db_val,
+    MetadataRecordKey,
+    RawDataRecordKey,
+)
 from .records.queries import RecordQuery
+from .txnctx import TxnRegister
 
 # ------------------------- Differ Types --------------------------------------
 
@@ -95,11 +100,11 @@ def diff_envs(base_env: lmdb.Environment, head_env: lmdb.Environment) -> DiffOut
     """
     added, deleted, mutated = [], [], []
 
+    baseTxn = TxnRegister().begin_reader_txn(base_env)
+    headTxn = TxnRegister().begin_reader_txn(head_env)
+    baseCur = baseTxn.cursor()
+    headCur = headTxn.cursor()
     try:
-        baseTxn = TxnRegister().begin_reader_txn(base_env)
-        headTxn = TxnRegister().begin_reader_txn(head_env)
-        baseCur = baseTxn.cursor()
-        headCur = headTxn.cursor()
         moreBase = baseCur.first()
         moreHead = headCur.first()
 
@@ -144,8 +149,8 @@ def diff_envs(base_env: lmdb.Environment, head_env: lmdb.Environment) -> DiffOut
     finally:
         baseCur.close()
         headCur.close()
-        base_env = TxnRegister().abort_reader_txn(base_env)
-        head_env = TxnRegister().abort_reader_txn(head_env)
+        TxnRegister().abort_reader_txn(base_env)
+        TxnRegister().abort_reader_txn(head_env)
 
     return DiffOutDB(set(added), set(deleted), set(mutated))
 
@@ -302,15 +307,14 @@ class BaseUserDiff(object):
             indicating the masterHEAD, devHEAD, ancestorHEAD, and canFF which
             tells if this is a fast-forward-able commit.
         """
-
-        mAncestors = commiting.get_commit_ancestors_graph(self._refenv, mHEAD)
-        dAncestors = commiting.get_commit_ancestors_graph(self._refenv, dHEAD)
+        mAncestors = get_commit_ancestors_graph(self._refenv, mHEAD)
+        dAncestors = get_commit_ancestors_graph(self._refenv, dHEAD)
         cAncestors = set(mAncestors.keys()).intersection(set(dAncestors.keys()))
         canFF = True if mHEAD in cAncestors else False
 
         ancestorOrder = []
         for ancestor in cAncestors:
-            timeOfCommit = commiting.get_commit_spec(self._refenv, ancestor).commit_time
+            timeOfCommit = get_commit_spec(self._refenv, ancestor).commit_time
             ancestorOrder.append((ancestor, timeOfCommit))
 
         ancestorOrder.sort(key=lambda t: t[1], reverse=True)
@@ -346,9 +350,7 @@ class BaseUserDiff(object):
         conflict = find_conflicts(diffs[0], diffs[1])
         return DiffAndConflictsDB(diff=diffs[2], conflict=conflict)
 
-    def _diff(self,
-              a_env: lmdb.Environment,
-              m_env: lmdb.Environment) -> DiffAndConflictsDB:
+    def _diff(self, a_env: lmdb.Environment, m_env: lmdb.Environment) -> DiffAndConflictsDB:
         """Fast Forward differ from ancestor to master commit.
 
         Note: this method returns the same MasterDevDiff struct as the three
@@ -416,7 +418,7 @@ class ReaderUserDiff(BaseUserDiff):
         super().__init__(*args, **kwargs)
         self._commit_hash = commit_hash
 
-    def _commit(self, dev_commit_hash: str) -> DiffAndConflictsDB:
+    def _run_diff(self, dev_commit_hash: str) -> DiffAndConflictsDB:
         """Compute diff between head and commit hash, returning DB formatted results
 
         Parameters
@@ -429,16 +431,7 @@ class ReaderUserDiff(BaseUserDiff):
         DiffAndConflictsDB
             two-tuple of `diff`, `conflict` (if any) calculated in the diff
             algorithm.
-
-        Raises
-        ------
-        ValueError
-            if the specified `dev_commit_hash` is not a valid commit reference.
         """
-        if not commiting.check_commit_hash_in_history(self._refenv, dev_commit_hash):
-            msg = f'HANGAR VALUE ERROR: dev_commit_hash: {dev_commit_hash} does not exist'
-            raise ValueError(msg)
-
         hist = self._determine_ancestors(self._commit_hash, dev_commit_hash)
         mH, dH, aH = hist.masterHEAD, hist.devHEAD, hist.ancestorHEAD
         with tmp_cmt_env(self._refenv, mH) as m_env, tmp_cmt_env(self._refenv, dH) as d_env:
@@ -447,43 +440,6 @@ class ReaderUserDiff(BaseUserDiff):
             else:
                 with tmp_cmt_env(self._refenv, aH) as a_env:
                     outDb = self._diff3(a_env, m_env, d_env)
-        return outDb
-
-    def _branch(self, dev_branch: str) -> DiffAndConflictsDB:
-        """Compute diff between ``HEAD`` and branch name, returning DB formatted results.
-
-        Parameters
-        ----------
-        dev_branch : str
-            name of the branch whose HEAD will be used to calculate the diff of.
-
-        Returns
-        -------
-        DiffAndConflictsDB
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff
-            algorithm.
-
-        Raises
-        ------
-        ValueError
-            If the specified `dev_branch` does not exist.
-        """
-        branchNames = heads.get_branch_names(self._branchenv)
-        if dev_branch in branchNames:
-            dHEAD = heads.get_branch_head_commit(self._branchenv, dev_branch)
-        else:
-            msg = f'HANGAR VALUE ERROR: dev_branch: {dev_branch} invalid branch name'
-            raise ValueError(msg)
-
-        hist = self._determine_ancestors(self._commit_hash, dHEAD)
-        mH, dH, aH = hist.masterHEAD, hist.devHEAD, hist.ancestorHEAD
-        with tmp_cmt_env(self._refenv, mH) as m_env, tmp_cmt_env(self._refenv, dH) as d_env:
-            if hist.canFF is True:
-                outDb = self._diff(m_env, d_env)
-            else:
-                with tmp_cmt_env(self._refenv, aH) as a_env:
-                    outDb = self._diff3(a_env, m_env, d_env)
-
         return outDb
 
     def commit(self, dev_commit_hash: str) -> DiffAndConflicts:
@@ -505,7 +461,11 @@ class ReaderUserDiff(BaseUserDiff):
         ValueError
             if the specified ``dev_commit_hash`` is not a valid commit reference.
         """
-        outDb = self._commit(dev_commit_hash=dev_commit_hash)
+        if not check_commit_hash_in_history(self._refenv, dev_commit_hash):
+            msg = f'HANGAR VALUE ERROR: dev_commit_hash: {dev_commit_hash} does not exist'
+            raise ValueError(msg)
+
+        outDb = self._run_diff(dev_commit_hash=dev_commit_hash)
         outRaw = _all_raw_from_db_changes(outDb)
         return outRaw
 
@@ -528,7 +488,14 @@ class ReaderUserDiff(BaseUserDiff):
         ValueError
             If the specified `dev_branch` does not exist.
         """
-        outDb = self._branch(dev_branch=dev_branch)
+        branchNames = get_branch_names(self._branchenv)
+        if dev_branch in branchNames:
+            dHEAD = get_branch_head_commit(self._branchenv, dev_branch)
+        else:
+            msg = f'HANGAR VALUE ERROR: dev_branch: {dev_branch} invalid branch name'
+            raise ValueError(msg)
+
+        outDb = self._run_diff(dev_commit_hash=dHEAD)
         outRaw = _all_raw_from_db_changes(outDb)
         return outRaw
 
@@ -580,7 +547,7 @@ class WriterUserDiff(BaseUserDiff):
         self._stageenv: lmdb.Environment = stageenv
         self._branch_name: str = branch_name
 
-    def _commit(self, dev_commit_hash: str) -> DiffAndConflictsDB:
+    def _run_diff(self, dev_commit_hash: str) -> DiffAndConflictsDB:
         """Compute diff between head and commit, returning DB formatted results.
 
         Parameters
@@ -593,17 +560,8 @@ class WriterUserDiff(BaseUserDiff):
         DiffAndConflictsDB
             two-tuple of `diff`, `conflict` (if any) calculated in the diff
             algorithm.
-
-        Raises
-        ------
-        ValueError
-            if the specified `dev_commit_hash` is not a valid commit reference.
         """
-        if not commiting.check_commit_hash_in_history(self._refenv, dev_commit_hash):
-            msg = f'HANGAR VALUE ERROR: dev_commit_hash: {dev_commit_hash} does not exist'
-            raise ValueError(msg)
-
-        commit_hash = heads.get_branch_head_commit(self._branchenv, self._branch_name)
+        commit_hash = get_branch_head_commit(self._branchenv, self._branch_name)
         hist = self._determine_ancestors(commit_hash, dev_commit_hash)
         with tmp_cmt_env(self._refenv, hist.devHEAD) as d_env:
             if hist.canFF is True:
@@ -611,56 +569,6 @@ class WriterUserDiff(BaseUserDiff):
             else:
                 with tmp_cmt_env(self._refenv, hist.ancestorHEAD) as a_env:
                     res = self._diff3(a_env, self._stageenv, d_env)
-        return res
-
-    def _branch(self, dev_branch: str) -> DiffAndConflictsDB:
-        """Compute diff between head and branch name, returning DB formatted results.
-
-        Parameters
-        ----------
-        dev_branch : str
-            name of the branch whose HEAD will be used to calculate the diff of.
-
-        Returns
-        -------
-        DiffAndConflictsDB
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff
-            algorithm.
-
-        Raises
-        ------
-        ValueError
-            If the specified `dev_branch` does not exist.
-        """
-        branchNames = heads.get_branch_names(self._branchenv)
-        if dev_branch in branchNames:
-            dHEAD = heads.get_branch_head_commit(self._branchenv, dev_branch)
-        else:
-            msg = f'HANGAR VALUE ERROR: dev_branch: {dev_branch} invalid branch name'
-            raise ValueError(msg)
-
-        commit_hash = heads.get_branch_head_commit(self._branchenv, self._branch_name)
-        hist = self._determine_ancestors(commit_hash, dHEAD)
-        with tmp_cmt_env(self._refenv, hist.devHEAD) as d_env:
-            if hist.canFF is True:
-                res = self._diff(self._stageenv, d_env)
-            else:
-                with tmp_cmt_env(self._refenv, hist.ancestorHEAD) as a_env:
-                    res = self._diff3(a_env, self._stageenv, d_env)
-        return res
-
-    def _staged(self) -> DiffAndConflictsDB:
-        """Return diff of the staging area to base, returning db formatted results.
-
-        Returns
-        -------
-        DiffAndConflictsDB
-            two-tuple of `diff`, `conflict` (if any) calculated in the diff
-            algorithm.
-        """
-        commit_hash = heads.get_branch_head_commit(self._branchenv, self._branch_name)
-        with tmp_cmt_env(self._refenv, commit_hash) as base_env:
-            res = self._diff(base_env, self._stageenv)
         return res
 
     def commit(self, dev_commit_hash: str) -> DiffAndConflicts:
@@ -682,7 +590,11 @@ class WriterUserDiff(BaseUserDiff):
         ValueError
             if the specified ``dev_commit_hash`` is not a valid commit reference.
         """
-        outDb = self._commit(dev_commit_hash=dev_commit_hash)
+        if not check_commit_hash_in_history(self._refenv, dev_commit_hash):
+            msg = f'HANGAR VALUE ERROR: dev_commit_hash: {dev_commit_hash} does not exist'
+            raise ValueError(msg)
+
+        outDb = self._run_diff(dev_commit_hash=dev_commit_hash)
         outRaw = _all_raw_from_db_changes(outDb)
         return outRaw
 
@@ -705,7 +617,14 @@ class WriterUserDiff(BaseUserDiff):
         ValueError
             If the specified ``dev_branch`` does not exist.
         """
-        outDb = self._branch(dev_branch=dev_branch)
+        branchNames = get_branch_names(self._branchenv)
+        if dev_branch in branchNames:
+            dHEAD = get_branch_head_commit(self._branchenv, dev_branch)
+        else:
+            msg = f'HANGAR VALUE ERROR: dev_branch: {dev_branch} invalid branch name'
+            raise ValueError(msg)
+
+        outDb = self._run_diff(dev_commit_hash=dHEAD)
         outRaw = _all_raw_from_db_changes(outDb)
         return outRaw
 
@@ -718,7 +637,9 @@ class WriterUserDiff(BaseUserDiff):
             two-tuple of ``diff``, ``conflict`` (if any) calculated in the diff
             algorithm.
         """
-        outDb = self._staged()
+        commit_hash = get_branch_head_commit(self._branchenv, self._branch_name)
+        with tmp_cmt_env(self._refenv, commit_hash) as base_env:
+            outDb = self._diff(base_env, self._stageenv)
         outRaw = _all_raw_from_db_changes(outDb)
         return outRaw
 
@@ -734,11 +655,11 @@ class WriterUserDiff(BaseUserDiff):
         str
             "CLEAN" if no changes have been made, otherwise "DIRTY"
         """
-        head_commit = heads.get_branch_head_commit(self._branchenv, self._branch_name)
+        head_commit = get_branch_head_commit(self._branchenv, self._branch_name)
         if head_commit == '':
             base_refs = ()
         else:
-            base_refs = commiting.get_commit_ref(self._refenv, head_commit)
+            base_refs = get_commit_ref(self._refenv, head_commit)
 
         stage_refs = tuple(RecordQuery(self._stageenv)._traverse_all_records())
         status = 'DIRTY' if (base_refs != stage_refs) else 'CLEAN'

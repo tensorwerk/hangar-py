@@ -3,10 +3,17 @@ from typing import Optional, Union, Iterator, Tuple, Dict
 
 import lmdb
 
-from .context import TxnRegister
-from .records import parsing
-from .records.queries import RecordQuery
 from .records.hashmachine import metadata_hash_digest
+from .records.parsing import (
+    hash_meta_db_key_from_raw_key,
+    hash_meta_db_val_from_raw_val,
+    hash_meta_raw_val_from_db_val,
+    metadata_record_db_key_from_raw_key,
+    metadata_record_db_val_from_raw_val,
+    metadata_record_raw_val_from_db_val,
+)
+from .records.queries import RecordQuery
+from .txnctx import TxnRegister
 from .utils import is_suitable_user_key, is_ascii
 
 
@@ -68,7 +75,7 @@ class MetadataReader(object):
         self._mspecs: Dict[Union[str, int], bytes] = {}
         metaNamesSpec = RecordQuery(dataenv).metadata_records()
         for metaNames, metaSpec in metaNamesSpec:
-            labelKey = parsing.hash_meta_db_key_from_raw_key(metaSpec.meta_hash)
+            labelKey = hash_meta_db_key_from_raw_key(metaSpec.meta_hash)
             self._mspecs[metaNames.meta_name] = labelKey
 
     def __enter__(self):
@@ -231,7 +238,7 @@ class MetadataReader(object):
             if tmpconman:
                 self.__enter__()
             metaVal = self._labelTxn.get(self._mspecs[key])
-            meta_val = parsing.hash_meta_raw_val_from_db_val(metaVal)
+            meta_val = hash_meta_raw_val_from_db_val(metaVal)
         except KeyError:
             raise KeyError(f'The checkout does not contain metadata with key: {key}')
         finally:
@@ -364,13 +371,13 @@ class MetadataWriter(MetadataReader):
                 self.__enter__()
 
             val_hash = metadata_hash_digest(value=value)
-            hashKey = parsing.hash_meta_db_key_from_raw_key(val_hash)
-            metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
-            metaRecVal = parsing.metadata_record_db_val_from_raw_val(val_hash)
+            hashKey = hash_meta_db_key_from_raw_key(val_hash)
+            metaRecKey = metadata_record_db_key_from_raw_key(key)
+            metaRecVal = metadata_record_db_val_from_raw_val(val_hash)
             # check if meta record already exists with same key
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
-                existingMetaRec = parsing.metadata_record_raw_val_from_db_val(existingMetaRecVal)
+                existingMetaRec = metadata_record_raw_val_from_db_val(existingMetaRecVal)
                 # check if meta record already exists with same key/val
                 if val_hash == existingMetaRec.meta_hash:
                     return key
@@ -378,7 +385,7 @@ class MetadataWriter(MetadataReader):
             # write new data if label hash does not exist
             existingHashVal = self._labelTxn.get(hashKey, default=False)
             if existingHashVal is False:
-                hashVal = parsing.hash_meta_db_val_from_raw_val(value)
+                hashVal = hash_meta_db_val_from_raw_val(value)
                 self._labelTxn.put(hashKey, hashVal)
 
             self._dataTxn.put(metaRecKey, metaRecVal)
@@ -415,7 +422,7 @@ class MetadataWriter(MetadataReader):
             if key not in self._mspecs:
                 raise KeyError(f'No metadata exists with key: {key}')
 
-            metaRecKey = parsing.metadata_record_db_key_from_raw_key(key)
+            metaRecKey = metadata_record_db_key_from_raw_key(key)
             delete_succeeded = self._dataTxn.delete(metaRecKey)
             if delete_succeeded is False:
                 raise KeyError(f'No metadata exists with key: {key}')

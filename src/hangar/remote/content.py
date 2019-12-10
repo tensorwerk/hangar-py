@@ -2,7 +2,8 @@ from typing import NamedTuple, Union, Sequence, Tuple, List, Optional
 
 import numpy as np
 
-from ..context import Environments, TxnRegister
+from ..context import Environments
+from ..txnctx import TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_opts_from_heuristics
 from ..records import parsing
 

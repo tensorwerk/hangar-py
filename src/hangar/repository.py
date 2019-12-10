@@ -3,11 +3,11 @@ import weakref
 import warnings
 from typing import Union, Optional, List
 
-from . import merger
-from . import constants as c
+from .merger import select_merge_algorithm
+from .constants import DIR_HANGAR
 from .remotes import Remotes
 from .context import Environments
-from .diagnostics import graphing, ecosystem
+from .diagnostics import graphing, ecosystem, integrity
 from .records import heads, parsing, summarize, vcompat
 from .checkout import ReaderCheckout, WriterCheckout
 from .utils import (
@@ -56,7 +56,7 @@ class Repository(object):
         except (TypeError, NotADirectoryError, PermissionError) as e:
             raise e from None
 
-        repo_pth = os.path.join(usr_path, c.DIR_HANGAR)
+        repo_pth = os.path.join(usr_path, DIR_HANGAR)
         if exists is False:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', UserWarning)
@@ -492,7 +492,7 @@ class Repository(object):
             Hash of the commit which is written if possible.
         """
         self.__verify_repo_initialized()
-        commit_hash = merger.select_merge_algorithm(
+        commit_hash = select_merge_algorithm(
             message=message,
             branchenv=self._env.branchenv,
             stageenv=self._env.stageenv,
@@ -700,6 +700,72 @@ class Repository(object):
         self.__verify_repo_initialized()
         branches = heads.get_branch_names(self._env.branchenv)
         return branches
+
+    def verify_repo_integrity(self) -> bool:
+        """Verify the integrity of the repository data on disk.
+
+        Runs a full cryptographic verification of repository contents in order
+        to ensure the integrity of all data and history recorded on disk.
+
+        .. note::
+
+            This proof may take a significant amount of time to run for
+            repositories which:
+
+            1. store significant quantities of data on disk.
+            2. have a very large number of commits in their history.
+
+            As a brief explanation for why these are the driving factors behind
+            processing time:
+
+            1. Every single piece of data in the repositories history must be read
+               from disk, cryptographically hashed, and compared to the expected
+               value. There is no exception to this rule; regardless of when a piece
+               of data was added / removed from an arrayset, or for how many (or how
+               few) commits some sample exists in. The integrity of the commit tree at
+               any point after some piece of data is added to the repo can only be
+               validated if it - and all earlier data pieces - are proven to be intact
+               and unchanged.
+
+               Note: This does not mean that the verification is repeatedly
+               performed for every commit some piece of data is stored in. Each
+               data piece is read from disk and verified only once, regardless of
+               how many commits some piece of data is referenced in.
+
+            2. Each commit reference (defining names / contents of a commit) must be
+               decompressed and parsed into a usable data structure. We scan across
+               all data digests referenced in the commit and ensure that the
+               corresponding data piece is known to hangar (and validated as
+               unchanged). The commit refs (along with the corresponding user records,
+               message, and parent map), are then re-serialized and cryptographically
+               hashed for comparison to the expected value. While this process is
+               fairly efficient for a single commit, it must be repeated for each
+               commit in the repository history, and may take a non-trivial amount of
+               time for repositories with thousands of commits.
+
+        While the two points above are the most time consuming operations,
+        there are many more checks which are performed alongside them as part
+        of the full verification run.
+
+        Returns
+        -------
+        bool
+            True if integrity verification is successful, otherwise False; in
+            this case, a message describing the offending component will be
+            printed to stdout.
+        """
+        self.__verify_repo_initialized()
+        heads.acquire_writer_lock(self._env.branchenv, 'VERIFY_PROCESS')
+        try:
+            integrity.run_verification(
+                branchenv=self._env.branchenv,
+                hashenv=self._env.hashenv,
+                labelenv=self._env.labelenv,
+                refenv=self._env.refenv,
+                repo_path=self._env.repo_path)
+        finally:
+            heads.release_writer_lock(self._env.branchenv, 'VERIFY_PROCESS')
+        return True
 
     def force_release_writer_lock(self) -> bool:
         """Force release the lock left behind by an unclosed writer-checkout

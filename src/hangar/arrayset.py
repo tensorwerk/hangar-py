@@ -1,30 +1,32 @@
 import os
 import warnings
 from multiprocessing import cpu_count, get_context
-from typing import Iterator, Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple
+from typing import Iterable, List, Mapping, Optional, Tuple, Union, NamedTuple
 
 import lmdb
 import numpy as np
 
-from .backends import BACKEND_ACCESSOR_MAP
-from .backends import backend_decoder
-from .backends import is_local_backend
-from .backends import parse_user_backend_opts
-from .context import TxnRegister
-from .utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
-from .records.hashmachine import schema_hash_digest
-from .records.hashmachine import array_hash_digest
+from .backends import (
+    BACKEND_ACCESSOR_MAP,
+    backend_decoder,
+    is_local_backend,
+    parse_user_backend_opts,
+)
+from .txnctx import TxnRegister
+from .records.hashmachine import schema_hash_digest, array_hash_digest
+from .records.parsing import (
+    arrayset_record_count_range_key,
+    arrayset_record_schema_db_key_from_raw_key,
+    arrayset_record_schema_db_val_from_raw_val,
+    data_record_db_key_from_raw_key,
+    data_record_db_val_from_raw_val,
+    data_record_raw_val_from_db_val,
+    generate_sample_name,
+    hash_data_db_key_from_raw_key,
+    hash_schema_db_key_from_raw_key,
+)
 from .records.queries import RecordQuery
-from .records.parsing import hash_data_db_key_from_raw_key
-from .records.parsing import generate_sample_name
-from .records.parsing import hash_schema_db_key_from_raw_key
-from .records.parsing import data_record_db_key_from_raw_key
-from .records.parsing import data_record_raw_val_from_db_val
-from .records.parsing import data_record_db_val_from_raw_val
-from .records.parsing import arrayset_record_count_range_key
-from .records.parsing import arrayset_record_schema_db_key_from_raw_key
-from .records.parsing import arrayset_record_schema_db_val_from_raw_val
-
+from .utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
 
 CompatibleArray = NamedTuple(
     'CompatibleArray', [('compatible', bool), ('reason', str)])
@@ -165,7 +167,7 @@ class ArraysetDataReader(object):
         """
         return self.get(key)
 
-    def __iter__(self) -> Iterator[Union[str, int]]:
+    def __iter__(self) -> Iterable[Union[str, int]]:
         return self.keys()
 
     def __len__(self) -> int:
@@ -304,7 +306,7 @@ class ArraysetDataReader(object):
         """
         return self._dflt_backend_opts
 
-    def keys(self, local: bool = False) -> Iterator[Union[str, int]]:
+    def keys(self, local: bool = False) -> Iterable[Union[str, int]]:
         """generator which yields the names of every sample in the arrayset
 
         Parameters
@@ -315,7 +317,7 @@ class ArraysetDataReader(object):
 
         Yields
         ------
-        Iterator[Union[str, int]]
+        Iterable[Union[str, int]]
             keys of one sample at a time inside the arrayset
 
         Notes
@@ -335,7 +337,7 @@ class ArraysetDataReader(object):
                 if is_local_backend(be):
                     yield name
 
-    def values(self, local=False) -> Iterator[np.ndarray]:
+    def values(self, local=False) -> Iterable[np.ndarray]:
         """generator which yields the tensor data for every sample in the arrayset
 
         Parameters
@@ -347,7 +349,7 @@ class ArraysetDataReader(object):
 
         Yields
         ------
-        Iterator[:class:`numpy.ndarray`]
+        Iterable[:class:`numpy.ndarray`]
             values of one sample at a time inside the arrayset
 
         Notes
@@ -367,7 +369,7 @@ class ArraysetDataReader(object):
                 if is_local_backend(be):
                     yield self.get(name)
 
-    def items(self, local=False) -> Iterator[Tuple[Union[str, int], np.ndarray]]:
+    def items(self, local=False) -> Iterable[Tuple[Union[str, int], np.ndarray]]:
         """generator yielding two-tuple of (name, tensor), for every sample in the arrayset.
 
         Parameters
@@ -379,7 +381,7 @@ class ArraysetDataReader(object):
 
         Yields
         ------
-        Iterator[Tuple[Union[str, int], :class:`numpy.ndarray`]]
+        Iterable[Tuple[Union[str, int], :class:`numpy.ndarray`]]
             sample name and stored value for every sample inside the arrayset
 
         Notes

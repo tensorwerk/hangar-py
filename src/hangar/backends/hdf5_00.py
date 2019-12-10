@@ -93,13 +93,6 @@ Fields Recorded for Each Array
 *  Dataset Index (``0:COLLECTION_SIZE`` dataset subarray selection)
 *  Subarray Shape
 
-Separators used
----------------
-
-*  ``SEP_KEY: ":"``
-*  ``SEP_HSH: "$"``
-*  ``SEP_LST: " "``
-*  ``SEP_SLC: "*"``
 
 Examples
 --------
@@ -112,7 +105,7 @@ Examples
     *  Dataset Number: 16
     *  Collection Index: 105
 
-    ``Record Data => "00:rlUK3C$8067007c0f05c359$16 105*10 10"``
+    ``Record Data => "00:rlUK3C:8067007c0f05c359:16:105:10 10"``
 
 1)  Adding to a piece of data to a the middle of a file:
 
@@ -122,7 +115,7 @@ Examples
     *  Dataset Number: "3"
     *  Collection Index: 199
 
-    ``Record Data => "00:rlUK3C$b89f873d3d153a9c$8 199*20 2 3"``
+    ``Record Data => "00:rlUK3C:b89f873d3d153a9c:8:199:20 2 3"``
 
 
 Technical Notes
@@ -166,18 +159,17 @@ Technical Notes
    operation). This is part of the reason that we only accept C ordered arrays
    as input to Hangar.
 """
+import logging
 import os
 import re
 import time
-import logging
 from collections import ChainMap
-from pathlib import Path
 from functools import partial
-from typing import (
-    MutableMapping, NamedTuple, Tuple, Optional, Union, Callable, Pattern)
+from pathlib import Path
+from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable
 
-import numpy as np
 import h5py
+import numpy as np
 try:
     # hdf5plugin warns if a filter is already loaded. we temporarily surpress
     # that here, then reset the logger level to it's initial version.
@@ -193,8 +185,9 @@ finally:
 from xxhash import xxh64_hexdigest
 
 from .. import __version__
-from .. import constants as c
+from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..utils import find_next_prime, random_string, set_blosc_nthreads
+
 
 set_blosc_nthreads()
 
@@ -217,10 +210,7 @@ CHUNK_RDCC_W0 = 0.75
 
 _FmtCode = '00'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
-_ShapeFmtRE: Pattern = re.compile('[,\(\)\[\]]')
-# split up a formated parsed string into unique fields
-_patern = fr'\{c.SEP_KEY}\{c.SEP_HSH}\{c.SEP_SLC}'
-_SplitDecoderRE: Pattern = re.compile(fr'[{_patern}]')
+_SRe = re.compile('[,\(\)\[\]]')
 
 
 HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec', [
@@ -229,10 +219,11 @@ HDF5_00_DataHashSpec = NamedTuple('HDF5_00_DataHashSpec', [
     ('checksum', str),
     ('dataset', str),
     ('dataset_idx', int),
-    ('shape', Tuple[int])])
+    ('shape', Tuple[int])
+])
 
 
-def hdf5_00_encode(uid: str, checksum: str, dataset: str, dataset_idx: int,
+def hdf5_00_encode(uid: str, cksum: str, dset: str, dset_idx: int,
                    shape: Tuple[int]) -> bytes:
     """converts the hdf5 data has spec to an appropriate db value
 
@@ -240,11 +231,11 @@ def hdf5_00_encode(uid: str, checksum: str, dataset: str, dataset_idx: int,
     ----------
     uid : str
         the file name prefix which the data is written to.
-    checksum : int
+    cksum : int
         xxhash_64.hex_digest checksum of the data bytes in numpy array form.
-    dataset : str
+    dset : str
         collection (ie. hdf5 dataset) name to find this data piece.
-    dataset_idx : int
+    dset_idx : int
         collection first axis index in which this data piece resides.
     shape : Tuple[int]
         shape of the data sample written to the collection idx. ie:
@@ -256,11 +247,7 @@ def hdf5_00_encode(uid: str, checksum: str, dataset: str, dataset_idx: int,
     bytes
         hash data db value recording all input specifications.
     """
-    out_str = f'{_FmtCode}{c.SEP_KEY}'\
-              f'{uid}{c.SEP_HSH}{checksum}{c.SEP_HSH}'\
-              f'{dataset}{c.SEP_LST}{dataset_idx}{c.SEP_SLC}'\
-              f'{_ShapeFmtRE.sub("", str(shape))}'
-    return out_str.encode()
+    return f'00:{uid}:{cksum}:{dset}:{dset_idx}:{_SRe.sub("", str(shape))}'.encode()
 
 
 def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
@@ -277,20 +264,9 @@ def hdf5_00_decode(db_val: bytes) -> HDF5_00_DataHashSpec:
         hdf5 data hash specification containing `backend`, `schema`,
         `instance`, `dataset`, `dataset_idx`, `shape`
     """
-    db_str = db_val.decode()
-    _, uid, checksum, dataset_vs, shape_vs = _SplitDecoderRE.split(db_str)
-    dataset, dataset_idx = dataset_vs.split(c.SEP_LST)
-    # if the data is of empty shape -> shape_vs = '' str.split() default value
-    # of none means split according to any whitespace, and discard empty strings
-    # from the result. So long as c.SEP_LST = ' ' this will work
+    _, uid, cksum, dset, dset_idx, shape_vs = db_val.decode().split(':')
     shape = tuple(map(int, shape_vs.split()))
-    raw_val = HDF5_00_DataHashSpec(backend=_FmtCode,
-                                   uid=uid,
-                                   checksum=checksum,
-                                   dataset=dataset,
-                                   dataset_idx=int(dataset_idx),
-                                   shape=shape)
-    return raw_val
+    return HDF5_00_DataHashSpec('00', uid, cksum, dset, int(dset_idx), shape)
 
 
 # ------------------------- Accessor Object -----------------------------------
@@ -327,10 +303,10 @@ class HDF5_00_FileHandles(object):
         self.slcExpr = np.s_
         self.slcExpr.maketuple = False
 
-        self.STAGEDIR: Path = Path(self.path, c.DIR_DATA_STAGE, _FmtCode)
-        self.REMOTEDIR: Path = Path(self.path, c.DIR_DATA_REMOTE, _FmtCode)
-        self.STOREDIR: Path = Path(self.path, c.DIR_DATA_STORE, _FmtCode)
-        self.DATADIR: Path = Path(self.path, c.DIR_DATA, _FmtCode)
+        self.STAGEDIR: Path = Path(self.path, DIR_DATA_STAGE, _FmtCode)
+        self.REMOTEDIR: Path = Path(self.path, DIR_DATA_REMOTE, _FmtCode)
+        self.STOREDIR: Path = Path(self.path, DIR_DATA_STORE, _FmtCode)
+        self.DATADIR: Path = Path(self.path, DIR_DATA, _FmtCode)
         self.DATADIR.mkdir(exist_ok=True)
 
     def __enter__(self):
@@ -456,8 +432,8 @@ class HDF5_00_FileHandles(object):
             If true, modify contents of the remote_dir, if false (default) modify
             contents of the staging directory.
         """
-        data_dir = Path(repo_path, c.DIR_DATA, _FmtCode)
-        PDIR = c.DIR_DATA_STAGE if not remote_operation else c.DIR_DATA_REMOTE
+        data_dir = Path(repo_path, DIR_DATA, _FmtCode)
+        PDIR = DIR_DATA_STAGE if not remote_operation else DIR_DATA_REMOTE
         process_dir = Path(repo_path, PDIR, _FmtCode)
         if not process_dir.is_dir():
             return
@@ -706,13 +682,12 @@ class HDF5_00_FileHandles(object):
             requested data.
         """
         arrSize = int(np.prod(hashVal.shape))
-        dsetIdx = int(hashVal.dataset_idx)
         dsetCol = f'/{hashVal.dataset}'
 
-        srcSlc = (self.slcExpr[dsetIdx], self.slcExpr[0:arrSize])
+        srcSlc = (self.slcExpr[hashVal.dataset_idx], self.slcExpr[0:arrSize])
         destSlc = None
 
-        if self.schema_dtype is not None:
+        if self.schema_dtype:  # if is not None
             destArr = np.empty((arrSize,), self.schema_dtype)
             try:
                 self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
@@ -791,8 +766,8 @@ class HDF5_00_FileHandles(object):
         self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(flat_arr, srcSlc, destSlc)
 
         hashVal = hdf5_00_encode(uid=self.w_uid,
-                                 checksum=checksum,
-                                 dataset=self.hNextPath,
-                                 dataset_idx=self.hIdx,
+                                 cksum=checksum,
+                                 dset=self.hNextPath,
+                                 dset_idx=self.hIdx,
                                  shape=array.shape)
         return hashVal

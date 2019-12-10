@@ -16,7 +16,8 @@ from . import hangar_service_pb2_grpc
 from . import request_header_validator_interceptor
 from .content import ContentWriter
 from .. import constants as c
-from ..context import Environments, TxnRegister
+from ..context import Environments
+from ..txnctx import TxnRegister
 from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting, hashs, heads, parsing, queries, summarize
 from ..records.hashmachine import array_hash_digest, metadata_hash_digest
@@ -598,7 +599,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         uncompBytes = blosc.decompress(hBytes)
         c_hashs_raw = chunks.deserialize_record_pack(uncompBytes)
         c_hashset = set([chunks.deserialize_ident(raw).digest for raw in c_hashs_raw])
-        s_hash_keys = list(hashs.HashQuery(self.env.labelenv).list_all_hash_keys_db())
+        s_hash_keys = list(hashs.HashQuery(self.env.labelenv).gen_all_hash_keys_db())
         s_hashes = map(parsing.hash_meta_raw_key_from_db_key, s_hash_keys)
         s_hashset = set(s_hashes)
 
