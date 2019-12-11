@@ -7,24 +7,18 @@ from .parsing import (
     repo_version_db_key,
     repo_version_db_val_from_raw_val,
     repo_version_raw_spec_from_raw_string,
-    repo_version_raw_string_from_raw_spec,
     repo_version_raw_val_from_db_val,
-    VersionSpec,
 )
+from .._version import Version
 from ..constants import LMDB_SETTINGS, LMDB_BRANCH_NAME
 from ..txnctx import TxnRegister
 from ..utils import pairwise
 
-"""
-Repository version finding methods
-----------------------------------
 
-methods to set and get repostory sotware versions
-"""
-
-
-def set_repository_software_version(branchenv: lmdb.Environment, ver_str: str,
-                                    *, overwrite: bool = False) -> bool:
+def set_repository_software_version(branchenv: lmdb.Environment,
+                                    ver_str: str,
+                                    *,
+                                    overwrite: bool = False) -> bool:
     """Write the repository software version to a particular value
 
     Parameters
@@ -54,7 +48,7 @@ def set_repository_software_version(branchenv: lmdb.Environment, ver_str: str,
     return success
 
 
-def get_repository_software_version_spec(branchenv: lmdb.Environment) -> VersionSpec:
+def get_repository_software_version_spec(branchenv: lmdb.Environment) -> Version:
     """Get the repository version specification tuple.
 
     Parameters
@@ -64,8 +58,10 @@ def get_repository_software_version_spec(branchenv: lmdb.Environment) -> Version
 
     Returns
     -------
-    VersionSpec
-        NamedTuple containing major, minor, and micro versions.
+    Version
+        This class abstracts handling of a project’s versions. A Version
+        instance is comparison aware and can be compared and sorted using the
+        standard Python interfaces.
 
     Raises
     ------
@@ -86,46 +82,13 @@ def get_repository_software_version_spec(branchenv: lmdb.Environment) -> Version
         return version_val
 
 
-def get_repository_software_version_str(branchenv: lmdb.Environment) -> str:
-    """Get the repository version string representation.
-
-    Parameters
-    ----------
-    branchenv : lmdb.Environment
-        db where the head, branch, and version specs are stored
-
-    Returns
-    -------
-    str
-        semantic version style string representation.
-
-    Raises
-    ------
-    KeyError
-        If no version key is set for the repository
-    """
-    versionKey = repo_version_db_key()
-    branchTxn = TxnRegister().begin_reader_txn(branchenv)
-    try:
-        versionVal = branchTxn.get(versionKey, default=False)
-    finally:
-        TxnRegister().abort_reader_txn(branchenv)
-
-    if versionVal is False:
-        raise KeyError('No version string is set for the repository')
-    else:
-        ver_spec = repo_version_raw_val_from_db_val(versionVal)
-        ver_Str = repo_version_raw_string_from_raw_spec(ver_spec)
-        return ver_Str
-
-
 """
 Initial checking of repository versions
 ---------------------------------------
 """
 
 
-def startup_check_repo_version(repo_path: os.PathLike) -> VersionSpec:
+def startup_check_repo_version(repo_path: os.PathLike) -> Version:
     """Determine repo version without having to have Environments ctx opened.
 
     Parameters
@@ -135,9 +98,10 @@ def startup_check_repo_version(repo_path: os.PathLike) -> VersionSpec:
 
     Returns
     -------
-    VersionSpec
-        NamedTuple containing ints for `major`, `minor`, `micro`, semantic
-        software version
+    Version
+        This class abstracts handling of a project’s versions. A Version
+        instance is comparison aware and can be compared and sorted using the
+        standard Python interfaces.
 
     Raises
     ------
@@ -158,29 +122,22 @@ def startup_check_repo_version(repo_path: os.PathLike) -> VersionSpec:
     return spec
 
 
-"""
-Version compatibility checking
-------------------------------
-
-Right now this is a dummy method, which just returns true, but it is important to
-have as we move to compatible changes in the future.
-"""
-
-
 incompatible_changes_after = [
-    VersionSpec(major=0, minor=2, micro=0),
-    VersionSpec(major=0, minor=3, micro=0),
-    VersionSpec(major=0, minor=4, micro=0)]
+    Version('0.2.0'),
+    Version('0.3.0'),
+    Version('0.4.0'),
+    Version('0.5.0.dev0'),
+]
 
 
-def is_repo_software_version_compatible(repo_v: VersionSpec, curr_v: VersionSpec) -> bool:
+def is_repo_software_version_compatible(repo_v: Version, curr_v: Version) -> bool:
     """Determine if the repo on disk and the current Hangar versions iscompatible.
 
     Parameters
     ----------
-    repo_v : VersionSpec
+    repo_v : Version
         repository software writtern version.
-    curr_v : VersionSpec
+    curr_v : Version
         currently active software version specification
 
     Returns

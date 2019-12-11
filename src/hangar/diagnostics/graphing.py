@@ -2,10 +2,6 @@
 """
 Portions of this code have been taken and modified from the "asciidag" project.
 
-Access Date:
-Commit: 7c1eefe3895630dc3906bbe9d553e0169202756a
-PermalinkURL
-
 URL:      https://github.com/sambrightman/asciidag/
 File:     asciidag/graph.py
 Commit:   7c1eefe3895630dc3906bbe9d553e0169202756a

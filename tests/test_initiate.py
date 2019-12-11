@@ -196,12 +196,18 @@ def test_get_ecosystem_details(managed_tmpdir):
     repo._env._close_environments()
 
 
+def test_inject_repo_version(monkeypatch):
+    import hangar
+    monkeypatch.setattr("hangar.__version__", '0.2.0')
+    assert hangar.__version__ == '0.2.0'
+
+
 def test_check_repository_version(written_repo):
     from hangar import __version__
     from pkg_resources import parse_version
 
     repo = written_repo
-    assert repo.version == parse_version(__version__).base_version
+    assert repo.version == parse_version(__version__).public
 
 
 def test_check_repository_software_version_startup(managed_tmpdir):
@@ -214,19 +220,44 @@ def test_check_repository_software_version_startup(managed_tmpdir):
 
     nrepo = Repository(managed_tmpdir, exists=True)
     assert nrepo.initialized is True
-    assert nrepo.version == parse_version(__version__).base_version
+    assert nrepo.version == parse_version(__version__).public
     nrepo._env._close_environments()
 
 
-def test_check_repository_software_version_fails_on_older_repo(managed_tmpdir):
+@pytest.mark.parametrize('repo_v,hangar_v', [
+    ['0.2.0', '0.3.0'],
+    ['0.2.0', '0.3.1rc1'],
+    ['0.2.0', '0.3.1.dev0'],
+    ['0.2.0', '0.3.1'],
+    ['0.3.0', '0.4.1.dev0'],
+    ['0.3.0', '0.4.1rc1'],
+    ['0.3.0', '0.4.0'],
+    ['0.3.0', '0.4.1'],
+    ['0.4.0', '0.5.0.dev0'],
+    ['0.4.0', '0.5.0rc1'],
+    ['0.4.0', '0.5.0'],
+    ['0.4.0', '0.5.1'],
+    ['0.5.0.dev0', '0.4.0'],
+    ['0.5.0.dev0', '0.4.1'],
+    ['0.5.0', '0.4.1'],
+])
+def test_check_repository_software_version_fails_hangar_version(monkeypatch, managed_tmpdir, repo_v, hangar_v):
+    import hangar
+    monkeypatch.setattr("hangar.__version__", hangar_v)
+    monkeypatch.setattr("hangar.context.__version__", hangar_v)
     from hangar import Repository
     from hangar.records.vcompat import set_repository_software_version
 
     repo = Repository(managed_tmpdir, exists=False)
     repo.init('test user', 'test@foo.bar', remove_old=True)
     # force writing of new software version. should trigger error on next read.
-    set_repository_software_version(repo._env.branchenv, '0.2.0', overwrite=True)
-    repo._env._close_environments()
+    set_repository_software_version(repo._env.branchenv, repo_v, overwrite=True)
+    try:
+        assert repo.version == repo_v
+    finally:
+        repo._env._close_environments()
+
+    assert hangar.__version__ == hangar_v
 
     with pytest.raises(RuntimeError):
         Repository(managed_tmpdir, exists=True)
