@@ -22,6 +22,11 @@ Bug Fixes
   (`#171 <https://github.com/tensorwerk/hangar-py/pull/171>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
+Breaking changes
+----------------
+
+* New backend record serialization format is incompatible with repositories written in version 0.4.0 or earlier.
+
 
 `v0.4.0`_ (2019-11-21)
 ======================

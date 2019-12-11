@@ -169,8 +169,8 @@ class Repository(object):
             semantic version of major, minor, micro version of repo software version.
         """
         self.__verify_repo_initialized()
-        res = vcompat.get_repository_software_version_str(self._env.branchenv)
-        return res
+        res = vcompat.get_repository_software_version_spec(self._env.branchenv)
+        return str(res)
 
     @property
     def initialized(self) -> bool:

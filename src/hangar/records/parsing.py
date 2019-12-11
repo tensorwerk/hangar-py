@@ -25,6 +25,9 @@ from ..constants import (
     SEP_KEY,
     WLOCK_SENTINAL,
 )
+from .._version import parse as version_parse
+from .._version import Version
+
 
 cycle_list = [str(c).rjust(5, '0') for c in range(99_999)]
 NAME_CYCLER = cycle(cycle_list)
@@ -50,48 +53,11 @@ Methods working with repository version specifiers
 --------------------------------------------------
 """
 
-VersionSpec = NamedTuple('VersionSpec', [
-    ('major', int),
-    ('minor', int),
-    ('micro', int),
-])
 
-
-def repo_version_raw_spec_from_raw_string(v_str: str) -> VersionSpec:
-    """Convert from user facing string representation to VersionSpec NamedTuple
-
-    Parameters
-    ----------
-    v_str : str
-        concatenated string with '.' between each `major`, `minor`, `micro` field
-        in semantic version style.
-
-    Returns
-    -------
-    VersionSpec
-        NamedTuple containing int fileds of `major`, `minor`, `micro` version.
+def repo_version_raw_spec_from_raw_string(v_str: str) -> Version:
+    """Convert from user facing string representation to Version object
     """
-    smajor, sminor, smicro = v_str.split('.')
-    return VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro[0]))
-
-
-def repo_version_raw_string_from_raw_spec(v_spec: VersionSpec) -> str:
-    """Convert from VersionSpec NamedTuple to user facing string representation.
-
-    version string always seperated by `.`
-
-    Parameters
-    ----------
-    v_spec : VersionSpec
-        NamedTuple containing int fields of `major`, `minor`, `micro` version
-        in semantic version style.
-
-    Returns
-    -------
-    str
-        concatenated string with '.' between each major, minor, micro
-    """
-    return f'{v_spec.major}.{v_spec.minor}.{v_spec.micro}'
+    return version_parse(v_str)
 
 
 # ------------------------- db version key is fixed -----------------
@@ -111,27 +77,28 @@ def repo_version_db_key() -> bytes:
 # ------------------------ raw -> db --------------------------------
 
 
-def repo_version_db_val_from_raw_val(v_spec: VersionSpec) -> bytes:
+def repo_version_db_val_from_raw_val(v_spec: Version) -> bytes:
     """determine repository version db specifier from version spec.
 
     Parameters
     ----------
-    v_spec : VersionSpec
-        NamedTuple containing int fields of `major`, `minor`, `micro` version
-        in semantic version style
+    v_spec : Version
+        This class abstracts handling of a project’s versions. A Version
+        instance is comparison aware and can be compared and sorted using the
+        standard Python interfaces.
 
     Returns
     -------
     bytes
         db formatted specification of version
     """
-    return f'{v_spec.major}{SEP_KEY}{v_spec.minor}{SEP_KEY}{v_spec.micro}'.encode()
+    return str(v_spec).encode()
 
 
 # ---------------------------- db -> raw ----------------------------
 
 
-def repo_version_raw_val_from_db_val(db_val: bytes) -> VersionSpec:
+def repo_version_raw_val_from_db_val(db_val: bytes) -> Version:
     """determine software version of hangar repository is written for.
 
     Parameters
@@ -141,12 +108,13 @@ def repo_version_raw_val_from_db_val(db_val: bytes) -> VersionSpec:
 
     Returns
     -------
-    VersionSpec
-        NamedTuple containing major, minor, micro fields as ints.
+    Version
+        This class abstracts handling of a project’s versions. A Version
+        instance is comparison aware and can be compared and sorted using the
+        standard Python interfaces.
     """
     db_str = db_val.decode()
-    smajor, sminor, smicro = db_str.split(SEP_KEY)
-    return VersionSpec(major=int(smajor), minor=int(sminor), micro=int(smicro))
+    return version_parse(db_str)
 
 
 """
