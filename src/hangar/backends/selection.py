@@ -96,13 +96,13 @@ from .remote_50 import REMOTE_50_Handler, remote_50_decode, REMOTE_50_DataHashSp
 # -------------------------- Parser Types and Mapping -------------------------
 
 
-_DataHashSpecs = Union[
+DataHashSpecsType = Union[
     HDF5_00_DataHashSpec,
     HDF5_01_DataHashSpec,
     NUMPY_10_DataHashSpec,
     REMOTE_50_DataHashSpec]
 
-_ParserMap = Mapping[bytes, Callable[[bytes], _DataHashSpecs]]
+_ParserMap = Mapping[bytes, Callable[[bytes], DataHashSpecsType]]
 
 BACKEND_DECODER_MAP: _ParserMap = {
     # LOCALS -> [00:50]
@@ -121,9 +121,9 @@ BACKEND_DECODER_MAP: _ParserMap = {
 
 _BeAccessors = Union[HDF5_00_FileHandles, HDF5_01_FileHandles,
                      NUMPY_10_FileHandles, REMOTE_50_Handler]
-_AccessorMap = Dict[str, _BeAccessors]
+AccessorMapType = Dict[str, _BeAccessors]
 
-BACKEND_ACCESSOR_MAP: _AccessorMap = {
+BACKEND_ACCESSOR_MAP: AccessorMapType = {
     # LOCALS -> [0:50]
     '00': HDF5_00_FileHandles,
     '01': HDF5_01_FileHandles,
@@ -138,7 +138,7 @@ BACKEND_ACCESSOR_MAP: _AccessorMap = {
 # ------------------------ Selector Functions ---------------------------------
 
 
-def backend_decoder(db_val: bytes) -> _DataHashSpecs:
+def backend_decoder(db_val: bytes) -> DataHashSpecsType:
     """Determine backend and decode specification for a raw hash record value.
 
     Parameters
@@ -148,7 +148,7 @@ def backend_decoder(db_val: bytes) -> _DataHashSpecs:
 
     Returns
     -------
-    namedtuple
+    DataHashSpecsType
         decoded specification with fields filled out uniquely for each backend.
         The only field common to all backends is located at index [0] with the
         field name `backend`.
@@ -203,7 +203,7 @@ def backend_from_heuristics(array: np.ndarray,
     return backend
 
 
-def is_local_backend(be_loc: _DataHashSpecs) -> bool:
+def is_local_backend(be_loc: DataHashSpecsType) -> bool:
     if be_loc[0].startswith('5'):
         return False
     else:

@@ -292,6 +292,7 @@ class HDF5_00_FileHandles(object):
         self.rFp: HDF5_00_MapTypes = {}
         self.wFp: HDF5_00_MapTypes = {}
         self.Fp: HDF5_00_MapTypes = ChainMap(self.rFp, self.wFp)
+        self.wdset: h5py.Dataset = None
 
         self.mode: Optional[str] = None
         self.hIdx: Optional[int] = None
@@ -403,6 +404,7 @@ class HDF5_00_FileHandles(object):
                 self.hIdx = None
                 self.hColsRemain = None
                 self.w_uid = None
+                self.wdset = None
             for uid in list(self.wFp.keys()):
                 try:
                     self.wFp[uid].close()
@@ -668,6 +670,8 @@ class HDF5_00_FileHandles(object):
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
 
+        self.wdset = self.wFp[self.w_uid][f'/{self.hNextPath}']
+
     def read_data(self, hashVal: HDF5_00_DataHashSpec) -> np.ndarray:
         """Read data from an hdf5 file handle at the specified locations
 
@@ -683,23 +687,21 @@ class HDF5_00_FileHandles(object):
         """
         arrSize = int(np.prod(hashVal.shape))
         dsetCol = f'/{hashVal.dataset}'
-
-        srcSlc = (self.slcExpr[hashVal.dataset_idx], self.slcExpr[0:arrSize])
-        destSlc = None
+        srcSlc = (hashVal.dataset_idx, self.slcExpr[0:arrSize])
 
         if self.schema_dtype:  # if is not None
             destArr = np.empty((arrSize,), self.schema_dtype)
             try:
-                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
             except TypeError:
                 self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
-                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
             except KeyError:
                 process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
                 if Path(process_dir, f'{hashVal.uid}.hdf5').is_file():
                     file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.hdf5')
                     self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
-                    self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+                    self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
                 else:
                     raise
         else:
@@ -752,6 +754,7 @@ class HDF5_00_FileHandles(object):
                 self.hIdx = 0
                 self.hNextPath += 1
                 self.hColsRemain -= 1
+                self.wdset = self.wFp[self.w_uid][f'/{self.hNextPath}']
                 if self.hColsRemain <= 1:
                     self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
                     self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
@@ -760,14 +763,7 @@ class HDF5_00_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        srcSlc = None
-        destSlc = (self.slcExpr[self.hIdx], self.slcExpr[0:array.size])
+        destSlc = (self.hIdx, self.slcExpr[0:array.size])
         flat_arr = np.ravel(array)
-        self.wFp[self.w_uid][f'/{self.hNextPath}'].write_direct(flat_arr, srcSlc, destSlc)
-
-        hashVal = hdf5_00_encode(uid=self.w_uid,
-                                 cksum=checksum,
-                                 dset=self.hNextPath,
-                                 dset_idx=self.hIdx,
-                                 shape=array.shape)
-        return hashVal
+        self.wdset.write_direct(flat_arr, None, destSlc)
+        return hdf5_00_encode(self.w_uid, checksum, self.hNextPath, self.hIdx, array.shape)

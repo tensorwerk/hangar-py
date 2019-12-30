@@ -40,7 +40,7 @@ def select_merge_algorithm(message: str,
                            stagehashenv: lmdb.Environment,
                            master_branch: str,
                            dev_branch: str,
-                           repo_path: str,
+                           repo_path: os.PathLike,
                            *,
                            writer_uuid: str = 'MERGE_PROCESS') -> str:
     """Entry point to perform a merge.
@@ -65,7 +65,7 @@ def select_merge_algorithm(message: str,
         name of the branch to serve as a merge master
     dev_branch : str
         name of the branch to use as the feature branch
-    repo_path: str
+    repo_path: os.PathLike
         path to the repository on disk
     writer_uuid : str, optional, kwarg only
         if the merge method is called from the repo level, the default writer

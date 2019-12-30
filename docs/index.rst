@@ -8,9 +8,9 @@
    quickstart
    installation
    concepts
+   api
    tutorial
    design
-   api
    cli
    externals
    faq

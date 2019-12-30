@@ -183,7 +183,7 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
                                           dtype=np.typeDict[dtype.lower()],
                                           named_samples=named,
                                           variable_shape=variable_)
-        click.echo(f'Initialized Arrayset: {aset.name}')
+        click.echo(f'Initialized Arrayset: {aset.arrayset}')
     except (ValueError, LookupError, PermissionError) as e:
         raise click.ClickException(e)
     finally:
@@ -204,7 +204,7 @@ def remove_arrayset(repo: Repository, name):
     """
     try:
         co = repo.checkout(write=True)
-        removed = co.arraysets.remove_aset(name)
+        removed = co.arraysets.delete(name)
         click.echo(f'Successfully removed arrayset: {removed}')
     except (ValueError, KeyError, PermissionError) as e:
         raise click.ClickException(e)

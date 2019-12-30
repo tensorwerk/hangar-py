@@ -6,15 +6,17 @@ from conftest import fixed_shape_backend_params
 
 class TestCheckout(object):
 
-    def test_write_checkout_specifying_commit_not_allowed_if_commit_exists(self, written_repo):
-        cmt_digest = written_repo.log(return_contents=True)['head']
+    def test_write_checkout_specifying_commit_not_allowed_if_commit_exists(self,
+                                                                           aset_samples_initialized_repo):
+        cmt_digest = aset_samples_initialized_repo.log(return_contents=True)['head']
         with pytest.raises(ValueError):
-            written_repo.checkout(write=True, commit=cmt_digest)
+            aset_samples_initialized_repo.checkout(write=True, commit=cmt_digest)
 
-    def test_write_checkout_specifying_commit_not_allowed_if_commit_does_not_exists(self, written_repo):
+    def test_write_checkout_specifying_commit_not_allowed_if_commit_does_not_exists(self,
+                                                                                    aset_samples_initialized_repo):
         cmt_digest = 'notrealcommit'
         with pytest.raises(ValueError):
-            written_repo.checkout(write=True, commit=cmt_digest)
+            aset_samples_initialized_repo.checkout(write=True, commit=cmt_digest)
 
     def test_two_write_checkouts(self, repo):
         w1_checkout = repo.checkout(write=True)
@@ -40,16 +42,16 @@ class TestCheckout(object):
         r2_checkout.close()
         w_checkout.close()
 
-    def test_write_with_read_checkout(self, written_repo, array5by7):
-        co = written_repo.checkout()
+    def test_write_with_read_checkout(self, aset_samples_initialized_repo, array5by7):
+        co = aset_samples_initialized_repo.checkout()
         with pytest.raises(TypeError):
             co.arraysets.init_arrayset(name='aset', shape=(5, 7), dtype=np.float64)
         with pytest.raises(AttributeError):
             co.metadata.add('a', 'b')
         co.close()
 
-    def test_writer_aset_obj_not_accessible_after_close(self, written_two_cmt_repo):
-        repo = written_two_cmt_repo
+    def test_writer_aset_obj_not_accessible_after_close(self, two_commit_filled_samples_repo):
+        repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
         asets = co.arraysets
         aset = co.arraysets['writtenaset']
@@ -62,8 +64,9 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             aset.__dict__
 
-    def test_writer_aset_obj_arrayset_iter_values_not_accessible_after_close(self, written_two_cmt_repo):
-        repo = written_two_cmt_repo
+    def test_writer_aset_obj_arrayset_iter_values_not_accessible_after_close(self,
+                                                                             two_commit_filled_samples_repo):
+        repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
         oldObjs = []
         for oldObj in co.arraysets.values():
@@ -74,8 +77,9 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 oldObj.__dict__
 
-    def test_writer_aset_obj_arrayset_iter_items_not_accessible_after_close(self, written_two_cmt_repo):
-        repo = written_two_cmt_repo
+    def test_writer_aset_obj_arrayset_iter_items_not_accessible_after_close(self,
+                                                                            two_commit_filled_samples_repo):
+        repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
         oldObjs = {}
         for oldName, oldObj in co.arraysets.items():
@@ -87,8 +91,9 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 obj.__dict__
 
-    def test_writer_aset_obj_not_accessible_after_commit_and_close(self, written_repo, array5by7):
-        repo = written_repo
+    def test_writer_aset_obj_not_accessible_after_commit_and_close(self,
+                                                                   aset_samples_initialized_repo, array5by7):
+        repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
         asets = co.arraysets
         aset = co.arraysets['writtenaset']
@@ -105,8 +110,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             shouldFail = aset['1']
 
-    def test_reader_aset_obj_not_accessible_after_close(self, written_two_cmt_repo):
-        repo = written_two_cmt_repo
+    def test_reader_aset_obj_not_accessible_after_close(self, two_commit_filled_samples_repo):
+        repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
         asets = co.arraysets
         aset = co.arraysets['writtenaset']
@@ -119,8 +124,9 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             aset.__dict__
 
-    def test_reader_aset_obj_arrayset_iter_values_not_accessible_after_close(self, written_two_cmt_repo):
-        repo = written_two_cmt_repo
+    def test_reader_aset_obj_arrayset_iter_values_not_accessible_after_close(self,
+                                                                             two_commit_filled_samples_repo):
+        repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
         oldObjs = []
         for oldObj in co.arraysets.values():
@@ -131,8 +137,9 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 oldObj.__dict__
 
-    def test_reader_aset_obj_arrayset_iter_items_not_accessible_after_close(self, written_two_cmt_repo):
-        repo = written_two_cmt_repo
+    def test_reader_aset_obj_arrayset_iter_items_not_accessible_after_close(self,
+                                                                            two_commit_filled_samples_repo):
+        repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
         oldObjs = {}
         for oldName, oldObj in co.arraysets.items():
@@ -144,8 +151,9 @@ class TestCheckout(object):
             with pytest.raises(ReferenceError):
                 obj.__dict__
 
-    def test_reader_arrayset_context_manager_not_accessible_after_close(self, written_two_cmt_repo):
-        repo = written_two_cmt_repo
+    def test_reader_arrayset_context_manager_not_accessible_after_close(self,
+                                                                        two_commit_filled_samples_repo):
+        repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
         aset = co.arraysets['writtenaset']
         klist = []
@@ -162,8 +170,9 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             aset[klist[0]]
 
-    def test_writer_arrayset_context_manager_not_accessible_after_close(self, written_two_cmt_repo):
-        repo = written_two_cmt_repo
+    def test_writer_arrayset_context_manager_not_accessible_after_close(self,
+                                                                        two_commit_filled_samples_repo):
+        repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
         aset = co.arraysets['writtenaset']
         with aset as ds:
@@ -180,8 +189,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             aset['1232']
 
-    def test_writer_metadata_obj_not_accessible_after_close(self, written_repo):
-        repo = written_repo
+    def test_writer_metadata_obj_not_accessible_after_close(self, aset_samples_initialized_repo):
+        repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
         md = co.metadata
         co.close()
@@ -189,8 +198,9 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             md.__dict__
 
-    def test_writer_metadata_obj_not_accessible_after_commit_and_close(self, written_repo):
-        repo = written_repo
+    def test_writer_metadata_obj_not_accessible_after_commit_and_close(self,
+                                                                       aset_samples_initialized_repo):
+        repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
         md = co.metadata
         md['hello'] = 'world'
@@ -202,16 +212,16 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             shouldFail = md['hello']
 
-    def test_reader_metadata_obj_not_accessible_after_close(self, written_repo):
-        repo = written_repo
+    def test_reader_metadata_obj_not_accessible_after_close(self, aset_samples_initialized_repo):
+        repo = aset_samples_initialized_repo
         co = repo.checkout(write=False)
         md = co.metadata
         co.close()
         with pytest.raises(ReferenceError):
             md.__dict__
 
-    def test_close_read_does_not_invalidate_write_checkout(self, written_repo, array5by7):
-        repo = written_repo
+    def test_close_read_does_not_invalidate_write_checkout(self, aset_samples_initialized_repo, array5by7):
+        repo = aset_samples_initialized_repo
         r_co = repo.checkout(write=False)
         w_co = repo.checkout(write=True)
         r_co.close()
@@ -228,8 +238,8 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             aset.__dict__
 
-    def test_close_write_does_not_invalidate_read_checkout(self, written_repo, array5by7):
-        repo = written_repo
+    def test_close_write_does_not_invalidate_read_checkout(self, aset_samples_initialized_repo, array5by7):
+        repo = aset_samples_initialized_repo
         r_co = repo.checkout(write=False)
         w_co = repo.checkout(write=True)
 
@@ -256,7 +266,7 @@ class TestCheckout(object):
         co.close()
         co = repo.checkout(write=True)
         with pytest.raises(ReferenceError):
-            aset.add(array5by7, '1')
+            aset.add('1', array5by7)
             co.commit('this is a commit message')
         co.close()
         with pytest.raises(ReferenceError):
@@ -276,10 +286,10 @@ class TestCheckout(object):
     def test_operate_on_arrayset_samples_after_commiting_but_not_closing_checkout(self, aset_backend, repo, array5by7):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset_backend)
-        aset.add(array5by7, '1')
+        aset.add('1', array5by7)
         co.commit('hi')
 
-        aset.add(array5by7, '2')  # this raises ReferenceError since the reference to aset is gone
+        aset.add('2', array5by7)  # this raises ReferenceError since the reference to aset is gone
         co.commit('hello 2')
         assert np.allclose(aset['2'], array5by7)
         co.close()
@@ -310,7 +320,7 @@ class TestCheckout(object):
         co = repo.checkout(write=True)
         asets = co.arraysets
         aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
-        aset.add(array5by7, '1')
+        aset.add('1', array5by7)
         co.commit('hi')
 
         aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
@@ -344,7 +354,7 @@ class TestCheckout(object):
     def test_reset_staging_area_clears_arraysets(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
-        aset.add(array5by7, '1')
+        aset.add('1', array5by7)
         co.commit('hi')
 
         aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
@@ -396,152 +406,152 @@ class TestCheckout(object):
 
 class TestBranchingMergingInCheckout(object):
 
-    def test_merge(self, written_repo, array5by7):
-        branch = written_repo.create_branch('testbranch')
+    def test_merge(self, aset_samples_initialized_repo, array5by7):
+        branch = aset_samples_initialized_repo.create_branch('testbranch')
         assert isinstance(branch.name, str)
         assert isinstance(branch.digest, str)
-        co = written_repo.checkout(write=True, branch=branch.name)
+        co = aset_samples_initialized_repo.checkout(write=True, branch=branch.name)
         assert co._branch_name == branch.name
         co.arraysets['writtenaset']['1'] = array5by7
         co.metadata.add('a', 'b')
         co.commit('this is a commit message')
         co.close()
-        written_repo.merge('test merge', 'master', branch.name)
-        co = written_repo.checkout()
+        aset_samples_initialized_repo.merge('test merge', 'master', branch.name)
+        co = aset_samples_initialized_repo.checkout()
         assert (co.arraysets['writtenaset']['1'] == array5by7).all()
         assert co.metadata.get('a') == 'b'
         co.close()
 
-    def test_merge_without_closing_previous_checkout(self, written_repo, array5by7):
-        branch = written_repo.create_branch('testbranch')
-        co = written_repo.checkout(write=True, branch=branch.name)
+    def test_merge_without_closing_previous_checkout(self, aset_samples_initialized_repo, array5by7):
+        branch = aset_samples_initialized_repo.create_branch('testbranch')
+        co = aset_samples_initialized_repo.checkout(write=True, branch=branch.name)
         co.arraysets['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         with pytest.raises(PermissionError):
-            written_repo.merge('test merge', 'master', branch.name)
+            aset_samples_initialized_repo.merge('test merge', 'master', branch.name)
         # unregister close operation as conftest will close env before this is called.
         atexit.unregister(co.close)
 
-    def test_merge_multiple_checkouts_same_aset(self, written_repo, array5by7):
-        branch1 = written_repo.create_branch('testbranch1')
-        co = written_repo.checkout(write=True, branch=branch1.name)
+    def test_merge_multiple_checkouts_same_aset(self, aset_samples_initialized_repo, array5by7):
+        branch1 = aset_samples_initialized_repo.create_branch('testbranch1')
+        co = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         co.arraysets['writtenaset']['1'] = array5by7
         co.metadata.add('a1', 'b1')
         co.commit('this is a commit message')
         co.close()
 
-        branch2 = written_repo.create_branch('testbranch2')
-        co = written_repo.checkout(write=True, branch=branch2.name)
+        branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
+        co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
         co.arraysets['writtenaset']['2'] = array5by7
         co.metadata.add('a2', 'b2')
         co.commit('this is a commit message')
         co.close()
 
-        written_repo.merge('test merge 1', 'master', branch1.name)
-        written_repo.merge('test merge 2', 'master', branch2.name)
+        aset_samples_initialized_repo.merge('test merge 1', 'master', branch1.name)
+        aset_samples_initialized_repo.merge('test merge 2', 'master', branch2.name)
 
-        co = written_repo.checkout(branch='master')
+        co = aset_samples_initialized_repo.checkout(branch='master')
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 2
         assert list(co.metadata.keys()) == ['a1', 'a2']
         co.close()
 
-    def test_merge_multiple_checkouts_multiple_aset(self, written_repo, array5by7):
-        branch1 = written_repo.create_branch('testbranch1')
-        co = written_repo.checkout(write=True, branch=branch1.name)
+    def test_merge_multiple_checkouts_multiple_aset(self, aset_samples_initialized_repo, array5by7):
+        branch1 = aset_samples_initialized_repo.create_branch('testbranch1')
+        co = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         co.arraysets['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
 
-        branch2 = written_repo.create_branch('testbranch2')
-        co = written_repo.checkout(write=True, branch=branch2.name)
+        branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
+        co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
         second_aset = co.arraysets.init_arrayset(name='second_aset', prototype=array5by7)
         second_aset['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
 
-        written_repo.merge('test merge 1', 'master', branch1.name)
-        written_repo.merge('test merge 2', 'master', branch2.name)
+        aset_samples_initialized_repo.merge('test merge 1', 'master', branch1.name)
+        aset_samples_initialized_repo.merge('test merge 2', 'master', branch2.name)
 
-        co = written_repo.checkout(branch='master')
+        co = aset_samples_initialized_repo.checkout(branch='master')
         assert len(co.arraysets) == 2
         assert len(co.arraysets['writtenaset']) == 1
         assert len(co.arraysets['second_aset']) == 1
         co.close()
 
-    def test_merge_diverged_conflict(self, written_repo, array5by7):
-        branch1 = written_repo.create_branch('testbranch1')
-        branch2 = written_repo.create_branch('testbranch2')
+    def test_merge_diverged_conflict(self, aset_samples_initialized_repo, array5by7):
+        branch1 = aset_samples_initialized_repo.create_branch('testbranch1')
+        branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
 
-        co = written_repo.checkout(write=True, branch=branch1.name)
+        co = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         co.arraysets['writtenaset']['1'] = array5by7
         co.metadata.add('a', 'b')
         co.commit('this is a commit message')
         co.close()
 
-        co = written_repo.checkout(write=True, branch=branch2.name)
+        co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
         newarray = np.zeros_like(array5by7)
         co.arraysets['writtenaset']['1'] = newarray
         co.metadata.add('a', 'c')
         co.commit('this is a commit message')
         co.close()
 
-        written_repo.merge('commit message', 'master', branch1.name)
+        aset_samples_initialized_repo.merge('commit message', 'master', branch1.name)
 
         with pytest.raises(ValueError):
-            written_repo.merge('commit message', 'master', branch2.name)
+            aset_samples_initialized_repo.merge('commit message', 'master', branch2.name)
 
-    def test_new_branch_from_where(self, written_repo, array5by7):
-        branch1 = written_repo.create_branch('testbranch1')
-        branch2 = written_repo.create_branch('testbranch2')
-        co1 = written_repo.checkout(write=True, branch=branch1.name)
-        h1 = written_repo.log(branch=co1.branch_name, return_contents=True)
+    def test_new_branch_from_where(self, aset_samples_initialized_repo, array5by7):
+        branch1 = aset_samples_initialized_repo.create_branch('testbranch1')
+        branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
+        co1 = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
+        h1 = aset_samples_initialized_repo.log(branch=co1.branch_name, return_contents=True)
         co1.close()
 
-        co2 = written_repo.checkout(write=True, branch=branch2.name)
+        co2 = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
         co2.arraysets.init_arrayset('aset2', prototype=array5by7)
         co2.arraysets['aset2']['2'] = array5by7
         co2.commit('this is a merge message')
         co2.close()
-        h2 = written_repo.log(branch=branch2.name, return_contents=True)
+        h2 = aset_samples_initialized_repo.log(branch=branch2.name, return_contents=True)
 
-        branch3 = written_repo.create_branch('testbranch3')
-        co3 = written_repo.checkout(write=True, branch=branch3.name)
-        h3 = written_repo.log(branch=co3.branch_name, return_contents=True)
+        branch3 = aset_samples_initialized_repo.create_branch('testbranch3')
+        co3 = aset_samples_initialized_repo.checkout(write=True, branch=branch3.name)
+        h3 = aset_samples_initialized_repo.log(branch=co3.branch_name, return_contents=True)
         co3.close()
 
         assert h2['head'] == h3['head']
         assert h2['ancestors'][h2['head']] == h3['ancestors'][h3['head']]
         assert h1['head'] in h2['ancestors'][h2['head']]
 
-    def test_cannot_checkout_branch_with_staged_changes(self, written_repo, array5by7):
-        branch1 = written_repo.create_branch('testbranch1')
-        branch2 = written_repo.create_branch('testbranch2')
-        co1 = written_repo.checkout(write=True, branch=branch1.name)
+    def test_cannot_checkout_branch_with_staged_changes(self, aset_samples_initialized_repo, array5by7):
+        branch1 = aset_samples_initialized_repo.create_branch('testbranch1')
+        branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
+        co1 = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         initial_cmt = co1.commit_hash
         co1.arraysets.init_arrayset('aset2', prototype=array5by7)
         co1.arraysets['aset2']['2'] = array5by7
         co1.close()
 
         with pytest.raises(ValueError):
-            con = written_repo.checkout(write=True, branch=branch2.name)
+            con = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
 
-        co1 = written_repo.checkout(write=True, branch=branch1.name)
+        co1 = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         co1.commit('hi')
         assert co1.commit_hash != initial_cmt
         assert co1.branch_name == branch1.name
         co1.close()
 
-        co2 = written_repo.checkout(write=True, branch=branch2.name)
+        co2 = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
         assert co2.branch_name == branch2.name
         assert co2.commit_hash == initial_cmt
         co2.close()
 
 
-def test_full_from_short_commit_digest(written_two_cmt_repo):
+def test_full_from_short_commit_digest(two_commit_filled_samples_repo):
     from hangar.records.commiting import expand_short_commit_digest
 
-    repo = written_two_cmt_repo
+    repo = two_commit_filled_samples_repo
     history = repo.log(branch='master', return_contents=True)
     commits = history['order']
     for full_cmt in commits:
@@ -553,9 +563,10 @@ def test_full_from_short_commit_digest(written_two_cmt_repo):
         expand_short_commit_digest(repo._env.refenv, 'zzzzzzzzzzzzzzzzzzzzzzzzzzzz')
 
 
-def test_writer_context_manager_objects_are_gc_removed_after_co_close(written_two_cmt_repo):
+def test_writer_context_manager_objects_are_gc_removed_after_co_close(
+    two_commit_filled_samples_repo):
 
-    repo = written_two_cmt_repo
+    repo = two_commit_filled_samples_repo
     co = repo.checkout(write=True)
     with co.metadata as m:
         m['aa'] = 'bb'
@@ -587,9 +598,10 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(written_tw
     co.close()
 
 
-def test_reader_context_manager_objects_are_gc_removed_after_co_close(written_two_cmt_repo):
+def test_reader_context_manager_objects_are_gc_removed_after_co_close(
+    two_commit_filled_samples_repo):
 
-    repo = written_two_cmt_repo
+    repo = two_commit_filled_samples_repo
     co = repo.checkout(write=False)
     with co.metadata as m:
         k = list(m.keys())
@@ -624,8 +636,8 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(written_tw
     assert co.__dict__ == {}
 
 
-def test_checkout_branch_not_existing_does_not_hold_writer_lock(written_two_cmt_repo):
-    repo = written_two_cmt_repo
+def test_checkout_branch_not_existing_does_not_hold_writer_lock(two_commit_filled_samples_repo):
+    repo = two_commit_filled_samples_repo
     assert 'doesnotexist' not in repo.list_branches()
     assert repo.writer_lock_held is False
     with pytest.raises(ValueError):

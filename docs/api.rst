@@ -33,14 +33,33 @@ Arraysets
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-Arrayset Data
--------------
 
-.. autoclass:: hangar.arrayset.ArraysetDataWriter()
+Sample Level Arrayset Data
+--------------------------
+
+.. autoclass:: hangar.columns.SampleWriterModifier()
    :members:
    :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
+
+
+Subsample Level Arrayset Data
+-----------------------------
+
+.. autoclass:: hangar.columns.SubsampleWriterModifier()
+   :members:
+   :inherited-members:
+   :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
+
+
+.. autoclass:: hangar.columns.SubsampleWriter()
+   :members:
+   :inherited-members:
+   :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
+
 
 Metadata
 --------
@@ -75,13 +94,30 @@ Arraysets
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-Arrayset Data
--------------
 
-.. autoclass:: hangar.arrayset.ArraysetDataReader()
+Sample Level Arrayset Data
+--------------------------
+
+.. autoclass:: hangar.columns.SampleReaderModifier()
    :members:
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
+
+
+Subsample Level Arrayset Data
+-----------------------------
+
+.. autoclass:: hangar.columns.SubsampleReaderModifier()
+   :members:
+   :special-members: __getitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
+
+
+.. autoclass:: hangar.columns.SubsampleReader()
+   :members:
+   :special-members: __getitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
+
 
 Metadata
 --------

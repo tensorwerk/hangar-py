@@ -10,6 +10,8 @@ import pytest
 import numpy as np
 
 from hangar import Repository
+from hangar.checkout import WriterCheckout
+
 import hangar
 
 
@@ -34,7 +36,16 @@ def repo(managed_tmpdir) -> Repository:
 
 
 @pytest.fixture()
-def written_repo(repo):
+def aset_samples_initialized_repo(repo) -> Repository:
+    co = repo.checkout(write=True)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
+    co.commit('this is a commit message')
+    co.close()
+    yield repo
+
+
+@pytest.fixture()
+def aset_subsamples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
@@ -43,8 +54,8 @@ def written_repo(repo):
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
-def repo_with_20_samples(request, written_repo, array5by7):
-    co = written_repo.checkout(write=True)
+def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
+    co = aset_samples_initialized_repo.checkout(write=True)
     second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7, backend_opts=request.param)
     first_aset = co.arraysets['writtenaset']
     for i in range(0, 20):
@@ -54,12 +65,12 @@ def repo_with_20_samples(request, written_repo, array5by7):
         second_aset[str(i)] = array5by7
     co.commit('20 samples')
     co.close()
-    yield written_repo
+    yield aset_samples_initialized_repo
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
-def repo_with_300_samples(request, written_repo, array5by7):
-    co = written_repo.checkout(write=True)
+def repo_300_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
+    co = aset_samples_initialized_repo.checkout(write=True)
     aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
     with aset:
         for i in range(300):
@@ -67,11 +78,11 @@ def repo_with_300_samples(request, written_repo, array5by7):
             aset[i] = array5by7
     co.commit('1000 samples')
     co.close()
-    yield written_repo
+    yield aset_samples_initialized_repo
 
 
 @pytest.fixture()
-def dummy_repo(repo):
+def repo_20_filled_samples_meta(repo) -> Repository:
     # for diff testing
     dummyData = np.arange(50).astype(np.int64)
     co1 = repo.checkout(write=True, branch='master')
@@ -88,7 +99,7 @@ def dummy_repo(repo):
 
 
 @pytest.fixture(params=variable_shape_backend_params)
-def variable_shape_written_repo(request, repo):
+def aset_samples_var_shape_initialized_repo(request, repo) -> Repository:
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(
         name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend_opts=request.param)
@@ -97,9 +108,25 @@ def variable_shape_written_repo(request, repo):
     yield repo
 
 
+@pytest.fixture(params=variable_shape_backend_params)
+def aset_subsamples_var_shape_initialized_repo(request, repo) -> Repository:
+    co = repo.checkout(write=True)
+    co.arraysets.init_arrayset(
+        name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend_opts=request.param, contains_subsamples=True)
+    co.commit('this is a commit message')
+    co.close()
+    yield repo
+
+
 @pytest.fixture()
-def w_checkout(written_repo):
-    co = written_repo.checkout(write=True)
+def aset_samples_initialized_w_checkout(aset_samples_initialized_repo) -> WriterCheckout:
+    co = aset_samples_initialized_repo.checkout(write=True)
+    yield co
+    co.close()
+
+@pytest.fixture()
+def aset_subsamples_initialized_w_checkout(aset_subsamples_initialized_repo) -> WriterCheckout:
+    co = aset_subsamples_initialized_repo.checkout(write=True)
     yield co
     co.close()
 
@@ -117,7 +144,7 @@ def randomsizedarray():
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
-def written_two_cmt_repo(request, repo, array5by7):
+def two_commit_filled_samples_repo(request, repo, array5by7) -> Repository:
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(
         name='writtenaset', shape=(5, 7), dtype=np.float32, backend_opts=request.param)
@@ -127,7 +154,7 @@ def written_two_cmt_repo(request, repo, array5by7):
 
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                d.delete(prevKey)
             for sIdx in range((cIdx + 1) * 5):
                 arr = np.random.randn(*array5by7.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr
@@ -137,7 +164,7 @@ def written_two_cmt_repo(request, repo, array5by7):
 
 
 @pytest.fixture()
-def repo_1_br_no_conf(repo):
+def repo_1_br_no_conf(repo) -> Repository:
 
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch='master')
@@ -164,7 +191,7 @@ def repo_1_br_no_conf(repo):
 
 
 @pytest.fixture()
-def repo_2_br_no_conf(repo_1_br_no_conf):
+def repo_2_br_no_conf(repo_1_br_no_conf) -> Repository:
 
     dummyData = np.arange(50)
     repo = repo_1_br_no_conf
@@ -197,8 +224,8 @@ def server_instance(managed_tmpdir, worker_id):
 
 
 @pytest.fixture()
-def written_two_cmt_server_repo(server_instance, written_two_cmt_repo) -> tuple:
-    written_two_cmt_repo.remote.add('origin', server_instance)
-    success = written_two_cmt_repo.remote.push('origin', 'master')
+def written_two_cmt_server_repo(server_instance, two_commit_filled_samples_repo) -> tuple:
+    two_commit_filled_samples_repo.remote.add('origin', server_instance)
+    success = two_commit_filled_samples_repo.remote.push('origin', 'master')
     assert success == 'master'
-    yield (server_instance, written_two_cmt_repo)
+    yield (server_instance, two_commit_filled_samples_repo)

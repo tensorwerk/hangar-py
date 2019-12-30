@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 
 
-def test_add_metadata_and_samples_to_existing_aset(dummy_repo):
+def test_add_metadata_and_samples_to_existing_aset(repo_20_filled_samples_meta):
     from hangar.records.summarize import status
     expected = '============ \n'\
                '| Branch: master \n'\
@@ -36,7 +36,7 @@ def test_add_metadata_and_samples_to_existing_aset(dummy_repo):
                '| Metadata: 0 \n'\
                ' \n'
     dummyData = np.arange(50).astype(np.int64)
-    co2 = dummy_repo.checkout(write=True)
+    co2 = repo_20_filled_samples_meta.checkout(write=True)
     for idx in range(10, 20):
         dummyData[:] = idx
         co2.arraysets['dummy'][str(idx)] = dummyData
@@ -47,7 +47,7 @@ def test_add_metadata_and_samples_to_existing_aset(dummy_repo):
     assert status('master', df.diff).getvalue() == expected
 
 
-def test_mutate_metadata_and_sample_values(dummy_repo):
+def test_mutate_metadata_and_sample_values(repo_20_filled_samples_meta):
     from hangar.records.summarize import status
     expected = '============ \n'\
                '| Branch: master \n'\
@@ -81,7 +81,7 @@ def test_mutate_metadata_and_sample_values(dummy_repo):
                '| Metadata: 1 \n'\
                ' \n'
     dummyData = np.arange(50).astype(np.int64)
-    co2 = dummy_repo.checkout(write=True)
+    co2 = repo_20_filled_samples_meta.checkout(write=True)
     for idx in range(5, 10):
         dummyData[:] = idx + 10
         co2.arraysets['dummy'][idx] = dummyData
@@ -91,7 +91,7 @@ def test_mutate_metadata_and_sample_values(dummy_repo):
     assert status('master', df.diff).getvalue() == expected
 
 
-def test_delete_metadata_and_samples(dummy_repo):
+def test_delete_metadata_and_samples(repo_20_filled_samples_meta):
     from hangar.records.summarize import status
     expected = '============ \n'\
                '| Branch: master \n'\
@@ -124,7 +124,7 @@ def test_delete_metadata_and_samples(dummy_repo):
                '|---------- \n'\
                '| Metadata: 0 \n'\
                ' \n'
-    co2 = dummy_repo.checkout(write=True)
+    co2 = repo_20_filled_samples_meta.checkout(write=True)
     for idx in range(5, 10):
         del co2.arraysets['dummy'][idx]
     del co2.metadata['hello']
@@ -133,7 +133,7 @@ def test_delete_metadata_and_samples(dummy_repo):
     assert status('master', df.diff).getvalue() == expected
 
 
-def test_add_new_aset_schema_and_samples(dummy_repo):
+def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
     from hangar.records.summarize import status
     expected = '============ \n'\
                '| Branch: master \n'\
@@ -173,7 +173,7 @@ def test_add_new_aset_schema_and_samples(dummy_repo):
                '|---------- \n'\
                '| Metadata: 0 \n'\
                ' \n'
-    co2 = dummy_repo.checkout(write=True)
+    co2 = repo_20_filled_samples_meta.checkout(write=True)
     co2.arraysets.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
@@ -183,7 +183,7 @@ def test_add_new_aset_schema_and_samples(dummy_repo):
     assert status('master', df.diff).getvalue() == expected
 
 
-def test_add_new_aset_schema_and_sample_and_delete_old_aset(dummy_repo):
+def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_samples_meta):
     from hangar.records.summarize import status
     expected = '============ \n'\
                '| Branch: master \n'\
@@ -231,7 +231,7 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(dummy_repo):
                '|---------- \n'\
                '| Metadata: 0 \n'\
                ' \n'
-    co2 = dummy_repo.checkout(write=True)
+    co2 = repo_20_filled_samples_meta.checkout(write=True)
     new = co2.arraysets.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
@@ -242,7 +242,7 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(dummy_repo):
     assert status('master', df.diff).getvalue() == expected
 
 
-def test_add_new_schema_and_samples_and_change_old_backend(dummy_repo):
+def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_samples_meta):
     from hangar.records.summarize import status
     expected = '============ \n'\
                '| Branch: master \n'\
@@ -290,7 +290,7 @@ def test_add_new_schema_and_samples_and_change_old_backend(dummy_repo):
                '|---------- \n'\
                '| Metadata: 0 \n'\
                ' \n'
-    co2 = dummy_repo.checkout(write=True)
+    co2 = repo_20_filled_samples_meta.checkout(write=True)
     co2.arraysets['dummy'].change_backend('00')
     co2.arraysets.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):

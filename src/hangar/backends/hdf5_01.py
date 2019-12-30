@@ -237,7 +237,7 @@ set_blosc_nthreads()
 # contents of a single hdf5 file
 COLLECTION_SIZE = 100
 COLLECTION_COUNT = 100
-CHUNK_MAX_RDCC_NBYTES = 500_000_000
+CHUNK_MAX_RDCC_NBYTES = 250_000_000
 CHUNK_RDCC_W0 = 0.75
 
 
@@ -328,6 +328,7 @@ class HDF5_01_FileHandles(object):
         self.rFp: HDF5_01_MapTypes = {}
         self.wFp: HDF5_01_MapTypes = {}
         self.Fp: HDF5_01_MapTypes = ChainMap(self.rFp, self.wFp)
+        self.wdset: h5py.Dataset = None
 
         self.mode: Optional[str] = None
         self.hIdx: Optional[int] = None
@@ -335,9 +336,6 @@ class HDF5_01_FileHandles(object):
         self.hMaxSize: Optional[int] = None
         self.hNextPath: Optional[int] = None
         self.hColsRemain: Optional[int] = None
-
-        self.slcExpr = np.s_
-        self.slcExpr.maketuple = False
 
         self.STAGEDIR: Path = Path(self.path, DIR_DATA_STAGE, _FmtCode)
         self.REMOTEDIR: Path = Path(self.path, DIR_DATA_REMOTE, _FmtCode)
@@ -439,6 +437,7 @@ class HDF5_01_FileHandles(object):
                 self.hIdx = None
                 self.hColsRemain = None
                 self.w_uid = None
+                self.wdset = None
             for uid in list(self.wFp.keys()):
                 try:
                     self.wFp[uid].close()
@@ -666,6 +665,7 @@ class HDF5_01_FileHandles(object):
             self.wFp[self.w_uid].swmr_mode = True
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
+        self.wdset = self.wFp[self.w_uid][f'/{self.hNextPath}']
 
     def read_data(self, hashVal: HDF5_01_DataHashSpec) -> np.ndarray:
         """Read data from an hdf5 file handle at the specified locations
@@ -681,22 +681,21 @@ class HDF5_01_FileHandles(object):
             requested data.
         """
         dsetCol = f'/{hashVal.dataset}'
-        srcSlc = (self.slcExpr[hashVal.dataset_idx], ...)
-        destSlc = None
+        srcSlc = (hashVal.dataset_idx, ...)
 
         if self.schema_dtype:  # if is not None
             destArr = np.empty(hashVal.shape, self.schema_dtype)
             try:
-                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
             except TypeError:
                 self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
-                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
             except KeyError:
                 process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
                 if Path(process_dir, f'{hashVal.uid}.hdf5').is_file():
                     file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.hdf5')
                     self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
-                    self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, destSlc)
+                    self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
                 else:
                     raise
         else:
@@ -748,7 +747,9 @@ class HDF5_01_FileHandles(object):
                 self.hIdx = 0
                 self.hNextPath += 1
                 self.hColsRemain -= 1
+                self.wdset = self.wFp[self.w_uid][f'/{self.hNextPath}']
                 if self.hColsRemain <= 1:
+                    self.wdset = None
                     self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
                     self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
                     self.wFp[self.w_uid].flush()
@@ -756,10 +757,5 @@ class HDF5_01_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        self.wFp[self.w_uid][f'/{self.hNextPath}'][self.hIdx] = array
-        hashVal = hdf5_01_encode(uid=self.w_uid,
-                                 cksum=checksum,
-                                 dset=self.hNextPath,
-                                 dset_idx=self.hIdx,
-                                 shape=array.shape)
-        return hashVal
+        self.wdset.write_direct(array, None, (self.hIdx, ...))
+        return hdf5_01_encode(self.w_uid, checksum, self.hNextPath, self.hIdx, array.shape)

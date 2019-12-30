@@ -6,77 +6,78 @@ class TestMetadata(object):
     @pytest.mark.parametrize('name', [
         'invalid\n', '\ninvalid', 'inv name', 'inva@lid',' trythis', 'andthis ',
         'VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'])
-    def test_writer_cannot_add_key_contains_whitespace(self, w_checkout, name):
+    def test_writer_cannot_add_key_contains_whitespace(self, aset_samples_initialized_w_checkout, name):
         with pytest.raises(ValueError):
-            w_checkout.metadata.add(name, 'b')
+            aset_samples_initialized_w_checkout.metadata.add(name, 'b')
 
-    def test_writer_add_can_overwrite_key_with_new_value(self, w_checkout):
-        w_checkout.metadata.add('a', 'b')
-        w_checkout.commit('this is a merge message')
-        w_checkout.metadata.add('a', 'c')
-        w_checkout.commit('second time')
-        assert w_checkout.metadata.get('a') == 'c'
+    def test_writer_add_can_overwrite_key_with_new_value(self, aset_samples_initialized_w_checkout):
+        aset_samples_initialized_w_checkout.metadata.add('a', 'b')
+        aset_samples_initialized_w_checkout.commit('this is a merge message')
+        aset_samples_initialized_w_checkout.metadata.add('a', 'c')
+        aset_samples_initialized_w_checkout.commit('second time')
+        assert aset_samples_initialized_w_checkout.metadata.get('a') == 'c'
 
-    def test_writer_add_requires_string_type_values(self, w_checkout):
-        w_checkout.metadata.add('1', 'test')
+    def test_writer_add_requires_string_type_values(self, aset_samples_initialized_w_checkout):
+        aset_samples_initialized_w_checkout.metadata.add('1', 'test')
         with pytest.raises(ValueError):
-            w_checkout.metadata.add('1', 1)
-        assert w_checkout.metadata.get('1') == 'test'
-        assert list(w_checkout.metadata.keys()) == ['1']
+            aset_samples_initialized_w_checkout.metadata.add('1', 1)
+        assert aset_samples_initialized_w_checkout.metadata.get('1') == 'test'
+        assert list(aset_samples_initialized_w_checkout.metadata.keys()) == ['1']
 
-    def test_writer_add_mixed_string_int_type_keys(self, w_checkout):
-        w_checkout.metadata.add('1', 'test')
-        w_checkout.metadata.add(1, 'test number')
-        w_checkout.metadata['2'] = 'test2'
-        w_checkout.metadata[2] = 'test2 number'
+    def test_writer_add_mixed_string_int_type_keys(self, aset_samples_initialized_w_checkout):
+        aset_samples_initialized_w_checkout.metadata.add('1', 'test')
+        aset_samples_initialized_w_checkout.metadata.add(1, 'test number')
+        aset_samples_initialized_w_checkout.metadata['2'] = 'test2'
+        aset_samples_initialized_w_checkout.metadata[2] = 'test2 number'
 
-        assert w_checkout.metadata.get('1') == 'test'
-        assert w_checkout.metadata.get(1) == 'test number'
-        assert w_checkout.metadata['2'] == 'test2'
-        assert w_checkout.metadata[2] == 'test2 number'
-        assert list(w_checkout.metadata.keys()) == ['1', 1, '2', 2]
+        assert aset_samples_initialized_w_checkout.metadata.get('1') == 'test'
+        assert aset_samples_initialized_w_checkout.metadata.get(1) == 'test number'
+        assert aset_samples_initialized_w_checkout.metadata['2'] == 'test2'
+        assert aset_samples_initialized_w_checkout.metadata[2] == 'test2 number'
+        assert list(aset_samples_initialized_w_checkout.metadata.keys()) == ['1', 1, '2', 2]
 
-    def test_writer_remove_mixed_string_int_type_type_keys(self, w_checkout):
-        w_checkout.metadata.add('1', 'test')
-        w_checkout.metadata.add(2, 'test2')
-        w_checkout.metadata[3] = 'test3'
+    def test_writer_remove_mixed_string_int_type_type_keys(self,
+                                                           aset_samples_initialized_w_checkout):
+        aset_samples_initialized_w_checkout.metadata.add('1', 'test')
+        aset_samples_initialized_w_checkout.metadata.add(2, 'test2')
+        aset_samples_initialized_w_checkout.metadata[3] = 'test3'
 
         with pytest.raises(KeyError):
-            w_checkout.metadata.remove(1)
+            aset_samples_initialized_w_checkout.metadata.remove(1)
         with pytest.raises(KeyError):
-            del w_checkout.metadata['2']
+            del aset_samples_initialized_w_checkout.metadata['2']
 
-        succ = w_checkout.metadata.remove('1')
+        succ = aset_samples_initialized_w_checkout.metadata.remove('1')
         assert succ == '1'
-        del w_checkout.metadata[2]
+        del aset_samples_initialized_w_checkout.metadata[2]
 
-        assert w_checkout.metadata.get(3) == 'test3'
-        assert list(w_checkout.metadata.keys()) == [3]
+        assert aset_samples_initialized_w_checkout.metadata.get(3) == 'test3'
+        assert list(aset_samples_initialized_w_checkout.metadata.keys()) == [3]
 
-    def test_writer_dict_style_add_get_works(self, w_checkout):
-        w_checkout.metadata['1'] = 'test'
-        assert w_checkout.metadata['1'] == 'test'
-        assert list(w_checkout.metadata.keys()) == ['1']
+    def test_writer_dict_style_add_get_works(self, aset_samples_initialized_w_checkout):
+        aset_samples_initialized_w_checkout.metadata['1'] = 'test'
+        assert aset_samples_initialized_w_checkout.metadata['1'] == 'test'
+        assert list(aset_samples_initialized_w_checkout.metadata.keys()) == ['1']
 
-    def test_writer_dict_style_add_delete_works(self, w_checkout):
-        w_checkout.metadata['1'] = 'test'
-        w_checkout.metadata['2'] = 'test two'
-        del w_checkout.metadata['2']
+    def test_writer_dict_style_add_delete_works(self, aset_samples_initialized_w_checkout):
+        aset_samples_initialized_w_checkout.metadata['1'] = 'test'
+        aset_samples_initialized_w_checkout.metadata['2'] = 'test two'
+        del aset_samples_initialized_w_checkout.metadata['2']
         with pytest.raises(KeyError):
-            w_checkout.metadata['2']
-        assert list(w_checkout.metadata.keys()) == ['1']
+            aset_samples_initialized_w_checkout.metadata['2']
+        assert list(aset_samples_initialized_w_checkout.metadata.keys()) == ['1']
 
-        w_checkout.commit('test commit')
-        w_checkout.metadata['2'] = 'test two.two'
-        del w_checkout.metadata['1']
+        aset_samples_initialized_w_checkout.commit('test commit')
+        aset_samples_initialized_w_checkout.metadata['2'] = 'test two.two'
+        del aset_samples_initialized_w_checkout.metadata['1']
         with pytest.raises(KeyError):
-            w_checkout.metadata['1']
-        assert w_checkout.metadata['2'] == 'test two.two'
-        assert list(w_checkout.metadata.keys()) == ['2']
+            aset_samples_initialized_w_checkout.metadata['1']
+        assert aset_samples_initialized_w_checkout.metadata['2'] == 'test two.two'
+        assert list(aset_samples_initialized_w_checkout.metadata.keys()) == ['2']
 
-        w_checkout.commit('commit two')
-        assert w_checkout.metadata['2'] == 'test two.two'
-        assert list(w_checkout.metadata.keys()) == ['2']
+        aset_samples_initialized_w_checkout.commit('commit two')
+        assert aset_samples_initialized_w_checkout.metadata['2'] == 'test two.two'
+        assert list(aset_samples_initialized_w_checkout.metadata.keys()) == ['2']
 
     def test_writer_remove_requires_arguments(self, repo):
         co = repo.checkout(write=True)
@@ -168,20 +169,20 @@ class TestMetadata(object):
         assert list(r_checkout.metadata.keys()) == ['1']
         r_checkout.close()
 
-    def test_reader_add_not_permitted(self, written_repo):
-        co = written_repo.checkout()
+    def test_reader_add_not_permitted(self, aset_samples_initialized_repo):
+        co = aset_samples_initialized_repo.checkout()
         with pytest.raises(AttributeError):
             co.metadata.add('a', 'b')
         co.close()
 
-    def test_reader_dict_style_add_not_permitted(self, written_repo):
-        co = written_repo.checkout()
+    def test_reader_dict_style_add_not_permitted(self, aset_samples_initialized_repo):
+        co = aset_samples_initialized_repo.checkout()
         with pytest.raises(TypeError):
             co.metadata['a'] = 'b'
         co.close()
 
-    def test_reader_remove_not_permitted(self, written_repo):
-        co = written_repo.checkout()
+    def test_reader_remove_not_permitted(self, aset_samples_initialized_repo):
+        co = aset_samples_initialized_repo.checkout()
         with pytest.raises(TypeError):
             del co.metadata['a']
         co.close()
@@ -210,8 +211,8 @@ class TestMetadata(object):
         assert 'foo' not in rco.metadata
         rco.close()
 
-    def test_reader_iswriteable_property_is_false(self, written_repo):
-        co = written_repo.checkout(write=False)
+    def test_reader_iswriteable_property_is_false(self, aset_samples_initialized_repo):
+        co = aset_samples_initialized_repo.checkout(write=False)
         assert co.metadata.iswriteable is False
         co.close()
 

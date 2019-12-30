@@ -254,7 +254,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         """Return a packed byte representation of samples corresponding to a digest.
 
         Please see comments below which explain why not all requests are
-        guarrenteed to fully complete in one operation.
+        guaranteed to fully complete in one operation.
 
         We receive a list of digests to send to the client. One consideration
         we have is that there is no way to know how much memory will be used

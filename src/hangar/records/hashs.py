@@ -1,5 +1,7 @@
-import lmdb
+import os
 from typing import Iterable, List, Tuple
+
+import lmdb
 
 from .parsing import (
     arrayset_record_schema_raw_key_from_db_key,
@@ -9,7 +11,7 @@ from .parsing import (
     hash_schema_raw_key_from_db_key,
     RawArraysetSchemaVal,
 )
-from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder, _DataHashSpecs
+from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder, DataHashSpecsType
 from ..constants import K_HASH, K_SCHEMA
 from ..txnctx import TxnRegister
 
@@ -186,7 +188,7 @@ class HashQuery(object):
         n = self._hashenv.stat()['entries']
         return n
 
-    def gen_all_hash_keys_raw_array_vals_parsed(self) -> Iterable[Tuple[str, _DataHashSpecs]]:
+    def gen_all_hash_keys_raw_array_vals_parsed(self) -> Iterable[Tuple[str, DataHashSpecsType]]:
         recs = self._traverse_all_hash_records(keys=True, values=True)
         for dbk, dbv in recs:
             rawk = hash_data_raw_key_from_db_key(dbk)
@@ -208,7 +210,7 @@ class HashQuery(object):
             yield (rawk, rawv)
 
 
-def delete_in_process_data(repo_path, *, remote_operation=False):
+def delete_in_process_data(repo_path: os.PathLike, *, remote_operation=False):
     """DANGER! Permanently delete uncommitted data files/links for stage or remote area.
 
     This searches each backend accessors staged (or remote) folder structure for

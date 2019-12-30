@@ -1,14 +1,13 @@
 import atexit
 import os
-import warnings
 import weakref
-from collections import namedtuple
 from contextlib import suppress
 from functools import partial
 from uuid import uuid4
 
 import lmdb
 
+from .mixins import GetMixin
 from .arrayset import Arraysets
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
@@ -19,7 +18,7 @@ from .records import heads
 from .utils import cm_weakref_obj_proxy
 
 
-class ReaderCheckout(object):
+class ReaderCheckout(GetMixin):
     """Checkout the repository as it exists at a particular branch.
 
     This class is instantiated automatically from a repository checkout
@@ -114,7 +113,7 @@ class ReaderCheckout(object):
     def _repr_pretty_(self, p, cycle):
         """pretty repr for printing in jupyter notebooks
         """
-        self.__verify_checkout_alive()
+        self._verify_alive()
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : False\
                 \n    Commit Hash  : {self._commit_hash}\
@@ -123,7 +122,7 @@ class ReaderCheckout(object):
         p.text(res)
 
     def __repr__(self):
-        self.__verify_checkout_alive()
+        self._verify_alive()
         res = f'{self.__class__}('\
               f'base_path={self._repo_path} '\
               f'labelenv={self._labelenv} '\
@@ -133,13 +132,14 @@ class ReaderCheckout(object):
         return res
 
     def __enter__(self):
+        self._verify_alive()
         self._is_conman = True
         return self
 
     def __exit__(self, *exc):
         self._is_conman = False
 
-    def __verify_checkout_alive(self):
+    def _verify_alive(self):
         """Validates that the checkout object has not been closed
 
         Raises
@@ -153,340 +153,6 @@ class ReaderCheckout(object):
                 f'Unable to operate on past checkout objects which have been '
                 f'closed. No operation occurred. Please use a new checkout.')
             raise e from None
-
-    def __getitem__(self, index):
-        """Dictionary style access to arraysets and samples
-
-        Checkout object can be thought of as a "dataset" ("dset") mapping a
-        view of samples across arraysets.
-
-            >>> dset = repo.checkout(branch='master')
-
-        Get an arrayset contained in the checkout.
-
-            >>> dset['foo']
-            ArraysetDataReader
-
-        Get a specific sample from ``'foo'`` (returns a single array)
-
-            >>> dset['foo', '1']
-            np.array([1])
-
-        Get multiple samples from ``'foo'`` (retuns a list of arrays, in order
-        of input keys)
-
-            >>> dset['foo', ['1', '2', '324']]
-            [np.array([1]), np.ndarray([2]), np.ndarray([324])]
-
-        Get sample from multiple arraysets (returns namedtuple of arrays, field
-        names = arrayset names)
-
-            >>> dset[('foo', 'bar', 'baz'), '1']
-            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
-
-        Get multiple samples from multiple arraysets(returns list of namedtuple
-        of array sorted in input key order, field names = arrayset names)
-
-            >>> dset[('foo', 'bar'), ('1', '2')]
-            [ArraysetData(foo=array([1]), bar=array([11])),
-             ArraysetData(foo=array([2]), bar=array([22]))]
-
-        Get samples from all arraysets (shortcut syntax)
-
-            >>> out = dset[:, ('1', '2')]
-            >>> out = dset[..., ('1', '2')]
-            >>> out
-            [ArraysetData(foo=array([1]), bar=array([11]), baz=array([111])),
-             ArraysetData(foo=array([2]), bar=array([22]), baz=array([222]))]
-
-            >>> out = dset[:, '1']
-            >>> out = dset[..., '1']
-            >>> out
-            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
-
-        .. warning::
-
-            It is possible for an :class:`~.arrayset.Arraysets` name to be an
-            invalid field name for a ``namedtuple`` object. The python docs state:
-
-                Any valid Python identifier may be used for a fieldname except for
-                names starting with an underscore. Valid identifiers consist of
-                letters, digits, and underscores but do not start with a digit or
-                underscore and cannot be a keyword such as class, for, return,
-                global, pass, or raise.
-
-            In addition, names must be unique, and cannot containing a period
-            (``.``) or dash (``-``) character. If a namedtuple would normally be
-            returned during some operation, and the field name is invalid, a
-            :class:`UserWarning` will be emitted indicating that any suspect fields
-            names will be replaced with the positional index as is customary in the
-            python standard library. The ``namedtuple`` docs explain this by
-            saying:
-
-                If rename is true, invalid fieldnames are automatically replaced with
-                positional names. For example, ['abc', 'def', 'ghi', 'abc'] is
-                converted to ['abc', '_1', 'ghi', '_3'], eliminating the keyword def
-                and the duplicate fieldname abc.
-
-            The next section demonstrates the implications and workarounds for this
-            issue
-
-        As an example, if we attempted to retrieve samples from arraysets with
-        the names: ``['raw', 'data.jpeg', '_garba-ge', 'try_2']``, two of the
-        four would be renamed:
-
-            >>> out = dset[('raw', 'data.jpeg', '_garba-ge', 'try_2'), '1']
-            >>> print(out)
-            ArraysetData(raw=array([0]), _1=array([1]), _2=array([2]), try_2==array([3]))
-            >>> print(out._fields)
-            ('raw', '_1', '_2', 'try_2')
-            >>> out.raw
-            array([0])
-            >>> out._2
-            array([4])
-
-        In cases where the input arraysets are explicitly specified, then, then
-        it is guarrenteed that the order of fields in the resulting tuple is
-        exactally what was requested in the input
-
-            >>> out = dset[('raw', 'data.jpeg', '_garba-ge', 'try_2'), '1']
-            >>> out._fields
-            ('raw', '_1', '_2', 'try_2')
-            >>> reorder = dset[('data.jpeg', 'try_2', 'raw', '_garba-ge'), '1']
-            >>> reorder._fields
-            ('_0', 'try_2', 'raw', '_3')
-
-        However, if an ``Ellipsis`` (``...``) or ``slice`` (``:``) syntax is
-        used to select arraysets, *the order in which arraysets are placed into
-        the namedtuple IS NOT predictable.* Should any arrayset have an invalid
-        field name, it will be renamed according to it's positional index, but
-        will not contain any identifying mark. At the moment, there is no
-        direct way to infer the arraayset name from this strcture alone. This
-        limitation will be addressed in a future release.
-
-        Do NOT rely on any observed patterns. For this corner-case, **the ONLY
-        guarrentee we provide is that structures returned from multi-sample
-        queries have the same order in every ``ArraysetData`` tuple returned in
-        that queries result list!** Should another query be made with
-        unspecified ordering, you should assume that the indices of the
-        arraysets in the namedtuple would have changed from the previous
-        result!!
-
-            >>> print(dset.arraysets.keys())
-            ('raw', 'data.jpeg', '_garba-ge', 'try_2']
-            >>> out = dset[:, '1']
-            >>> out._fields
-            ('_0', 'raw', '_2', 'try_2')
-            >>>
-            >>> # ordering in a single query is preserved
-            ...
-            >>> multi_sample = dset[..., ('1', '2')]
-            >>> multi_sample[0]._fields
-            ('try_2', '_1', 'raw', '_3')
-            >>> multi_sample[1]._fields
-            ('try_2', '_1', 'raw', '_3')
-            >>>
-            >>> # but it may change upon a later query
-            >>> multi_sample2 = dset[..., ('1', '2')]
-            >>> multi_sample2[0]._fields
-            ('_0', '_1', 'raw', 'try_2')
-            >>> multi_sample2[1]._fields
-            ('_0', '_1', 'raw', 'try_2')
-
-        Parameters
-        ----------
-        index
-            Please see detailed explanation above for full options. Hard coded
-            options are the order to specification.
-
-            The first element (or collection) specified must be ``str`` type and
-            correspond to an arrayset name(s). Alternativly the Ellipsis operator
-            (``...``) or unbounded slice operator (``:`` <==> ``slice(None)``) can
-            be used to indicate "select all" behavior.
-
-            If a second element (or collection) is present, the keys correspond to
-            sample names present within (all) the specified arraysets. If a key is
-            not present in even on arrayset, the entire ``get`` operation will
-            abort with ``KeyError``. If desired, the same selection syntax can be
-            used with the :meth:`~hangar.checkout.ReaderCheckout.get` method, which
-            will not Error in these situations, but simply return ``None`` values
-            in the appropriate position for keys which do not exist.
-
-        Returns
-        -------
-        :class:`~.arrayset.Arraysets`
-            single arrayset parameter, no samples specified
-
-        :class:`numpy.ndarray`
-            Single arrayset specified, single sample key specified
-
-        List[:class:`numpy.ndarray`]
-            Single arrayset, multiple samples array data for each sample is
-            returned in same order sample keys are recieved.
-
-        List[NamedTuple[``*``:class:`numpy.ndarray`]]
-            Multiple arraysets, multiple samples. Each arrayset's name is used
-            as a field in the NamedTuple elements, each NamedTuple contains
-            arrays stored in each arrayset via a common sample key. Each sample
-            key is returned values as an individual element in the
-            List. The sample order is returned in the same order it wasw recieved.
-
-        Warns
-        -----
-        UserWarning
-            Arrayset names contains characters which are invalid as namedtuple fields.
-
-        Notes
-        -----
-
-        *  All specified arraysets must exist
-
-        *  All specified sample `keys` must exist in all specified arraysets,
-           otherwise standard exception thrown
-
-        *  Slice syntax cannot be used in sample `keys` field
-
-        *  Slice syntax for arrayset field cannot specify `start`, `stop`, or
-           `step` fields, it is soley a shortcut syntax for 'get all arraysets' in
-           the ``:`` or ``slice(None)`` form
-
-        .. seealso:
-
-            :meth:`~hangar.checkout.ReaderCheckout.get`
-
-        """
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__verify_checkout_alive()
-                self.__enter__()
-
-            if isinstance(index, str):
-                return self.arraysets[index]
-            elif not isinstance(index, (tuple, list)):
-                raise TypeError(f'Unknown index: {index} type: {type(index)}')
-            if len(index) > 2:
-                raise ValueError(f'index of len > 2 not allowed: {index}')
-
-            arraysets, samples = index
-            return self.get(arraysets, samples, except_missing=True)
-
-        finally:
-            if tmpconman:
-                self.__exit__()
-
-    def get(self, arraysets, samples, *, except_missing=False):
-        """View of sample data across arraysets gracefully handeling missing sample keys.
-
-        Please see :meth:`__getitem__` for full description. This method is
-        identical with a single exception: if a sample key is not present in an
-        arrayset, this method will plane a null ``None`` value in it's return
-        slot rather than throwing a ``KeyError`` like the dict style access
-        does.
-
-        Parameters
-        ----------
-        arraysets: Union[str, Iterable[str], Ellipses, slice(None)]
-
-            Name(s) of the arraysets to query. The Ellipsis operator (``...``)
-            or unbounded slice operator (``:`` <==> ``slice(None)``) can be
-            used to indicate "select all" behavior.
-
-        samples: Union[str, int, Iterable[Union[str, int]]]
-
-            Names(s) of the samples to query
-
-        except_missing: bool, **KWARG ONLY**
-
-            If False, will not throw exceptions on missing sample key value.
-            Will raise KeyError if True and missing key found.
-
-        Returns
-        -------
-        :class:`~.arrayset.Arraysets`
-            single arrayset parameter, no samples specified
-
-        :class:`numpy.ndarray`
-            Single arrayset specified, single sample key specified
-
-        List[:class:`numpy.ndarray`]
-            Single arrayset, multiple samples array data for each sample is
-            returned in same order sample keys are recieved.
-
-        List[NamedTuple[``*``:class:`numpy.ndarray`]]
-            Multiple arraysets, multiple samples. Each arrayset's name is used
-            as a field in the NamedTuple elements, each NamedTuple contains
-            arrays stored in each arrayset via a common sample key. Each sample
-            key is returned values as an individual element in the
-            List. The sample order is returned in the same order it wasw recieved.
-
-        Warns
-        -----
-        UserWarning
-            Arrayset names contains characters which are invalid as namedtuple fields.
-        """
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__verify_checkout_alive()
-                self.__enter__()
-
-            # Arrayset Parsing
-            if (arraysets is Ellipsis) or isinstance(arraysets, slice):
-                arraysets = list(self._arraysets._arraysets.values())
-            elif isinstance(arraysets, str):
-                arraysets = [self._arraysets._arraysets[arraysets]]
-            elif isinstance(arraysets, (tuple, list)):
-                arraysets = [self._arraysets._arraysets[aname] for aname in arraysets]
-            else:
-                raise TypeError(f'Arraysets: {arraysets} type: {type(arraysets)}')
-            nAsets = len(arraysets)
-            try:
-                aset_names = [aset.name for aset in arraysets]
-                ArraysetData = namedtuple('ArraysetData', aset_names)
-            except ValueError:
-                warnings.warn(
-                    'Arrayset names contains characters which are invalid as namedtuple fields. '
-                    'All suspect field names will be replaced by their positional names '
-                    '(ie "_0" for element 0, "_4" for element 4)', UserWarning)
-                ArraysetData = namedtuple('ArraysetData', aset_names, rename=True)
-
-            # Sample Parsing
-            if isinstance(samples, (str, int)):
-                samples = [samples]
-            elif not isinstance(samples, (tuple, list)):
-                raise TypeError(f'Samples idx: {samples} type: {type(samples)}')
-            nSamples = len(samples)
-
-            # Data Retrieval
-            asetsSamplesData = []
-            for aset in arraysets:
-                aset_samples = []
-                for sample in samples:
-                    try:
-                        arr = aset.get(sample)
-                    except KeyError as e:
-                        if except_missing:
-                            raise e
-                        arr = None
-                    aset_samples.append(arr)
-                if nAsets == 1:
-                    asetsSamplesData = aset_samples
-                    if nSamples == 1:
-                        asetsSamplesData = asetsSamplesData[0]
-                    break
-                asetsSamplesData.append(aset_samples)
-            else:  # N.B. for-else conditional (ie. 'no break')
-                tmp = map(ArraysetData._make, zip(*asetsSamplesData))
-                asetsSamplesData = list(tmp)
-                if len(asetsSamplesData) == 1:
-                    asetsSamplesData = asetsSamplesData[0]
-
-            return asetsSamplesData
-
-        finally:
-            if tmpconman:
-                self.__exit__()
 
     @property
     def arraysets(self) -> Arraysets:
@@ -523,7 +189,7 @@ class ReaderCheckout(object):
             arraysets accessor class but which can be invalidated when the writer
             lock is released.
         """
-        self.__verify_checkout_alive()
+        self._verify_alive()
         wr = cm_weakref_obj_proxy(self._arraysets)
         return wr
 
@@ -543,7 +209,7 @@ class ReaderCheckout(object):
             metadata class but which can be invalidated when the writer lock is
             released.
         """
-        self.__verify_checkout_alive()
+        self._verify_alive()
         wr = cm_weakref_obj_proxy(self._metadata)
         return wr
 
@@ -563,7 +229,7 @@ class ReaderCheckout(object):
             exactly like the differ class but which can be invalidated when the
             writer lock is released.
         """
-        self.__verify_checkout_alive()
+        self._verify_alive()
         wr = weakref.proxy(self._differ)
         return wr
 
@@ -579,7 +245,7 @@ class ReaderCheckout(object):
         str
             commit hash of the checkout
         """
-        self.__verify_checkout_alive()
+        self._verify_alive()
         return self._commit_hash
 
     def close(self) -> None:
@@ -590,7 +256,7 @@ class ReaderCheckout(object):
         system resources, which may improve performance for repositories with
         multiple simultaneous read checkouts.
         """
-        self.__verify_checkout_alive()
+        self._verify_alive()
         with suppress(AttributeError):
             self._arraysets._close()
 
@@ -631,7 +297,7 @@ class ReaderCheckout(object):
 # --------------- Write enabled checkout ---------------------------------------
 
 
-class WriterCheckout(object):
+class WriterCheckout(GetMixin):
     """Checkout the repository at the head of a given branch for writing.
 
     This is the entry point for all writing operations to the repository, the
@@ -694,7 +360,7 @@ class WriterCheckout(object):
             db where the hash records are stored.
         refenv : lmdb.Environment
             db where the commit record data is unpacked and stored.
-        stagenv : lmdb.Environment
+        stageenv : lmdb.Environment
             db where the stage record data is unpacked and stored.
         branchenv : lmdb.Environment
             db where the head record data is unpacked and stored.
@@ -718,13 +384,13 @@ class WriterCheckout(object):
         self._arraysets: Arraysets = None
         self._differ: WriterUserDiff = None
         self._metadata: MetadataWriter = None
-        self.__setup()
+        self._setup()
         atexit.register(self.close)
 
     def _repr_pretty_(self, p, cycle):
         """pretty repr for printing in jupyter notebooks
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : True\
                 \n    Base Branch  : {self._branch_name}\
@@ -733,7 +399,7 @@ class WriterCheckout(object):
         p.text(res)
 
     def __repr__(self):
-        self.__acquire_writer_lock()
+        self._verify_alive()
         res = f'{self.__class__}('\
               f'base_path={self._repo_path} '\
               f'branch_name={self._branch_name} ' \
@@ -745,7 +411,7 @@ class WriterCheckout(object):
         return res
 
     def __enter__(self):
-        self.__acquire_writer_lock()
+        self._verify_alive()
         self._is_conman = True
         self.arraysets.__enter__()
         return self
@@ -754,7 +420,7 @@ class WriterCheckout(object):
         self._is_conman = False
         self.arraysets.__exit__(*exc)
 
-    def __acquire_writer_lock(self):
+    def _verify_alive(self):
         """Ensures that this class instance holds the writer lock in the database.
 
         Raises
@@ -787,7 +453,7 @@ class WriterCheckout(object):
                 del self._differ
             raise e from None
 
-    def __setup(self):
+    def _setup(self):
         """setup the staging area appropriately for a write enabled checkout.
 
         On setup, we cannot be sure what branch the staging area was previously
@@ -804,7 +470,7 @@ class WriterCheckout(object):
             based on one branch's ``HEAD``, but a different branch was specified to
             be used for the base of this checkout.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         current_head = heads.get_staging_branch_head(self._branchenv)
         currentDiff = WriterUserDiff(stageenv=self._stageenv,
                                      refenv=self._refenv,
@@ -848,339 +514,6 @@ class WriterCheckout(object):
             branchenv=self._branchenv,
             branch_name=self._branch_name)
 
-    def __getitem__(self, index):
-        """Dictionary style access to arraysets and samples
-
-        Checkout object can be thought of as a "dataset" ("dset") mapping a
-        view of samples across arraysets.
-
-            >>> dset = repo.checkout(branch='master')
-
-        Get an arrayset contained in the checkout.
-
-            >>> dset['foo']
-            ArraysetDataReader
-
-        Get a specific sample from ``'foo'`` (returns a single array)
-
-            >>> dset['foo', '1']
-            np.array([1])
-
-        Get multiple samples from ``'foo'`` (retuns a list of arrays, in order
-        of input keys)
-
-            >>> dset['foo', ['1', '2', '324']]
-            [np.array([1]), np.ndarray([2]), np.ndarray([324])]
-
-        Get sample from multiple arraysets (returns namedtuple of arrays, field
-        names = arrayset names)
-
-            >>> dset[('foo', 'bar', 'baz'), '1']
-            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
-
-        Get multiple samples from multiple arraysets(returns list of namedtuple
-        of array sorted in input key order, field names = arrayset names)
-
-            >>> dset[('foo', 'bar'), ('1', '2')]
-            [ArraysetData(foo=array([1]), bar=array([11])),
-             ArraysetData(foo=array([2]), bar=array([22]))]
-
-        Get samples from all arraysets (shortcut syntax)
-
-            >>> out = dset[:, ('1', '2')]
-            >>> out = dset[..., ('1', '2')]
-            >>> out
-            [ArraysetData(foo=array([1]), bar=array([11]), baz=array([111])),
-             ArraysetData(foo=array([2]), bar=array([22]), baz=array([222]))]
-
-            >>> out = dset[:, '1']
-            >>> out = dset[..., '1']
-            >>> out
-            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
-
-        .. warning::
-
-            It is possible for an :class:`~.arrayset.Arraysets` name to be an
-            invalid field name for a ``namedtuple`` object. The python docs state:
-
-                Any valid Python identifier may be used for a fieldname except for
-                names starting with an underscore. Valid identifiers consist of
-                letters, digits, and underscores but do not start with a digit or
-                underscore and cannot be a keyword such as class, for, return,
-                global, pass, or raise.
-
-            In addition, names must be unique, and cannot containing a period
-            (``.``) or dash (``-``) character. If a namedtuple would normally be
-            returned during some operation, and the field name is invalid, a
-            :class:`UserWarning` will be emitted indicating that any suspect fields
-            names will be replaced with the positional index as is customary in the
-            python standard library. The ``namedtuple`` docs explain this by
-            saying:
-
-                If rename is true, invalid fieldnames are automatically replaced with
-                positional names. For example, ['abc', 'def', 'ghi', 'abc'] is
-                converted to ['abc', '_1', 'ghi', '_3'], eliminating the keyword def
-                and the duplicate fieldname abc.
-
-            The next section demonstrates the implications and workarounds for this
-            issue
-
-        As an example, if we attempted to retrieve samples from arraysets with
-        the names: ``['raw', 'data.jpeg', '_garba-ge', 'try_2']``, two of the
-        four would be renamed:
-
-            >>> out = dset[('raw', 'data.jpeg', '_garba-ge', 'try_2'), '1']
-            >>> print(out)
-            ArraysetData(raw=array([0]), _1=array([1]), _2=array([2]), try_2==array([3]))
-            >>> print(out._fields)
-            ('raw', '_1', '_2', 'try_2')
-            >>> out.raw
-            array([0])
-            >>> out._2
-            array([4])
-
-        In cases where the input arraysets are explicitly specified, then, then
-        it is guarrenteed that the order of fields in the resulting tuple is
-        exactally what was requested in the input
-
-            >>> out = dset[('raw', 'data.jpeg', '_garba-ge', 'try_2'), '1']
-            >>> out._fields
-            ('raw', '_1', '_2', 'try_2')
-            >>> reorder = dset[('data.jpeg', 'try_2', 'raw', '_garba-ge'), '1']
-            >>> reorder._fields
-            ('_0', 'try_2', 'raw', '_3')
-
-        However, if an ``Ellipsis`` (``...``) or ``slice`` (``:``) syntax is
-        used to select arraysets, *the order in which arraysets are placed into
-        the namedtuple IS NOT predictable.* Should any arrayset have an invalid
-        field name, it will be renamed according to it's positional index, but
-        will not contain any identifying mark. At the moment, there is no
-        direct way to infer the arraayset name from this strcture alone. This
-        limitation will be addressed in a future release.
-
-        Do NOT rely on any observed patterns. For this corner-case, **the ONLY
-        guarrentee we provide is that structures returned from multi-sample
-        queries have the same order in every ``ArraysetData`` tuple returned in
-        that queries result list!** Should another query be made with
-        unspecified ordering, you should assume that the indices of the
-        arraysets in the namedtuple would have changed from the previous
-        result!!
-
-            >>> print(dset.arraysets.keys())
-            ('raw', 'data.jpeg', '_garba-ge', 'try_2']
-            >>> out = dset[:, '1']
-            >>> out._fields
-            ('_0', 'raw', '_2', 'try_2')
-            >>>
-            >>> # ordering in a single query is preserved
-            ...
-            >>> multi_sample = dset[..., ('1', '2')]
-            >>> multi_sample[0]._fields
-            ('try_2', '_1', 'raw', '_3')
-            >>> multi_sample[1]._fields
-            ('try_2', '_1', 'raw', '_3')
-            >>>
-            >>> # but it may change upon a later query
-            >>> multi_sample2 = dset[..., ('1', '2')]
-            >>> multi_sample2[0]._fields
-            ('_0', '_1', 'raw', 'try_2')
-            >>> multi_sample2[1]._fields
-            ('_0', '_1', 'raw', 'try_2')
-
-        Parameters
-        ----------
-        index
-            Please see detailed explanation above for full options.
-
-            The first element (or collection) specified must be ``str`` type and
-            correspond to an arrayset name(s). Alternativly the Ellipsis operator
-            (``...``) or unbounded slice operator (``:`` <==> ``slice(None)``) can
-            be used to indicate "select all" behavior.
-
-            If a second element (or collection) is present, the keys correspond to
-            sample names present within (all) the specified arraysets. If a key is
-            not present in even on arrayset, the entire ``get`` operation will
-            abort with ``KeyError``. If desired, the same selection syntax can be
-            used with the :meth:`~hangar.checkout.WriterCheckout.get` method, which
-            will not Error in these situations, but simply return ``None`` values
-            in the appropriate position for keys which do not exist.
-
-        Returns
-        -------
-        :class:`~.arrayset.Arraysets`
-            single arrayset parameter, no samples specified
-
-        :class:`numpy.ndarray`
-            Single arrayset specified, single sample key specified
-
-        List[:class:`numpy.ndarray`]
-            Single arrayset, multiple samples array data for each sample is
-            returned in same order sample keys are recieved.
-
-        List[NamedTuple[``*``:class:`numpy.ndarray`]]
-            Multiple arraysets, multiple samples. Each arrayset's name is used
-            as a field in the NamedTuple elements, each NamedTuple contains
-            arrays stored in each arrayset via a common sample key. Each sample
-            key is returned values as an individual element in the
-            List. The sample order is returned in the same order it wasw recieved.
-
-        Warns
-        -----
-        UserWarning
-            Arrayset names contains characters which are invalid as namedtuple fields.
-
-        Notes
-        -----
-
-        *  All specified arraysets must exist
-
-        *  All specified sample `keys` must exist in all specified arraysets,
-           otherwise standard exception thrown
-
-        *  Slice syntax cannot be used in sample `keys` field
-
-        *  Slice syntax for arrayset field cannot specify `start`, `stop`, or
-           `step` fields, it is soley a shortcut syntax for 'get all arraysets' in
-           the ``:`` or ``slice(None)`` form
-
-        .. seealso:
-
-            :meth:`~hangar.checkout.WriterCheckout.get`
-
-        """
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__acquire_writer_lock()
-                self.__enter__()
-
-            if isinstance(index, str):
-                return self.arraysets[index]
-            elif not isinstance(index, (tuple, list)):
-                raise TypeError(f'Unknown index: {index} type: {type(index)}')
-            if len(index) > 2:
-                raise ValueError(f'index of len > 2 not allowed: {index}')
-
-            arraysets, samples = index
-            return self.get(arraysets, samples, except_missing=True)
-
-        finally:
-            if tmpconman:
-                self.__exit__()
-
-    def get(self, arraysets, samples, *, except_missing=False):
-        """View of samples across arraysets which handles missing sample keys.
-
-        Please see :meth:`__getitem__` for full description. This method is
-        identical with a single exception: if a sample key is not present in an
-        arrayset, this method will plane a null ``None`` value in it's return
-        slot rather than throwing a ``KeyError`` like the dict style access
-        does.
-
-        Parameters
-        ----------
-        arraysets: Union[str, Iterable[str], Ellipses, slice(None)]
-
-            Name(s) of the arraysets to query. The Ellipsis operator (``...``)
-            or unbounded slice operator (``:`` <==> ``slice(None)``) can be
-            used to indicate "select all" behavior.
-
-        samples: Union[str, int, Iterable[Union[str, int]]]
-
-            Names(s) of the samples to query
-
-        except_missing: bool, *kwarg-only*
-
-            If False, will not throw exceptions on missing sample key value.
-            Will raise KeyError if True and missing key found.
-
-        Returns
-        -------
-        :class:`~.arrayset.Arraysets`
-            single arrayset parameter, no samples specified
-
-        :class:`numpy.ndarray`
-            Single arrayset specified, single sample key specified
-
-        List[:class:`numpy.ndarray`]
-            Single arrayset, multiple samples array data for each sample is
-            returned in same order sample keys are recieved.
-
-        List[NamedTuple[``*``:class:`numpy.ndarray`]]
-            Multiple arraysets, multiple samples. Each arrayset's name is used
-            as a field in the NamedTuple elements, each NamedTuple contains
-            arrays stored in each arrayset via a common sample key. Each sample
-            key is returned values as an individual element in the List. The
-            sample order is returned in the same order it wasw recieved.
-
-        Warns
-        -----
-        UserWarning
-            Arrayset names contains characters which are invalid as namedtuple fields.
-        """
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__acquire_writer_lock()
-                self.__enter__()
-
-            # Arrayset Parsing
-            if (arraysets is Ellipsis) or isinstance(arraysets, slice):
-                arraysets = list(self._arraysets._arraysets.values())
-            elif isinstance(arraysets, str):
-                arraysets = [self._arraysets._arraysets[arraysets]]
-            elif isinstance(arraysets, (tuple, list)):
-                arraysets = [self._arraysets._arraysets[aname] for aname in arraysets]
-            else:
-                raise TypeError(f'Arraysets: {arraysets} type: {type(arraysets)}')
-            nAsets = len(arraysets)
-            try:
-                aset_names = [aset.name for aset in arraysets]
-                ArraysetData = namedtuple('ArraysetData', aset_names)
-            except ValueError:
-                warnings.warn(
-                    'Arrayset names contains characters which are invalid as namedtuple fields. '
-                    'All suspect field names will be replaced by their positional names '
-                    '(ie "_0" for element 0, "_4" for element 4)', UserWarning)
-                ArraysetData = namedtuple('ArraysetData', aset_names, rename=True)
-
-            # Sample Parsing
-            if isinstance(samples, (str, int)):
-                samples = [samples]
-            elif not isinstance(samples, (tuple, list)):
-                raise TypeError(f'Samples idx: {samples} type: {type(samples)}')
-            nSamples = len(samples)
-
-            # Data Retrieval
-            asetsSamplesData = []
-            for aset in arraysets:
-                aset_samples = []
-                for sample in samples:
-                    try:
-                        arr = aset.get(sample)
-                    except KeyError as e:
-                        if except_missing:
-                            raise e
-                        arr = None
-                    aset_samples.append(arr)
-                if nAsets == 1:
-                    asetsSamplesData = aset_samples
-                    if nSamples == 1:
-                        asetsSamplesData = asetsSamplesData[0]
-                    break
-                asetsSamplesData.append(aset_samples)
-            else:  # N.B. for-else conditional (ie. 'no break')
-                tmp = map(ArraysetData._make, zip(*asetsSamplesData))
-                asetsSamplesData = list(tmp)
-                if len(asetsSamplesData) == 1:
-                    asetsSamplesData = asetsSamplesData[0]
-
-            return asetsSamplesData
-
-        finally:
-            if tmpconman:
-                self.__exit__()
-
     def __setitem__(self, index, value):
         """Syntax for setting items.
 
@@ -1222,14 +555,14 @@ class WriterCheckout(object):
             ``arrayset`` can be specified. When specifying multiple ``arraysets``
             or ``samples``, each data piece to be stored must reside as individual
             elements (``np.ndarray``) in a List or Tuple. The number of keys and
-            the number of values must match exactally.
+            the number of values must match exactly.
 
         values: Union[:class:`numpy.ndarray`, Iterable[:class:`numpy.ndarray`]]
             Data to store in the specified arraysets/sample keys. When
             specifying multiple ``arraysets`` or ``samples``, each data piece
             to be stored must reside as individual elements (``np.ndarray``) in
             a List or Tuple. The number of keys and the number of values must
-            match exactally.
+            match exactly.
 
         Notes
         -----
@@ -1244,7 +577,7 @@ class WriterCheckout(object):
         try:
             tmpconman = not self._is_conman
             if tmpconman:
-                self.__acquire_writer_lock()
+                self._verify_alive()
                 self.__enter__()
 
             if not isinstance(index, (tuple, list)):
@@ -1346,7 +679,7 @@ class WriterCheckout(object):
             arraysets accessor class but which can be invalidated when the writer
             lock is released.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         wr = cm_weakref_obj_proxy(self._arraysets)
         return wr
 
@@ -1366,7 +699,7 @@ class WriterCheckout(object):
             metadata class but which can be invalidated when the writer lock is
             released.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         wr = cm_weakref_obj_proxy(self._metadata)
         return wr
 
@@ -1386,7 +719,7 @@ class WriterCheckout(object):
             exactly like the differ class but which can be invalidated when the
             writer lock is released.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         wr = weakref.proxy(self._differ)
         return wr
 
@@ -1399,7 +732,7 @@ class WriterCheckout(object):
         str
             name of the branch whose commit ``HEAD`` changes are staged from.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         return self._branch_name
 
     @property
@@ -1411,7 +744,7 @@ class WriterCheckout(object):
         str
             commit hash
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         cmt = heads.get_branch_head_commit(branchenv=self._branchenv,
                                            branch_name=self._branch_name)
         return cmt
@@ -1435,7 +768,7 @@ class WriterCheckout(object):
             commit hash of the new commit for the `master` branch this checkout
             was started from.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         commit_hash = select_merge_algorithm(
             message=message,
             branchenv=self._branchenv,
@@ -1489,12 +822,12 @@ class WriterCheckout(object):
         RuntimeError
             If no changes have been made in the staging area, no commit occurs.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
 
         open_asets = []
         for arrayset in self._arraysets.values():
             if arrayset._is_conman:
-                open_asets.append(arrayset.name)
+                open_asets.append(arrayset.arrayset)
         open_meta = self._metadata._is_conman
 
         try:
@@ -1514,7 +847,7 @@ class WriterCheckout(object):
                                                    refenv=self._refenv,
                                                    repo_path=self._repo_path)
             # purge recs then reopen file handles so that we don't have to invalidate
-            # previous weakproxy references like if we just called :meth:``__setup```
+            # previous weakproxy references like if we just called :meth:``_setup```
             hashs.clear_stage_hash_records(self._stagehashenv)
             self._arraysets._open()
 
@@ -1550,7 +883,7 @@ class WriterCheckout(object):
         RuntimeError
             If no changes have been made to the staging area, No-Op.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
         print(f'Hard reset requested with writer_lock: {self._writer_lock}')
 
         if self._differ.status() == 'CLEAN':
@@ -1592,7 +925,7 @@ class WriterCheckout(object):
         result in a lock being placed on the repository which will not allow any
         writes until it has been manually cleared.
         """
-        self.__acquire_writer_lock()
+        self._verify_alive()
 
         if hasattr(self, '_arraysets') and (getattr(self, '_arraysets') is not None):
             self._arraysets._close()

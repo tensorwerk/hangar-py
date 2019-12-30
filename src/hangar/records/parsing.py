@@ -238,13 +238,7 @@ class RawDataRecordKey(NamedTuple):
     """Represents a Data Sample Record Key"""
     aset_name: str = None
     data_name: Union[str, int] = None
-    subsample: str = None
-
-
-class RawDataSubsampleRecordKey(NamedTuple):
-    aset: str
-    sample: Union[str, int]
-    subsample: Union[str, int]
+    subsample: Union[str, int] = None
 
 
 class RawDataRecordVal(NamedTuple):
@@ -321,7 +315,8 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
 # -------------------- raw (python) -> db -----------------------------
 
 
-def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int], *, subsample: Union[str, int] = None) -> bytes:
+def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int], *,
+                                    subsample: Union[str, int] = None) -> bytes:
     """converts a python record spec into the appropriate lmdb key
 
     Parameters
@@ -417,7 +412,7 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         corresponding dimension here.
     schema_dtype : int
         The datatype numeric code (`np.dtype.num`) of the arrayset. All input
-        tensors must exactally match this datatype.
+        tensors must exactly match this datatype.
     schema_is_named : bool
         Are samples in the arraysets identifiable with names, or not.
     schema_default_backend : str

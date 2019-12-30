@@ -134,14 +134,14 @@ def test_cannot_operate_without_repo_init(managed_tmpdir):
     assert repo._env.repo_is_initialized is False
 
 
-def test_check_repo_size(repo_with_20_samples):
+def test_check_repo_size(repo_20_filled_samples):
     from hangar.utils import parse_bytes, folder_size
 
-    expected_nbytes = folder_size(repo_with_20_samples._repo_path, recurse=True)
-    nbytes = repo_with_20_samples.size_nbytes
+    expected_nbytes = folder_size(repo_20_filled_samples._repo_path, recurse=True)
+    nbytes = repo_20_filled_samples.size_nbytes
     assert expected_nbytes == nbytes
 
-    format_nbytes = repo_with_20_samples.size_human
+    format_nbytes = repo_20_filled_samples.size_human
     # account for rounding when converting int to str.
     assert nbytes * 0.95 <= parse_bytes(format_nbytes) <= nbytes * 1.05
 
@@ -160,7 +160,7 @@ def test_force_release_writer_lock(managed_tmpdir, monkeypatch):
     # try to release the writer lock with a process which has different uid
     co._writer_lock = 'lololol'
     with pytest.raises(RuntimeError):
-        monkeypatch.setattr(co, '_WriterCheckout__acquire_writer_lock', mock_true)
+        monkeypatch.setattr(co, '_verify_alive', mock_true)
         co.close()
     # replace, but rest of object is closed
     monkeypatch.setattr(co, '_writer_lock', orig_lock)
@@ -202,11 +202,11 @@ def test_inject_repo_version(monkeypatch):
     assert hangar.__version__ == '0.2.0'
 
 
-def test_check_repository_version(written_repo):
+def test_check_repository_version(aset_samples_initialized_repo):
     from hangar import __version__
     from pkg_resources import parse_version
 
-    repo = written_repo
+    repo = aset_samples_initialized_repo
     assert repo.version == parse_version(__version__).public
 
 
