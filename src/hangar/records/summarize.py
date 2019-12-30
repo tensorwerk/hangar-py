@@ -224,10 +224,10 @@ def status(branch_name: str, diff: DiffOut) -> StringIO:
 
         buf.write('|---------- \n')
         buf.write(f'| Samples: {len(df.samples)} \n')
-        unique = unique_everseen(df.samples.keys(), lambda x: x.aset_name)
+        unique = unique_everseen(df.samples, lambda x: x.aset_name)
         for u in unique:
             un = u.aset_name
-            count = sum((1 for k in df.samples.keys() if k.aset_name == un))
+            count = sum((1 for k in df.samples if k.aset_name == un))
             buf.write(f'|  - "{un}": {count} \n')
 
         buf.write('|---------- \n')
