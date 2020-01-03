@@ -166,20 +166,23 @@ def _raw_from_db_change(changes: Set[Tuple[bytes, bytes]]) -> Changes:
     Changes
         human readable formatted dict of key/value pairs.
     """
-    arraysets, metadata, schema = [], [], {}
+    arraysets, metadata, schema = [], [], []
     for k, v in changes:
         if k[:2] == b'a:':
-            arraysets.append(data_record_raw_key_from_db_key(k))
+            arraysets.append(k)
             continue
         elif k[:2] == b'l:':
-            metadata.append(metadata_record_raw_key_from_db_key(k))
+            metadata.append(k)
             continue
-        elif k[:2] == b's:':
-            rk = arrayset_record_schema_raw_key_from_db_key(k)
-            rv = arrayset_record_schema_raw_val_from_db_val(v)
-            schema[rk] = rv
+        else:  # k[:2] == b's:'
+            schema.append((k, v))
             continue
-    return Changes(schema=schema, samples=arraysets, metadata=metadata)
+
+    rawAsets = map(data_record_raw_key_from_db_key, arraysets)
+    rawMeta = map(metadata_record_raw_key_from_db_key, metadata)
+    rawSchema = {arrayset_record_schema_raw_key_from_db_key(k):
+                 arrayset_record_schema_raw_val_from_db_val(v) for k, v in schema}
+    return Changes(schema=rawSchema, samples=tuple(rawAsets), metadata=tuple(rawMeta))
 
 
 def _all_raw_from_db_changes(outDb: DiffAndConflictsDB) -> DiffAndConflicts:
