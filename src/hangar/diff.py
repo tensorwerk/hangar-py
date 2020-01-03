@@ -18,9 +18,7 @@ from .records.parsing import (
     arrayset_record_schema_raw_key_from_db_key,
     arrayset_record_schema_raw_val_from_db_val,
     data_record_raw_key_from_db_key,
-    data_record_raw_val_from_db_val,
     metadata_record_raw_key_from_db_key,
-    metadata_record_raw_val_from_db_val,
     MetadataRecordKey,
     RawDataRecordKey,
 )
@@ -37,8 +35,8 @@ HistoryDiffStruct = NamedTuple('HistoryDiffStruct', [('masterHEAD', str),
 
 Changes = NamedTuple('Changes', [
     ('schema', dict),
-    ('samples', dict),
-    ('metadata', dict),
+    ('samples', list),
+    ('metadata', list),
 ])
 
 DiffOutDB = NamedTuple('DiffOutDB', [
@@ -82,7 +80,7 @@ DiffAndConflicts = NamedTuple('DiffAndConflicts', [
 # ------------------------------- Differ Methods ------------------------------
 
 
-def diff_envs(base_env: lmdb.Environment, head_env: lmdb.Environment) -> DiffOutDB:
+def diff_envs(base_env: lmdb.Environment, head_env: lmdb.Environment, ) -> DiffOutDB:
     """Main diff algorithm to determine changes between unpacked lmdb environments.
 
     Parameters
@@ -168,24 +166,23 @@ def _raw_from_db_change(changes: Set[Tuple[bytes, bytes]]) -> Changes:
     Changes
         human readable formatted dict of key/value pairs.
     """
-    arraysets, metadata, schema = {}, {}, {}
+    arraysets, metadata, schema = [], [], []
     for k, v in changes:
-        if k.startswith(b'a:'):
-            rk = data_record_raw_key_from_db_key(k)
-            rv = data_record_raw_val_from_db_val(v)
-            arraysets[rk] = rv
+        if k[:2] == b'a:':
+            arraysets.append(k)
             continue
-        elif k.startswith(b'l:'):
-            rk = metadata_record_raw_key_from_db_key(k)
-            rv = metadata_record_raw_val_from_db_val(v)
-            metadata[rk] = rv
+        elif k[:2] == b'l:':
+            metadata.append(k)
             continue
-        elif k.startswith(b's:'):
-            rk = arrayset_record_schema_raw_key_from_db_key(k)
-            rv = arrayset_record_schema_raw_val_from_db_val(v)
-            schema[rk] = rv
+        else:  # k[:2] == b's:'
+            schema.append((k, v))
             continue
-    return Changes(schema=schema, samples=arraysets, metadata=metadata)
+
+    rawAsets = map(data_record_raw_key_from_db_key, arraysets)
+    rawMeta = map(metadata_record_raw_key_from_db_key, metadata)
+    rawSchema = {arrayset_record_schema_raw_key_from_db_key(k):
+                 arrayset_record_schema_raw_val_from_db_val(v) for k, v in schema}
+    return Changes(schema=rawSchema, samples=tuple(rawAsets), metadata=tuple(rawMeta))
 
 
 def _all_raw_from_db_changes(outDb: DiffAndConflictsDB) -> DiffAndConflicts:
@@ -344,9 +341,8 @@ class BaseUserDiff(object):
             structure containing (`additions`, `deletions`, `mutations`) for
             diff, as well as the ConflictRecord struct.
         """
-        # it = (m_diff, d_diff, md_diff)
         it = ((a_env, m_env), (a_env, d_env), (d_env, m_env))
-        diffs = list(starmap(diff_envs, it))  # significant perf improvement by map.
+        diffs = tuple(starmap(diff_envs, it))  # significant perf improvement by map.
         conflict = find_conflicts(diffs[0], diffs[1])
         return DiffAndConflictsDB(diff=diffs[2], conflict=conflict)
 

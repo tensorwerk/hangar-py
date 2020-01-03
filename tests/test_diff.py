@@ -154,9 +154,9 @@ class TestReaderWriterDiff(object):
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t21.samples) == 1
         assert len(conflicts.t22.samples) == 1
-        for k in conflicts.t21.samples.keys():
+        for k in conflicts.t21.samples:
             assert k.data_name == '6'
-        for k in conflicts.t22.samples.keys():
+        for k in conflicts.t22.samples:
             assert k.data_name == '7'
         co.close()
 
@@ -355,7 +355,7 @@ class TestReaderWriterDiff(object):
         co = repo.checkout(write=writer, branch='testbranch')
         assert np.allclose(co.arraysets['writtenaset'][101], array5by7)
         diff = co.diff.branch('master').diff
-        assert create_meta_nt('crazykey') in diff.added.metadata.keys()
+        assert create_meta_nt('crazykey') in diff.added.metadata
         assert 'aset2' in diff.added.schema.keys()
         calledWithAset = False
         for record in diff.added.samples:
