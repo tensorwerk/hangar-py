@@ -1,27 +1,27 @@
+from pathlib import Path
+import warnings
 from collections import defaultdict, namedtuple
 from contextlib import contextmanager
-import os
-import warnings
-from types import MappingProxyType
 from typing import Optional, Tuple, Any, Dict, Sequence
 from weakref import proxy
 
 import lmdb
 import numpy as np
+from wrapt import ObjectProxy
 
+from .aset_flat import SampleReaderModifier, SampleWriterModifier
+from .aset_nested import (
+    SubsampleReader, SubsampleWriter,
+    SubsampleReaderModifier, SubsampleWriterModifier,
+)
 from ..backends import (
     BACKEND_ACCESSOR_MAP,
     backend_decoder,
     is_local_backend,
 )
-from ..txnctx import TxnRegister
 from ..records.parsing import hash_data_db_key_from_raw_key, RawArraysetSchemaVal
 from ..records.queries import RecordQuery
-from .aset_nested import (
-    SubsampleReader, SubsampleWriter,
-    SubsampleReaderModifier, SubsampleWriterModifier,
-)
-from .aset_flat import SampleReaderModifier, SampleWriterModifier
+from ..txnctx import TxnRegister
 
 
 class AsetTxn(object):
@@ -37,10 +37,9 @@ class AsetTxn(object):
 
     __slots__ = ('stagehashenv', 'dataenv', 'hashenv',
                  'hashTxn', 'dataTxn', 'stageHashTxn',
-                 '_TxnRegister', '_is_conman', '__weakref__')
+                 '_TxnRegister', '__weakref__')
 
     def __init__(self, dataenv, hashenv, stagehashenv):
-        self._is_conman: bool = False
 
         self._TxnRegister = TxnRegister()
         self.stagehashenv = stagehashenv
@@ -51,45 +50,33 @@ class AsetTxn(object):
         self.dataTxn: Optional[lmdb.Transaction] = None
         self.stageHashTxn: Optional[lmdb.Transaction] = None
 
-    @property
-    def is_conman(self):
-        return self._is_conman
-
     def open_read(self):
         """Manually open read-only transactions, caller responsible for closing.
         """
-        if not self._is_conman:
-            self._is_conman = True
-            self.hashTxn = self._TxnRegister.begin_reader_txn(self.hashenv)
-            self.dataTxn = self._TxnRegister.begin_reader_txn(self.dataenv)
+        self.hashTxn = self._TxnRegister.begin_reader_txn(self.hashenv)
+        self.dataTxn = self._TxnRegister.begin_reader_txn(self.dataenv)
         return self
 
     def close_read(self):
         """Manually close read-only transactions, must be called after manual open.
         """
-        if self._is_conman:
-            self.hashTxn = self._TxnRegister.abort_reader_txn(self.hashenv)
-            self.dataTxn = self._TxnRegister.abort_reader_txn(self.dataenv)
-            self._is_conman = False
+        self.hashTxn = self._TxnRegister.abort_reader_txn(self.hashenv)
+        self.dataTxn = self._TxnRegister.abort_reader_txn(self.dataenv)
 
     def open_write(self):
         """Manually open write-enabled transactions, caller responsible for closing.
         """
-        if not self._is_conman:
-            self._is_conman = True
-            self.hashTxn = self._TxnRegister.begin_writer_txn(self.hashenv)
-            self.dataTxn = self._TxnRegister.begin_writer_txn(self.dataenv)
-            self.stageHashTxn = self._TxnRegister.begin_writer_txn(self.stagehashenv)
+        self.hashTxn = self._TxnRegister.begin_writer_txn(self.hashenv)
+        self.dataTxn = self._TxnRegister.begin_writer_txn(self.dataenv)
+        self.stageHashTxn = self._TxnRegister.begin_writer_txn(self.stagehashenv)
         return self
 
     def close_write(self):
         """Manually close write-enabled transactions, must be called after manual open.
         """
-        if self._is_conman:
-            self.hashTxn = self._TxnRegister.commit_writer_txn(self.hashenv)
-            self.dataTxn = self._TxnRegister.commit_writer_txn(self.dataenv)
-            self.stageHashTxn = self._TxnRegister.commit_writer_txn(self.stagehashenv)
-            self._is_conman = False
+        self.hashTxn = self._TxnRegister.commit_writer_txn(self.hashenv)
+        self.dataTxn = self._TxnRegister.commit_writer_txn(self.dataenv)
+        self.stageHashTxn = self._TxnRegister.commit_writer_txn(self.stagehashenv)
 
     @contextmanager
     def read(self):
@@ -99,11 +86,9 @@ class AsetTxn(object):
         application exceptions.
         """
         try:
-            tmpconman = not self._is_conman
             yield self.open_read()
         finally:
-            if tmpconman:
-                self.close_read()
+            self.close_read()
 
     @contextmanager
     def write(self):
@@ -113,11 +98,9 @@ class AsetTxn(object):
         application exceptions.
         """
         try:
-            tmpconman = not self._is_conman
             yield self.open_write()
         finally:
-            if tmpconman:
-                self.close_write()
+            self.close_write()
 
 
 class Backend:
@@ -139,13 +122,13 @@ class Backend:
             f'operation is required to access these samples.', UserWarning)
 
     @staticmethod
-    def write_open_file_handles(path: os.PathLike, shape: Tuple[int],
+    def write_open_file_handles(path: Path, shape: Tuple[int],
                                 dtype: np.dtype) -> Dict[str, Any]:
         """Open backend accessor file handles for writing.
 
         Parameters
         ----------
-        path : os.PathLike
+        path : Path
             path to the hangar repository on disk
         shape : Tuple[int]
             maximum shape of data to be written into the backend
@@ -167,7 +150,7 @@ class Backend:
         return fhandles
 
     @staticmethod
-    def read_open_file_handles(used_backends: Sequence[str], path: os.PathLike,
+    def read_open_file_handles(used_backends: Sequence[str], path: Path,
                                shape: Tuple[int],
                                dtype: np.dtype) -> Dict[str, Any]:
         """Open backend accessor file handles for reading
@@ -176,7 +159,7 @@ class Backend:
         ----------
         used_backends : Sequence[str]
             backend format codes which should be opened
-        path : os.PathLike
+        path : Path
             path to the hangar repository on disk
         shape : Tuple[int]
             maximum shape contained data can be sized to; as defined in the
@@ -208,7 +191,7 @@ class Subsample(Backend):
     """
 
     @staticmethod
-    def load_sample_keys_and_specs(aset_name, txnctx):
+    def load_sample_keys_and_specs(aset_name, txnctx: AsetTxn):
         sspecs = defaultdict(dict)
         with txnctx.read() as ctx:
             hashTxn = ctx.hashTxn
@@ -228,7 +211,7 @@ class Subsample(Backend):
                 seen.add(spec.backend)
         return seen
 
-    def _common_setup(self, txnctx, aset_name):
+    def _common_setup(self, txnctx: AsetTxn, aset_name):
         _sspecs = self.load_sample_keys_and_specs(aset_name, txnctx)
         used_backends = self.used_backends(_sspecs)
         has_remote_backend = self.contains_remote_backend(used_backends)
@@ -237,7 +220,7 @@ class Subsample(Backend):
         return (used_backends, has_remote_backend, _sspecs)
 
     def generate_reader(self, txnctx: AsetTxn, aset_name: str,
-                        path: os.PathLike,
+                        path: Path,
                         schema_specs: RawArraysetSchemaVal) -> Construct:
         """Generate instance ready structures for read-only checkouts
 
@@ -248,7 +231,7 @@ class Subsample(Backend):
         aset_name : str
             name of the arrayset that the reader constructors are being
             generated for
-        path : os.PathLike
+        path : Path
             path to the repository on disk
         schema_specs : RawArraysetSchemaVal
             schema definition of the arrayset.
@@ -263,13 +246,15 @@ class Subsample(Backend):
         dtype = np.typeDict[schema_specs.schema_dtype]
 
         used_backends, has_remote_backend, _sspecs = self._common_setup(txnctx, aset_name)
-        file_handles = self.read_open_file_handles(used_backends, path, shape, dtype)
+        file_handles = ObjectProxy(self.read_open_file_handles(used_backends, path, shape, dtype))
+        file_handles['enter_count'] = 0
+        file_handle_proxy = proxy(file_handles)
         sspecs = {}
         for sample_key, subsample_key_specs in _sspecs.items():
             sspecs[sample_key] = SubsampleReader(
                 asetn=aset_name,
                 samplen=sample_key,
-                be_handles=file_handles,
+                be_handles=file_handle_proxy,
                 specs=subsample_key_specs)
 
         modifier = SubsampleReaderModifier(aset_name=aset_name,
@@ -280,7 +265,7 @@ class Subsample(Backend):
         return Construct(file_handles=file_handles, modifier=modifier)
 
     def generate_writer(self, txnctx: AsetTxn, aset_name: str,
-                        path: os.PathLike,
+                        path: Path,
                         schema_specs: RawArraysetSchemaVal) -> Construct:
         """Generate instance ready structures for write-enabled checkouts
 
@@ -291,7 +276,7 @@ class Subsample(Backend):
         aset_name : str
             name of the arrayset that the reader constructors are being
             generated for
-        path : os.PathLike
+        path : Path
             path to the repository on disk
         schema_specs : RawArraysetSchemaVal
             schema definition of the arrayset.
@@ -310,14 +295,17 @@ class Subsample(Backend):
         used_backends, has_remote_backend, _sspecs = self._common_setup(txnctx, aset_name)
         file_handles = self.write_open_file_handles(path, shape, dtype)
         file_handles[default_backend].backend_opts = default_backend_opts
+        file_handles['enter_count'] = 0
+        file_handles['schema_spec'] = schema_specs
+        file_handles = ObjectProxy(file_handles)
+        file_handle_proxy = proxy(file_handles)
         sspecs = {}
         for sample_key, subsample_key_specs in _sspecs.items():
             sspecs[sample_key] = SubsampleWriter(
                 aset_txn_ctx=proxy(txnctx),
-                schema_specs=schema_specs,
                 asetn=aset_name,
                 samplen=sample_key,
-                be_handles=file_handles,
+                be_handles=file_handle_proxy,
                 specs=subsample_key_specs)
 
         modifier = SubsampleWriterModifier(aset_txn_ctx=txnctx,
@@ -335,7 +323,7 @@ class Sample(Backend):
     """
 
     @staticmethod
-    def load_sample_keys_and_specs(aset_name, txnctx):
+    def load_sample_keys_and_specs(aset_name, txnctx: AsetTxn):
         sspecs = {}
         with txnctx.read() as ctx:
             hashTxn = ctx.hashTxn
@@ -354,7 +342,7 @@ class Sample(Backend):
             seen.add(spec.backend)
         return seen
 
-    def _common_setup(self, txnctx, aset_name):
+    def _common_setup(self, txnctx: AsetTxn, aset_name):
         sspecs = self.load_sample_keys_and_specs(aset_name, txnctx)
         used_backends = self.used_backends(sspecs)
         has_remote_backend = self.contains_remote_backend(used_backends)
@@ -363,7 +351,7 @@ class Sample(Backend):
         return (used_backends, has_remote_backend, sspecs)
 
     def generate_reader(self, txnctx: AsetTxn, aset_name: str,
-                        path: os.PathLike, schema_specs: RawArraysetSchemaVal) -> Construct:
+                        path: Path, schema_specs: RawArraysetSchemaVal) -> Construct:
         """Generate instance ready structures for read-only checkouts
 
         Parameters
@@ -373,7 +361,7 @@ class Sample(Backend):
         aset_name : str
             name of the arrayset that the reader constructors are being
             generated for
-        path : os.PathLike
+        path : Path
             path to the repository on disk
         schema_specs : RawArraysetSchemaVal
             schema definition of the arrayset.
@@ -397,7 +385,7 @@ class Sample(Backend):
         return Construct(file_handles=file_handles, modifier=modifier)
 
     def generate_writer(self, txnctx: AsetTxn, aset_name: str,
-                        path: os.PathLike, schema_specs: RawArraysetSchemaVal) -> Construct:
+                        path: Path, schema_specs: RawArraysetSchemaVal) -> Construct:
         """Generate instance ready structures for write-enabled checkouts.
 
         Parameters
@@ -407,7 +395,7 @@ class Sample(Backend):
         aset_name : str
             name of the arrayset that the reader constructors are being
             generated for
-        path : os.PathLike
+        path : Path
             path to the repository on disk
         schema_specs : RawArraysetSchemaVal
             schema definition of the arrayset.

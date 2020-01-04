@@ -54,7 +54,7 @@ Technical Notes
    actual retrieved data into suitable sized collections on a ``fetch-data()``
    operation
 """
-import os
+from pathlib import Path
 from typing import NamedTuple, Optional
 
 import numpy as np
@@ -102,7 +102,7 @@ def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
 
 class REMOTE_50_Handler(object):
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype

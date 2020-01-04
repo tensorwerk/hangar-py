@@ -1,9 +1,10 @@
 import atexit
-import os
+from pathlib import Path
 import weakref
-from contextlib import suppress
+from contextlib import suppress, ExitStack
 from functools import partial
 from uuid import uuid4
+from typing import Optional
 
 import lmdb
 
@@ -12,9 +13,7 @@ from .arrayset import Arraysets
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
-from .records import commiting
-from .records import hashs
-from .records import heads
+from .records import commiting, hashs, heads
 from .utils import cm_weakref_obj_proxy
 
 
@@ -63,7 +62,7 @@ class ReaderCheckout(GetMixin):
     """
 
     def __init__(self,
-                 base_path: os.PathLike, labelenv: lmdb.Environment,
+                 base_path: Path, labelenv: lmdb.Environment,
                  dataenv: lmdb.Environment, hashenv: lmdb.Environment,
                  branchenv: lmdb.Environment, refenv: lmdb.Environment,
                  commit: str):
@@ -71,7 +70,7 @@ class ReaderCheckout(GetMixin):
 
         Parameters
         ----------
-        base_path : str
+        base_path : Path
             directory path to the Hangar repository on disk
         labelenv : lmdb.Environment
             db where the label dat is stored
@@ -93,7 +92,8 @@ class ReaderCheckout(GetMixin):
         self._hashenv = hashenv
         self._branchenv = branchenv
         self._refenv = refenv
-        self._is_conman = False
+        self._enter_count = 0
+        self._stack: Optional[ExitStack] = None
 
         self._metadata = MetadataReader(
             mode='r',
@@ -133,11 +133,17 @@ class ReaderCheckout(GetMixin):
 
     def __enter__(self):
         self._verify_alive()
-        self._is_conman = True
+        with ExitStack() as stack:
+            if self._enter_count == 0:
+                stack.enter_context(self._arraysets)
+                stack.enter_context(self._metadata)
+            self._enter_count += 1
+            self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._is_conman = False
+        self._stack.close()
+        self._enter_count -= 1
 
     def _verify_alive(self):
         """Validates that the checkout object has not been closed
@@ -155,6 +161,11 @@ class ReaderCheckout(GetMixin):
             raise e from None
 
     @property
+    def _is_conman(self):
+        self._verify_alive()
+        return bool(self._enter_count)
+
+    @property
     def arraysets(self) -> Arraysets:
         """Provides access to arrayset interaction object.
 
@@ -166,13 +177,13 @@ class ReaderCheckout(GetMixin):
             1
             >>> print(co.arraysets.keys())
             ['foo']
-
             >>> fooAset = co.arraysets['foo']
             >>> fooAset.dtype
             np.fooDtype
-
             >>> asets = co.arraysets
             >>> fooAset = asets['foo']
+            >>> fooAset.dtype
+            np.fooDtype
             >>> fooAset = asets.get('foo')
             >>> fooAset.dtype
             np.fooDtype
@@ -237,6 +248,7 @@ class ReaderCheckout(GetMixin):
     def commit_hash(self) -> str:
         """Commit hash this read-only checkout's data is read from.
 
+            >>> co = repo.checkout()
             >>> co.commit_hash
             foohashdigesthere
 
@@ -257,6 +269,10 @@ class ReaderCheckout(GetMixin):
         multiple simultaneous read checkouts.
         """
         self._verify_alive()
+
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+
         with suppress(AttributeError):
             self._arraysets._close()
 
@@ -282,6 +298,7 @@ class ReaderCheckout(GetMixin):
         with suppress(AttributeError):
             del self._differ
 
+        del self._stack
         del self._commit_hash
         del self._repo_path
         del self._labelenv
@@ -289,7 +306,7 @@ class ReaderCheckout(GetMixin):
         del self._hashenv
         del self._branchenv
         del self._refenv
-        del self._is_conman
+        del self._enter_count
         atexit.unregister(self.close)
         return
 
@@ -336,7 +353,7 @@ class WriterCheckout(GetMixin):
     """
 
     def __init__(self,
-                 repo_pth: os.PathLike,
+                 repo_pth: Path,
                  branch_name: str,
                  labelenv: lmdb.Environment,
                  hashenv: lmdb.Environment,
@@ -349,7 +366,7 @@ class WriterCheckout(GetMixin):
 
         Parameters
         ----------
-        repo_pth : str
+        repo_pth : Path
             local file path of the repository.
         branch_name : str
             name of the branch whose ``HEAD`` commit will for the starting state
@@ -369,10 +386,11 @@ class WriterCheckout(GetMixin):
         mode : str, optional
             open in write or read only mode, default is 'a' which is write-enabled.
         """
-        self._is_conman = False
-        self._repo_path = repo_pth
+        self._enter_count = 0
+        self._repo_path: Path = repo_pth
         self._branch_name = branch_name
         self._writer_lock = str(uuid4())
+        self._stack: Optional[ExitStack] = None
 
         self._refenv = refenv
         self._hashenv = hashenv
@@ -381,9 +399,9 @@ class WriterCheckout(GetMixin):
         self._branchenv = branchenv
         self._stagehashenv = stagehashenv
 
-        self._arraysets: Arraysets = None
-        self._differ: WriterUserDiff = None
-        self._metadata: MetadataWriter = None
+        self._arraysets: Optional[Arraysets] = None
+        self._differ: Optional[WriterUserDiff] = None
+        self._metadata: Optional[MetadataWriter] = None
         self._setup()
         atexit.register(self.close)
 
@@ -412,13 +430,22 @@ class WriterCheckout(GetMixin):
 
     def __enter__(self):
         self._verify_alive()
-        self._is_conman = True
-        self.arraysets.__enter__()
+        with ExitStack() as stack:
+            if self._enter_count == 0:
+                stack.enter_context(self._arraysets)
+                stack.enter_context(self._metadata)
+            self._enter_count += 1
+            self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._is_conman = False
-        self.arraysets.__exit__(*exc)
+        self._stack.close()
+        self._enter_count -= 1
+
+    @property
+    def _is_conman(self):
+        self._verify_alive()
+        return bool(self._enter_count)
 
     def _verify_alive(self):
         """Ensures that this class instance holds the writer lock in the database.
@@ -522,20 +549,17 @@ class WriterCheckout(GetMixin):
 
             >>> dset = repo.checkout(branch='master', write=True)
 
-        Add single sample to single arrayset
-
+            # Add single sample to single arrayset
             >>> dset['foo', 1] = np.array([1])
             >>> dset['foo', 1]
             array([1])
 
-        Add multiple samples to single arrayset
-
+            # Add multiple samples to single arrayset
             >>> dset['foo', [1, 2, 3]] = [np.array([1]), np.array([2]), np.array([3])]
             >>> dset['foo', [1, 2, 3]]
             [array([1]), array([2]), array([3])]
 
-        Add single sample to multiple arraysets
-
+            # Add single sample to multiple arraysets
             >>> dset[['foo', 'bar'], 1] = [np.array([1]), np.array([11])]
             >>> dset[:, 1]
             ArraysetData(foo=array([1]), bar=array([11]))
@@ -557,7 +581,7 @@ class WriterCheckout(GetMixin):
             elements (``np.ndarray``) in a List or Tuple. The number of keys and
             the number of values must match exactly.
 
-        values: Union[:class:`numpy.ndarray`, Iterable[:class:`numpy.ndarray`]]
+        value: Union[:class:`numpy.ndarray`, Iterable[:class:`numpy.ndarray`]]
             Data to store in the specified arraysets/sample keys. When
             specifying multiple ``arraysets`` or ``samples``, each data piece
             to be stored must reside as individual elements (``np.ndarray``) in
@@ -574,11 +598,10 @@ class WriterCheckout(GetMixin):
         *  Add multiple samples to multiple arraysets not yet supported.
 
         """
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self._verify_alive()
-                self.__enter__()
+        self._verify_alive()
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
             if not isinstance(index, (tuple, list)):
                 raise ValueError(f'Idx: {index} does not specify arrayset(s) AND sample(s)')
@@ -640,9 +663,6 @@ class WriterCheckout(GetMixin):
                     for sampleName, val in zip(sampleNames, value):
                         aset[sampleName] = val
                 return None
-        finally:
-            if tmpconman:
-                self.__exit__()
 
     @property
     def arraysets(self) -> Arraysets:
@@ -927,6 +947,9 @@ class WriterCheckout(GetMixin):
         """
         self._verify_alive()
 
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+
         if hasattr(self, '_arraysets') and (getattr(self, '_arraysets') is not None):
             self._arraysets._close()
 
@@ -955,6 +978,7 @@ class WriterCheckout(GetMixin):
 
         heads.release_writer_lock(self._branchenv, self._writer_lock)
 
+        del self._stack
         del self._refenv
         del self._hashenv
         del self._labelenv
@@ -964,6 +988,6 @@ class WriterCheckout(GetMixin):
         del self._repo_path
         del self._writer_lock
         del self._branch_name
-        del self._is_conman
+        del self._enter_count
         atexit.unregister(self.close)
         return

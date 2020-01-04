@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 import tempfile
 import time
 import warnings
@@ -49,7 +50,7 @@ class Remotes(object):
     def __init__(self, env: Environments):
 
         self._env: Environments = env
-        self._repo_path: os.PathLike = self._env.repo_path
+        self._repo_path: Path = self._env.repo_path
         self._client: Optional[HangarClient] = None
 
     def __verify_repo_initialized(self):

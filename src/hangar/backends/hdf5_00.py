@@ -283,8 +283,8 @@ class HDF5_00_FileHandles(object):
     write to the same arrayset schema.
     """
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
-        self.path: os.PathLike = repo_path
+    def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
+        self.path: Path = repo_path
         self.schema_shape: tuple = schema_shape
         self.schema_dtype: np.dtype = schema_dtype
         self._dflt_backend_opts: Optional[dict] = None

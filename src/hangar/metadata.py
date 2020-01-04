@@ -1,4 +1,5 @@
-import os
+from contextlib import ExitStack
+from pathlib import Path
 from typing import Optional, Union, Iterator, Tuple, Dict
 
 import lmdb
@@ -45,7 +46,7 @@ class MetadataReader(object):
 
     def __init__(self,
                  mode: str,
-                 repo_pth: os.PathLike,
+                 repo_pth: Path,
                  dataenv: lmdb.Environment,
                  labelenv: lmdb.Environment,
                  *args, **kwargs):
@@ -55,7 +56,7 @@ class MetadataReader(object):
         ----------
         mode : str
             'r' for read-only, 'a' for write-enabled
-        repo_pth : os.PathLike
+        repo_pth : Path
             path to the repository on disk.
         dataenv : lmdb.Environment
             the lmdb environment in which the data records are stored. this is
@@ -67,10 +68,12 @@ class MetadataReader(object):
         """
         self._mode = mode
         self._path = repo_pth
-        self._is_conman: bool = False
         self._labelenv: lmdb.Environment = labelenv
         self._labelTxn: Optional[lmdb.Transaction] = None
         self._TxnRegister = TxnRegister()
+
+        self._stack: Optional[ExitStack] = None
+        self._enter_count: int = 0
 
         self._mspecs: Dict[Union[str, int], bytes] = {}
         metaNamesSpec = RecordQuery(dataenv).metadata_records()
@@ -79,13 +82,17 @@ class MetadataReader(object):
             self._mspecs[metaNames.meta_name] = labelKey
 
     def __enter__(self):
-        self._is_conman = True
-        self._labelTxn = self._TxnRegister.begin_reader_txn(self._labelenv)
+        with ExitStack() as stack:
+            self._enter_count += 1
+            self._labelTxn = self._TxnRegister.begin_reader_txn(self._labelenv)
+            stack.callback(self._TxnRegister.abort_reader_txn, self._labelenv)
+            self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._is_conman = False
-        self._labelTxn = self._TxnRegister.abort_reader_txn(self._labelenv)
+        self._stack.close()
+        self._stack = None
+        self._enter_count -= 1
 
     def __len__(self) -> int:
         """Determine how many metadata key/value pairs are in the checkout
@@ -146,6 +153,10 @@ class MetadataReader(object):
                 \n    Writeable: {self.iswriteable}\
                 \n    Number of Keys: {self.__len__()}\n'
         return res
+
+    @property
+    def _is_conman(self):
+        return bool(self._enter_count)
 
     @property
     def iswriteable(self) -> bool:
@@ -233,17 +244,14 @@ class MetadataReader(object):
         KeyError
             If no metadata exists in the checkout with the provided key.
         """
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__enter__()
-            metaVal = self._labelTxn.get(self._mspecs[key])
-            meta_val = hash_meta_raw_val_from_db_val(metaVal)
-        except KeyError:
-            raise KeyError(f'The checkout does not contain metadata with key: {key}')
-        finally:
-            if tmpconman:
-                self.__exit__()
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            try:
+                metaVal = self._labelTxn.get(self._mspecs[key])
+                meta_val = hash_meta_raw_val_from_db_val(metaVal)
+            except KeyError:
+                raise KeyError(f'The checkout does not contain metadata with key: {key}')
         return meta_val
 
 
@@ -282,15 +290,19 @@ class MetadataWriter(MetadataReader):
         self._dataTxn: Optional[lmdb.Transaction] = None
 
     def __enter__(self):
-        self._is_conman = True
-        self._labelTxn = self._TxnRegister.begin_writer_txn(self._labelenv)
-        self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
+        with ExitStack() as stack:
+            self._enter_count += 1
+            self._labelTxn = self._TxnRegister.begin_writer_txn(self._labelenv)
+            stack.callback(self._TxnRegister.commit_writer_txn, self._labelenv)
+            self._dataTxn = self._TxnRegister.begin_writer_txn(self._dataenv)
+            stack.callback(self._TxnRegister.commit_writer_txn, self._dataenv)
+            self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._is_conman = False
-        self._labelTxn = self._TxnRegister.commit_writer_txn(self._labelenv)
-        self._dataTxn = self._TxnRegister.commit_writer_txn(self._dataenv)
+        self._stack.close()
+        self._stack = None
+        self._enter_count -= 1
 
     def __setitem__(self, key: Union[str, int], value: str) -> Union[str, int]:
         """Store a key/value pair as metadata. Convenience method to :meth:`add`.
@@ -365,10 +377,9 @@ class MetadataWriter(MetadataReader):
         except ValueError as e:
             raise e from None
 
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__enter__()
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
             val_hash = metadata_hash_digest(value=value)
             hashKey = hash_meta_db_key_from_raw_key(val_hash)
@@ -390,11 +401,7 @@ class MetadataWriter(MetadataReader):
 
             self._dataTxn.put(metaRecKey, metaRecVal)
             self._mspecs[key] = hashKey
-
-        finally:
-            if tmpconman:
-                self.__exit__()
-        return key
+            return key
 
     def remove(self, key: Union[str, int]) -> Union[str, int]:
         """Remove a piece of metadata from the staging area of the next commit.
@@ -415,22 +422,15 @@ class MetadataWriter(MetadataReader):
         KeyError
             If the checkout does not contain metadata with the provided key.
         """
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__enter__()
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+
             if key not in self._mspecs:
                 raise KeyError(f'No metadata exists with key: {key}')
-
             metaRecKey = metadata_record_db_key_from_raw_key(key)
             delete_succeeded = self._dataTxn.delete(metaRecKey)
             if delete_succeeded is False:
                 raise KeyError(f'No metadata exists with key: {key}')
             del self._mspecs[key]
-
-        except (KeyError, ValueError) as e:
-            raise e from None
-        finally:
-            if tmpconman:
-                self.__exit__()
-        return key
+            return key

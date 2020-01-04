@@ -1,5 +1,6 @@
 import configparser
 import os
+from pathlib import Path
 import platform
 import shutil
 import tempfile
@@ -43,9 +44,9 @@ from .utils import readme_contents
 
 class Environments(object):
 
-    def __init__(self, pth: os.PathLike):
+    def __init__(self, pth: Path):
 
-        self.repo_path: os.PathLike = pth
+        self.repo_path: Path = pth
         self.refenv: Optional[lmdb.Environment] = None
         self.hashenv: Optional[lmdb.Environment] = None
         self.stageenv: Optional[lmdb.Environment] = None
@@ -88,7 +89,8 @@ class Environments(object):
         RuntimeError If the repository version is not compatible with the
         current software.
         """
-        if not os.path.isfile(pjoin(self.repo_path, LMDB_BRANCH_NAME)):
+
+        if not self.repo_path.joinpath(LMDB_BRANCH_NAME).is_file():
             msg = f'No repository exists at {self.repo_path}, please use `repo.init()` method'
             warnings.warn(msg, UserWarning)
             return False
@@ -103,10 +105,10 @@ class Environments(object):
         self._open_environments()
         return True
 
-    def _init_repo(self,
-                   user_name: str,
-                   user_email: str,
-                   remove_old: bool = False) -> os.PathLike:
+    def init_repo(self,
+                  user_name: str,
+                  user_email: str,
+                  remove_old: bool = False) -> os.PathLike:
         """Create a new hangar repositiory at the specified environment path.
 
         Parameters
@@ -121,7 +123,7 @@ class Environments(object):
 
         Returns
         -------
-        os.PathLike
+        Path
             The path to the newly created repository on disk.
 
         Raises
@@ -130,16 +132,17 @@ class Environments(object):
             If a hangar repository exists at the specified path, and `remove_old`
             was not set to ``True``.
         """
-        if os.path.isfile(pjoin(self.repo_path, LMDB_BRANCH_NAME)):
+        if self.repo_path.joinpath(LMDB_BRANCH_NAME).is_file():
             if remove_old is True:
-                shutil.rmtree(self.repo_path)
+                shutil.rmtree(str(self.repo_path))
             else:
                 raise OSError(f'Hangar Directory: {self.repo_path} already exists')
 
-        os.makedirs(pjoin(self.repo_path, DIR_DATA_STORE))
-        os.makedirs(pjoin(self.repo_path, DIR_DATA_STAGE))
-        os.makedirs(pjoin(self.repo_path, DIR_DATA_REMOTE))
-        os.makedirs(pjoin(self.repo_path, DIR_DATA))
+        self.repo_path.mkdir()
+        self.repo_path.joinpath(DIR_DATA_STORE).mkdir()
+        self.repo_path.joinpath(DIR_DATA_STAGE).mkdir()
+        self.repo_path.joinpath(DIR_DATA_REMOTE).mkdir()
+        self.repo_path.joinpath(DIR_DATA).mkdir()
         print(f'Hangar Repo initialized at: {self.repo_path}')
 
         userConf = {'USER': {'name': user_name, 'email': user_email}}
@@ -149,7 +152,7 @@ class Environments(object):
             CFG.write(f)
 
         readmeTxt = readme_contents(user_name, user_email)
-        with open(pjoin(self.repo_path, README_FILE_NAME), 'w') as f:
+        with self.repo_path.joinpath(README_FILE_NAME).open('w') as f:
             f.write(readmeTxt.getvalue())
 
         self._open_environments()
@@ -215,12 +218,12 @@ class Environments(object):
         If any commits are checked out (in an unpacked state), read those in as
         well.
         """
-        ref_pth = pjoin(self.repo_path, LMDB_REF_NAME)
-        hash_pth = pjoin(self.repo_path, LMDB_HASH_NAME)
-        stage_pth = pjoin(self.repo_path, LMDB_STAGE_REF_NAME)
-        branch_pth = pjoin(self.repo_path, LMDB_BRANCH_NAME)
-        label_pth = pjoin(self.repo_path, LMDB_META_NAME)
-        stagehash_pth = pjoin(self.repo_path, LMDB_STAGE_HASH_NAME)
+        ref_pth = str(self.repo_path.joinpath(LMDB_REF_NAME))
+        hash_pth = str(self.repo_path.joinpath(LMDB_HASH_NAME))
+        stage_pth = str(self.repo_path.joinpath(LMDB_STAGE_REF_NAME))
+        branch_pth = str(self.repo_path.joinpath(LMDB_BRANCH_NAME))
+        label_pth = str(self.repo_path.joinpath(LMDB_META_NAME))
+        stagehash_pth = str(self.repo_path.joinpath(LMDB_STAGE_HASH_NAME))
 
         self.refenv = lmdb.open(path=ref_pth, **LMDB_SETTINGS)
         self.hashenv = lmdb.open(path=hash_pth, **LMDB_SETTINGS)

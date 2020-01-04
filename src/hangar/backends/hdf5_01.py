@@ -236,7 +236,7 @@ set_blosc_nthreads()
 
 # contents of a single hdf5 file
 COLLECTION_SIZE = 100
-COLLECTION_COUNT = 100
+COLLECTION_COUNT = 200
 CHUNK_MAX_RDCC_NBYTES = 250_000_000
 CHUNK_RDCC_W0 = 0.75
 
@@ -319,7 +319,7 @@ class HDF5_01_FileHandles(object):
     write to the same arrayset schema.
     """
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
         self.path: os.PathLike = repo_path
         self.schema_shape: tuple = schema_shape
         self.schema_dtype: np.dtype = schema_dtype

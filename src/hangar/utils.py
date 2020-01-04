@@ -1,15 +1,17 @@
 import importlib
 import os
+from pathlib import Path
 import random
 import re
 import string
 import time
 import types
 import weakref
+from collections import deque
 from functools import partial, wraps
 from io import StringIO
 from inspect import signature
-from itertools import tee, filterfalse
+from itertools import tee, filterfalse, count
 from typing import Union, Any
 
 import blosc
@@ -252,6 +254,23 @@ def unique_everseen(iterable, key=None):
                 yield element
 
 
+def ilen(iterable):
+    """Return the number of items in *iterable*.
+
+        >>> ilen(x for x in range(1000000) if x % 3 == 0)
+        333334
+        >>> it = iter([0, 1, 2, False])
+        >>> ilen(it)
+        4
+
+    This consumes the iterable, so handle with care.
+
+    """
+    counter = count()
+    deque(zip(iterable, counter), maxlen=0)
+    return next(counter)
+
+
 def find_next_prime(N: int) -> int:
     """Find next prime >= N
 
@@ -285,12 +304,12 @@ def find_next_prime(N: int) -> int:
             return n
 
 
-def file_size(p: os.PathLike) -> int:  # pragma: no cover
+def file_size(p: Path) -> int:  # pragma: no cover
     """Query the file size of a specific file
 
     Parameters
     ----------
-    p : os.PathLike
+    p : Path
         path to a file that exists on disk.
 
     Raises
@@ -303,14 +322,13 @@ def file_size(p: os.PathLike) -> int:  # pragma: no cover
     int
         nbytes the file consumes on disk.
     """
-    if not os.path.isfile(p):
-        err = f'Cannot query size of: {p}. File does not exist'
+    if not p.is_file():
+        err = f'Cannot query size of: {str(p)}. File does not exist'
         raise FileNotFoundError(err)
-    nbytes = os.stat(p).st_size
-    return nbytes
+    return p.stat().st_size
 
 
-def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
+def folder_size(p: Path, *, recurse: bool = False) -> int:
     """size of all files in a folder.
 
     Default is to not include subdirectories. Set "recurse=True"
@@ -318,7 +336,7 @@ def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
 
     Parameters
     ----------
-    p : os.PathLike
+    p : Path
         path to the repository on disk.
     recurse : bool, kwarg-only
         to calculate the full size of the repo (Default value = False)
@@ -329,25 +347,25 @@ def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
         number of bytes used up in the repo_path
     """
     total = 0
-    for entry in os.scandir(p):
-        if entry.is_file(follow_symlinks=False):
+    for entry in p.iterdir():
+        if entry.is_file() and not entry.is_symlink():
             total += entry.stat().st_size
-        elif (recurse is True) and (entry.is_dir(follow_symlinks=False) is True):
-            total += folder_size(entry.path, recurse=True)
+        elif recurse and entry.is_dir() and not entry.is_symlink():
+            total += folder_size(entry.resolve(), recurse=True)
     return total
 
 
-def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
+def is_valid_directory_path(p: Path) -> Path:
     """Check if path is directory which user has write permission to.
 
     Parameters
     ----------
-    p : os.PathLike
+    p : Path
         path to some location on disk
 
     Returns
     -------
-    os.PathLike
+    Path
         If successful, the path with any user constructions expanded
         (ie. `~/somedir` -> `/home/foo/somedir`)
 
@@ -360,16 +378,16 @@ def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
     PermissionError
         If the user does not have write access to the specified path
     """
-    try:
-        usr_path = os.path.expanduser(p)
-    except TypeError:
+    if not isinstance(p, Path):
         msg = f'Path arg `p`: {p} of type: {type(p)} is not valid path specifier'
         raise TypeError(msg)
 
-    if not os.path.isdir(usr_path):
+    usr_path = p.expanduser().resolve(strict=True)
+
+    if not usr_path.is_dir():
         msg = f'Path arg `p`: {p} is not a directory.'
         raise NotADirectoryError(msg)
-    if not os.access(usr_path, os.W_OK):  # pragma: no cover
+    if not os.access(str(usr_path), os.W_OK):  # pragma: no cover
         msg = f'User does not have permission to write to directory path: {p}'
         raise PermissionError(msg)
 

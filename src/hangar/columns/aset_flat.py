@@ -1,6 +1,6 @@
-from contextlib import contextmanager
-import os
-from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable
+from contextlib import ExitStack
+from pathlib import Path
+from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Type, Optional
 
 import numpy as np
 
@@ -31,7 +31,8 @@ from ..records.parsing import (
 KeyType = Union[str, int]
 KeyArrMap = Dict[KeyType, np.ndarray]
 KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
-GetKeysType = Union[KeyType, Sequence[KeyType]]
+# GetKeysType = Union[KeyType, Sequence[KeyType]]
+AsetTxnType = Type['AsetTxn']
 
 
 class CompatibleArray(NamedTuple):
@@ -56,7 +57,7 @@ class SampleReaderModifier(object):
                  samples: Dict[KeyType, DataHashSpecsType],
                  backend_handles: AccessorMapType,
                  schema_spec: RawArraysetSchemaVal,
-                 repo_path: os.PathLike,
+                 repo_path: Path,
                  *args, **kwargs):
 
         self._mode = 'r'
@@ -100,7 +101,7 @@ class SampleReaderModifier(object):
                 \n    Contains Subsamples      : False\n'
         p.text(res)
 
-    def _ipython_key_completions_(self):
+    def _ipython_key_completions_(self):  # pragma: no cover
         """Let ipython know that any key based access can use the arrayset keys
 
         Since we don't want to inherit from dict, nor mess with `__dir__` for
@@ -122,7 +123,7 @@ class SampleReaderModifier(object):
         state = self.__dict__.copy()
         return state
 
-    def __setstate__(self, state: dict) -> None:  # pragma: no cover
+    def __setstate__(self, state: dict) -> None:
         """ensure multiprocess operations can pickle relevant data.
         """
         self.__dict__.update(state)
@@ -132,23 +133,6 @@ class SampleReaderModifier(object):
 
     def __exit__(self, *exc):
         return
-
-    def __getitem__(self, key: KeyType) -> np.ndarray:
-        """Retrieve data for some sample key via dict style access conventions.
-
-        .. seealso:: :meth:`get`
-
-        Parameters
-        ----------
-        key : KeyTyle
-            Sample key to retrieve from the arrayset.
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            Sample array data corresponding to the provided key.
-        """
-        return self.get(key)
 
     def __iter__(self) -> Iterable[KeyType]:
         """Create iterator yielding an arrayset sample key for every call to ``next``.
@@ -192,6 +176,61 @@ class SampleReaderModifier(object):
     def _close(self):
         for val in self._be_fs.values():
             val.close()
+
+    def __getitem__(self, key: KeyType) -> np.ndarray:
+        """Retrieve data for some sample key via dict style access conventions.
+
+        .. seealso:: :meth:`get`
+
+        Parameters
+        ----------
+        key : KeyType
+            Sample key to retrieve from the arrayset.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            Sample array data corresponding to the provided key.
+
+        Raises
+        ------
+        KeyError
+            if no sample with the requested key exists.
+        """
+        try:
+            spec = self._samples[key]
+            return self._be_fs[spec.backend].read_data(spec)
+        except KeyError:
+            raise KeyError(f'No sample key {key} exists in arrayset.')
+
+    def get(self, *keys: KeyType) -> Union[KeyArrMap, np.ndarray]:
+        """Retrieve tensor data for some sample key(s) in the arrayset.
+
+        Parameters
+        ----------
+        *keys : KeyType
+            Return the value for the key if a sample exists with that name.
+
+        Returns
+        -------
+        Union[:class:`np.ndarray`, KeyArrMap]
+            Tensor data stored in the arrayset archived with provided name(s).
+
+            If multiple keys passed as a parameter, a dict mapping key names
+            to tensor data.
+
+        Raises
+        ------
+        KeyError
+            if the arrayset does not contain data with the provided name
+        """
+        if len(keys) > 1:
+            res = {}
+            for key in keys:
+                res[key] = self[key]
+        else:
+            res = self[keys[0]]
+        return res
 
     @property
     def arrayset(self) -> str:
@@ -339,11 +378,11 @@ class SampleReaderModifier(object):
         """
         if not local:
             for sample_name in tuple(self._samples.keys()):
-                yield self.get(sample_name)
+                yield self[sample_name]
         else:
             for sample_name, sample_spec in tuple(self._samples.items()):
                 if is_local_backend(sample_spec):
-                    yield self.get(sample_name)
+                    yield self[sample_name]
 
     def items(self, local: bool = False) -> Iterable[Tuple[KeyType, np.ndarray]]:
         """Generator yielding (name, tensor) tuple for every sample in arrayset.
@@ -362,123 +401,40 @@ class SampleReaderModifier(object):
         """
         if not local:
             for sample_name in tuple(self._samples.keys()):
-                yield (sample_name, self.get(sample_name))
+                yield sample_name, self[sample_name]
         else:
             for sample_name, sample_spec in tuple(self._samples.items()):
                 if is_local_backend(sample_spec):
-                    yield (sample_name, self.get(sample_name))
-
-    def get(self, keys: GetKeysType) -> Union[np.ndarray, KeyArrMap]:
-        """Retrieve tensor data for some sample key(s) in the arrayset.
-
-        Parameters
-        ----------
-        keys : GetKeysType
-            Single key, or sequence (list or tuple) of sample keys to retrieve
-            data for.
-
-        Returns
-        -------
-        Union[:class:`np.ndarray`, KeyArrMap]:
-            Tensor data stored in the arrayset archived with provided name(s).
-
-            If single item is passed to the ``key`` parameter, then an instance
-            of a single :class:`np.ndarray` will be returned.
-
-            If a sequence (list or tuple) of keys are provided, then a dictionary
-            will be returned containing a mapping of each element in ``keys`` to
-            it's corresponding :class:`np.ndarray` instance.
-
-        Raises
-        ------
-        KeyError
-            if the arrayset does not contain data with the provided name
-        """
-        try:
-            if isinstance(keys, (str, int)):
-                sample = keys
-                spec = self._samples[keys]
-                return self._be_fs[spec.backend].read_data(spec)
-            elif isinstance(keys, (list, tuple)):
-                res = {}
-                for sample in keys:
-                    spec = self._samples[sample]
-                    res[sample] = self._be_fs[spec.backend].read_data(spec)
-                return res
-            else:
-                raise ValueError(f'sample keys argument: {keys} not valid format')
-        except KeyError:
-            raise KeyError(f'No sample key {sample} exists in arrayset.')
+                    yield sample_name, self[sample_name]
 
 
 class SampleWriterModifier(SampleReaderModifier):
 
-    def __init__(self, aset_txn_ctx, *args, **kwargs):
+    def __init__(self, aset_txn_ctx: AsetTxnType, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._mode = 'a'
         self._txnctx = aset_txn_ctx
+        self._stack: Optional[ExitStack] = None
+        self._enter_count = 0
 
     def __enter__(self):
-        self._txnctx.open_write()
-        for k in self._be_fs.keys():
-            self._be_fs[k].__enter__()
+        with ExitStack() as stack:
+            self._txnctx.open_write()
+            stack.callback(self._txnctx.close_write)
+            if self._enter_count == 0:
+                for k in self._be_fs.keys():
+                    stack.enter_context(self._be_fs[k])
+            self._enter_count += 1
+            self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._txnctx.close_write()
-        for k in self._be_fs.keys():
-            self._be_fs[k].__exit__(*exc)
-
-    def __setitem__(self, key: KeyType, value: np.ndarray) -> KeyType:
-        """Store a piece of data in a arrayset. Convenience method to :meth:`add`.
-
-        .. seealso::
-
-            :meth:`add` for the actual method called.
-
-            :meth:`update` for an implementation analogous to python's built in
-            :meth:`dict.update` method which accepts a dict or iterable of key/value
-            pairs to add in the same operation.
-
-        Parameters
-        ----------
-        key : KeyType
-            Key (name) of the sample to add to the arrayset.
-        value : :class:`numpy.ndarray`
-            Tensor data to add as the sample.
-
-        Returns
-        -------
-        KeyType
-            Sample key (name) of the stored data (if operation was successful)
-        """
-        return self.add(key, value)
-
-    def __delitem__(self, key: KeyType) -> KeyType:
-        """Remove a sample from the arrayset. Convenience method to :meth:`delete`.
-
-        .. seealso::
-
-            :meth:`delete` (the analogous named operation for this method)
-
-            :meth:`pop` to return a records value and then delete it in the same
-            operation
-
-        Parameters
-        ----------
-        key : KeyType
-            Name of the sample to remove from the arrayset.
-
-        Returns
-        -------
-        KeyType
-            Name of the sample removed from the arrayset (assuming operation successful)
-        """
-        return self.delete(key)
+        self._stack.close()
+        self._enter_count -= 1
 
     @property
-    def _is_conman(self):
-        return self._txnctx.is_conman
+    def _is_conman(self) -> bool:
+        return bool(self._enter_count)
 
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
@@ -515,35 +471,119 @@ class SampleWriterModifier(SampleReaderModifier):
                 reason = f'data shape {data.shape} != fixed schema {MAX_SHAPE}'
 
         compatible = True if reason == '' else False
-        res = CompatibleArray(compatible=compatible, reason=reason)
-        return res
+        return CompatibleArray(compatible, reason)
 
-    @contextmanager
-    def _txn_backend_context(self):
-        tmpconman = False
-        try:
-            if self._txnctx.is_conman:
-                yield self._txnctx
-            else:
-                tmpconman = True
-                self._txnctx = self._txnctx.open_write()
-                for k in self._be_fs.keys():
-                    self._be_fs[k].__enter__()
-                yield self._txnctx
-        finally:
-            if tmpconman:
-                for k in self._be_fs.keys():
-                    self._be_fs[k].__exit__()
-                self._txnctx.close_write()
+    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> bool:
 
-    def add(self, key: KeyType, value: np.ndarray, **kwargs) -> KeyType:
+        if not is_suitable_user_key(key):
+            raise ValueError(f'Sample name `{key}` is not suitable.')
+        isCompat = self._verify_array_compatible(value)
+        if not isCompat.compatible:
+            raise ValueError(isCompat.reason)
+
+    def _perform_set(self, key: KeyType, value: np.ndarray) -> KeyType:
+        """Internal write method. Assumes all arguments validated and context is open
+
+        Parameters
+        ----------
+        key : KeyType
+            sample key to store
+        value : np.ndarray
+            tensor data to store
+
+        Returns
+        -------
+        KeyType
+            name of saved data.
+        """
+        full_hash = array_hash_digest(value)
+        hashKey = hash_data_db_key_from_raw_key(full_hash)
+        # check if data record already exists with given key
+        dataRecKey = data_record_db_key_from_raw_key(self._asetn, key)
+        existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
+        if existingDataRecVal:
+            # check if data record already with same key & hash value
+            existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
+            if full_hash == existingDataRec.data_hash:
+                return key
+
+        # write new data if data hash does not exist
+        existingHashVal = self._txnctx.hashTxn.get(hashKey, default=False)
+        if existingHashVal is False:
+            hashVal = self._be_fs[self._dflt_backend].write_data(value)
+            self._txnctx.hashTxn.put(hashKey, hashVal)
+            self._txnctx.stageHashTxn.put(hashKey, hashVal)
+            hash_spec = backend_decoder(hashVal)
+        else:
+            hash_spec = backend_decoder(existingHashVal)
+
+        # add the record to the db
+        dataRecVal = data_record_db_val_from_raw_val(full_hash)
+        self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
+        self._samples[key] = hash_spec
+        return key
+
+    def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
+        """Store a piece of data in a arrayset.
+
+        .. seealso::
+
+            :meth:`add` alternative way to set key / value where input is expressed
+            as parameters in a method call.
+
+            :meth:`update` for an implementation analogous to python's built in
+            :meth:`dict.update` method which accepts a dict or iterable of
+            key/value pairs to add in the same operation.
+
+        Parameters
+        ----------
+        key : KeyType, optional
+            name to assign to the same (assuming the arrayset accepts named
+            samples), If str, can only contain alpha-numeric ascii characters
+            (in addition to '-', '.', '_'). Integer key must be >= 0. by default
+            None
+        value : :class:`numpy.ndarray`
+            data to store as a sample in the arrayset.
+
+        Raises
+        ------
+        ValueError
+            If no `name` arg was provided for arrayset requiring named samples.
+        ValueError
+            If input data tensor rank exceeds specified rank of arrayset samples.
+        ValueError
+            For variable shape arraysets, if a dimension size of the input data
+            tensor exceeds specified max dimension size of the arrayset samples.
+        ValueError
+            For fixed shape arraysets, if input data dimensions do not exactly match
+            specified arrayset dimensions.
+        ValueError
+            If type of `data` argument is not an instance of np.ndarray.
+        ValueError
+            If `data` is not "C" contiguous array layout.
+        ValueError
+            If the datatype of the input data does not match the specified data type of
+            the arrayset
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            self._set_arg_validate(key, value)
+            self._perform_set(key, value)
+
+    def add(self, key: KeyType, value: np.ndarray) -> KeyType:
         """Store a piece of data in a arrayset with a given name and value
 
         .. seealso::
 
+            :meth:`__setitem__` which implements identical functionality through a
+            dict style interface. The only difference is that upon successful
+            completion, this method returns the name of the key which was set,
+            while :meth:`__setitem__` does not return anything.
+
             :meth:`update` which implements functionality similar to python's
-            builtin :meth:`dict.update` method, accepting either a dictionary
-            or other iterable (of length two) listing key / value pairs.
+            builtin :meth:`dict.update` method, accepting either a dictionary or
+            other iterable (of length two) listing key / value pairs.
 
         Parameters
         ----------
@@ -580,54 +620,54 @@ class SampleWriterModifier(SampleReaderModifier):
             If the datatype of the input data does not match the specified data type of
             the arrayset
         """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            self._set_arg_validate(key, value)
+            return self._perform_set(key, value)
 
-        # ------------------------ argument type checking ---------------------
+    def append(self, value: np.ndarray) -> KeyType:
+        """TODO: is this the right way we should be handling unnamed samples?
 
-        try:
-            if self._schema_spec.schema_is_named and not is_suitable_user_key(key):
-                raise ValueError(f'Sample name `{key}` is not suitable.')
-            elif not self._schema_spec.schema_is_named:
-                key = kwargs['bulkn'] if 'bulkn' in kwargs else generate_sample_name()
+        Thesis:
+            Rather than have seperate arraysets for each named and unnamed sample type,
+            you should be able to append to any arrayset without a name, and one will be
+            generated for you?
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            key = generate_sample_name()
+            self._set_arg_validate(key, value)
+            return self._perform_set(key, value)
 
-            isCompat = self._verify_array_compatible(value)
-            if not isCompat.compatible:
-                raise ValueError(isCompat.reason)
-        except ValueError as e:
-            raise e from None
+    def _from_sequence(self, seq: Sequence[KeyArrType]) -> Sequence[KeyType]:
+        # assume callers already set up context manager
+        for idx, kv_double in enumerate(seq):
+            if len(kv_double) != 2:
+                raise ValueError(
+                    f"dictionary update sequence element #{idx} ({kv_double}) has "
+                    f"length {len(kv_double)}; 2 is required")
+            self._set_arg_validate(kv_double[0], kv_double[1])
+        saved_keys = []
+        for key, val in seq:
+            self._perform_set(key, val)
+            saved_keys.append(key)
+        return saved_keys
 
-        # --------------------- add data to storage backend -------------------
+    def _merge(self, mapping: KeyArrMap) -> Sequence[KeyType]:
+        # assume callers already set up context manager
+        for key, val in mapping.items():
+            self._set_arg_validate(key, val)
+        saved_keys = []
+        for key, val in mapping.items():
+            self._perform_set(key, val)
+            saved_keys.append(key)
+        return saved_keys
 
-        with self._txn_backend_context() as ctx:
-
-            full_hash = array_hash_digest(value)
-            hashKey = hash_data_db_key_from_raw_key(full_hash)
-            # check if data record already exists with given key
-            dataRecKey = data_record_db_key_from_raw_key(self._asetn, key)
-            existingDataRecVal = ctx.dataTxn.get(dataRecKey, default=False)
-            if existingDataRecVal:
-                # check if data record already with same key & hash value
-                existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
-                if full_hash == existingDataRec.data_hash:
-                    return key
-
-            # write new data if data hash does not exist
-            existingHashVal = ctx.hashTxn.get(hashKey, default=False)
-            if existingHashVal is False:
-                hashVal = self._be_fs[self._dflt_backend].write_data(value)
-                ctx.hashTxn.put(hashKey, hashVal)
-                ctx.stageHashTxn.put(hashKey, hashVal)
-                hash_spec = backend_decoder(hashVal)
-            else:
-                hash_spec = backend_decoder(existingHashVal)
-
-            # add the record to the db
-            dataRecVal = data_record_db_val_from_raw_val(full_hash)
-            ctx.dataTxn.put(dataRecKey, dataRecVal)
-            self._samples[key] = hash_spec
-
-        return key
-
-    def update(self, other: Union[KeyArrMap, KeyArrType, Sequence[KeyArrType]]) -> List[KeyType]:
+    def update(self,
+               other: Union[None, KeyArrMap, KeyArrType, Sequence[KeyArrType]] = None,
+               **kwargs) -> List[KeyType]:
         """Store some data with the key/value pairs from other, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
@@ -636,19 +676,25 @@ class SampleWriterModifier(SampleReaderModifier):
 
         Parameters
         ----------
-        other : Union[KeyArrMap, KeyArrType, Sequence[KeyArrType]]
+        other : Union[None, KeyArrMap, KeyArrType, Sequence[KeyArrType]], optional
             Dictionary mapping sample names to :class:`np.ndarray` instances,
             length two sequence (list or tuple) of sample name and
             :class:`np.ndarray` instance, or sequence of multiple length two
             sequences (list or tuple) of sample names / :class:`np.ndarray`
             instances to store. If sample name is string type, can only contain
             alpha-numeric ascii characters (in addition to '-', '.', '_').
-            Integer key must be >= 0.
+            Integer key must be >= 0. By default, None, in which care assignments
+            will be made from keywork args
+        **kwargs
+            keyword arguments provided will be saved with keywords as sample keys
+            (string type only) and values as np.array instances.
+
 
         Returns
         -------
         List[KeyType]
-            sample name(s) of the stored data (assuming the operation was successful)
+            sample name(s) of the stored data (assuming the operation was
+            successful)
 
         Raises
         ------
@@ -660,40 +706,96 @@ class SampleWriterModifier(SampleReaderModifier):
             For variable shape arraysets, if a dimension size of the input data
             tensor exceeds specified max dimension size of the arrayset samples.
         ValueError
-            For fixed shape arraysets, if input data dimensions do not exactly match
-            specified arrayset dimensions.
+            For fixed shape arraysets, if input data dimensions do not exactly
+            match specified arrayset dimensions.
         ValueError
             If type of `data` argument is not an instance of np.ndarray.
         ValueError
             If `data` is not "C" contiguous array layout.
         ValueError
-            If the datatype of the input data does not match the specified data type of
-            the arrayset
+            If the datatype of the input data does not match the specified data
+            type of the arrayset
         """
-        res = []
-        with self._txn_backend_context():
-            if isinstance(other, dict):
-                for key, value in other.items():
-                    res.append(self.add(key, value))
-            elif isinstance(other, (list, tuple)):
-                if len(other) == 2:
-                    if is_suitable_user_key(other[0]) and isinstance(other[1], np.ndarray):
-                        other = [other]  # contain in other list for iteration.
-                for kvpair in other:
-                    if not isinstance(kvpair, (list, tuple)) or (len(kvpair) != 2):
-                        raise ValueError(f'length of other element {kvpair} != 2. No-Op.')
-                for key, value in other:
-                    res.append(self.add(key, value))
-        return res
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
-    def delete(self, keys: Union[KeyType, Sequence[KeyType]]) -> Union[KeyType, Sequence[KeyType]]:
+            # Note: we have to merge kwargs dict (if it exists) with `other` before
+            # operating on either one. This is so that the validation and write
+            # methods occur in one operation; if any element in any one of the inputs,
+            # is invalid, no data will be written from another.
+
+            saved_keys = []
+            if isinstance(other, dict):
+                if kwargs:
+                    other.update(kwargs)
+                saved_keys.extend(self._merge(other))
+            elif isinstance(other, (list, tuple)):
+                if kwargs:
+                    other = list(other)
+                    other.extend(list(kwargs.items()))
+                saved_keys.extend(self._from_sequence(other))
+            elif other is None:
+                saved_keys.extend(self._merge(kwargs))
+            else:
+                raise ValueError(f'Type of `other` {type(other)} must be mapping, list, tuple')
+
+            return saved_keys
+
+    def _perform_del(self, key: KeyType) -> KeyType:
+        """Internal del method. Assumes all arguments validated and context is open
+
+        Parameters
+        ----------
+        key : KeyType
+            sample key remove.
+
+        Returns
+        -------
+        KeyType
+            name of removed sample.
+        """
+        dataKey = data_record_db_key_from_raw_key(self._asetn, key)
+        isRecordDeleted = self._txnctx.dataTxn.delete(dataKey)
+        if isRecordDeleted is False:
+            raise KeyError
+        del self._samples[key]
+        return key
+
+    def __delitem__(self, key: KeyType) -> KeyType:
+        """Remove a sample from the arrayset. Convenience method to :meth:`delete`.
+
+        .. seealso::
+
+            :meth:`delete` (the analogous named operation for this method)
+
+            :meth:`pop` to return a records value and then delete it in the same
+            operation
+
+        Parameters
+        ----------
+        key : KeyType
+            Name of the sample to remove from the arrayset.
+
+        Returns
+        -------
+        KeyType
+            Name of the sample removed from the arrayset (assuming operation successful)
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            if key not in self:
+                raise KeyError(f'No sample {key} in {self._asetn}')
+            self._perform_del(key)
+
+    def delete(self, *keys: KeyType) -> Union[KeyType, Sequence[KeyType]]:
         """Remove some key / value pair(s) from the arrayset, returning the deleted keys.
 
         Parameters
         ----------
-        keys : Union[KeyType, Sequence[KeyType]]
-            Either a single sample key to remove, or a sequence (list or tuple)
-            of keys to remove from the arrayset
+        *keys : KeyType
+            name (or names) or samples to remove from the arrayset
 
         Returns
         -------
@@ -705,29 +807,31 @@ class SampleWriterModifier(SampleReaderModifier):
         KeyError
             If there is no sample with some key in the arrayset.
         """
-        res = keys  # return same type of key as passed in
-        with self._txn_backend_context() as ctx:
-            if not isinstance(keys, (list, tuple)):
-                keys = [keys]
-            for key in keys:
-                try:
-                    dataKey = data_record_db_key_from_raw_key(self._asetn, key)
-                    del self._samples[key]
-                    isRecordDeleted = ctx.dataTxn.delete(dataKey)
-                    if isRecordDeleted is False:
-                        raise KeyError
-                except KeyError:
-                    raise KeyError(f'No sample {key} in {self._asetn}')
-            return res
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
-    def pop(self, keys: Union[KeyType, Sequence[KeyType]]) -> Union[np.ndarray, KeyArrMap]:
+            if len(keys) > 1:
+                for key in keys:
+                    if key not in self:
+                        raise KeyError(f'No sample with name {key} exists.')
+                removed = []
+                for key in keys:
+                    removed.append(self._perform_del(key))
+                return removed
+            else:
+                if keys[0] not in self:
+                    raise KeyError(f'No sample with name {keys[0]} exists.')
+                return self._perform_del(keys[0])
+
+    def pop(self, *keys: KeyType) -> Union[np.ndarray, KeyArrMap]:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
         Parameters
         ----------
-        keys : Union[KeyType, Sequence[KeyType]]
-            Either a single sample key to remove, or a sequence (list or tuple)
-            of keys to remove from the arrayset
+        *keys : KeyType
+            name (or names) of samples to remove from the arrayset and get values
+            values back for.
 
         Returns
         -------
@@ -740,8 +844,8 @@ class SampleWriterModifier(SampleReaderModifier):
         KeyError
             If there is no sample with some key in the arrayset.
         """
-        values = self.get(keys)
-        self.delete(keys)
+        values = self.get(*keys)
+        self.delete(*keys)
         return values
 
     def change_backend(self, backend_opts: Union[str, dict]):

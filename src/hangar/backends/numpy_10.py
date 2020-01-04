@@ -161,7 +161,7 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
 
 class NUMPY_10_FileHandles(object):
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype

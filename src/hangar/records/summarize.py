@@ -142,8 +142,9 @@ def summary(env, *, branch='', commit='') -> StringIO:
 
     spec = get_commit_spec(env.refenv, cmt)._asdict()
     if cmt == '':
-        print('No commits made')
-        return {}
+        buf = StringIO()
+        buf.write('No commits made')
+        return buf
 
     with tmp_cmt_env(env.refenv, cmt) as cmtrefenv:
         query = RecordQuery(cmtrefenv)

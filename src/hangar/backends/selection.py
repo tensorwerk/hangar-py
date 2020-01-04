@@ -121,7 +121,7 @@ BACKEND_DECODER_MAP: _ParserMap = {
 
 _BeAccessors = Union[HDF5_00_FileHandles, HDF5_01_FileHandles,
                      NUMPY_10_FileHandles, REMOTE_50_Handler]
-AccessorMapType = Dict[str, _BeAccessors]
+AccessorMapType = Dict[str, Union[_BeAccessors, None]]
 
 BACKEND_ACCESSOR_MAP: AccessorMapType = {
     # LOCALS -> [0:50]

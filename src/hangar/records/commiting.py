@@ -3,7 +3,7 @@ import os
 import shutil
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from pathlib import Path
 
 import lmdb
@@ -214,7 +214,7 @@ def get_commit_ancestors_graph(refenv, starting_commit):
     while end_commit is not True:
         childCommit = get_commit_ancestors(refenv, parent_commit)
 
-        if ((childCommit.master_ancestor == '') or (childCommit.master_ancestor in seen)):
+        if (childCommit.master_ancestor == '') or (childCommit.master_ancestor in seen):
             end_commit = True
             commit_graph[parent_commit] = [childCommit.master_ancestor]
             if len(more_work) != 0:
@@ -357,15 +357,13 @@ def tmp_cmt_env(refenv: lmdb.Environment, commit_hash: str):
     lmdb.Environment
         environment with all db contents from ``commit`` unpacked
     """
-    tempD = tempfile.mkdtemp()
-    try:
-        tmpDF = os.path.join(tempD, 'test.lmdb')
-        tmpDB = lmdb.open(path=tmpDF, sync=False, writemap=True, **LMDB_SETTINGS)
-        unpack_commit_ref(refenv, tmpDB, commit_hash)
-        yield tmpDB
-    finally:
-        tmpDB.close()
-        shutil.rmtree(tempD)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpDF = os.path.join(tmpdir, 'test.lmdb')
+        with closing(
+                lmdb.open(tmpDF, sync=False, writemap=True, **LMDB_SETTINGS)
+        ) as tmpDB:
+            unpack_commit_ref(refenv, tmpDB, commit_hash)
+            yield tmpDB
 
 
 """
@@ -483,7 +481,7 @@ def _commit_ref(stageenv: lmdb.Environment) -> DigestAndBytes:
 # -------------------- Format ref k/v pairs and write the commit to disk ----------------
 
 
-def commit_records(message, branchenv, stageenv, refenv, repo_path,
+def commit_records(message, branchenv, stageenv, refenv, repo_path: Path,
                    *, is_merge_commit=False, merge_master=None, merge_dev=None):
     """Commit all staged records to the repository, updating branch HEAD as needed.
 
@@ -502,6 +500,8 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path,
         uncompressed format.
     refenv : lmdb.Environment
         lmdb environment where the commit ref records are stored.
+    repo_path : Path
+        path to the hangar repository on disk
     is_merge_commit : bool, optional
         Is the commit a merge commit or not? defaults to False
     merge_master : string, optional
@@ -627,7 +627,7 @@ def replace_staging_area_with_refs(stageenv, sorted_content):
         TxnRegister().commit_writer_txn(stageenv)
 
 
-def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False):
+def move_process_data_to_store(repo_path: Path, *, remote_operation: bool = False):
     """Move symlinks to hdf5 files from process directory to store directory
 
     In process writes never directly access files in the data directory.
@@ -641,7 +641,7 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
 
     Parameters
     ----------
-    repo_path : str
+    repo_path : Path
         path to the repository on dir
     remote_operation : bool, optional
         If this operation is occurring from a remote fetch operation. (the
@@ -668,7 +668,7 @@ def move_process_data_to_store(repo_path: str, *, remote_operation: bool = False
 
     # reset before releasing control.
     shutil.rmtree(process_dir)
-    os.makedirs(process_dir)
+    process_dir.mkdir(exist_ok=False)
 
 
 def list_all_commits(refenv):

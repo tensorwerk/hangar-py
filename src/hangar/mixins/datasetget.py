@@ -1,8 +1,10 @@
+from contextlib import ExitStack
+
 from collections import namedtuple
 import warnings
 
 
-# noinspection PyProtectedMember
+# noinspection PyUnresolvedReferences
 class GetMixin:
     """Mixin methods for the checkout object classes.
 
@@ -50,12 +52,17 @@ class GetMixin:
         Get samples from all arraysets (shortcut syntax)
 
             >>> out = dset[:, ('1', '2')]
+            >>> out
+            [ArraysetData(foo=array([1]), bar=array([11]), baz=array([111])),
+             ArraysetData(foo=array([2]), bar=array([22]), baz=array([222]))]
             >>> out = dset[..., ('1', '2')]
             >>> out
             [ArraysetData(foo=array([1]), bar=array([11]), baz=array([111])),
              ArraysetData(foo=array([2]), bar=array([22]), baz=array([222]))]
 
             >>> out = dset[:, '1']
+            >>> out
+            ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
             >>> out = dset[..., '1']
             >>> out
             ArraysetData(foo=array([1]), bar=array([11]), baz=array([111]))
@@ -211,11 +218,9 @@ class GetMixin:
             :meth:`~hangar.checkout.ReaderCheckout.get`
 
         """
-        tmpconman = not self._is_conman
-        try:
-            if tmpconman:
-                self._verify_alive()
-                self.__enter__()
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
             if isinstance(index, str):
                 return self.arraysets[index]
@@ -223,13 +228,8 @@ class GetMixin:
                 raise TypeError(f'Unknown index: {index} type: {type(index)}')
             if len(index) > 2:
                 raise ValueError(f'index of len > 2 not allowed: {index}')
-
             arraysets, samples = index
             return self.get(arraysets, samples, except_missing=True)
-
-        finally:
-            if tmpconman:
-                self.__exit__()
 
     def get(self, arraysets, samples, *, except_missing=False):
         """View of sample data across arraysets gracefully handling missing sample keys.
@@ -281,11 +281,9 @@ class GetMixin:
         UserWarning
             Arrayset names contains characters which are invalid as namedtuple fields.
         """
-        tmpconman = not self._is_conman
-        try:
-            if tmpconman:
-                self._verify_alive()
-                self.__enter__()
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
             # Arrayset Parsing
             if (arraysets is Ellipsis) or isinstance(arraysets, slice):
@@ -333,13 +331,10 @@ class GetMixin:
                     break
                 asetsSamplesData.append(aset_samples)
             else:  # N.B. for-else conditional (ie. 'no break')
+                # noinspection PyUnresolvedReferences
                 tmp = map(ArraysetData._make, zip(*asetsSamplesData))
                 asetsSamplesData = list(tmp)
                 if len(asetsSamplesData) == 1:
                     asetsSamplesData = asetsSamplesData[0]
 
             return asetsSamplesData
-
-        finally:
-            if tmpconman:
-                self.__exit__()

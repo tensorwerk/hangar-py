@@ -1,4 +1,5 @@
-import os
+from contextlib import ExitStack
+from pathlib import Path
 from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 
 import lmdb
@@ -41,7 +42,7 @@ class Arraysets(object):
 
     def __init__(self,
                  mode: str,
-                 repo_pth: os.PathLike,
+                 repo_pth: Path,
                  arraysets: Dict[str, ModifierTypes],
                  hashenv: Optional[lmdb.Environment] = None,
                  dataenv: Optional[lmdb.Environment] = None,
@@ -60,7 +61,7 @@ class Arraysets(object):
         ----------
         mode : str
             one of 'r' or 'a' to indicate read or write mode
-        repo_pth : os.PathLike
+        repo_pth : Path
             path to the repository on disk
         arraysets : Mapping[str, Union[ArraysetDataReader, ArraysetDataWriter]]
             dictionary of ArraysetData objects
@@ -73,10 +74,11 @@ class Arraysets(object):
         stagehashenv : Optional[lmdb.Environment]
             environment handle for newly added staged data hash records.
         """
+        self._stack = []
+        self._is_conman_counter = 0
         self._mode = mode
         self._repo_pth = repo_pth
         self._arraysets = arraysets
-        self._is_conman = False
 
         if self._mode == 'a':
             self._hashenv = hashenv
@@ -190,6 +192,10 @@ class Arraysets(object):
 
     def __iter__(self) -> Iterable[str]:
         return iter(self._arraysets)
+
+    @property
+    def _is_conman(self):
+        return bool(self._is_conman_counter)
 
     @property
     def iswriteable(self) -> bool:
@@ -332,15 +338,16 @@ class Arraysets(object):
         return self.delete(key)
 
     def __enter__(self):
-        self._is_conman = True
-        for asetN in list(self._arraysets.keys()):
-            self._arraysets[asetN].__enter__()
+        with ExitStack() as stack:
+            for asetN in list(self._arraysets.keys()):
+                stack.enter_context(self._arraysets[asetN])
+            self._is_conman_counter += 1
+            self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._is_conman = False
-        for asetN in list(self._arraysets.keys()):
-            self._arraysets[asetN].__exit__(*exc)
+        self._is_conman_counter -= 1
+        self._stack.close()
 
     def multi_add(self, mapping: Mapping[str, np.ndarray]) -> str:
         """Add related samples to un-named arraysets with the same generated key.
@@ -380,24 +387,17 @@ class Arraysets(object):
         KeyError
             If no arrayset with the given name exists in the checkout
         """
-        try:
-            tmpconman = not self._is_conman
-            if tmpconman:
-                self.__enter__()
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
             if not all([k in self._arraysets for k in mapping.keys()]):
-                raise KeyError(
-                    f'some key(s): {mapping.keys()} not in aset(s): {self._arraysets.keys()}')
+                raise KeyError(f'not all keys {list(mapping.keys())} exist as arrayset names')
+
             data_name = generate_sample_name()
             for k, v in mapping.items():
                 self._arraysets[k].add(data_name, v)
-        except KeyError as e:
-            raise e from None
-        finally:
-            if tmpconman:
-                self.__exit__()
-
-        return data_name
+            return data_name
 
     def init_arrayset(self,
                       name: str,
@@ -591,8 +591,10 @@ class Arraysets(object):
             raise PermissionError(
                 'Not allowed while any arraysets class is opened in a context manager')
 
-        datatxn = TxnRegister().begin_writer_txn(self._dataenv)
-        try:
+        with ExitStack() as stack:
+            datatxn = TxnRegister().begin_writer_txn(self._dataenv)
+            stack.callback(TxnRegister().commit_writer_txn, self._dataenv)
+
             if aset_name not in self._arraysets:
                 e = KeyError(f'Cannot remove: {aset_name}. Key does not exist.')
                 raise e from None
@@ -612,15 +614,13 @@ class Arraysets(object):
 
             asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(aset_name)
             datatxn.delete(asetSchemaKey)
-        finally:
-            TxnRegister().commit_writer_txn(self._dataenv)
 
         return aset_name
 
 # ------------------------ Class Factory Functions ------------------------------
 
     @classmethod
-    def _from_staging_area(cls, repo_pth: os.PathLike, hashenv: lmdb.Environment,
+    def _from_staging_area(cls, repo_pth: Path, hashenv: lmdb.Environment,
                            stageenv: lmdb.Environment,
                            stagehashenv: lmdb.Environment):
         """Class method factory to checkout :class:`Arraysets` in write-enabled mode
@@ -632,7 +632,7 @@ class Arraysets(object):
 
         Parameters
         ----------
-        repo_pth : os.PathLike
+        repo_pth : Path
             directory path to the hangar repository on disk
         hashenv : lmdb.Environment
             environment where tensor data hash records are open in write mode.
@@ -671,7 +671,7 @@ class Arraysets(object):
         return cls('a', repo_pth, arraysets, hashenv, stageenv, stagehashenv, txnctx)
 
     @classmethod
-    def _from_commit(cls, repo_pth: os.PathLike, hashenv: lmdb.Environment,
+    def _from_commit(cls, repo_pth: Path, hashenv: lmdb.Environment,
                      cmtrefenv: lmdb.Environment):
         """Class method factory to checkout :class:`.arrayset.Arraysets` in read-only mode
 
@@ -682,7 +682,7 @@ class Arraysets(object):
 
         Parameters
         ----------
-        repo_pth : os.PathLike
+        repo_pth : Path
             directory path to the hangar repository on disk
         hashenv : lmdb.Environment
             environment where tensor data hash records are open in read-only mode.

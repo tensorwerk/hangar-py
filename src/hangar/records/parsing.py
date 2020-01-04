@@ -280,20 +280,20 @@ def data_record_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_STGARR)) -> Ra
         Tuple containing the record aset_name, data_name
     """
     key = db_key.decode()
-    aset_name, *data_name = key[_SPLT:].split(SEP_KEY)
-    if len(data_name) == 1:
-        if data_name[0][0] == K_INT:
-            sample = int(data_name[0][1:])
-        else:
-            sample = data_name[0]
-        return RawDataRecordKey(aset_name, sample)
+    key_items = key[_SPLT:].split(SEP_KEY)
+
+    if len(key_items) == 2:
+        aset, sample = key_items
+        if sample[0] == K_INT:
+            sample = int(sample[1:])
+        return RawDataRecordKey(aset, sample)
     else:
-        sample, subsample = data_name
+        aset, sample, subsample = key_items
         if sample[0] == K_INT:
             sample = int(sample[1:])
         if subsample[0] == K_INT:
             subsample = int(subsample[1:])
-        return RawDataRecordKey(aset_name, sample, subsample)
+        return RawDataRecordKey(aset, sample, subsample)
 
 
 def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
@@ -334,20 +334,16 @@ def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int], 
         Byte encoded db record key
     """
     if isinstance(data_name, int):
-        data_part = f'{SEP_KEY}{K_INT}{data_name}'
+        data_part = f'{K_STGARR}{aset_name}{SEP_KEY}{K_INT}{data_name}'
     else:
-        data_part = f'{SEP_KEY}{data_name}'
+        data_part = f'{K_STGARR}{aset_name}{SEP_KEY}{data_name}'
 
     if isinstance(subsample, int):
-        subsample_part = f'{SEP_KEY}{K_INT}{subsample}'
+        return f'{data_part}{SEP_KEY}{K_INT}{subsample}'.encode()
     elif isinstance(subsample, str):
-        subsample_part = f'{SEP_KEY}{subsample}'
-
-    if subsample is None:
-        record_key = f'{K_STGARR}{aset_name}{data_part}'.encode()
+        return f'{data_part}{SEP_KEY}{subsample}'.encode()
     else:
-        record_key = f'{K_STGARR}{aset_name}{data_part}{subsample_part}'.encode()
-    return record_key
+        return data_part.encode()
 
 
 def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
@@ -759,7 +755,7 @@ class DigestAndBytes(NamedTuple):
 
 class DigestAndDbRefs(NamedTuple):
     digest: str
-    db_kvs: Tuple[Tuple[bytes, bytes]]
+    db_kvs: Union[Tuple, Tuple[Tuple[bytes, bytes]]]
 
 
 def _hash_func(recs: bytes) -> str:

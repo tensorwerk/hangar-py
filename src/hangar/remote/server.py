@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+from typing import Union
 import tempfile
 import warnings
 from concurrent import futures
@@ -28,7 +30,10 @@ set_blosc_nthreads()
 
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
-    def __init__(self, repo_path, overwrite=False):
+    def __init__(self, repo_path: Union[str, bytes, Path], overwrite=False):
+
+        if isinstance(repo_path, (str, bytes)):
+            repo_path = Path(repo_path)
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
@@ -36,7 +41,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         self.env: Environments = envs
 
         try:
-            self.env._init_repo(
+            self.env.init_repo(
                 user_name='SERVER_USER',
                 user_email='SERVER_USER@HANGAR.SERVER',
                 remove_old=overwrite)
@@ -644,7 +649,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
 
-def serve(hangar_path: os.PathLike,
+def serve(hangar_path: str,
           overwrite: bool = False,
           *,
           channel_address: str = None,

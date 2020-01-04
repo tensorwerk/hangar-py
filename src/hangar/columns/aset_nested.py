@@ -1,7 +1,6 @@
-from contextlib import contextmanager
-import os
-from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any
-from types import MappingProxyType
+from contextlib import ExitStack
+from pathlib import Path
+from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
 from weakref import proxy
 
 import numpy as np
@@ -27,15 +26,13 @@ from ..records.parsing import (
     RawArraysetSchemaVal,
 )
 
-
+AsetTxnType = Type['AsetTxn']
 KeyType = Union[str, int]
 KeysType = Union[KeyType, Sequence[KeyType]]
 EllipsisType = type(Ellipsis)
 GetKeysType = Union[KeysType, EllipsisType, slice]
-
 KeyArrMap = Dict[KeyType, np.ndarray]
 KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
-
 MapKeyArrType = Union[KeyArrMap, KeyArrType, Sequence[KeyArrType]]
 
 
@@ -89,6 +86,14 @@ class SubsampleReader(object):
         """
         return list(self.keys())
 
+    def __enter__(self):
+        self._enter_count += 1
+        return self
+
+    def __exit__(self, *exc):
+        self._enter_count -= 1
+        return
+
     def __getstate__(self) -> dict:
         """ensure multiprocess operations can pickle relevant data.
         """
@@ -102,7 +107,7 @@ class SubsampleReader(object):
         state['_subsamples'] = self._subsamples
         return state
 
-    def __setstate__(self, state: dict) -> None:  # pragma: no cover
+    def __setstate__(self, state: dict) -> None:
         """ensure multiprocess operations can pickle relevant data.
         """
         self._asetn = state['_asetn']
@@ -116,20 +121,23 @@ class SubsampleReader(object):
     def __contains__(self, key: KeyType) -> bool:
         return key in self._subsamples
 
-    def __getitem__(self, key):
+    def __iter__(self) -> Iterable[KeyType]:
+        yield from self.keys()
+
+    def __getitem__(self, key: KeyType) -> np.ndarray:
         return self.get(key)
 
     @property
-    def _backend_handles(self):
-        return self._be_fs
+    def _enter_count(self):
+        return self._be_fs['enter_count']
 
-    @_backend_handles.setter
-    def _backend_handles(self, value):
-        self._be_fs = value
+    @_enter_count.setter
+    def _enter_count(self, value):
+        self._be_fs['enter_count'] = value
 
-    @_backend_handles.deleter
-    def _backend_handles(self):
-        self._be_fs = None
+    @property
+    def _is_conman(self):
+        return bool(self._enter_count)
 
     @property
     def sample(self) -> KeyType:
@@ -290,7 +298,7 @@ class SubsampleReader(object):
         try:
             # select subsample(s) with regular keys
             if isinstance(keys, (str, int)):
-                subsamples = keys
+                subsample = keys
                 spec = self._subsamples[keys]
                 return self._be_fs[spec.backend].read_data(spec)
 
@@ -325,12 +333,12 @@ class SubsampleReader(object):
 
 class SubsampleWriter(SubsampleReader):
 
-    __slots__ = ('_txnctx', '_schema_spec')
+    __slots__ = ('_txnctx', '_stack')
 
-    def __init__(self, aset_txn_ctx, schema_specs: RawArraysetSchemaVal, *args, **kwargs):
+    def __init__(self, aset_txn_ctx, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._txnctx = aset_txn_ctx
-        self._schema_spec = schema_specs
+        self._stack: Optional[ExitStack] = None
 
     def __repr__(self):
         res = f'{self.__class__}('\
@@ -347,6 +355,25 @@ class SubsampleWriter(SubsampleReader):
                 \n    Default Backend          : {self._schema_spec.schema_default_backend}\
                 \n    Number of Subsamples     : {self.__len__()}\n'
         p.text(res)
+
+    def __enter__(self):
+        with ExitStack() as stack:
+            self._txnctx.open_write()
+            stack.callback(self._txnctx.close_write)
+            if self._enter_count == 0:
+                for k in self._be_fs.keys():
+                    if k in ('enter_count', 'schema_spec'):
+                        continue
+                    stack.enter_context(self._be_fs[k])
+            self._enter_count += 1
+            self._stack = stack.pop_all()
+        return self
+
+    def __exit__(self, *exc):
+        self._stack.close()
+        self._enter_count -= 1
+        if self._enter_count == 0:
+            self._stack = None
 
     def __setitem__(self, key: KeyType, value: np.ndarray) -> KeyType:
         """Store a piece of data as a subsample. Convenience method to :meth:`add`.
@@ -377,12 +404,8 @@ class SubsampleWriter(SubsampleReader):
         return self.pop(keys)
 
     @property
-    def _schema(self):
-        return self._schema_spec
-
-    @_schema.setter
-    def _schema(self, value: RawArraysetSchemaVal):
-        self._schema_spec = value
+    def _schema_spec(self) -> RawArraysetSchemaVal:
+        return self._be_fs['schema_spec']
 
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
@@ -421,24 +444,6 @@ class SubsampleWriter(SubsampleReader):
         compatible = True if reason == '' else False
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
-
-    @contextmanager
-    def _txn_backend_context(self):
-        tmpconman = False
-        try:
-            if self._txnctx.is_conman:
-                yield self._txnctx
-            else:
-                tmpconman = True
-                self._txnctx = self._txnctx.open_write()
-                for k in self._be_fs.keys():
-                    self._be_fs[k].__enter__()
-                yield self._txnctx
-        finally:
-            if tmpconman:
-                for k in self._be_fs.keys():
-                    self._be_fs[k].__exit__()
-                self._txnctx.close_write()
 
     def add(self, key: KeyType, value: np.ndarray) -> KeyType:
         """Store a piece of data in a subsample with a given name and value
@@ -533,14 +538,17 @@ class SubsampleWriter(SubsampleReader):
 
         # ------------------- add data to storage backend ---------------------
 
-        with self._txn_backend_context() as ctx:
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+
             for subsamplen, data in data_map.items():
                 full_hash = array_hash_digest(data)
                 hashKey = hash_data_db_key_from_raw_key(full_hash)
                 # check if data record already exists with given key
                 dataRecKey = data_record_db_key_from_raw_key(
                     self._asetn, self._samplen, subsample=subsamplen)
-                existingDataRecVal = ctx.dataTxn.get(dataRecKey, default=False)
+                existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
                 if existingDataRecVal:
                     # check if data record already with same key & hash value
                     existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
@@ -548,19 +556,19 @@ class SubsampleWriter(SubsampleReader):
                         continue
 
                 # write new data if data hash does not exist
-                existingHashVal = ctx.hashTxn.get(hashKey, default=False)
+                existingHashVal = self._txnctx.hashTxn.get(hashKey, default=False)
                 if existingHashVal is False:
                     backendCode = self._schema_spec.schema_default_backend
                     hashVal = self._be_fs[backendCode].write_data(data)
-                    ctx.hashTxn.put(hashKey, hashVal)
-                    ctx.stageHashTxn.put(hashKey, hashVal)
+                    self._txnctx.hashTxn.put(hashKey, hashVal)
+                    self._txnctx.stageHashTxn.put(hashKey, hashVal)
                     hash_spec = backend_decoder(hashVal)
                 else:
                     hash_spec = backend_decoder(existingHashVal)
 
                 # add the record to the db
                 dataRecVal = data_record_db_val_from_raw_val(full_hash)
-                ctx.dataTxn.put(dataRecKey, dataRecVal)
+                self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
                 self._subsamples.update([(subsamplen, hash_spec)])
 
         res = tuple(data_map.keys())
@@ -597,11 +605,14 @@ class SubsampleWriter(SubsampleReader):
 
         # ------------------------- db modification ---------------------------
 
-        with self._txn_backend_context() as ctx:
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+
             for subsample in subsamples:
                 dbKey = data_record_db_key_from_raw_key(
                     self._asetn, self._samplen, subsample=subsample)
-                isRecordDeleted = ctx.dataTxn.delete(dbKey)
+                isRecordDeleted = self._txnctx.dataTxn.delete(dbKey)
                 if isRecordDeleted is False:
                     raise KeyError(f'No subsample {subsample} in sample {self._samplen}')
                 del self._subsamples[subsample]
@@ -642,7 +653,7 @@ class SubsampleReaderModifier(object):
                  samples: Dict[KeyType, SubsampleTypes],
                  backend_handles: Dict[str, Any],
                  schema_spec: RawArraysetSchemaVal,
-                 repo_path: os.PathLike,
+                 repo_path: Path,
                  *args, **kwargs):
 
         self._mode = 'r'
@@ -650,6 +661,7 @@ class SubsampleReaderModifier(object):
         self._samples = samples
         self._be_fs = backend_handles
         self._path = repo_path
+        self._stack: Optional[ExitStack] = None
 
         self._schema_spec = schema_spec
         self._schema_variable = schema_spec.schema_is_var
@@ -702,9 +714,11 @@ class SubsampleReaderModifier(object):
         return list(self.keys())
 
     def __enter__(self):
+        self._enter_count += 1
         return self
 
     def __exit__(self, *exc):
+        self._enter_count -= 1
         return
 
     def __getstate__(self) -> dict:
@@ -715,7 +729,7 @@ class SubsampleReaderModifier(object):
         state = self.__dict__.copy()
         return state
 
-    def __setstate__(self, state: dict) -> None:  # pragma: no cover
+    def __setstate__(self, state: dict) -> None:
         """ensure multiprocess operations can pickle relevant data.
         """
         self.__dict__.update(state)
@@ -767,11 +781,35 @@ class SubsampleReaderModifier(object):
 
     def _open(self):
         for val in self._be_fs.values():
-            val.open(mode=self._mode)
+            try:
+                # since we are storing non backend accessor information in the be_fs
+                # weakref proxy for the purpose of memory savings, not all elements
+                # have a `open` method
+                val.open(mode=self._mode)
+            except AttributeError:
+                pass
 
     def _close(self):
         for val in self._be_fs.values():
-            val.close()
+            # since we are storing non backend accessor information in the be_fs
+            # weakref proxy for the purpose of memory savings, not all elements
+            # have a `close` method
+            try:
+                val.close()
+            except AttributeError:
+                pass
+
+    @property
+    def _enter_count(self):
+        return self._be_fs['enter_count']
+
+    @_enter_count.setter
+    def _enter_count(self, value):
+        self._be_fs['enter_count'] = value
+
+    @property
+    def _is_conman(self):
+        return bool(self._enter_count)
 
     @property
     def arrayset(self) -> str:
@@ -972,21 +1010,29 @@ class SubsampleReaderModifier(object):
 
 class SubsampleWriterModifier(SubsampleReaderModifier):
 
-    def __init__(self, aset_txn_ctx, *args, **kwargs):
+    def __init__(self, aset_txn_ctx: AsetTxnType, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._mode = 'a'
         self._txnctx = aset_txn_ctx
+        self._stack: ExitStack = ExitStack()
 
     def __enter__(self):
-        self._txnctx.open_write()
-        for k in self._be_fs.keys():
-            self._be_fs[k].__enter__()
+        with ExitStack() as stack:
+            self._txnctx.open_write()
+            stack.callback(self._txnctx.close_write)
+            if self._enter_count == 0:
+                for k in tuple(self._be_fs.keys()):
+                    if k in ('enter_count', 'schema_spec'):
+                        continue
+                    stack.enter_context(self._be_fs[k])
+            self._enter_count += 1
+            self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._txnctx.close_write()
-        for k in self._be_fs.keys():
-            self._be_fs[k].__exit__(*exc)
+        self._stack.close()
+        self._enter_count -= 1
+        return
 
     def __setitem__(self, key: KeyType, value: MapKeyArrType) -> Tuple[KeyType]:
         """Store some subsample key / subsample data map pairs, overwriting existing keys.
@@ -1007,10 +1053,6 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             for this methods parameters
         """
         return self.delete(key)
-
-    @property
-    def _is_conman(self):
-        return self._txnctx.is_conman
 
     def add(self, sample: KeyType, subsample_map: MapKeyArrType) -> Tuple[KeyType]:
         """Store some data with the key/value pairs from other, overwriting existing keys.
@@ -1042,10 +1084,9 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         else:
             self._samples[sample] = SubsampleWriter(
                 aset_txn_ctx=proxy(self._txnctx),
-                schema_specs=self._schema_spec,
                 asetn=self._asetn,
                 samplen=sample,
-                be_handles=self._be_fs,
+                be_handles=proxy(self._be_fs),
                 specs={})
             try:
                 return self._samples[sample].update(subsample_map)
@@ -1223,6 +1264,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             schema_default_backend_opts=beopts.opts,
             schema_contains_subsamples=self._contains_subsamples)
 
+
         hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         with self._txnctx.write() as ctx:
             ctx.dataTxn.put(asetSchemaKey, asetSchemaVal)
@@ -1238,13 +1280,9 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             self._be_fs[beopts.backend].close()
         self._be_fs[beopts.backend].open(mode=self._mode)
         self._be_fs[beopts.backend].backend_opts = beopts.opts
+        self._be_fs['schema_spec'] = rawAsetSchema
         self._dflt_backend = beopts.backend
         self._dflt_backend_opts = beopts.opts
         self._dflt_schema_hash = schema_hash
         self._schema_spec = rawAsetSchema
-
-        be_fs_proxy = MappingProxyType(self._be_fs)
-        for k in self._samples.keys():
-            self._samples[k]._schema = rawAsetSchema
-            self._samples[k]._be_fs = be_fs_proxy
         return
