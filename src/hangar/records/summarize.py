@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import time
 from io import StringIO
 
@@ -87,9 +88,9 @@ def details(env: lmdb.Environment, line_limit=100, line_length=100) -> StringIO:
     """
     buf = StringIO()
     buf.write('\n======================\n')
-    buf.write(f'{os.path.basename(env.path())}')
+    buf.write(f'{Path(env.path()).name}')
     try:
-        buf.write(f'File Size: {format_bytes(file_size(env.path()))}\n')
+        buf.write(f'File Size: {format_bytes(file_size(Path(env.path())))}\n')
     except FileNotFoundError:
         pass
     buf.write('======================\n\n')

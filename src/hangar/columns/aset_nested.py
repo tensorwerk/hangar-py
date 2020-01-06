@@ -24,6 +24,7 @@ from ..records.parsing import (
     hash_data_db_key_from_raw_key,
     hash_schema_db_key_from_raw_key,
     RawArraysetSchemaVal,
+    generate_sample_name,
 )
 
 AsetTxnType = Type['AsetTxn']
@@ -33,7 +34,7 @@ EllipsisType = type(Ellipsis)
 GetKeysType = Union[KeysType, EllipsisType, slice]
 KeyArrMap = Dict[KeyType, np.ndarray]
 KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
-MapKeyArrType = Union[KeyArrMap, KeyArrType, Sequence[KeyArrType]]
+MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 
 
 class CompatibleArray(NamedTuple):
@@ -124,8 +125,51 @@ class SubsampleReader(object):
     def __iter__(self) -> Iterable[KeyType]:
         yield from self.keys()
 
+    def _perform_get(self, key: KeyType) -> np.ndarray:
+        try:
+            spec = self._subsamples[key]
+            return self._be_fs[spec.backend].read_data(spec)
+        except KeyError:
+            raise KeyError(f'No subsample key {key} exists in sample {self.sample}.')
+
     def __getitem__(self, key: KeyType) -> np.ndarray:
-        return self.get(key)
+        """Retrieve data for some subsample key via dict style access conventions.
+
+        .. seealso:: :meth:`get`
+
+        Parameters
+        ----------
+        key : KeyType
+            Sample key to retrieve from the arrayset.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            Sample array data corresponding to the provided key.
+
+        Raises
+        ------
+        KeyError
+            if no sample with the requested key exists.
+        """
+        # select subsample(s) with regular keys
+        if isinstance(key, (str, int)):
+            return self._perform_get(key)
+        # select all subsamples
+        elif key is Ellipsis:
+            res = {}
+            for subsample in tuple(self._subsamples.keys()):
+                res[subsample] = self._perform_get(subsample)
+            return res
+        # slice subsamples by sorted order of keys
+        elif isinstance(key, slice):
+            res = {}
+            subsample_spec_slice = tuple(self._subsamples.items())[key]
+            for subsample, spec in subsample_spec_slice:
+                res[subsample] = self._perform_get(subsample)
+            return res
+        else:
+            raise ValueError(f'subsample keys argument: {key} not valid format')
 
     @property
     def _enter_count(self):
@@ -267,7 +311,7 @@ class SubsampleReader(object):
                 if is_local_backend(subsample_spec):
                     yield (subsample_name, self.get(subsample_name))
 
-    def get(self, keys: GetKeysType) -> Union[np.ndarray, KeyArrMap]:
+    def get(self, *keys: Union[None, GetKeysType]) -> Union[np.ndarray, KeyArrMap]:
         """Retrieve the data associated with some subsample key(s)
 
         Parameters
@@ -295,40 +339,13 @@ class SubsampleReader(object):
             single :class:`numpy.ndarray` if a single sample key was passed in, else
             a dictionary mapping subsample names to array data.
         """
-        try:
-            # select subsample(s) with regular keys
-            if isinstance(keys, (str, int)):
-                subsample = keys
-                spec = self._subsamples[keys]
-                return self._be_fs[spec.backend].read_data(spec)
-
-            # select subsample(s) in sequence ie. [sub1, sub2, ..., subN]]
-            elif isinstance(keys, (list, tuple)):
-                res = {}
-                for subsample in keys:
-                    spec = self._subsamples[subsample]
-                    res[subsample] = self._be_fs[spec.backend].read_data(spec)
-                return res
-
-            # select all subsamples
-            elif keys is Ellipsis:
-                res = {}
-                for subsample, spec in tuple(self._subsamples.items()):
-                    res[subsample] = self._be_fs[spec.backend].read_data(spec)
-                return res
-
-            # slice subsamples by sorted order of keys
-            elif isinstance(keys, slice):
-                res = {}
-                subsample_spec_slice = tuple(self._subsamples.items())[keys]
-                for subsample, spec in subsample_spec_slice:
-                    res[subsample] = self._be_fs[spec.backend].read_data(spec)
-                return res
-
-            else:
-                raise ValueError(f'subsample keys argument: {keys} not valid format')
-        except KeyError:
-            raise KeyError(f'No subsample key {subsample} exists in sample {self.sample}.')
+        if len(keys) > 1:
+            res = {}
+            for key in keys:
+                res[key] = self._perform_get(key)
+        else:
+            res = self[keys[0]]
+        return res
 
 
 class SubsampleWriter(SubsampleReader):
@@ -375,34 +392,6 @@ class SubsampleWriter(SubsampleReader):
         if self._enter_count == 0:
             self._stack = None
 
-    def __setitem__(self, key: KeyType, value: np.ndarray) -> KeyType:
-        """Store a piece of data as a subsample. Convenience method to :meth:`add`.
-
-        .. seealso::
-
-            :meth:`add` for the actual method called.
-
-            :meth:`update` for an implementation analogous to python's built in
-            :meth:`dict.update` method which accepts a dict or iterable of key/value
-            pairs to add in the same operation.
-
-        Parameters
-        ----------
-        key : KeyType
-            Key (name) of the subsample to add to the arrayset.
-        value : :class:`numpy.ndarray`
-            Tensor data to add as the sample.
-
-        Returns
-        -------
-        KeyType
-            Sample key (name) of the stored data (if operation was successful)
-        """
-        return self.update((key, value))
-
-    def __delitem__(self, keys):
-        return self.pop(keys)
-
     @property
     def _schema_spec(self) -> RawArraysetSchemaVal:
         return self._be_fs['schema_spec']
@@ -445,6 +434,82 @@ class SubsampleWriter(SubsampleReader):
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
 
+    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> bool:
+
+        if not is_suitable_user_key(key):
+            raise ValueError(f'Sample name `{key}` is not suitable.')
+        isCompat = self._verify_array_compatible(value)
+        if not isCompat.compatible:
+            raise ValueError(isCompat.reason)
+
+    def _perform_set(self, key: KeyType, value: np.ndarray) -> KeyType:
+        """Internal write method. Assumes all arguments validated and context is open
+
+        Parameters
+        ----------
+        key : KeyType
+            subsample key to store
+        value : np.ndarray
+            tensor data to store
+
+        Returns
+        -------
+        KeyType
+            name of saved data subsample.
+        """
+        full_hash = array_hash_digest(value)
+        hashKey = hash_data_db_key_from_raw_key(full_hash)
+        # check if data record already exists with given key
+        dataRecKey = data_record_db_key_from_raw_key(
+            self._asetn, self._samplen, subsample=key)
+        existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
+        if existingDataRecVal:
+            # check if data record already with same key & hash value
+            existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
+            if full_hash == existingDataRec.data_hash:
+                return key
+
+        # write new data if data hash does not exist
+        existingHashVal = self._txnctx.hashTxn.get(hashKey, default=False)
+        if existingHashVal is False:
+            backendCode = self._schema_spec.schema_default_backend
+            hashVal = self._be_fs[backendCode].write_data(value)
+            self._txnctx.hashTxn.put(hashKey, hashVal)
+            self._txnctx.stageHashTxn.put(hashKey, hashVal)
+            hash_spec = backend_decoder(hashVal)
+        else:
+            hash_spec = backend_decoder(existingHashVal)
+
+        # add the record to the db
+        dataRecVal = data_record_db_val_from_raw_val(full_hash)
+        self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
+        self._subsamples[key] = hash_spec
+        return key
+
+    def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
+        """Store a piece of data as a subsample. Convenience method to :meth:`add`.
+
+        .. seealso::
+
+            :meth:`add` for the actual method called.
+
+            :meth:`update` for an implementation analogous to python's built in
+            :meth:`dict.update` method which accepts a dict or iterable of key/value
+            pairs to add in the same operation.
+
+        Parameters
+        ----------
+        key : KeyType
+            Key (name) of the subsample to add to the arrayset.
+        value : :class:`numpy.ndarray`
+            Tensor data to add as the sample.
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            self._set_arg_validate(key, value)
+            self._perform_set(key, value)
+
     def add(self, key: KeyType, value: np.ndarray) -> KeyType:
         """Store a piece of data in a subsample with a given name and value
 
@@ -468,9 +533,50 @@ class SubsampleWriter(SubsampleReader):
         KeyType
             sample name of the stored data (assuming the operation was successful)
         """
-        return self.update((key, value))
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            self._set_arg_validate(key, value)
+            return self._perform_set(key, value)
 
-    def update(self, other: MapKeyArrType) -> Union[KeyType, Tuple[KeyType]]:
+    def append(self, value: np.ndarray) -> KeyType:
+        """TODO: is this the right way we should be handling unnamed samples?
+
+        Thesis:
+            Rather than have seperate arraysets for each named and unnamed sample type,
+            you should be able to append to any arrayset without a name, and one will be
+            generated for you?
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            key = generate_sample_name()
+            self._set_arg_validate(key, value)
+            return self._perform_set(key, value)
+
+    def _from_sequence(self, seq: Sequence[KeyArrType]) -> List[KeyType]:
+        # assume callers already set up context manager
+        for idx, kv_double in enumerate(seq):
+            if len(kv_double) != 2:
+                raise ValueError(
+                    f"dictionary update sequence element #{idx} ({kv_double}) has "
+                    f"length {len(kv_double)}; 2 is required")
+            self._set_arg_validate(kv_double[0], kv_double[1])
+        saved_keys = []
+        for key, val in seq:
+            saved_keys.append(self._perform_set(key, val))
+        return saved_keys
+
+    def _merge(self, mapping: KeyArrMap) -> List[KeyType]:
+        # assume callers already set up context manager
+        for key, val in mapping.items():
+            self._set_arg_validate(key, val)
+        saved_keys = []
+        for key, val in mapping.items():
+            saved_keys.append(self._perform_set(key, val))
+        return saved_keys
+
+    def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> List[KeyType]:
         """Store some data with the key/value pairs from other, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
@@ -479,151 +585,129 @@ class SubsampleWriter(SubsampleReader):
 
         Parameters
         ----------
-        other : MapKeyArrType
-            Dictionary mapping sample names to :class:`np.ndarray` instances,
-            length two sequence (list or tuple) of subsample name(s) and
-            :class:`np.ndarray` instance, or sequence of multiple length two
-            sequences (list or tuple) of sample name(s) / :class:`np.ndarray`
-            instance(s) to store. If sample name is string type, can only contain
-            alpha-numeric ascii characters (in addition to '-', '.', '_').
-            Integer key must be >= 0.
+        other : Union[None, MapKeyArrType]
+            Accepts either another dictionary object or an iterable of key/value
+            pairs (as tuples or other iterables of length two). mapping sample
+            names to :class:`np.ndarray` instances, If sample name is string type,
+            can only contain alpha-numeric ascii characters (in addition to '-',
+            '.', '_'). Integer key must be >=
+            0.
+        **kwargs
+            keyword arguments provided will be saved with keywords as subsample
+            keys (string type only) and values as np.array instances.
 
         Returns
         -------
-        Union[KeyType, Tuple[KeyType]]
+        List[KeyType]
             sample name(s) of the stored data (assuming the operation was successful)
         """
-
-        # ------------------------ argument checking --------------------------
-
-        try:
-            if isinstance(other, dict):
-                for k, v in other.items():
-                    if not is_suitable_user_key(k):
-                        raise ValueError(f'dict key: {k} not suitable name')
-                    isCompat = self._verify_array_compatible(v)
-                    if not isCompat.compatible:
-                        raise ValueError(isCompat.reason)
-                data_map: KeyArrMap = other
-
-            elif isinstance(other, (list, tuple)):
-                if isinstance(other[0], (list, tuple)):
-                    for item_data in other:
-                        if len(item_data) != 2:
-                            raise ValueError(f'length of subsample container key/val != 2.')
-                        subsamplen, data = item_data
-                        if not is_suitable_user_key(subsamplen):
-                            raise ValueError(f'data sample name: {subsamplen} not suitable.')
-                        isCompat = self._verify_array_compatible(data)
-                        if not isCompat.compatible:
-                            raise ValueError(isCompat.reason)
-                    data_map: KeyArrMap = dict(list(other))
-
-                else:
-                    if len(other) != 2:
-                        raise ValueError(f'length of subsample container key/val != 2.')
-                    subsamplen, data = other
-                    if not is_suitable_user_key(subsamplen):
-                        raise ValueError(f'data sample name: {subsamplen} not suitable.')
-                    isCompat = self._verify_array_compatible(data)
-                    if not isCompat.compatible:
-                        raise ValueError(isCompat.reason)
-                    data_map: KeyArrMap = dict([other])
-
-            else:
-                raise ValueError(f'`other` must be dict or sequence, not {type(other)}')
-
-        except ValueError as e:
-            raise e from None
-
-        # ------------------- add data to storage backend ---------------------
-
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
 
-            for subsamplen, data in data_map.items():
-                full_hash = array_hash_digest(data)
-                hashKey = hash_data_db_key_from_raw_key(full_hash)
-                # check if data record already exists with given key
-                dataRecKey = data_record_db_key_from_raw_key(
-                    self._asetn, self._samplen, subsample=subsamplen)
-                existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
-                if existingDataRecVal:
-                    # check if data record already with same key & hash value
-                    existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
-                    if full_hash == existingDataRec.data_hash:
-                        continue
+            # Note: we have to merge kwargs dict (if it exists) with `other` before
+            # operating on either one. This is so that the validation and write
+            # methods occur in one operation; if any element in any one of the inputs,
+            # is invalid, no data will be written from another.
 
-                # write new data if data hash does not exist
-                existingHashVal = self._txnctx.hashTxn.get(hashKey, default=False)
-                if existingHashVal is False:
-                    backendCode = self._schema_spec.schema_default_backend
-                    hashVal = self._be_fs[backendCode].write_data(data)
-                    self._txnctx.hashTxn.put(hashKey, hashVal)
-                    self._txnctx.stageHashTxn.put(hashKey, hashVal)
-                    hash_spec = backend_decoder(hashVal)
-                else:
-                    hash_spec = backend_decoder(existingHashVal)
+            if isinstance(other, dict):
+                if kwargs:
+                    other.update(kwargs)
+                return self._merge(other)
+            elif isinstance(other, (list, tuple)):
+                if kwargs:
+                    other = list(other)
+                    other.extend(list(kwargs.items()))
+                return self._from_sequence(other)
+            elif other is None:
+                return self._merge(kwargs)
+            else:
+                raise ValueError(f'Type of `other` {type(other)} must be mapping, list, tuple')
 
-                # add the record to the db
-                dataRecVal = data_record_db_val_from_raw_val(full_hash)
-                self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
-                self._subsamples.update([(subsamplen, hash_spec)])
-
-        res = tuple(data_map.keys())
-        return res[0] if len(res) == 1 else res
-
-    def delete(self, keys: KeysType) -> KeysType:
-        """Remove subsample key(s) / array pair(s) from the sample listing.
+    def _perform_del(self, key: KeyType) -> KeyType:
+        """Internal del method. Assumes all arguments validated and context is open
 
         Parameters
         ----------
-        keys : KeysType
-            The subsample key to remove from the sample. Can either be a single
-            key, or a Sequence (list or tuple) of keys. All keys must exist
-            in the sample set or an exception will be thrown.
+        key : KeyType
+            subsample key remove.
 
         Returns
         -------
-        KeysType
-            Upon success, returns the subsample key(s) which were removed.
+        KeyType
+            name of removed subsample.
         """
+        dbKey = data_record_db_key_from_raw_key(
+            self._asetn, self._samplen, subsample=key)
+        isRecordDeleted = self._txnctx.dataTxn.delete(dbKey)
+        if isRecordDeleted is False:
+            raise KeyError(f'No subsample {key} in sample {self._samplen}')
+        del self._subsamples[key]
+        return key
 
-        # ------------------------ argument checking --------------------------
+    def __delitem__(self, key: KeyType):
+        """Remove a subsample from the arrayset. Convenience method to :meth:`delete`.
 
-        if isinstance(keys, (list, tuple)):
-            if not all([k in self._subsamples for k in keys]):
-                raise KeyError(f'All subsample keys: {keys} must exist in sample.')
-            subsamples = keys
-        elif isinstance(keys, (str, int)):
-            if keys not in self._subsamples:
-                raise KeyError(f'Subsample key: {keys} must exist in sample.')
-            subsamples = [keys]
-        else:
-            raise TypeError(f'Invalid argument type of `keys` param: {type(keys)}')
+        .. seealso::
 
-        # ------------------------- db modification ---------------------------
+            :meth:`delete` (the analogous named operation for this method)
 
+            :meth:`pop` to return a records value and then delete it in the same
+            operation
+
+        Parameters
+        ----------
+        key : KeyType
+            Name of the sample to remove from the arrayset.
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            if key not in self:
+                raise KeyError(f'No subsample {key} in sample {self._samplen}')
+            self._perform_del(key)
+
+    def delete(self, *keys: KeyType) -> Union[KeyType, Sequence[KeyType]]:
+        """Remove some key / value subsample pairs from a sample, returning the deleted keys.
+
+        Parameters
+        ----------
+        *keys : KeyType
+            name (or names) or subsample(s) to remove from the sample
+
+        Returns
+        -------
+        Union[KeyType, Sequence[KeyType]]
+            Upon success, the key(s) removed from the sample
+
+        Raises
+        ------
+        KeyError
+            If there is no subsample with the provided key(s)
+        """
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
 
-            for subsample in subsamples:
-                dbKey = data_record_db_key_from_raw_key(
-                    self._asetn, self._samplen, subsample=subsample)
-                isRecordDeleted = self._txnctx.dataTxn.delete(dbKey)
-                if isRecordDeleted is False:
-                    raise KeyError(f'No subsample {subsample} in sample {self._samplen}')
-                del self._subsamples[subsample]
-        return keys
+            if len(keys) > 1:
+                for key in keys:
+                    if key not in self:
+                        raise KeyError(f'No sample with name {key} exists.')
+                removed = []
+                for key in keys:
+                    removed.append(self._perform_del(key))
+                return removed
+            else:
+                if keys[0] not in self:
+                    raise KeyError(f'No sample with name {keys[0]} exists.')
+                return self._perform_del(keys[0])
 
-    def pop(self, keys: KeysType) -> Union[np.ndarray, KeyArrMap]:
+    def pop(self, *keys: KeysType) -> Union[np.ndarray, KeyArrMap]:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
         Parameters
         ----------
-        keys : KeysType
+        *keys : KeysType
             Either a single sample key to remove, or a sequence (list or tuple)
             of keys to remove from the arrayset
 
@@ -638,8 +722,8 @@ class SubsampleWriter(SubsampleReader):
         KeyError
             If there is no sample with some key in the arrayset.
         """
-        values = self.get(keys)
-        self.delete(keys)
+        values = self.get(*keys)
+        self.delete(*keys)
         return values
 
 
@@ -1034,7 +1118,77 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         self._enter_count -= 1
         return
 
-    def __setitem__(self, key: KeyType, value: MapKeyArrType) -> Tuple[KeyType]:
+    def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
+        """Determine if an array is compatible with the arraysets schema
+
+        Parameters
+        ----------
+        data : :class:`numpy.ndarray`
+            array to check compatibility for
+
+        Returns
+        -------
+        CompatibleArray
+            compatible and reason field
+        """
+        SCHEMA_DTYPE = self._schema_spec.schema_dtype
+        MAX_SHAPE = self._schema_spec.schema_max_shape
+
+        reason = ''
+        if not isinstance(data, np.ndarray):
+            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
+        elif data.dtype.num != SCHEMA_DTYPE:
+            reason = f'dtype: {data.dtype} != aset: {np.typeDict[SCHEMA_DTYPE]}.'
+        elif not data.flags.c_contiguous:
+            reason = f'`data` must be "C" contiguous array.'
+
+        if reason == '':
+            if self._schema_spec.schema_is_var is True:
+                if data.ndim != len(MAX_SHAPE):
+                    reason = f'data rank {data.ndim} != aset rank {len(MAX_SHAPE)}'
+                for dDimSize, schDimSize in zip(data.shape, MAX_SHAPE):
+                    if dDimSize > schDimSize:
+                        reason = f'shape {data.shape} exceeds schema max {MAX_SHAPE}'
+            elif data.shape != MAX_SHAPE:
+                reason = f'data shape {data.shape} != fixed schema {MAX_SHAPE}'
+
+        compatible = True if reason == '' else False
+        res = CompatibleArray(compatible=compatible, reason=reason)
+        return res
+
+    def _set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
+
+        if not is_suitable_user_key(sample_key):
+            raise ValueError(f'Sample name `{sample_key}` is not suitable.')
+
+        if isinstance(subsample_map, (tuple, list)):
+            subsample_map = dict(subsample_map)
+
+        for subsample_key, subsample_val in subsample_map.items():
+            if not is_suitable_user_key(subsample_key):
+                raise ValueError(f'Sample name `{sample_key}` is not suitable.')
+            isCompat = self._verify_array_compatible(subsample_val)
+            if not isCompat.compatible:
+                raise ValueError(isCompat.reason)
+
+    def _perform_set(self, key: KeyType, value: MapKeyArrType) -> List[KeyType]:
+        if key in self._samples:
+            return self._samples[key].update(value)
+        else:
+            self._samples[key] = SubsampleWriter(
+                aset_txn_ctx=proxy(self._txnctx),
+                asetn=self._asetn,
+                samplen=key,
+                be_handles=proxy(self._be_fs),
+                specs={})
+            try:
+                # TODO: class method to eliminate double validation check?
+                return self._samples[key].update(value)
+            except Exception as e:
+                del self._samples[key]
+                raise e
+
+    def __setitem__(self, key: KeyType, value: MapKeyArrType) -> None:
         """Store some subsample key / subsample data map pairs, overwriting existing keys.
 
         .. seealso::
@@ -1042,19 +1196,13 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             :meth:`add` for the actual implementation of the method and docstring
             for this methods parameters
         """
-        return self.add(key, value)
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            self._set_arg_validate(key, value)
+            self._perform_set(key, value)
 
-    def __delitem__(self, key: KeyType) -> KeyType:
-        """Remove a sample (including all contained subsamples) from the arrayset.
-
-        .. seealso::
-
-            :meth:`delete` for the actual implementation of the method and docstring
-            for this methods parameters
-        """
-        return self.delete(key)
-
-    def add(self, sample: KeyType, subsample_map: MapKeyArrType) -> Tuple[KeyType]:
+    def add(self, sample: KeyType, subsample_map: MapKeyArrType) -> Tuple[KeyType, Sequence[KeyType]]:
         """Store some data with the key/value pairs from other, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
@@ -1076,30 +1224,50 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
 
         Returns
         -------
-        Tuple[KeyType]
-            subsample name(s) of the stored data (assuming the operation was successful)
+        Tuple[KeyType, Sequence[KeyType]]
+            two tuple of sample name saved, and sequence of subsample names saved.
         """
-        if sample in self._samples:
-            return self._samples[sample].update(subsample_map)
-        else:
-            self._samples[sample] = SubsampleWriter(
-                aset_txn_ctx=proxy(self._txnctx),
-                asetn=self._asetn,
-                samplen=sample,
-                be_handles=proxy(self._be_fs),
-                specs={})
-            try:
-                return self._samples[sample].update(subsample_map)
-            except Exception as e:
-                del self._samples[sample]
-                raise e
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            self._set_arg_validate(sample, subsample_map)
+            subsample_keys = self._perform_set(sample, subsample_map)
+            return (sample, subsample_keys)
+
+    def _from_sequence(self, seq) -> Sequence[Tuple[KeyType, Sequence[KeyType]]]:
+        """input [[sample_key, sample_data_map], ..., [sample_key, sample_data_map]]
+        """
+        # assume callers already set up context manager
+        for idx, kv_double in enumerate(seq):
+            if len(kv_double) != 2:
+                raise ValueError(
+                    f"dictionary update sequence element #{idx} ({kv_double}) has "
+                    f"length {len(kv_double)}; 2 is required")
+            self._set_arg_validate(kv_double[0], kv_double[1])
+        saved_keys = []
+        for key, val in seq:
+            subsample_keys = self._perform_set(key, val)
+            saved_keys.append((key, subsample_keys))
+        return saved_keys
+
+    def _merge(self, mapping) -> Sequence[Tuple[KeyType, Sequence[KeyType]]]:
+        """input Dict[sample_key, [MapKeyArrType]]
+        """
+        # assume callers already set up context manager
+        for key, val in mapping.items():
+            self._set_arg_validate(key, val)
+        saved_keys = []
+        for key, val in mapping.items():
+            subsample_keys = self._perform_set(key, val)
+            saved_keys.append((key, subsample_keys))
+        return saved_keys
 
     def update(
             self,
-            other: Union[Dict[KeyType, MapKeyArrType],
-                         Sequence[Union[List[Union[KeyType, MapKeyArrType]],
-                                  Tuple[KeyType, MapKeyArrType]]]]
-    ) -> Tuple[SubsampleName]:
+            other: Union[None, Dict[KeyType, MapKeyArrType],
+                         Sequence[Sequence[Union[KeyType, MapKeyArrType]]]],
+            **kwargs
+    ) -> Sequence[Tuple[KeyType, Sequence[KeyType]]]:
         """Store some data with the key/value pairs from other, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
@@ -1108,54 +1276,70 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
 
         Parameters
         ----------
-        other : Union[Dict[KeyType, MapKeyArrType],
-                      Sequence[Union[List[Union[KeyType, MapKeyArrType]],
-                      Tuple[KeyType, MapKeyArrType]]]]
-            Dictionary mapping sample names to subsample data maps. Or Squence
-            (list or tuple) where element one is the sample name and element
-            two is a subsample data map.
+        other : Union[None, Dict[KeyType, MapKeyArrType],
+                      Sequence[Sequence[Union[KeyType, MapKeyArrType]]]]
 
-            Subsample data maps are dictionaries mapping sample names to
-            :class:`np.ndarray` instances, length two sequence (list or tuple) of
-            sample name and :class:`np.ndarray` instance, or sequence of multiple
-            length two sequences (list or tuple) of sample names /
-            :class:`np.ndarray` instances to store. If sample name is string type,
-            can only contain alpha-numeric ascii characters (in addition to '-',
-            '.', '_'). Integer key must be >= 0.
+            Dictionary mapping sample names to subsample data maps. Or Squence
+            (list or tuple) where element one is the sample name and element two is
+            a subsample data map.
+
+        **kwargs :
+            keyword arguments provided will be saved with keywords as sample
+            keys (string type only) and values as a mapping of subarray keys to
+            :class:`np.ndarray` instances.
 
         Returns
         -------
-        Tuple[SubsampleName]
-            Tuple of namedtuple which contains fields listing `sample` and
-            `subsample` keys which data were added into.
+        Sequence[Tuple[KeyType, Sequence[KeyType]]]
+            Sequence of two tuple which contains fields listing `sample` and
+            sequence of `subsample` keys which data were added into.
         """
-        res = []
-        if isinstance(other, dict):
-            for sample_name, subsample_map in other.items():
-                subsample_names = self.add(sample_name, subsample_map)
-                for subsample_name in subsample_names:
-                    res.append(SubsampleName(sample=sample_name, subsample=subsample_name))
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
-        elif isinstance(other, (list, tuple)):
-            if isinstance(other[0], (list, tuple)):
-                for element in other:
-                    sample_name, subsample_map = element[0], element[1]
-                    subsample_names = self.add(sample_name, subsample_map)
-                    for subsample_name in subsample_names:
-                        res.append(SubsampleName(sample=sample_name, subsample=subsample_name))
-            elif isinstance(other[0], (str, int)) and isinstance(other[1], (dict, list, tuple)):
-                sample_name, subsample_map = other[0], other[1]
-                subsample_names = self.add(sample_name, subsample_map)
-                for subsample_name in subsample_names:
-                    res.append(SubsampleName(sample=sample_name, subsample=subsample_name))
+            # Note: we have to merge kwargs dict (if it exists) with `other` before
+            # operating on either one. This is so that the validation and write
+            # methods occur in one operation; if any element in any one of the inputs,
+            # is invalid, no data will be written from another.
+
+            if isinstance(other, dict):
+                if kwargs:
+                    other.update(kwargs)
+                return self._merge(other)
+            elif isinstance(other, (list, tuple)):
+                if kwargs:
+                    other = list(other)
+                    other.extend(list(kwargs.items()))
+                return self._from_sequence(other)
+            elif other is None:
+                return self._merge(kwargs)
             else:
-                raise ValueError(f'Other contains invalid elements')
-        else:
-            raise ValueError(f'Other must be dict or sequence, not {type(other)}')
+                raise ValueError(f'Type of `other` {type(other)} must be mapping, list, tuple')
 
-        return tuple(res)
+    def _perform_del(self, key: KeyType) -> KeyType:
+        sample = self._samples[key]
+        subsample_keys = list(sample.keys())
+        sample.delete(*subsample_keys)
+        del self._samples[key]
+        return key
 
-    def delete(self, keys: KeysType) -> KeysType:
+    def __delitem__(self, key: KeyType) -> None:
+        """Remove a sample (including all contained subsamples) from the arrayset.
+
+        .. seealso::
+
+            :meth:`delete` for the actual implementation of the method and docstring
+            for this methods parameters
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            if key not in self:
+                raise KeyError(f'No sample {key} in {self._asetn}')
+            self._perform_del(key)
+
+    def delete(self, *keys: KeysType) -> KeysType:
         """Delete a sample (and all contained subsamples), returning removed sample key.
 
         Parameters
@@ -1169,22 +1353,29 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         KeysType
             Upon success, the sample key(s) removed from the arrayset
         """
-        res = keys
-        if not isinstance(keys, (list, tuple)):
-            keys = [keys]
-        for key in keys:
-            sample = self._samples[key]
-            subsample_keys = list(sample.keys())
-            sample.delete(subsample_keys)
-            del self._samples[key]
-        return res
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
 
-    def pop(self, keys: KeysType) -> Dict[KeyType, KeyArrMap]:
+            if len(keys) > 1:
+                for key in keys:
+                    if key not in self:
+                        raise KeyError(f'No sample with name {key} exists.')
+                removed = []
+                for key in keys:
+                    removed.append(self._perform_del(key))
+                return removed
+            else:
+                if keys[0] not in self:
+                    raise KeyError(f'No sample with name {keys[0]} exists.')
+                return self._perform_del(keys[0])
+
+    def pop(self, *keys: KeysType) -> Dict[KeyType, KeyArrMap]:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
         Parameters
         ----------
-        keys : KeysType
+        *keys : KeysType
             Either a single sample key to remove, or a sequence (list or tuple)
             of keys to remove from the arrayset
 
@@ -1200,14 +1391,20 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         KeyError
             If there is no sample with some key in the arrayset.
         """
-        res = {}
-        if not isinstance(keys, (list, tuple)):
-            keys = [keys]
-        for key in keys:
-            sample = self._samples[key]
-            res[key] = sample.data
-            self.delete(key)
-        return res
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+
+            for key in keys:
+                if key not in self:
+                    raise KeyError(f'sample name {key} does not exist.')
+
+            res = {}
+            for key in keys:
+                sample = self._samples[key]
+                res[key] = sample.data
+                self.delete(key)
+            return res
 
     def change_backend(self, backend_opts: Union[str, dict]):
         """Change the default backend and filters applied to future data writes.
@@ -1263,7 +1460,6 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             schema_default_backend=beopts.backend,
             schema_default_backend_opts=beopts.opts,
             schema_contains_subsamples=self._contains_subsamples)
-
 
         hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         with self._txnctx.write() as ctx:

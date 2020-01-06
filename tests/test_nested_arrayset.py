@@ -238,18 +238,42 @@ class TestAddData:
         co.close()
 
 
-
 # --------------------------- Test Remove Data -------------------------------------
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
-def initialized_arrayset(request, repo, subsample_data_map):
-    backend = request.param
+def backend_param(request):
+    return request.param
+
+
+@pytest.fixture(params=[False, True])
+def write_enabled(request):
+    return request.param
+
+
+@pytest.fixture()
+def initialized_arrayset(backend_param, write_enabled, repo, subsample_data_map):
     co = repo.checkout(write=True)
     aset = co.arraysets.init_arrayset(
-        'foo', shape=(5, 7), dtype=np.uint16, backend_opts=backend, contains_subsamples=True)
+        'foo', shape=(5, 7), dtype=np.uint16, backend_opts=backend_param, contains_subsamples=True)
     aset.update(subsample_data_map)
-    yield aset
+    if not write_enabled:
+        co.commit('first')
+        co.close()
+        co = repo.checkout()
+        yield co.arraysets['foo']
+    else:
+        yield co.arraysets['foo']
+    co.close()
+
+
+@pytest.fixture()
+def initialized_arrayset_write_only(backend_param, repo, subsample_data_map):
+    co = repo.checkout(write=True)
+    aset = co.arraysets.init_arrayset(
+        'foo', shape=(5, 7), dtype=np.uint16, backend_opts=backend_param, contains_subsamples=True)
+    aset.update(subsample_data_map)
+    yield co.arraysets['foo']
     co.close()
 
 
@@ -257,46 +281,46 @@ class TestRemoveData:
 
     # --------------------- delete -----------------------------
 
-    def test_delete_single_sample_from_arrayset(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
+    def test_delete_single_sample_from_arrayset(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
         res = aset.delete('foo')
         assert res == 'foo'
         assert 'foo' not in aset
 
-    def test_delete_multiple_samples_from_arrayset(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
-        res = aset.delete(['foo', 2])
+    def test_delete_multiple_samples_from_arrayset(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
+        res = aset.delete(*['foo', 2])
         assert res == ['foo', 2]
         assert 'foo' not in aset
         assert 2 not in aset
 
-    def test_delitem_single_sample_from_arrayset(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
+    def test_delitem_single_sample_from_arrayset(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
         del aset['foo']
         assert 'foo' not in aset
 
-    def test_delete_single_subsample_from_sample(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
+    def test_delete_single_subsample_from_sample(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
         res = aset['foo'].delete(0)
         assert res == 0
         assert 0 not in aset['foo']
 
-    def test_delitem_single_subsample_from_sample(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
+    def test_delitem_single_subsample_from_sample(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
         del aset['foo'][0]
         assert 0 not in aset['foo']
 
-    def test_delete_multiple_subsample_from_sample(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
-        res = aset['foo'].delete([0, 1])
+    def test_delete_multiple_subsample_from_sample(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
+        res = aset['foo'].delete(*[0, 1])
         assert res == [0, 1]
         assert 0 not in aset['foo']
         assert 1 not in aset['foo']
 
     # ------------------------ pop ----------------------------
 
-    def test_pop_single_sample_from_arrayset(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
+    def test_pop_single_sample_from_arrayset(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
         res = aset.pop('foo')
         assert 'foo' not in aset
         assert isinstance(res, dict)
@@ -309,9 +333,9 @@ class TestRemoveData:
         for expected_k, expected_v in subsample_data_map['foo'].items():
             assert_equal(popped_subsample_kvs[expected_k], expected_v)
 
-    def test_pop_multiple_samples_from_arrayset(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
-        res = aset.pop(['foo', 2])
+    def test_pop_multiple_samples_from_arrayset(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
+        res = aset.pop(*['foo', 2])
         assert 'foo' not in aset
         assert 2 not in aset
         assert isinstance(res, dict)
@@ -327,16 +351,16 @@ class TestRemoveData:
             for expected_k, expected_v in subsample_data_map[popped_sample_key].items():
                 assert_equal(popped_subsample_kvs[expected_k], expected_v)
 
-    def test_pop_single_subsample_from_sample(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
+    def test_pop_single_subsample_from_sample(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
         res = aset['foo'].pop(0)
         assert 0 not in aset['foo']
         assert isinstance(res, np.ndarray)
         assert_equal(res, subsample_data_map['foo'][0])
 
-    def test_pop_multiple_subsample_from_sample(self, initialized_arrayset, subsample_data_map):
-        aset = initialized_arrayset
-        res = aset['foo'].pop([0, 1])
+    def test_pop_multiple_subsample_from_sample(self, initialized_arrayset_write_only, subsample_data_map):
+        aset = initialized_arrayset_write_only
+        res = aset['foo'].pop(*[0, 1])
         assert 0 not in aset['foo']
         assert 1 not in aset['foo']
 
@@ -506,7 +530,7 @@ class TestGetDataMethods:
         aset = initialized_arrayset
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
-            res = sample.get(list(subsample_data.keys())[:2])
+            res = sample.get(*list(list(subsample_data.keys())[:2]))
             assert isinstance(res, dict)
             assert len(res) == 2
             for k, v in res.items():
@@ -518,15 +542,15 @@ class TestGetDataMethods:
             sample = aset.get(sample_name)
             with pytest.raises(KeyError):
                 # both keys don't exist
-                sample.get(['doesnotexist', 999_999])
+                sample.get(*['doesnotexist', 999_999])
             with pytest.raises(ValueError):
                 # only one key doesn't exist, str type
                 test_keys = list(subsample_data.keys()).append('doesnotexist')
-                sample.get(test_keys)
+                sample.get(*test_keys)
             with pytest.raises(ValueError):
                 # only one key doesn't exist, int type
                 test_keys = list(subsample_data.keys()).append(999_999)
-                sample.get(test_keys)
+                sample.get(*test_keys)
 
     def test_get_sample_getitem_single_subsample(self, initialized_arrayset, subsample_data_map):
         aset = initialized_arrayset
@@ -549,7 +573,9 @@ class TestGetDataMethods:
         aset = initialized_arrayset
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
-            res = sample[list(subsample_data.keys())[:2]]
+            with pytest.raises(ValueError):
+                res = sample[list(subsample_data.keys())[:2]]
+            res = sample.get(*list(subsample_data.keys())[:2])
             assert isinstance(res, dict)
             assert len(res) == 2
             for k, v in res.items():
@@ -560,7 +586,7 @@ class TestGetDataMethods:
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
             real_keys = list(subsample_data.keys())
-            with pytest.raises(KeyError):
+            with pytest.raises(ValueError):
                 # both keys don't exist
                 sample[['doesnotexist', 999_999]]
             with pytest.raises(ValueError):
@@ -587,9 +613,9 @@ class TestGetDataMethods:
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
             existing_subsample_key = next(iter(subsample_data.keys()))
-            with pytest.raises(KeyError):
+            with pytest.raises(ValueError):
                 sample[..., existing_subsample_key]
-            with pytest.raises(KeyError):
+            with pytest.raises(ValueError):
                 sample[..., [existing_subsample_key]]
 
     def test_get_sample_getitem_subsamples_with_unbound_slice(self, initialized_arrayset, subsample_data_map):

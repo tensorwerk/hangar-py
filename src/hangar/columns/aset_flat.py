@@ -473,8 +473,22 @@ class SampleWriterModifier(SampleReaderModifier):
         compatible = True if reason == '' else False
         return CompatibleArray(compatible, reason)
 
-    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> bool:
+    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
+        """Verify if key / value pair is valid to be written in this arrayset
 
+        Parameters
+        ----------
+        key : KeyType
+            name to associate with this data piece
+        value : :class:`np.ndarray`
+            piece of data to store in the arrayset
+
+        Raises
+        ------
+        ValueError
+            If key is not valid type/contents or if value is not correct object
+            type / if it does not conform to arrayset schema
+        """
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
         isCompat = self._verify_array_compatible(value)
@@ -651,8 +665,7 @@ class SampleWriterModifier(SampleReaderModifier):
             self._set_arg_validate(kv_double[0], kv_double[1])
         saved_keys = []
         for key, val in seq:
-            self._perform_set(key, val)
-            saved_keys.append(key)
+            saved_keys.append(self._perform_set(key, val))
         return saved_keys
 
     def _merge(self, mapping: KeyArrMap) -> Sequence[KeyType]:
@@ -661,8 +674,7 @@ class SampleWriterModifier(SampleReaderModifier):
             self._set_arg_validate(key, val)
         saved_keys = []
         for key, val in mapping.items():
-            self._perform_set(key, val)
-            saved_keys.append(key)
+            saved_keys.append(self._perform_set(key, val))
         return saved_keys
 
     def update(self,
@@ -762,7 +774,7 @@ class SampleWriterModifier(SampleReaderModifier):
         del self._samples[key]
         return key
 
-    def __delitem__(self, key: KeyType) -> KeyType:
+    def __delitem__(self, key: KeyType) -> None:
         """Remove a sample from the arrayset. Convenience method to :meth:`delete`.
 
         .. seealso::
@@ -776,11 +788,6 @@ class SampleWriterModifier(SampleReaderModifier):
         ----------
         key : KeyType
             Name of the sample to remove from the arrayset.
-
-        Returns
-        -------
-        KeyType
-            Name of the sample removed from the arrayset (assuming operation successful)
         """
         with ExitStack() as stack:
             if not self._is_conman:

@@ -29,7 +29,7 @@ from .._version import parse as version_parse
 from .._version import Version
 
 
-cycle_list = [str(c).rjust(5, '0') for c in range(99_999)]
+cycle_list = (str(c).rjust(4, '0') for c in range(9_999))
 NAME_CYCLER = cycle(cycle_list)
 RANDOM_NAME_SEED = str(randint(0, 999_999_999)).rjust(0, '0')
 perf_counter()  # call to init monotonic start point
@@ -37,7 +37,7 @@ perf_counter()  # call to init monotonic start point
 
 def generate_sample_name() -> str:
     ncycle = next(NAME_CYCLER)
-    if ncycle == '00000':
+    if ncycle == '0000':
         sleep(0.001)
 
     sec, subsec = str(perf_counter()).split('.')
