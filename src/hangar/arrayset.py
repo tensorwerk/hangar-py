@@ -1,3 +1,4 @@
+from collections import defaultdict
 import os
 import warnings
 from multiprocessing import cpu_count, get_context
@@ -28,8 +29,9 @@ from .records.parsing import (
 from .records.queries import RecordQuery
 from .utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
 
-CompatibleArray = NamedTuple(
-    'CompatibleArray', [('compatible', bool), ('reason', str)])
+CompatibleArray = NamedTuple('CompatibleArray', [
+    ('compatible', bool),
+    ('reason', str)])
 
 
 class ArraysetDataReader(object):
