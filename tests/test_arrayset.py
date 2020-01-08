@@ -38,7 +38,7 @@ class TestArrayset(object):
         asetOldAsetn = asetOld._asetn
         asetOldDefaultSchemaHash = asetOld._dflt_schema_hash
 
-        asetOld.add('1', array5by7)
+        asetOld['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
@@ -283,7 +283,15 @@ class TestDataWithFixedSizedArrayset(object):
         assert np.allclose(co.arraysets['writtenaset']['1'], co.arraysets.get('writtenaset').get('1'), array5by7)
         co.close()
 
-    def test_getitem_multiple_samples(self, aset_samples_initialized_repo, array5by7):
+    def test_get_sample_with_default_works(self, aset_samples_initialized_repo, array5by7):
+        co = aset_samples_initialized_repo.checkout(write=True)
+        res = co.arraysets['writtenaset'].get('doesnotexist', default=500)
+        assert res is 500
+        res = co.arraysets['writtenaset'].get('doesnotexist', 500)
+        assert res is 500
+        co.close()
+
+    def test_get_multiple_samples_fails(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
         co.arraysets['writtenaset']['1'] = array5by7
         co.arraysets['writtenaset']['2'] = array5by7+1
@@ -292,19 +300,14 @@ class TestDataWithFixedSizedArrayset(object):
         co.close()
 
         nco = aset_samples_initialized_repo.checkout()
-        res = nco.arraysets['writtenaset'].get('1', '2')
-        assert len(res) == 2
-        assert isinstance(res, dict)
-        assert_equal(res['1'], array5by7)
-        assert_equal(res['2'], array5by7+1)
+        with pytest.raises(TypeError):
+            res = nco.arraysets['writtenaset'].get(['1', '2'])
+        res = nco.arraysets['writtenaset'].get(('1', '2'))
+        assert res is None
 
         aset = nco.arraysets['writtenaset']
-        res = aset.get(*('1', '2', '3'))
-        assert len(res) == 3
-        assert isinstance(res, dict)
-        assert_equal(res['1'], array5by7)
-        assert_equal(res['2'], array5by7+1)
-        assert_equal(res['3'], array5by7+2)
+        with pytest.raises(TypeError):
+            res = aset.get(*('1', '2', '3'))
         nco.close()
 
     def test_getitem_multiple_samples_missing_key(self, aset_samples_initialized_repo, array5by7):
@@ -321,30 +324,6 @@ class TestDataWithFixedSizedArrayset(object):
             aset[('1', '2')]
         nco.close()
 
-    def test_get_multiple_samples(self, aset_samples_initialized_repo, array5by7):
-        co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
-        co.arraysets['writtenaset']['2'] = array5by7+1
-        co.arraysets['writtenaset']['3'] = array5by7+2
-        co.commit('this is a commit message')
-        co.close()
-
-        nco = aset_samples_initialized_repo.checkout()
-        res = nco.arraysets['writtenaset'].get(*('1', '2'))
-        assert len(res) == 2
-        assert isinstance(res, dict)
-        assert_equal(res['1'], array5by7)
-        assert_equal(res['2'], array5by7+1)
-
-        aset = nco.arraysets['writtenaset']
-        res = aset.get(*('1', '2', '3'))
-        assert len(res) == 3
-        assert isinstance(res, dict)
-        assert_equal(res['1'], array5by7)
-        assert_equal(res['2'], array5by7+1)
-        assert_equal(res['3'], array5by7+2)
-        nco.close()
-
     def test_get_multiple_samples_missing_key(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
         co.arraysets['writtenaset']['1'] = array5by7
@@ -352,11 +331,9 @@ class TestDataWithFixedSizedArrayset(object):
         co.close()
 
         nco = aset_samples_initialized_repo.checkout()
-        with pytest.raises(KeyError):
-            nco.arraysets['writtenaset'].get(*('1', '2'))
-        with pytest.raises(KeyError):
-            aset = nco.arraysets['writtenaset']
-            aset.get(*('1', '2'))
+        aset = nco.arraysets['writtenaset']
+        res = aset.get(('1', '2'))
+        assert res == None
         nco.close()
 
     def test_add_data_str_keys(self, aset_samples_initialized_repo, array5by7):
@@ -366,7 +343,7 @@ class TestDataWithFixedSizedArrayset(object):
             aset['somerandomkey']
 
         aset['1'] = array5by7
-        aset.add('2', array5by7)
+        aset['2'] = array5by7
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
@@ -380,7 +357,7 @@ class TestDataWithFixedSizedArrayset(object):
 
         aset[1] = array5by7
         secondArray = array5by7 + 1
-        aset.add(2, secondArray)
+        aset[2] = secondArray
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
@@ -414,9 +391,9 @@ class TestDataWithFixedSizedArrayset(object):
         newFirstArray = array5by7 + 1
         aset['1'] = newFirstArray
         secondArray = array5by7 + 2
-        aset.add(2, secondArray)
+        aset[2] = secondArray
         thirdArray = array5by7 + 3
-        aset.add('2', thirdArray)
+        aset['2'] = thirdArray
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
@@ -437,14 +414,12 @@ class TestDataWithFixedSizedArrayset(object):
     def test_add_with_wrong_argument_order(self, aset_samples_initialized_w_checkout, array5by7):
         aset = aset_samples_initialized_w_checkout.arraysets['writtenaset']
         with pytest.raises(ValueError):
-            aset.add(array5by7, '1')
+            aset[array5by7] = '1'
 
     def test_update_with_dict_single_item(self, aset_samples_initialized_w_checkout, array5by7):
         aset = aset_samples_initialized_w_checkout.arraysets['writtenaset']
         data_map = {'foo': array5by7}
-        res = aset.update(data_map)
-        assert len(res) == 1
-        assert 'foo' in res
+        aset.update(data_map)
         assert_equal(aset['foo'], array5by7)
 
     def test_update_with_dict_multiple_items(self, aset_samples_initialized_w_checkout, array5by7):
@@ -453,10 +428,7 @@ class TestDataWithFixedSizedArrayset(object):
             'foo': array5by7,
             1: array5by7+1
         }
-        res = aset.update(data_map)
-        assert len(res) == 2
-        assert 'foo' in res
-        assert 1 in res
+        aset.update(data_map)
         assert_equal(aset['foo'], array5by7)
         assert_equal(aset[1], array5by7+1)
 
@@ -467,9 +439,7 @@ class TestDataWithFixedSizedArrayset(object):
             aset.update(data_map)
         assert 'foo' not in aset
 
-        res = aset.update((data_map,))  # try again while contained in iterable
-        assert len(res) == 1
-        assert 'foo' in res
+        aset.update((data_map,))  # try again while contained in iterable
         assert_equal(aset['foo'], array5by7)
 
     def test_update_with_list_multiple_items(self, aset_samples_initialized_w_checkout, array5by7):
@@ -478,26 +448,18 @@ class TestDataWithFixedSizedArrayset(object):
             ('foo', array5by7),
             (1, array5by7+1),
         ]
-        res = aset.update(data_map)
-        assert len(res) == 2
-        assert 'foo' in res
-        assert 1 in res
+        aset.update(data_map)
         assert_equal(aset['foo'], array5by7)
         assert_equal(aset[1], array5by7+1)
 
     def test_update_with_only_kwargs_single_item(self, aset_samples_initialized_w_checkout, array5by7):
         aset = aset_samples_initialized_w_checkout.arraysets['writtenaset']
-        res = aset.update(foo=array5by7)
-        assert len(res) == 1
-        assert 'foo' in res
+        aset.update(foo=array5by7)
         assert_equal(aset['foo'], array5by7)
 
     def test_update_with_only_kwargs_multiple_items(self, aset_samples_initialized_w_checkout, array5by7):
         aset = aset_samples_initialized_w_checkout.arraysets['writtenaset']
-        res = aset.update(foo=array5by7, bar=array5by7+1)
-        assert len(res) == 2
-        assert 'foo' in res
-        assert 'bar' in res
+        aset.update(foo=array5by7, bar=array5by7+1)
         assert_equal(aset['foo'], array5by7)
         assert_equal(aset['bar'], array5by7+1)
 
@@ -507,11 +469,7 @@ class TestDataWithFixedSizedArrayset(object):
             ('foo', array5by7),
             (1, array5by7+1),
         ]
-        res = aset.update(data_map, bar=array5by7+2)
-        assert len(res) == 3
-        assert 'foo' in res
-        assert 1 in res
-        assert 'bar' in res
+        aset.update(data_map, bar=array5by7+2)
         assert_equal(aset['foo'], array5by7)
         assert_equal(aset[1], array5by7+1)
         assert_equal(aset['bar'], array5by7 + 2)
@@ -522,11 +480,7 @@ class TestDataWithFixedSizedArrayset(object):
             'foo': array5by7,
             1: array5by7+1,
         }
-        res = aset.update(data_map, bar=array5by7+2)
-        assert len(res) == 3
-        assert 'foo' in res
-        assert 1 in res
-        assert 'bar' in res
+        aset.update(data_map, bar=array5by7+2)
         assert_equal(aset['foo'], array5by7)
         assert_equal(aset[1], array5by7+1)
         assert_equal(aset['bar'], array5by7 + 2)
@@ -560,23 +514,6 @@ class TestDataWithFixedSizedArrayset(object):
         [('valid', np.random.random((5, 7))), ('foo', np.random.random((5, 7)), 'bar')],
         [('valid', np.random.random((5, 7))), ('valid2', np.random.random((5, 7)))],
     ])
-    def test_add_with_invalid_data_map_fails(self, aset_samples_initialized_w_checkout, key, value):
-        aset = aset_samples_initialized_w_checkout['writtenaset']
-        with pytest.raises(ValueError):
-            aset.add(key, value)
-
-    @pytest.mark.parametrize('key,value', [
-        ['foo', {'bar': np.random.random((5, 7))}],
-        ['foo', ('bar', np.random.random((5, 7)))],
-        [('foo', 'bar'), np.random.random((5, 7))],
-        ['foo', {('foo', 'bar'): np.random.random((5, 7))}],
-        ['foo', ('bar', np.random.random((5, 7)))],
-        ['foo', (np.random.random((5, 7)), 'bar')],
-        [np.random.random((5, 7)), ('foo', 'bar')],
-        [('foo', np.random.random((5, 7)), 'bar'), ('valid', np.random.random((5, 7)))],
-        [('valid', np.random.random((5, 7))), ('foo', np.random.random((5, 7)), 'bar')],
-        [('valid', np.random.random((5, 7))), ('valid2', np.random.random((5, 7)))],
-    ])
     def test_setitem_with_invalid_data_map_fails(self, aset_samples_initialized_w_checkout, key, value):
         aset = aset_samples_initialized_w_checkout['writtenaset']
         with pytest.raises(ValueError):
@@ -584,7 +521,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_add_multiple_data_single_commit(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         new_array = np.zeros_like(array5by7)
         co.arraysets['writtenaset']['2'] = new_array
         co.commit('this is a commit message')
@@ -600,15 +537,18 @@ class TestDataWithFixedSizedArrayset(object):
     def test_add_same_data_same_key_does_not_duplicate_hash(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
         aset = co.arraysets['writtenaset']
-        assert aset.add('1', array5by7) == '1'
-        assert aset.add('1', array5by7) == '1'
+        aset['1'] = array5by7
+        old_spec = aset._samples['1']
+        aset['1'] = array5by7
+        new_spec = aset._samples['1']
+        assert old_spec == new_spec
         assert len(aset) == 1
         assert len(aset._samples) == 1
         co.close()
 
     def test_multiple_data_multiple_commit(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         new_array = np.zeros_like(array5by7)
         co.arraysets['writtenaset']['2'] = new_array
@@ -629,7 +569,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_added_but_not_commited(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         co.close()
 
         with pytest.raises(PermissionError):
@@ -643,7 +583,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_remove_data(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         co.arraysets['writtenaset']['2'] = array5by7 + 1
         co.arraysets['writtenaset']['3'] = array5by7 + 2
         assert len(co.arraysets) == 1
@@ -654,7 +594,7 @@ class TestDataWithFixedSizedArrayset(object):
         co = aset_samples_initialized_repo.checkout(write=True)
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 3
-        co.arraysets['writtenaset'].delete('1')
+        del co.arraysets['writtenaset']['1']
         del co.arraysets['writtenaset']['3']
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 1
@@ -673,7 +613,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_remove_data_multiple_items(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         co.arraysets['writtenaset']['2'] = array5by7 + 1
         co.arraysets['writtenaset']['3'] = array5by7 + 2
         assert len(co.arraysets) == 1
@@ -684,8 +624,12 @@ class TestDataWithFixedSizedArrayset(object):
         co = aset_samples_initialized_repo.checkout(write=True)
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 3
-        res = co.arraysets['writtenaset'].delete(*('1', '3'))
-        assert res == ['1', '3']
+        with pytest.raises(KeyError):
+            del co.arraysets['writtenaset'][('1', '3')]
+        assert '1' in co.arraysets['writtenaset']
+        assert '3' in co.arraysets['writtenaset']
+        del co.arraysets['writtenaset']['1']
+        del co.arraysets['writtenaset']['3']
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 1
         co.commit('this is a commit message')
@@ -703,7 +647,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_pop_data(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         co.arraysets['writtenaset']['2'] = array5by7 + 1
         co.arraysets['writtenaset']['3'] = array5by7 + 2
         assert len(co.arraysets) == 1
@@ -738,7 +682,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_pop_data_multiple_items(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         co.arraysets['writtenaset']['2'] = array5by7 + 1
         co.arraysets['writtenaset']['3'] = array5by7 + 2
         assert len(co.arraysets) == 1
@@ -749,11 +693,12 @@ class TestDataWithFixedSizedArrayset(object):
         co = aset_samples_initialized_repo.checkout(write=True)
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 3
-        res = co.arraysets['writtenaset'].pop(*('1', '3'))
-        assert len(res) == 2
-        assert isinstance(res, dict)
-        assert_equal(res['1'], array5by7)
-        assert_equal(res['3'], array5by7 + 2)
+        with pytest.raises(TypeError):
+            co.arraysets['writtenaset'].pop('1', '3')
+        res = co.arraysets['writtenaset'].pop('1')
+        assert_equal(res, array5by7)
+        res = co.arraysets['writtenaset'].pop('3')
+        assert_equal(res, array5by7 + 2)
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 1
         co.commit('this is a commit message')
@@ -771,7 +716,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_remove_all_data(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         new_array = np.zeros_like(array5by7)
         co.arraysets['writtenaset']['2'] = new_array
         assert len(co.arraysets) == 1
@@ -782,8 +727,8 @@ class TestDataWithFixedSizedArrayset(object):
         co = aset_samples_initialized_repo.checkout(write=True)
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 2
-        co.arraysets['writtenaset'].delete('1')
-        co.arraysets['writtenaset'].delete('2')
+        del co.arraysets['writtenaset']['1']
+        del co.arraysets['writtenaset']['2']
         assert len(co.arraysets) == 1
         assert len(co.arraysets['writtenaset']) == 0
 
@@ -816,12 +761,10 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_remove_data_nonexistant_sample_key_raises(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add('1', array5by7)
+        co.arraysets['writtenaset']['1'] = array5by7
         new_array = np.zeros_like(array5by7)
         co.arraysets['writtenaset']['2'] = new_array
         co.arraysets['writtenaset']['3'] = new_array + 5
-        with pytest.raises(KeyError):
-            co.arraysets['writtenaset'].delete('doesnotexist')
         with pytest.raises(KeyError):
             del co.arraysets['writtenaset']['doesnotexist']
         co.commit('this is a commit message')
@@ -863,25 +806,23 @@ class TestDataWithFixedSizedArrayset(object):
         assert_equal(co.arraysets['aset2']['arr'], newarray)
         co.close()
 
-    @pytest.mark.skip('unnamed sample appending not yet supported.')
     def test_samples_without_name(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray)
-        with pytest.raises(ValueError, TypeError):
-            aset.add(randomsizedarray)
+        with pytest.raises(TypeError):
+            aset[randomsizedarray]
 
-        aset_no_name = co.arraysets.init_arrayset('aset_no_name',
-                                                  prototype=randomsizedarray,
-                                                  named_samples=False)
-        aset_no_name.add(randomsizedarray)
+        aset_no_name = co.arraysets.init_arrayset('aset_no_name', prototype=randomsizedarray)
+        added = aset_no_name.append(randomsizedarray)
         assert_equal(next(aset_no_name.values()), randomsizedarray)
+        assert_equal(aset_no_name[added], randomsizedarray)
         co.close()
 
     def test_append_samples(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray)
         with pytest.raises((ValueError, TypeError)):
-            aset.add(randomsizedarray)
+            aset[randomsizedarray]
 
         aset_no_name = co.arraysets.init_arrayset('aset_no_name', prototype=randomsizedarray)
         generated_key = aset_no_name.append(randomsizedarray)
@@ -942,7 +883,7 @@ class TestDataWithFixedSizedArrayset(object):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
         with co.arraysets['aset'] as aset:
-            aset.add('1', randomsizedarray)
+            aset['1'] = randomsizedarray
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
@@ -964,7 +905,7 @@ class TestDataWithFixedSizedArrayset(object):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
         with co.arraysets['aset'] as aset:
-            aset.add('1', randomsizedarray)
+            aset['1'] = randomsizedarray
             co.metadata['hello'] = 'world'
         with co.metadata as metadata:
             newarr = randomsizedarray + 1
@@ -980,50 +921,6 @@ class TestDataWithFixedSizedArrayset(object):
         assert co.metadata.get('hello') == 'world'
         co.close()
 
-    @pytest.mark.skip(f'multi add is not supported anymore?')
-    @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
-    @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
-    def test_bulk_add(self, aset1_backend, aset2_backend, repo, randomsizedarray):
-        co = repo.checkout(write=True)
-        co.arraysets.init_arrayset(
-            'aset_no_name1',
-            prototype=randomsizedarray,
-            named_samples=False,
-            backend_opts=aset1_backend)
-        co.arraysets.init_arrayset(
-            'aset_no_name2',
-            prototype=randomsizedarray,
-            named_samples=False,
-            backend_opts=aset2_backend)
-        co.commit('this is a commit message')
-
-        # dummy additino with wrong key
-        with pytest.raises(KeyError):
-            co.arraysets.multi_add(
-                {
-                    'aset_no_name2': randomsizedarray / 255,
-                    'dummykey': randomsizedarray
-                })
-        # making sure above addition did not add partial data
-        with pytest.raises(RuntimeError):
-            co.commit('this is a commit message')
-
-        # proper addition and verification
-        co.arraysets.multi_add(
-            {
-                'aset_no_name1': randomsizedarray,
-                'aset_no_name2': randomsizedarray / 255
-            })
-        co.commit('this is a commit message')
-        co.close()
-
-        co = repo.checkout()
-        data1 = next(co.arraysets['aset_no_name1'].values())
-        data2 = next(co.arraysets['aset_no_name2'].values())
-        assert np.allclose(data1, randomsizedarray)
-        assert np.allclose(data2, randomsizedarray / 255)
-        co.close()
-
     def test_writer_arrayset_properties_are_correct(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
         assert co.arraysets.iswriteable is True
@@ -1032,13 +929,12 @@ class TestDataWithFixedSizedArrayset(object):
         assert d.dtype == array5by7.dtype
         assert np.allclose(d.shape, array5by7.shape) is True
         assert d.variable_shape is False
-        assert d.named_samples is True
         assert d.iswriteable is True
         assert d.backend == '01'
         assert isinstance(d.backend_opts, dict)
         assert len(d.backend_opts) > 0
         assert d.contains_subsamples is False
-        assert d.remote_reference_keys == []
+        assert d.remote_reference_keys == ()
         assert d.contains_remote_references is False
         co.close()
 
@@ -1050,18 +946,17 @@ class TestDataWithFixedSizedArrayset(object):
         assert d.dtype == array5by7.dtype
         assert np.allclose(d.shape, array5by7.shape) is True
         assert d.variable_shape is False
-        assert d.named_samples is True
         assert d.iswriteable is False
         assert d.backend == '01'
         assert isinstance(d.backend_opts, dict)
         assert len(d.backend_opts) > 0
         assert d.contains_subsamples is False
-        assert d.remote_reference_keys == []
+        assert d.remote_reference_keys == ()
         assert d.contains_remote_references is False
 
     def test_iter_arrayset_samples_yields_keys(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'].add(0, array5by7)
+        co.arraysets['writtenaset'][0] = array5by7
         new_array = np.zeros_like(array5by7)
         co.arraysets['writtenaset'][1] = new_array
         co.arraysets['writtenaset'][2] = new_array + 5
@@ -1273,12 +1168,11 @@ class TestVariableSizedArrayset(object):
         assert d.dtype == np.float64
         assert np.allclose(d.shape, (10, 10))
         assert d.variable_shape is True
-        assert d.named_samples is True
         assert d.iswriteable is True
         assert d.backend in variable_shape_backend_params
         assert isinstance(d.backend_opts, dict)
         assert d.contains_subsamples is False
-        assert d.remote_reference_keys == []
+        assert d.remote_reference_keys == ()
         assert d.contains_remote_references is False
         co.close()
 
@@ -1289,12 +1183,11 @@ class TestVariableSizedArrayset(object):
         assert d.dtype == np.float64
         assert np.allclose(d.shape, (10, 10))
         assert d.variable_shape is True
-        assert d.named_samples is True
         assert d.iswriteable is False
         assert d.backend in variable_shape_backend_params
         assert isinstance(d.backend_opts, dict)
         assert d.contains_subsamples is False
-        assert d.remote_reference_keys == []
+        assert d.remote_reference_keys == ()
         assert d.contains_remote_references is False
         co.close()
 
@@ -1359,7 +1252,7 @@ class TestMultiprocessArraysetReads(object):
 
 
     @pytest.mark.parametrize('backend', fixed_shape_backend_params)
-    def test_multiprocess_get_fails_on_superset_of_keys_and_succeeds_on_subset(self, repo, backend):
+    def test_multiprocess_get_succeeds_on_superset_and_subset_of_keys(self, repo, backend):
         from multiprocessing import get_context
 
         co = repo.checkout(write=True)
@@ -1378,10 +1271,14 @@ class TestMultiprocessArraysetReads(object):
         ds = nco.arraysets['writtenaset']
 
         # superset of keys fails
-        with pytest.raises(KeyError):
-            keys = [i for i in range(24)]
-            with get_context('spawn').Pool(2) as P:
-                _ = P.map(ds.get, keys)
+        keys = [i for i in range(24)]
+        with get_context('spawn').Pool(2) as P:
+            cmtData = P.map(ds.get, keys)
+        for idx, data in enumerate(cmtData):
+            if idx >= 20:
+                assert data is None
+            else:
+                assert_equal(data, masterSampList[idx])
 
         # subset of keys works
         keys = [i for i in range(10, 20)]

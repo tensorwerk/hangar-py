@@ -728,9 +728,9 @@ def test_writer_co_aset_removes_all_samples_and_arrayset_still_exists(aset_sampl
     assert len(wco.arraysets['writtenaset']) == 3
 
     with wco.arraysets['writtenaset'] as wset:
-        wset.delete(0)
-        wset.delete(1)
-        wset.delete(2)
+        del wset[0]
+        del wset[1]
+        del wset[2]
         # Removed all samples, now the aset's gone
         assert len(wset) == 0
         assert len(wco.arraysets) == 1

@@ -913,7 +913,7 @@ class WriterCheckout(GetMixin):
         self._arraysets._close()
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
-        hashs.delete_in_process_data(self._repo_path)
+        hashs.backends_remove_in_process_data(self._repo_path)
 
         branch_head = heads.get_staging_branch_head(self._branchenv)
         head_commit = heads.get_branch_head_commit(self._branchenv, branch_head)

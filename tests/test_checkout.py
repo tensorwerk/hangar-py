@@ -266,7 +266,7 @@ class TestCheckout(object):
         co.close()
         co = repo.checkout(write=True)
         with pytest.raises(ReferenceError):
-            aset.add('1', array5by7)
+            aset['1'] = array5by7
             co.commit('this is a commit message')
         co.close()
         with pytest.raises(ReferenceError):
@@ -286,10 +286,10 @@ class TestCheckout(object):
     def test_operate_on_arrayset_samples_after_commiting_but_not_closing_checkout(self, aset_backend, repo, array5by7):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset_backend)
-        aset.add('1', array5by7)
+        aset['1'] = array5by7
         co.commit('hi')
 
-        aset.add('2', array5by7)  # this raises ReferenceError since the reference to aset is gone
+        aset['2'] = array5by7  # this raises ReferenceError since the reference to aset i gon
         co.commit('hello 2')
         assert np.allclose(aset['2'], array5by7)
         co.close()
@@ -320,7 +320,7 @@ class TestCheckout(object):
         co = repo.checkout(write=True)
         asets = co.arraysets
         aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
-        aset.add('1', array5by7)
+        aset['1'] = array5by7
         co.commit('hi')
 
         aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
@@ -354,7 +354,7 @@ class TestCheckout(object):
     def test_reset_staging_area_clears_arraysets(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
-        aset.add('1', array5by7)
+        aset['1'] = array5by7
         co.commit('hi')
 
         aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)

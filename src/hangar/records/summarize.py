@@ -217,7 +217,6 @@ def status(branch_name: str, diff: DiffOut) -> StringIO:
         buf.write(f'| Schema: {len(df.schema)} \n')
         for k, v in df.schema.items():
             buf.write(f'|  - "{k}": \n')
-            buf.write(f'|       named: {v.schema_is_named} \n')
             buf.write(f'|       dtype: {np.dtype(np.typeDict[v.schema_dtype])} \n')
             buf.write(f'|       (max) shape: {v.schema_max_shape} \n')
             buf.write(f'|       variable shape: {v.schema_is_var} \n')

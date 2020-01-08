@@ -208,20 +208,18 @@ from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable
 
 import h5py
 import numpy as np
-
 try:
-    # hdf5plugin warns if a filter is already loaded. we temporarily surpress
-    # that here, then reset the logger level to it's initial version.
+    # hdf5plugin warns if a filter is already loaded.
     _logger = logging.getLogger('hdf5plugin')
     _initialLevel = _logger.getEffectiveLevel()
     _logger.setLevel(logging.ERROR)
     import hdf5plugin
-    assert 'blosc' in hdf5plugin.FILTERS
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    pass
+    if not 'blosc' in hdf5plugin.FILTERS:
+        raise ImportError(f'BLOSC unavailable via hdf5plugin: {hdf5plugin.FILTERS}')
 finally:
     _logger.setLevel(_initialLevel)
 from xxhash import xxh64_hexdigest
+
 
 from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
@@ -453,7 +451,7 @@ class HDF5_01_FileHandles(object):
             del self.rFp[uid]
 
     @staticmethod
-    def delete_in_process_data(repo_path: os.PathLike, *, remote_operation=False) -> None:
+    def delete_in_process_data(repo_path: Path, *, remote_operation=False) -> None:
         """Removes some set of files entirely from the stage/remote directory.
 
         DANGER ZONE. This should essentially only be used to perform hard resets
@@ -461,7 +459,7 @@ class HDF5_01_FileHandles(object):
 
         Parameters
         ----------
-        repo_path : os.PathLike
+        repo_path : Path
             path to the repository on disk
         remote_operation : optional, kwarg only, bool
             If true, modify contents of the remote_dir, if false (default) modify

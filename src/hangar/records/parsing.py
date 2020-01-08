@@ -252,7 +252,6 @@ class RawArraysetSchemaVal(NamedTuple):
     schema_dtype: int
     schema_is_var: bool
     schema_max_shape: tuple
-    schema_is_named: bool
     schema_default_backend: str
     schema_default_backend_opts: dict
     schema_contains_subsamples: bool
@@ -388,7 +387,7 @@ def arrayset_record_schema_db_key_from_raw_key(aset_name):
 
 def arrayset_record_schema_db_val_from_raw_val(schema_hash,
                                                schema_is_var, schema_max_shape,
-                                               schema_dtype, schema_is_named,
+                                               schema_dtype,
                                                schema_default_backend,
                                                schema_default_backend_opts,
                                                schema_contains_subsamples):
@@ -409,8 +408,6 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
     schema_dtype : int
         The datatype numeric code (`np.dtype.num`) of the arrayset. All input
         tensors must exactly match this datatype.
-    schema_is_named : bool
-        Are samples in the arraysets identifiable with names, or not.
     schema_default_backend : str
         backend specification for the schema default backend.
     schema_default_backend_opts : dict
@@ -428,7 +425,6 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         'schema_dtype': schema_dtype,
         'schema_is_var': schema_is_var,
         'schema_max_shape': schema_max_shape,
-        'schema_is_named': schema_is_named,
         'schema_default_backend': schema_default_backend,
         'schema_default_backend_opts': schema_default_backend_opts,
         'schema_contains_subsamples': schema_contains_subsamples,

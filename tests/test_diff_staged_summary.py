@@ -143,7 +143,6 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
                '|---------- \n'\
                '| Schema: 1 \n'\
                '|  - "new_aset": \n'\
-               '|       named: True \n'\
                '|       dtype: float32 \n'\
                '|       (max) shape: (10, 10) \n'\
                '|       variable shape: False \n'\
@@ -193,7 +192,6 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
                '|---------- \n'\
                '| Schema: 1 \n'\
                '|  - "new_aset": \n'\
-               '|       named: True \n'\
                '|       dtype: float32 \n'\
                '|       (max) shape: (10, 10) \n'\
                '|       variable shape: False \n'\
@@ -210,7 +208,6 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
                '|---------- \n'\
                '| Schema: 1 \n'\
                '|  - "dummy": \n'\
-               '|       named: True \n'\
                '|       dtype: int64 \n'\
                '|       (max) shape: (50,) \n'\
                '|       variable shape: False \n'\
@@ -252,7 +249,6 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
                '|---------- \n'\
                '| Schema: 1 \n'\
                '|  - "new_aset": \n'\
-               '|       named: True \n'\
                '|       dtype: float32 \n'\
                '|       (max) shape: (10, 10) \n'\
                '|       variable shape: False \n'\
@@ -278,7 +274,6 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
                '|---------- \n'\
                '| Schema: 1 \n'\
                '|  - "dummy": \n'\
-               '|       named: True \n'\
                '|       dtype: int64 \n'\
                '|       (max) shape: (50,) \n'\
                '|       variable shape: False \n'\

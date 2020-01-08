@@ -332,8 +332,8 @@ class BaseUserDiff(object):
             masterHEAD=mHEAD, devHEAD=dHEAD, ancestorHEAD=commonAncestor, canFF=canFF)
         return res
 
-    def _diff3(self,
-               a_env: lmdb.Environment,
+    @staticmethod
+    def _diff3(a_env: lmdb.Environment,
                m_env: lmdb.Environment,
                d_env: lmdb.Environment) -> DiffAndConflictsDB:
         """Three way diff and conflict finder from ancestor, master, and dev commits.
@@ -358,7 +358,8 @@ class BaseUserDiff(object):
         conflict = find_conflicts(diffs[0], diffs[1])
         return DiffAndConflictsDB(diff=diffs[2], conflict=conflict)
 
-    def _diff(self, a_env: lmdb.Environment, m_env: lmdb.Environment) -> DiffAndConflictsDB:
+    @staticmethod
+    def _diff(a_env: lmdb.Environment, m_env: lmdb.Environment) -> DiffAndConflictsDB:
         """Fast Forward differ from ancestor to master commit.
 
         Note: this method returns the same MasterDevDiff struct as the three

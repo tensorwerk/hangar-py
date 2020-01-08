@@ -406,7 +406,7 @@ class TestArraysetSampleConflicts(object):
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.arraysets['dummy'].delete('0')
+        del co.arraysets['dummy']['0']
         co.commit('commit on testbranch with removal')
         co.close()
 
@@ -416,13 +416,13 @@ class TestArraysetSampleConflicts(object):
     def test_no_conflict_both_removal(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.arraysets['dummy'].delete('0')
+        del co.arraysets['dummy']['0']
         del co.arraysets['dummy'][21]
         co.commit('commit on master with removal')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.arraysets['dummy'].delete('0')
+        del co.arraysets['dummy']['0']
         del co.arraysets['dummy'][10]
         co.commit('commit on testbranch with removal')
         co.close()

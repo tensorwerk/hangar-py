@@ -134,15 +134,13 @@ def arrayset(ctx):  # pragma: no cover
 @arrayset.command(name='create')
 @click.option('--variable-shape', 'variable_', is_flag=True, default=False,
               help='flag indicating sample dimensions can be any size up to max shape.')
-@click.option('--named/--not-named', default=True,
-              help='flag indicating if samples are named or not.')
 @click.argument('name', nargs=1, type=click.STRING, required=True)
 @click.argument('dtype', nargs=1, type=click.Choice([
     'UINT8', 'INT8', 'UINT16', 'INT16', 'UINT32', 'INT32',
     'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64']), required=True)
 @click.argument('shape', nargs=-1, type=click.INT, required=True)
 @pass_repo
-def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
+def create_arrayset(repo: Repository, name, dtype, shape, variable_):
     """Create an arrayset with NAME and DTYPE of SHAPE.
 
     The arrayset will be created in the staging area / branch last used by a
@@ -181,7 +179,6 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
         aset = co.arraysets.init_arrayset(name=name,
                                           shape=shape,
                                           dtype=np.typeDict[dtype.lower()],
-                                          named_samples=named,
                                           variable_shape=variable_)
         click.echo(f'Initialized Arrayset: {aset.arrayset}')
     except (ValueError, LookupError, PermissionError) as e:

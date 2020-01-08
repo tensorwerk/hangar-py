@@ -40,16 +40,20 @@ def test_setting_backend_property_cannot_change_backend(repo, array5by7, backend
 
 
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)
-def test_backend_opts_property_reports_correct_defaults(repo, array5by7, backend):
+@pytest.mark.parametrize('subsamples', [True, False])
+def test_backend_opts_property_reports_correct_defaults(repo, array5by7, backend, subsamples):
     from hangar.backends import backend_opts_from_heuristics
     expected_opts = backend_opts_from_heuristics(backend,
                                                  array5by7,
-                                                 named_samples=False,
                                                  variable_shape=False)
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=backend)
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7,
+                                       backend_opts=backend, contains_subsamples=subsamples)
     assert aset.backend_opts == expected_opts
-    aset[0] = array5by7
+    if subsamples:
+        aset[0] = {0: array5by7}
+    else:
+        aset[0] = array5by7
     wco.commit('first')
     wco.close()
 
@@ -59,12 +63,17 @@ def test_backend_opts_property_reports_correct_defaults(repo, array5by7, backend
     rco.close()
 
 
+@pytest.mark.parametrize('subsamples', [True, False])
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)
-def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by7, backend):
+def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by7, backend, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=backend)
-    aset[0] = array5by7
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7,
+                                       backend_opts=backend, contains_subsamples=subsamples)
+    if subsamples:
+        aset.update({0: {0: array5by7}})
+    else:
+        aset[0] = array5by7
     with pytest.raises(AttributeError):
         aset.backend_opts = {'foo': 'bar'}
     wco.commit('first')
@@ -78,13 +87,15 @@ def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by
     rco.close()
 
 
+@pytest.mark.parametrize('subsamples', [True, False])
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)
-def test_init_arrayset_with_backend_opts_works(repo, array5by7, backend):
+def test_init_arrayset_with_backend_opts_works(repo, array5by7, backend, subsamples):
     expected_opts = {'foo': 'bar'}
     input_opts = {'backend': backend, **expected_opts}
 
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=input_opts)
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7,
+                                       backend_opts=input_opts, contains_subsamples=subsamples)
     assert aset.backend_opts == expected_opts
     wco.commit('first')
     wco.close()
@@ -108,41 +119,62 @@ def test_init_arrayset_with_backend_opts_works(repo, array5by7, backend):
     [np.random.randn(5, 2), True, '00'],
     [np.random.randn(5, 2), False, '01'],
 ])
-def test_heuristics_select_backend(repo, prototype, variable_shape, expected_backend):
-
+@pytest.mark.parametrize('subsamples', [True, False])
+def test_heuristics_select_backend(repo, prototype, variable_shape, expected_backend, subsamples):
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=prototype, variable_shape=variable_shape)
+    aset = wco.arraysets.init_arrayset('aset', prototype=prototype,
+                                       variable_shape=variable_shape, contains_subsamples=subsamples)
     assert aset.backend == expected_backend
-    aset['0'] = prototype
+    if subsamples:
+        aset.update({'0': {'0': prototype}})
+    else:
+        aset['0'] = prototype
     wco.commit('first commit')
     assert aset.backend == expected_backend
-    assert np.allclose(prototype, aset['0'])
+    if subsamples:
+        assert np.allclose(prototype, aset['0']['0'])
+    else:
+        assert np.allclose(prototype, aset['0'])
     wco.close()
 
     nwco = repo.checkout(write=True)
     naset = nwco.arraysets['aset']
     assert naset.backend == expected_backend
-    assert np.allclose(prototype, naset['0'])
+    if subsamples:
+        assert np.allclose(prototype, naset['0']['0'])
+    else:
+        assert np.allclose(prototype, naset['0'])
     nwco.close()
 
 
 @pytest.mark.parametrize('prototype', [np.random.randn(10), np.random.randn(1000), np.random.randn(2, 2)])
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)
-def test_manual_override_heuristics_select_backend(repo, prototype, backend):
+@pytest.mark.parametrize('subsamples', [True, False])
+def test_manual_override_heuristics_select_backend(repo, prototype, backend, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=prototype, backend_opts=backend)
+    aset = wco.arraysets.init_arrayset('aset', prototype=prototype,
+                                       backend_opts=backend, contains_subsamples=subsamples)
     assert aset.backend == backend
-    aset['0'] = prototype
+    if subsamples:
+        aset.update({'0': {'0': prototype}})
+    else:
+        aset['0'] = prototype
     wco.commit('first commit')
     assert aset.backend == backend
-    assert np.allclose(prototype, aset['0'])
+    if subsamples:
+        assert np.allclose(prototype, aset['0']['0'])
+    else:
+        assert np.allclose(prototype, aset['0'])
     wco.close()
 
     nwco = repo.checkout(write=True)
     naset = nwco.arraysets['aset']
     assert naset.backend == backend
-    assert np.allclose(prototype, naset['0'])
+    if subsamples:
+        assert np.allclose(prototype, naset['0']['0'])
+    else:
+        assert np.allclose(prototype, naset['0'])
     nwco.close()
 
 
@@ -156,15 +188,23 @@ def test_manual_override_heuristics_invalid_value_raises_error(repo):
 
 @pytest.mark.parametrize('backendStart', fixed_shape_backend_params)
 @pytest.mark.parametrize('backendEnd', fixed_shape_backend_params)
-def test_manual_change_backends_after_write_works(repo, array5by7, backendStart, backendEnd):
+@pytest.mark.parametrize('subsamples', [True, False])
+def test_manual_change_backends_after_write_works(repo, array5by7, backendStart, backendEnd, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=backendStart)
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7,
+                                       backend_opts=backendStart, contains_subsamples=subsamples)
     assert aset.backend == backendStart
-    aset[0] = array5by7
+    if subsamples:
+        aset.update({0: {0: array5by7}})
+    else:
+        aset[0] = array5by7
     wco.commit('first commit')
     assert aset.backend == backendStart
-    assert np.allclose(array5by7, aset[0])
+    if subsamples:
+        assert np.allclose(array5by7, aset[0][0])
+    else:
+        assert np.allclose(array5by7, aset[0])
     wco.close()
 
     nwco = repo.checkout(write=True)
@@ -172,11 +212,18 @@ def test_manual_change_backends_after_write_works(repo, array5by7, backendStart,
     assert naset.backend == backendStart
 
     naset.change_backend(backend_opts=backendEnd)
-    naset[1] = array5by7 + 1
+    if subsamples:
+        naset.update({1: {1: array5by7+1}})
+    else:
+        naset[1] = array5by7 + 1
 
     assert naset.backend == backendEnd
-    assert np.allclose(array5by7, naset[0])
-    assert np.allclose(array5by7 + 1, naset[1])
+    if subsamples:
+        assert np.allclose(array5by7, naset[0][0])
+        assert np.allclose(array5by7+1, naset[1][1])
+    else:
+        assert np.allclose(array5by7, naset[0])
+        assert np.allclose(array5by7+1, naset[1])
     nwco.commit('second')
     nwco.close()
 
@@ -187,15 +234,23 @@ def test_manual_change_backends_after_write_works(repo, array5by7, backendStart,
 
 @pytest.mark.parametrize('backendStart', fixed_shape_backend_params)
 @pytest.mark.parametrize('backendFail', ['lmao', '000'])
-def test_manual_change_backend_to_invalid_fmt_code_fails(repo, array5by7, backendStart, backendFail):
+@pytest.mark.parametrize('subsamples', [True, False])
+def test_manual_change_backend_to_invalid_fmt_code_fails(repo, array5by7, backendStart, backendFail, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=backendStart)
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7,
+                                       backend_opts=backendStart, contains_subsamples=subsamples)
     assert aset.backend == backendStart
-    aset[0] = array5by7
+    if subsamples:
+        aset[0] = {0: array5by7}
+    else:
+        aset[0] = array5by7
     wco.commit('first commit')
     assert aset.backend == backendStart
-    assert np.allclose(array5by7, aset[0])
+    if subsamples:
+        assert np.allclose(array5by7, aset[0][0])
+    else:
+        assert np.allclose(array5by7, aset[0])
     wco.close()
 
     nwco = repo.checkout(write=True)
@@ -205,24 +260,40 @@ def test_manual_change_backend_to_invalid_fmt_code_fails(repo, array5by7, backen
     with pytest.raises(ValueError):
         naset.change_backend(backend_opts=backendFail)
     assert naset.backend == backendStart
-    naset[1] = array5by7 + 1
-    assert np.allclose(array5by7, naset[0])
-    assert np.allclose(array5by7 + 1, naset[1])
+    if subsamples:
+        naset[1] = {1: array5by7+1}
+    else:
+        naset[1] = array5by7 + 1
+
+    if subsamples:
+        assert np.allclose(array5by7, naset[0][0])
+        assert np.allclose(array5by7 + 1, naset[1][1])
+    else:
+        assert np.allclose(array5by7, naset[0])
+        assert np.allclose(array5by7 + 1, naset[1])
     nwco.commit('second')
     nwco.close()
 
 
 @pytest.mark.parametrize('backendStart', fixed_shape_backend_params)
 @pytest.mark.parametrize('backendEnd', fixed_shape_backend_params)
-def test_manual_change_backend_fails_while_in_cm(repo, array5by7, backendStart, backendEnd):
+@pytest.mark.parametrize('subsamples', [True, False])
+def test_manual_change_backend_fails_while_in_cm(repo, array5by7, backendStart, backendEnd, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=backendStart)
+    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7,
+                                       backend_opts=backendStart, contains_subsamples=subsamples)
     assert aset.backend == backendStart
-    aset[0] = array5by7
+    if subsamples:
+        aset[0] = {0: array5by7}
+    else:
+        aset[0] = array5by7
     wco.commit('first commit')
     assert aset.backend == backendStart
-    assert np.allclose(array5by7, aset[0])
+    if subsamples:
+        assert np.allclose(array5by7, aset[0][0])
+    else:
+        assert np.allclose(array5by7, aset[0])
     wco.close()
 
     nwco = repo.checkout(write=True)
@@ -248,8 +319,16 @@ def test_manual_change_backend_fails_while_in_cm(repo, array5by7, backendStart, 
             nwco.arraysets['aset'].change_backend(backend_opts=backendEnd)
 
     assert naset.backend == backendStart
-    naset[1] = array5by7 + 1
-    assert np.allclose(array5by7, naset[0])
-    assert np.allclose(array5by7 + 1, naset[1])
+    if subsamples:
+        naset[1] = {1: array5by7+1}
+    else:
+        naset[1] = array5by7 + 1
+
+    if subsamples:
+        assert np.allclose(array5by7, naset[0][0])
+        assert np.allclose(array5by7 + 1, naset[1][1])
+    else:
+        assert np.allclose(array5by7, naset[0])
+        assert np.allclose(array5by7 + 1, naset[1])
     nwco.commit('second')
     nwco.close()

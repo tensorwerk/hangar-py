@@ -129,7 +129,7 @@ class HashQuery(CursorRangeIterator):
             yield (rawk, rawv)
 
 
-def delete_in_process_data(repo_path: Path, *, remote_operation=False):
+def backends_remove_in_process_data(repo_path: Path, *, remote_operation: bool = False):
     """DANGER! Permanently delete uncommitted data files/links for stage or remote area.
 
     This searches each backend accessors staged (or remote) folder structure for

@@ -52,8 +52,7 @@ def array_hash_digest(array: np.ndarray, *, tcode='0') -> str:
 
 
 def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
-                       named_samples: bool, variable_shape: bool,
-                       backend_code: str, backend_opts: dict,
+                       variable_shape: bool, backend_code: str, backend_opts: dict,
                        *, tcode: str = '1') -> str:
     """Generate the schema hash for some schema specification
 
@@ -65,8 +64,6 @@ def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
         number of elements in the array data
     dtype_num : int
         datatype numeric code of array data
-    named_samples : bool
-        do samples go by user provided, or generated names?
     variable_shape : bool
         can samples contain dimensions with lower length then the a dimension's
         max size?
@@ -86,8 +83,8 @@ def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
     """
     if tcode == '1':
         optsHsh = json.dumps(backend_opts, separators=(',', ':')).encode()
-        schema_pack = struct.pack(f'<{len(shape)}QQB??2s{len(optsHsh)}s', *shape,
-                                  size, dtype_num, named_samples, variable_shape,
+        schema_pack = struct.pack(f'<{len(shape)}QQB?2s{len(optsHsh)}s', *shape,
+                                  size, dtype_num, variable_shape,
                                   backend_code.encode(), optsHsh)
         schemaHsh = blake2b(schema_pack, digest_size=6)
         res = f'1={schemaHsh.hexdigest()}'

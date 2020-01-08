@@ -257,7 +257,7 @@ def test_push_fetch_records(server_instance, backend):
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
             co1.arraysets.init_arrayset(
-                name='dummy', prototype=dummyData, named_samples=True, backend_opts=backend)
+                name='dummy', prototype=dummyData, backend_opts=backend)
             for idx in range(10):
                 dummyData[:] = idx
                 co1.arraysets['dummy'][str(idx)] = dummyData
@@ -308,7 +308,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
             co1.arraysets.init_arrayset(
-                name='dummy', prototype=dummyData, named_samples=True, backend_opts=backend)
+                name='dummy', prototype=dummyData, backend_opts=backend)
             for idx in range(10):
                 dummyData[:] = idx
                 co1.arraysets['dummy'][str(idx)] = dummyData
@@ -513,7 +513,6 @@ def test_arrayset_create_uint8(repo_20_filled_samples_meta):
         assert 'train_images' in co.arraysets
         assert co.arraysets['train_images'].shape == (256, 256, 3)
         assert co.arraysets['train_images'].dtype == np.uint8
-        assert co.arraysets['train_images'].named_samples is True
         assert co.arraysets['train_images'].variable_shape is False
         assert len(co.arraysets['train_images']) == 0
     finally:
@@ -532,7 +531,6 @@ def test_arrayset_create_float32(repo_20_filled_samples_meta):
         assert 'train_images' in co.arraysets
         assert co.arraysets['train_images'].shape == (256,)
         assert co.arraysets['train_images'].dtype == np.float32
-        assert co.arraysets['train_images'].named_samples is True
         assert co.arraysets['train_images'].variable_shape is False
         assert len(co.arraysets['train_images']) == 0
     finally:
@@ -572,25 +570,6 @@ def test_arrayset_create_invalid_name_fails(repo_20_filled_samples_meta):
         co.close()
 
 
-def test_arrayset_create_no_named_samples(repo_20_filled_samples_meta):
-    runner = CliRunner()
-    res = runner.invoke(
-        cli.create_arrayset,
-        ['train_images', 'FLOAT32', '256', '--not-named'], obj=repo_20_filled_samples_meta)
-    assert res.exit_code == 0
-    assert res.stdout == 'Initialized Arrayset: train_images\n'
-    co = repo_20_filled_samples_meta.checkout(write=True)
-    try:
-        assert 'train_images' in co.arraysets
-        assert co.arraysets['train_images'].shape == (256,)
-        assert co.arraysets['train_images'].dtype == np.float32
-        assert co.arraysets['train_images'].named_samples is False
-        assert co.arraysets['train_images'].variable_shape is False
-        assert len(co.arraysets['train_images']) == 0
-    finally:
-        co.close()
-
-
 def test_arrayset_create_variable_shape(repo_20_filled_samples_meta):
     runner = CliRunner()
     res = runner.invoke(
@@ -603,7 +582,6 @@ def test_arrayset_create_variable_shape(repo_20_filled_samples_meta):
         assert 'train_images' in co.arraysets
         assert co.arraysets['train_images'].shape == (256,)
         assert co.arraysets['train_images'].dtype == np.float32
-        assert co.arraysets['train_images'].named_samples is True
         assert co.arraysets['train_images'].variable_shape is True
         assert len(co.arraysets['train_images']) == 0
     finally:
@@ -968,7 +946,8 @@ class TestExport(object):
             m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['save'], ['ext'], 'save', self.save))
             res = runner.invoke(
                 cli.export_data, [aset_name, '--sample', 'wrongname', '--format', 'ext'], obj=repo)
-            assert 'No sample key wrongname exists' in res.output
+            assert res.exit_code == 1
+            assert 'wrongname' in res.output
 
     def test_export_for_specified_branch(self, monkeypatch, written_repo_with_1_sample):
         repo = written_repo_with_1_sample
@@ -1035,4 +1014,5 @@ class TestShow(object):
             m.setattr(PluginManager, "_scan_plugins", monkeypatch_scan(['show'], ['ext'], 'show', self.show))
             res = runner.invoke(
                 cli.view_data, [aset_name, 'wrongsample', '--format', 'ext'], obj=repo)
-            assert "No sample key wrongsample exists" in res.stdout
+            assert res.exit_code == 1
+            assert "wrongsample" in res.stdout

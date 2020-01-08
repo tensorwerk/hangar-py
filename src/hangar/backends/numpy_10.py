@@ -246,7 +246,7 @@ class NUMPY_10_FileHandles(object):
             del self.rFp[k]
 
     @staticmethod
-    def delete_in_process_data(repo_path, *, remote_operation=False):
+    def delete_in_process_data(repo_path: Path, *, remote_operation: bool = False):
         """Removes some set of files entirely from the stage/remote directory.
 
         DANGER ZONE. This should essentially only be used to perform hard resets
@@ -254,7 +254,7 @@ class NUMPY_10_FileHandles(object):
 
         Parameters
         ----------
-        repo_path : str
+        repo_path : Path
             path to the repository on disk
         remote_operation : optional, kwarg only, bool
             If true, modify contents of the remote_dir, if false (default) modify

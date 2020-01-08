@@ -22,7 +22,7 @@ from .records.commiting import (
     replace_staging_area_with_refs,
     commit_records,
 )
-from .records.hashs import clear_stage_hash_records, delete_in_process_data
+from .records.hashs import clear_stage_hash_records, backends_remove_in_process_data
 from .records.heads import (
     get_staging_branch_head,
     get_branch_head_commit,
@@ -190,7 +190,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
             branchenv=branchenv, branch_name=master_branch, commit_hash=new_masterHEAD)
         set_staging_branch_head(branchenv=branchenv, branch_name=master_branch)
 
-        delete_in_process_data(repo_path=repo_path)
+        backends_remove_in_process_data(repo_path=repo_path)
         clear_stage_hash_records(stagehashenv=stagehashenv)
 
     except ValueError as e:
@@ -276,7 +276,7 @@ def _three_way_merge(message: str,
                 for kv in cur.iternext(keys=True, values=True):
                     dbcont.append(kv)
 
-    delete_in_process_data(repo_path=repo_path)
+    backends_remove_in_process_data(repo_path=repo_path)
     replace_staging_area_with_refs(stageenv=stageenv, sorted_content=dbcont)
 
     commit_hash = commit_records(

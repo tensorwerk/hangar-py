@@ -86,8 +86,7 @@ def repo_20_filled_samples_meta(repo) -> Repository:
     # for diff testing
     dummyData = np.arange(50).astype(np.int64)
     co1 = repo.checkout(write=True, branch='master')
-    co1.arraysets.init_arrayset(
-        name='dummy', prototype=dummyData, named_samples=True)
+    co1.arraysets.init_arrayset(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
         co1.arraysets['dummy'][idx] = dummyData
@@ -154,7 +153,7 @@ def two_commit_filled_samples_repo(request, repo, array5by7) -> Repository:
 
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.delete(prevKey)
+                del d[prevKey]
             for sIdx in range((cIdx + 1) * 5):
                 arr = np.random.randn(*array5by7.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr
@@ -168,8 +167,7 @@ def repo_1_br_no_conf(repo) -> Repository:
 
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch='master')
-    co1.arraysets.init_arrayset(
-        name='dummy', prototype=dummyData, named_samples=True)
+    co1.arraysets.init_arrayset(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
         co1.arraysets['dummy'][str(idx)] = dummyData

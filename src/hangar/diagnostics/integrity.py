@@ -1,15 +1,11 @@
-import os
 from pathlib import Path
-import tempfile
 import warnings
 import sys
-from contextlib import closing
 
 import lmdb
 import numpy as np
 from tqdm import tqdm
 
-from .. import constants as c
 from ..backends import BACKEND_ACCESSOR_MAP, is_local_backend
 from ..txnctx import TxnRegister
 from ..records import commiting, hashmachine, hashs, parsing, queries, heads
@@ -85,7 +81,6 @@ def _verify_schema_integrity(hashenv: lmdb.Environment):
             shape=val.schema_max_shape,
             size=int(np.prod(val.schema_max_shape)),
             dtype_num=val.schema_dtype,
-            named_samples=val.schema_is_named,
             variable_shape=val.schema_is_var,
             backend_code=val.schema_default_backend,
             backend_opts=val.schema_default_backend_opts,
@@ -167,17 +162,6 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                     meta_digests = set(rq.metadata_hashes())
                     array_data_digests = set(rq.data_hashes())
                     schema_digests = set(rq.schema_hashes())
-                # with tempfile.TemporaryDirectory() as tempD:
-                #     tmpDF = os.path.join(tempD, f'{cmt}.lmdb')
-                #     with closing(lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)) as tmpDB:
-                #         try:
-                #             commiting.unpack_commit_ref(refenv, tmpDB, cmt)
-                #             rq = queries.RecordQuery(tmpDB)
-                #             meta_digests = set(rq.metadata_hashes())
-                #             array_data_digests = set(rq.data_hashes())
-                #             schema_digests = set(rq.schema_hashes())
-                #         except IOError as e:
-                #             raise RuntimeError(str(e)) from e
 
                     for datadigest in array_data_digests:
                         dbk = parsing.hash_data_db_key_from_raw_key(datadigest)

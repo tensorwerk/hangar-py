@@ -5,9 +5,7 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 import lmdb
 import numpy as np
 
-from .backends import (
-    parse_user_backend_opts,
-)
+from .backends import parse_user_backend_opts
 from .txnctx import TxnRegister
 from .records.hashmachine import schema_hash_digest
 from .records.parsing import (
@@ -15,7 +13,6 @@ from .records.parsing import (
     arrayset_record_schema_db_key_from_raw_key,
     arrayset_record_schema_db_val_from_raw_val,
     arrayset_record_schema_raw_val_from_db_val,
-    generate_sample_name,
     hash_schema_db_key_from_raw_key,
 )
 from .records.queries import RecordQuery
@@ -47,7 +44,7 @@ class Arraysets(object):
                  hashenv: Optional[lmdb.Environment] = None,
                  dataenv: Optional[lmdb.Environment] = None,
                  stagehashenv: Optional[lmdb.Environment] = None,
-                 txnctx: AsetTxn = None):
+                 txnctx: Optional[AsetTxn] = None):
         """Developer documentation for init method.
 
         .. warning::
@@ -73,6 +70,8 @@ class Arraysets(object):
             cmtrefenv for read-only checkouts.
         stagehashenv : Optional[lmdb.Environment]
             environment handle for newly added staged data hash records.
+        txnctx: Optional[AsetTxn]
+            class implementing context managers to handle lmdb transactions
         """
         self._stack = []
         self._is_conman_counter = 0
@@ -96,7 +95,6 @@ class Arraysets(object):
         if self._mode == 'r':
             self.init_arrayset = None
             self.delete = None
-            self.multi_add = None
             self.__delitem__ = None
             self.__setitem__ = None
 
@@ -349,62 +347,11 @@ class Arraysets(object):
         self._is_conman_counter -= 1
         self._stack.close()
 
-    def multi_add(self, mapping: Mapping[str, np.ndarray]) -> str:
-        """Add related samples to un-named arraysets with the same generated key.
-
-        If you have multiple arraysets in a checkout whose samples are related to
-        each other in some manner, there are two ways of associating samples
-        together:
-
-        1) using named arraysets and setting each tensor in each arrayset to the
-           same sample "name" using un-named arraysets.
-        2) using this "add" method. which accepts a dictionary of "arrayset
-           names" as keys, and "tensors" (ie. individual samples) as values.
-
-        When method (2) - this method - is used, the internally generated sample
-        ids will be set to the same value for the samples in each arrayset. That
-        way a user can iterate over the arrayset key's in one sample, and use
-        those same keys to get the other related tensor samples in another
-        arrayset.
-
-        Parameters
-        ----------
-        mapping: Mapping[str, :class:`numpy.ndarray`]
-            Dict mapping (any number of) arrayset names to tensor data (samples)
-            which to add. The arraysets must exist, and must be set to accept
-            samples which are not named by the user
-
-        Returns
-        -------
-        str
-            generated id (key) which each sample is stored under in their
-            corresponding arrayset. This is the same for all samples specified in
-            the input dictionary.
-
-
-        Raises
-        ------
-        KeyError
-            If no arrayset with the given name exists in the checkout
-        """
-        with ExitStack() as stack:
-            if not self._is_conman:
-                stack.enter_context(self)
-
-            if not all([k in self._arraysets for k in mapping.keys()]):
-                raise KeyError(f'not all keys {list(mapping.keys())} exist as arrayset names')
-
-            data_name = generate_sample_name()
-            for k, v in mapping.items():
-                self._arraysets[k].add(data_name, v)
-            return data_name
-
     def init_arrayset(self,
                       name: str,
                       shape: Union[int, Tuple[int]] = None,
                       dtype: np.dtype = None,
                       prototype: np.ndarray = None,
-                      named_samples: bool = True,
                       variable_shape: bool = False,
                       contains_subsamples: bool = False,
                       *,
@@ -437,10 +384,6 @@ class Arraysets(object):
             A sample array of correct datatype and shape which will be used to
             initialize the arrayset storage mechanisms. If this is provided, the
             `shape` and `dtype` arguments must not be set, defaults to None.
-        named_samples : bool, optional
-            If the samples in the arrayset have names associated with them. If set,
-            all samples must be provided names, if not, no name will be assigned.
-            defaults to True, which means all samples should have names.
         variable_shape : bool, optional
             If this is a variable sized arrayset. If true, a the maximum shape is
             set from the provided ``shape`` or ``prototype`` argument. Any sample
@@ -515,7 +458,6 @@ class Arraysets(object):
 
             beopts = parse_user_backend_opts(backend_opts=backend_opts,
                                              prototype=prototype,
-                                             named_samples=named_samples,
                                              variable_shape=variable_shape)
         except (ValueError, LookupError) as e:
             raise e from None
@@ -525,7 +467,6 @@ class Arraysets(object):
         schema_hash = schema_hash_digest(shape=prototype.shape,
                                          size=prototype.size,
                                          dtype_num=prototype.dtype.num,
-                                         named_samples=named_samples,
                                          variable_shape=variable_shape,
                                          backend_code=beopts.backend,
                                          backend_opts=beopts.opts)
@@ -536,7 +477,6 @@ class Arraysets(object):
             schema_is_var=variable_shape,
             schema_max_shape=prototype.shape,
             schema_dtype=prototype.dtype.num,
-            schema_is_named=named_samples,
             schema_default_backend=beopts.backend,
             schema_default_backend_opts=beopts.opts,
             schema_contains_subsamples=contains_subsamples)

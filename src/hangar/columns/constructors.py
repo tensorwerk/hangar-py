@@ -50,6 +50,18 @@ class AsetTxn(object):
         self.dataTxn: Optional[lmdb.Transaction] = None
         self.stageHashTxn: Optional[lmdb.Transaction] = None
 
+    @property
+    def _debug_(self):  # pragma: no cover
+        return {
+            f'__class__': self.__class__,
+            f'_TxnRegister': self._TxnRegister._debug_,
+            f'dataenv': self.dataenv,
+            f'hashenv': self.hashenv,
+            f'hashTxn': self.hashTxn,
+            f'dataTxn': self.dataTxn,
+            f'stageHashTxn': self.stageHashTxn,
+        }
+
     def open_read(self):
         """Manually open read-only transactions, caller responsible for closing.
         """

@@ -165,7 +165,6 @@ BackendOpts = NamedTuple('BackendOpts', [('backend', str), ('opts', dict)])
 
 
 def backend_from_heuristics(array: np.ndarray,
-                            named_samples: bool,
                             variable_shape: bool) -> str:
     """Given a prototype array, attempt to select the appropriate backend.
 
@@ -173,8 +172,6 @@ def backend_from_heuristics(array: np.ndarray,
     ----------
     array : np.ndarray
         prototype array to determine the appropriate backend for.
-    named_samples : bool
-        If the samples in the arrayset have names associated with them.
     variable_shape : bool
         If this is a variable sized arrayset.
 
@@ -212,7 +209,6 @@ def is_local_backend(be_loc: DataHashSpecsType) -> bool:
 
 def backend_opts_from_heuristics(backend: str,
                                  array: np.ndarray,
-                                 named_samples: bool,
                                  variable_shape: bool) -> dict:
     """Generate default backend opt args for a backend and array sample.
 
@@ -223,8 +219,6 @@ def backend_opts_from_heuristics(backend: str,
     array : np.ndarray
         sample (prototype) of the array data which the backend opts will be
         applied to
-    named_samples : bool
-        If the samples in the arrayset have names associated with them.
     variable_shape : bool
         If this is a variable sized arrayset.
 
@@ -287,7 +281,6 @@ def backend_opts_from_heuristics(backend: str,
 
 def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
                             prototype: np.ndarray,
-                            named_samples: bool,
                             variable_shape: bool) -> BackendOpts:
     """Decide the backend and opts to apply given a users selection (or default `None` value)
 
@@ -302,8 +295,6 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
     prototype : np.ndarray
         Sample of the data array which will be save (same dtype and shape) to
         base the storage backend and opts on.
-    named_samples : bool
-        If the samples in the arrayset have names associated with them.
     variable_shape : bool
         If this is a variable sized arrayset.
 
@@ -330,7 +321,6 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
             backend = backend_opts
             opts = backend_opts_from_heuristics(backend=backend,
                                                 array=prototype,
-                                                named_samples=named_samples,
                                                 variable_shape=variable_shape)
     elif isinstance(backend_opts, dict):
         if backend_opts['backend'] not in BACKEND_ACCESSOR_MAP:
@@ -339,11 +329,9 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
         opts = {k: v for k, v in backend_opts.items() if k != 'backend'}
     elif backend_opts is None:
         backend = backend_from_heuristics(array=prototype,
-                                          named_samples=named_samples,
                                           variable_shape=variable_shape)
         opts = backend_opts_from_heuristics(backend=backend,
                                             array=prototype,
-                                            named_samples=named_samples,
                                             variable_shape=variable_shape)
     else:
         raise ValueError(f'Backend opts value: {backend_opts} is invalid')
