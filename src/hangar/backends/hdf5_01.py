@@ -204,7 +204,7 @@ import time
 from collections import ChainMap
 from functools import partial
 from pathlib import Path
-from typing import MutableMapping, NamedTuple, Tuple, Optional, Union, Callable
+from typing import MutableMapping, Tuple, Optional, Union, Callable
 
 import h5py
 import numpy as np
@@ -214,7 +214,7 @@ try:
     _initialLevel = _logger.getEffectiveLevel()
     _logger.setLevel(logging.ERROR)
     import hdf5plugin
-    if not 'blosc' in hdf5plugin.FILTERS:
+    if 'blosc' not in hdf5plugin.FILTERS:
         raise ImportError(f'BLOSC unavailable via hdf5plugin: {hdf5plugin.FILTERS}')
 finally:
     _logger.setLevel(_initialLevel)
@@ -224,13 +224,11 @@ from xxhash import xxh64_hexdigest
 from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..utils import find_next_prime, random_string, set_blosc_nthreads
-
+from .specs import HDF5_01_DataHashSpec
 
 set_blosc_nthreads()
 
-
 # ----------------------------- Configuration ---------------------------------
-
 
 # contents of a single hdf5 file
 COLLECTION_SIZE = 100
@@ -238,23 +236,11 @@ COLLECTION_COUNT = 200
 CHUNK_MAX_RDCC_NBYTES = 250_000_000
 CHUNK_RDCC_W0 = 0.75
 
-
 # -------------------------------- Parser Implementation ----------------------
-
 
 _FmtCode = '01'
 # match and remove the following characters: '['   ']'   '('   ')'   ','
 _SRe = re.compile('[,\(\)\[\]]')
-
-
-HDF5_01_DataHashSpec = NamedTuple('HDF5_01_DataHashSpec', [
-    ('backend', str),
-    ('uid', str),
-    ('checksum', str),
-    ('dataset', str),
-    ('dataset_idx', int),
-    ('shape', Tuple[int])
-])
 
 
 def hdf5_01_encode(uid: str, cksum: str, dset: str, dset_idx: int,
@@ -282,25 +268,6 @@ def hdf5_01_encode(uid: str, cksum: str, dset: str, dset_idx: int,
         hash data db value recording all input specifications.
     """
     return f'01:{uid}:{cksum}:{dset}:{dset_idx}:{_SRe.sub("", str(shape))}'.encode()
-
-
-def hdf5_01_decode(db_val: bytes) -> HDF5_01_DataHashSpec:
-    """converts an hdf5 data hash db val into an hdf5 data python spec.
-
-    Parameters
-    ----------
-    db_val : bytestring
-        data hash db value
-
-    Returns
-    -------
-    HDF5_01_DataHashSpec
-        hdf5 data hash specification containing `backend`, `schema`,
-        `instance`, `dataset`, `dataset_idx`, `shape`
-    """
-    _, uid, cksum, dset, dset_idx, shape_vs = db_val.decode().split(':')
-    shape = tuple(map(int, shape_vs.split()))
-    return HDF5_01_DataHashSpec('01', uid, cksum, dset, int(dset_idx), shape)
 
 
 # ------------------------- Accessor Object -----------------------------------

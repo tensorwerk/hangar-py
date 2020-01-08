@@ -20,7 +20,7 @@ from .content import ContentWriter
 from .. import constants as c
 from ..context import Environments
 from ..txnctx import TxnRegister
-from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
+from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting, hashs, heads, parsing, queries, summarize
 from ..records.hashmachine import array_hash_digest, metadata_hash_digest
 from ..utils import set_blosc_nthreads

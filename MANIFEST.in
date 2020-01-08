@@ -15,4 +15,4 @@ include README.rst
 
 include tox.ini .travis.yml mypy.ini
 
-global-exclude *.py[cod] __pycache__ *.so *.dylib
+global-exclude *.py[cod] __pycache__

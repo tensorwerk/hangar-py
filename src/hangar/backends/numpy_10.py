@@ -81,7 +81,7 @@ import re
 from collections import ChainMap
 from functools import partial
 from pathlib import Path
-from typing import MutableMapping, NamedTuple, Tuple, Optional
+from typing import MutableMapping, Optional
 
 import numpy as np
 from numpy.lib.format import open_memmap
@@ -89,28 +89,18 @@ from xxhash import xxh64_hexdigest
 
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..utils import random_string
+from .specs import NUMPY_10_DataHashSpec
 
 # ----------------------------- Configuration ---------------------------------
 
-
 # number of subarray contents of a single numpy memmap file
 COLLECTION_SIZE = 1000
-
 
 # -------------------------------- Parser Implementation ----------------------
 
 _FmtCode = '10'
 # # match and remove the following characters: '['   ']'   '('   ')'   ','
 _SRe = re.compile('[,\(\)\[\]]')
-
-
-NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec', [
-    ('backend', str),
-    ('uid', str),
-    ('checksum', str),
-    ('collection_idx', int),
-    ('shape', Tuple[int])
-])
 
 
 def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> bytes:
@@ -135,25 +125,6 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
         hash data db value recording all input specifications
     """
     return f'10:{uid}:{cksum}:{collection_idx}:{_SRe.sub("", str(shape))}'.encode()
-
-
-def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
-    """converts a numpy data hash db val into a numpy data python spec
-
-    Parameters
-    ----------
-    db_val : bytes
-        data hash db val
-
-    Returns
-    -------
-    DataHashSpec
-        numpy data hash specification containing `backend`, `schema`, and
-        `uid`, `collection_idx` and `shape` fields.
-    """
-    _, uid, cksum, collection_idx, shape_vs = db_val.decode().split(':')
-    shape = tuple(map(int, shape_vs.split()))
-    return NUMPY_10_DataHashSpec('10', uid, cksum, int(collection_idx), shape)
 
 
 # ------------------------- Accessor Object -----------------------------------

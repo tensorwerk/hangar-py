@@ -186,6 +186,8 @@ class Arraysets(object):
         return True if key in self._arraysets else False
 
     def __len__(self) -> int:
+        """Get the number of arrayset columns contained in the checkout.
+        """
         return len(self._arraysets)
 
     def __iter__(self) -> Iterable[str]:
@@ -358,16 +360,25 @@ class Arraysets(object):
                       backend_opts: Optional[Union[str, dict]] = None) -> WriterModifierTypes:
         """Initializes a arrayset in the repository.
 
-        Arraysets are groups of related data pieces (samples). All samples within
-        a arrayset have the same data type, and number of dimensions. The size of
-        each dimension can be either fixed (the default behavior) or variable
-        per sample.
+        Arrayset columns are created in order to store some arbitrary
+        collection of data pieces (arrays). Items need not be related to
+        eachother in any direct capactity; the only criteria hangar requires is
+        that all pieces of data stored in the arrayset have a compatible schema
+        with eachother (more on this below). Each piece of data is indexed by
+        some key (either user defined or automatically generated depending on
+        the user's preferences). Both single level stores (sample keys mapping
+        to data on disk) and nested stores (where some sample key maps to an
+        arbitrary number of subsamples, in turn each pointing to some piece of
+        store data on disk) are supported.
 
-        For fixed dimension sizes, all samples written to the arrayset must have
-        the same size that was initially specified upon arrayset initialization.
-        Variable size arraysets on the other hand, can write samples with
-        dimensions of any size less than a maximum which is required to be set
-        upon arrayset creation.
+        All data pieces within a arrayset have the same data type and number of
+        dimensions. The size of each dimension can be either fixed (the default
+        behavior) or variable per sample. For fixed dimension sizes, all data
+        pieces written to the arrayset must have the same shape & size which
+        was specified at the time the arrayset column was initialized.
+        Alternativly, variable sized arraysets can write data pieces with
+        dimensions of any size (up to a specified maximum).
+
 
         Parameters
         ----------
@@ -391,7 +402,11 @@ class Arraysets(object):
             initial specification (so long as they have the same rank as what
             was specified) defaults to False.
         contains_subsamples : bool, optional
-            **NEED DESCRIPTION**
+            True if the arrayset column should store data in a nested structure.
+            In this scheme, a sample key is used to index an aribrary number of
+            subsamples which map some (sub)key to some piece of data. If False,
+            sample keys map directly to a single piece of data; essentially
+            acting as a single level key/value store. By default, False.
         backend_opts : Optional[Union[str, dict]], optional
             ADVANCED USERS ONLY, backend format code and filter opts to apply
             to arrayset data. If None, automatically inferred and set based on

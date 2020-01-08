@@ -583,6 +583,26 @@ def test_arrayset_create_variable_shape(repo_20_filled_samples_meta):
         assert co.arraysets['train_images'].shape == (256,)
         assert co.arraysets['train_images'].dtype == np.float32
         assert co.arraysets['train_images'].variable_shape is True
+        assert co.arraysets['train_images'].contains_subsamples is False
+        assert len(co.arraysets['train_images']) == 0
+    finally:
+        co.close()
+
+
+def test_arrayset_create_contains_subsamples(repo_20_filled_samples_meta):
+    runner = CliRunner()
+    res = runner.invoke(
+        cli.create_arrayset,
+        ['train_images', 'FLOAT32', '256', '--contains-subsamples'], obj=repo_20_filled_samples_meta)
+    assert res.exit_code == 0
+    assert res.stdout == 'Initialized Arrayset: train_images\n'
+    co = repo_20_filled_samples_meta.checkout(write=True)
+    try:
+        assert 'train_images' in co.arraysets
+        assert co.arraysets['train_images'].shape == (256,)
+        assert co.arraysets['train_images'].dtype == np.float32
+        assert co.arraysets['train_images'].variable_shape is False
+        assert co.arraysets['train_images'].contains_subsamples is True
         assert len(co.arraysets['train_images']) == 0
     finally:
         co.close()

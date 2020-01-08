@@ -134,13 +134,16 @@ def arrayset(ctx):  # pragma: no cover
 @arrayset.command(name='create')
 @click.option('--variable-shape', 'variable_', is_flag=True, default=False,
               help='flag indicating sample dimensions can be any size up to max shape.')
+@click.option('--contains-subsamples', 'subsamples_', is_flag=True, default=False,
+              help=('flag indicating if this is a column which nests multiple '
+                    'subsamples under a common sample key.'))
 @click.argument('name', nargs=1, type=click.STRING, required=True)
 @click.argument('dtype', nargs=1, type=click.Choice([
     'UINT8', 'INT8', 'UINT16', 'INT16', 'UINT32', 'INT32',
     'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64']), required=True)
 @click.argument('shape', nargs=-1, type=click.INT, required=True)
 @pass_repo
-def create_arrayset(repo: Repository, name, dtype, shape, variable_):
+def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_):
     """Create an arrayset with NAME and DTYPE of SHAPE.
 
     The arrayset will be created in the staging area / branch last used by a
@@ -173,13 +176,21 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_):
 
           $ hangar arrayset create --variable-shape train_images UINT8 256 256 3
 
+    To specify that the column contains a nested set of subsample data under a
+    common sample key, the ``--contains-subsamples`` flag can be used.
+
+       .. code-block:: console
+
+          $ hangar arrayset create --contains-subsamples train_images UINT8 256 256 3
+
     """
     try:
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset(name=name,
                                           shape=shape,
                                           dtype=np.typeDict[dtype.lower()],
-                                          variable_shape=variable_)
+                                          variable_shape=variable_,
+                                          contains_subsamples=subsamples_)
         click.echo(f'Initialized Arrayset: {aset.arrayset}')
     except (ValueError, LookupError, PermissionError) as e:
         raise click.ClickException(e)

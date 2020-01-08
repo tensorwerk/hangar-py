@@ -9,7 +9,6 @@ from .utils import valfilter, valfilterfalse
 from ..utils import is_suitable_user_key, cm_weakref_obj_proxy
 from ..backends import (
     backend_decoder,
-    is_local_backend,
     parse_user_backend_opts,
     BACKEND_ACCESSOR_MAP,
     DataHashSpecsType,
@@ -219,9 +218,9 @@ class SubsampleReader(object):
         """
         if local:
             if self._mode == 'r':
-                yield from valfilter(is_local_backend, self._subsamples).keys()
+                yield from valfilter(lambda x: x.islocal, self._subsamples).keys()
             else:
-                yield from tuple(valfilter(is_local_backend, self._subsamples).keys())
+                yield from tuple(valfilter(lambda x: x.islocal, self._subsamples).keys())
         else:
             if self._mode == 'r':
                 yield from self._subsamples.keys()
@@ -243,7 +242,7 @@ class SubsampleReader(object):
             on some remote server. True if all sample data is available on the
             machine's local disk.
         """
-        return not all(map(is_local_backend, self._subsamples.values()))
+        return not all(map(lambda x: x.islocal, self._subsamples.values()))
 
     @property
     def remote_reference_keys(self) -> Tuple[KeyType]:
@@ -255,7 +254,7 @@ class SubsampleReader(object):
             list of subsample keys in the arrayset whose data references indicate
             they are stored on a remote server.
         """
-        return tuple(valfilterfalse(is_local_backend, self._subsamples).keys())
+        return tuple(valfilterfalse(lambda x: x.islocal, self._subsamples).keys())
 
     def keys(self, local: bool = False) -> Iterable[KeyType]:
         """Generator yielding the name (key) of every subsample.
@@ -1079,7 +1078,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
 
     def update(self,
                other: Union[None, Dict[KeyType, MapKeyArrType],
-                                  Sequence[Sequence[Union[KeyType, MapKeyArrType]]]] = None,
+                            Sequence[Sequence[Union[KeyType, MapKeyArrType]]]] = None,
                **kwargs) -> None:
         """Store some data with the key/value pairs from other, overwriting existing keys.
 

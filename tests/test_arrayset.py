@@ -181,10 +181,13 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('hello')
         co.close()
         co = repo.checkout()
+
         # perform the mock
-        template = co._arraysets._arraysets['aset1']._samples[1]
-        co._arraysets._arraysets['aset1']._samples[12] = template._replace(backend='50')
-        co._arraysets._arraysets['aset2']._samples[22] = template._replace(backend='50')
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        co._arraysets._arraysets['aset1']._samples[12] = template
+        co._arraysets._arraysets['aset2']._samples[22] = template
+
         assert co.arraysets.contains_remote_references == {'aset1': True, 'aset2': True, 'aset3': False}
         assert co.arraysets.remote_sample_keys == {'aset1': (12,), 'aset2': (22,), 'aset3': ()}
         co.close()
@@ -269,10 +272,12 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
+
         # perform the mock
-        template = co._arraysets._arraysets['aset1']._samples['3']
-        co._arraysets._arraysets['aset1']._samples['4'] = template._replace(backend='50')
-        co._arraysets._arraysets['aset2']._samples['4'] = template._replace(backend='50')
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        co._arraysets._arraysets['aset1']._samples['4'] = template
+        co._arraysets._arraysets['aset2']._samples['4'] = template
 
         # iterating over .items()
         tensors_in_the_order = iter(all_tensors)

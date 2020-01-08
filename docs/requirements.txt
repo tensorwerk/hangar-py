@@ -4,4 +4,4 @@ sphinx-click
 nbsphinx
 recommonmark
 IPython
--e .
+Cython

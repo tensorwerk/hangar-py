@@ -8,7 +8,6 @@ from .utils import valfilter, valfilterfalse
 from ..utils import is_suitable_user_key
 from ..backends import (
     backend_decoder,
-    is_local_backend,
     parse_user_backend_opts,
     BACKEND_ACCESSOR_MAP,
     AccessorMapType,
@@ -33,7 +32,6 @@ KeyType = Union[str, int]
 KeyArrMap = Dict[KeyType, np.ndarray]
 KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
 MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
-# GetKeysType = Union[KeyType, Sequence[KeyType]]
 AsetTxnType = Type['AsetTxn']
 
 
@@ -286,7 +284,7 @@ class SampleReaderModifier(object):
             on some remote server. True if all sample data is available on the
             machine's local disk.
         """
-        return not all(map(is_local_backend, self._samples.values()))
+        return not all(map(lambda x: x.islocal, self._samples.values()))
 
     @property
     def remote_reference_keys(self) -> Tuple[KeyType]:
@@ -298,7 +296,7 @@ class SampleReaderModifier(object):
             list of sample keys in the arrayset whose data references indicate
             they are stored on a remote server.
         """
-        return tuple(valfilterfalse(is_local_backend, self._samples).keys())
+        return tuple(valfilterfalse(lambda x: x.islocal, self._samples).keys())
 
     @property
     def backend(self) -> str:
@@ -351,9 +349,9 @@ class SampleReaderModifier(object):
         """
         if local:
             if self._mode == 'r':
-                yield from valfilter(is_local_backend, self._samples).keys()
+                yield from valfilter(lambda x: x.islocal, self._samples).keys()
             else:
-                yield from tuple(valfilter(is_local_backend, self._samples).keys())
+                yield from tuple(valfilter(lambda x: x.islocal, self._samples).keys())
         else:
             if self._mode == 'r':
                 yield from self._samples.keys()

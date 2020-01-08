@@ -83,37 +83,14 @@ Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the
 process.
 """
-from typing import Dict, Union, Callable, Mapping, NamedTuple, Optional
+from typing import Dict, Union, NamedTuple, Optional
 
 import numpy as np
 
-from .hdf5_00 import HDF5_00_FileHandles, hdf5_00_decode, HDF5_00_DataHashSpec
-from .hdf5_01 import HDF5_01_FileHandles, hdf5_01_decode, HDF5_01_DataHashSpec
-from .numpy_10 import NUMPY_10_FileHandles, numpy_10_decode, NUMPY_10_DataHashSpec
-from .remote_50 import REMOTE_50_Handler, remote_50_decode, REMOTE_50_DataHashSpec
-
-
-# -------------------------- Parser Types and Mapping -------------------------
-
-
-DataHashSpecsType = Union[
-    HDF5_00_DataHashSpec,
-    HDF5_01_DataHashSpec,
-    NUMPY_10_DataHashSpec,
-    REMOTE_50_DataHashSpec]
-
-_ParserMap = Mapping[bytes, Callable[[bytes], DataHashSpecsType]]
-
-BACKEND_DECODER_MAP: _ParserMap = {
-    # LOCALS -> [00:50]
-    b'00': hdf5_00_decode,
-    b'01': hdf5_01_decode,
-    b'10': numpy_10_decode,
-    b'20': None,               # tiledb_20 - Reserved
-    # REMOTES -> [50:100]
-    b'50': remote_50_decode,
-    b'60': None,               # url_60 - Reserved
-}
+from .hdf5_00 import HDF5_00_FileHandles
+from .hdf5_01 import HDF5_01_FileHandles
+from .numpy_10 import NUMPY_10_FileHandles
+from .remote_50 import REMOTE_50_Handler
 
 
 # ------------------------ Accessor Types and Mapping -------------------------
@@ -133,29 +110,6 @@ BACKEND_ACCESSOR_MAP: AccessorMapType = {
     '50': REMOTE_50_Handler,
     '60': None,               # url_60 - Reserved
 }
-
-
-# ------------------------ Selector Functions ---------------------------------
-
-
-def backend_decoder(db_val: bytes) -> DataHashSpecsType:
-    """Determine backend and decode specification for a raw hash record value.
-
-    Parameters
-    ----------
-    db_val : bytes
-        unmodified record specification bytes retrieved for a particular hash
-
-    Returns
-    -------
-    DataHashSpecsType
-        decoded specification with fields filled out uniquely for each backend.
-        The only field common to all backends is located at index [0] with the
-        field name `backend`.
-    """
-    parser = BACKEND_DECODER_MAP[db_val[:2]]
-    decoded = parser(db_val)
-    return decoded
 
 
 # --------------------------- Backend Heuristics ------------------------------
@@ -198,13 +152,6 @@ def backend_from_heuristics(array: np.ndarray,
         backend = '00'
 
     return backend
-
-
-def is_local_backend(be_loc: DataHashSpecsType) -> bool:
-    if be_loc[0].startswith('5'):
-        return False
-    else:
-        return True
 
 
 def backend_opts_from_heuristics(backend: str,

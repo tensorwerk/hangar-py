@@ -102,7 +102,7 @@ valid_arrays_fixed = npst.arrays(np.float32,
 
 
 @given(key=st_valid_keys, subkey=st_valid_keys, val=valid_arrays_fixed)
-@settings(max_examples=200, deadline=200.0, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=100, deadline=200.0, suppress_health_check=[HealthCheck.too_slow])
 def test_arrayset_fixed_key_values_nested(key, subkey, val, fixed_shape_repo_co_float32_aset_nested):
     global added_samples_subsamples
     added_samples_subsamples[key].add(subkey)
@@ -136,7 +136,7 @@ valid_arrays_var_float32 = npst.arrays(np.float32,
 
 
 @given(key=st_valid_keys, subkey=st_valid_keys, val=valid_arrays_var_float32)
-@settings(max_examples=200, deadline=200.0, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=100, deadline=200.0, suppress_health_check=[HealthCheck.too_slow])
 def test_arrayset_variable_shape_float32_nested(key, val, subkey, variable_shape_repo_co_float32_aset_nested):
     global added_samples_subsamples
 
@@ -161,7 +161,7 @@ valid_arrays_var_uint8 = npst.arrays(np.uint8,
 
 
 @given(key=st_valid_keys, subkey=st_valid_keys, val=valid_arrays_var_uint8)
-@settings(max_examples=200, deadline=200.0, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=100, deadline=200.0, suppress_health_check=[HealthCheck.too_slow])
 def test_arrayset_variable_shape_uint8_nested(key, val, subkey, variable_shape_repo_co_uint8_aset_nested):
     global added_samples_subsamples
 

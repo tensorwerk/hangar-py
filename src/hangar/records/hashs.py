@@ -11,7 +11,7 @@ from .parsing import (
     hash_schema_raw_key_from_db_key,
     RawArraysetSchemaVal,
 )
-from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder, DataHashSpecsType
+from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder, DataHashSpecsType
 from ..constants import K_HASH, K_SCHEMA
 from ..txnctx import TxnRegister
 from ..mixins import CursorRangeIterator

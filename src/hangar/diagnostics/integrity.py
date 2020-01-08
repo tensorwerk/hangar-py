@@ -6,7 +6,7 @@ import lmdb
 import numpy as np
 from tqdm import tqdm
 
-from ..backends import BACKEND_ACCESSOR_MAP, is_local_backend
+from ..backends import BACKEND_ACCESSOR_MAP
 from ..txnctx import TxnRegister
 from ..records import commiting, hashmachine, hashs, parsing, queries, heads
 from ..utils import tb_params_last_called
@@ -49,7 +49,7 @@ def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: Path):
             if spec.backend not in bes:
                 bes[spec.backend] = BACKEND_ACCESSOR_MAP[spec.backend](repo_path, None, None)
                 bes[spec.backend].open(mode='r')
-            if is_local_backend(spec) is False:
+            if spec.islocal is False:
                 nremote += 1
                 continue
             arr = bes[spec.backend].read_data(spec)

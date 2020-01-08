@@ -888,8 +888,12 @@ class TestContainerIntrospection:
             assert sample.contains_remote_references is False
 
         # add subsamples which are not local to each subsample
-        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
-        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        aset['foo']._subsamples[50] = template
+        aset[2]._subsamples[50] = template
+
         aset.contains_remote_references is True
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
@@ -904,8 +908,12 @@ class TestContainerIntrospection:
             assert sample.remote_reference_keys == ()
 
         # add subsamples which are not local to each subsample
-        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
-        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        aset['foo']._subsamples[50] = template
+        aset[2]._subsamples[50] = template
+
         assert aset.remote_reference_keys == (2, 'foo') or ('foo', 2)
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
@@ -1174,8 +1182,12 @@ class TestGetDataMethods:
     def test_get_sample_keys_method_local_only(self, initialized_arrayset):
         from collections.abc import Iterator
         aset = initialized_arrayset
+
         # add subsamples which are not local to each subsample
-        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        aset['foo']._subsamples[50] = template
 
         assert isinstance(aset.keys(local=True), Iterator)
         res = list(aset.keys(local=True))
@@ -1196,9 +1208,13 @@ class TestGetDataMethods:
     def test_get_sample_subsample_keys_method_local_only(self, initialized_arrayset, subsample_data_map):
         from collections.abc import Iterator
         aset = initialized_arrayset
+
         # add subsamples which are not local to each subsample
-        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
-        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        aset['foo']._subsamples[50] = template
+        aset[2]._subsamples[50] = template
 
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
@@ -1236,7 +1252,10 @@ class TestGetDataMethods:
         from collections.abc import Iterator
         aset = initialized_arrayset
         # add subsamples which are not local to each subsample
-        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        aset['foo']._subsamples[50] = template
 
         assert isinstance(aset.values(local=True), Iterator)
         res = list(aset.values(local=True))
@@ -1261,8 +1280,11 @@ class TestGetDataMethods:
 
         aset = initialized_arrayset
         # add subsamples which are not local to each subsample
-        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
-        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        aset['foo']._subsamples[50] = template
+        aset[2]._subsamples[50] = template
 
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
@@ -1300,7 +1322,10 @@ class TestGetDataMethods:
         from collections.abc import Iterator
         aset = initialized_arrayset
         # add subsamples which are not local to each subsample
-        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        aset['foo']._subsamples[50] = template
 
         assert isinstance(aset.items(local=True), Iterator)
         res = list(aset.items(local=True))
@@ -1327,8 +1352,11 @@ class TestGetDataMethods:
 
         aset = initialized_arrayset
         # add subsamples which are not local to each subsample
-        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
-        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        aset['foo']._subsamples[50] = template
+        aset[2]._subsamples[50] = template
 
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
@@ -1395,10 +1423,12 @@ class TestGetDataMethods:
         co.close()
         co = repo.checkout()
         # perform the mock
-        template = co._arraysets._arraysets['aset1']._samples[1]._subsamples[11]
-        co._arraysets._arraysets['aset1']._samples[1]._subsamples[12] = template._replace(backend='50')
-        template = co._arraysets._arraysets['aset2']._samples[1]._subsamples[21]
-        co._arraysets._arraysets['aset2']._samples[1]._subsamples[22] = template._replace(backend='50')
+        # perform the mock
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        co._arraysets._arraysets['aset1']._samples[1]._subsamples[12] = template
+        co._arraysets._arraysets['aset2']._samples[1]._subsamples[22] = template
+
         assert co.arraysets.contains_remote_references == {'aset1': True, 'aset2': True, 'aset3': False}
         assert co.arraysets.remote_sample_keys == {'aset1': (1,), 'aset2': (1,), 'aset3': ()}
         co.close()

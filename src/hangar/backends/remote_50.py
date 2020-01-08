@@ -55,18 +55,15 @@ Technical Notes
    operation
 """
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import Optional
 
 import numpy as np
 
+from .specs import REMOTE_50_DataHashSpec
+
 # -------------------------------- Parser Implementation ----------------------
 
-
 _FmtCode = '50'
-REMOTE_50_DataHashSpec = NamedTuple('REMOTE_50_DataHashSpec', [
-    ('backend', str),
-    ('schema_hash', str)
-])
 
 
 def remote_50_encode(schema_hash: str = '') -> bytes:
@@ -78,23 +75,6 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
         hash data db value
     """
     return f'50:{schema_hash}'.encode()
-
-
-def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
-    """converts a numpy data hash db val into a numpy data python spec
-
-    Parameters
-    ----------
-    db_val : bytes
-        data hash db val
-
-    Returns
-    -------
-    REMOTE_50_DataHashSpec
-        hash specification containing an identifies: `backend`, `schema_hash`
-    """
-    schema_hash = db_val.decode()[3:]
-    return REMOTE_50_DataHashSpec('50', schema_hash)
 
 
 # ------------------------- Accessor Object -----------------------------------

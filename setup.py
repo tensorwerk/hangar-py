@@ -8,8 +8,8 @@ from os.path import dirname
 from os.path import join
 from os.path import splitext
 
-from setuptools import find_packages
-from setuptools import setup
+from setuptools import find_packages, setup
+from Cython.Build import cythonize
 
 
 def read(*names, **kwargs):
@@ -72,7 +72,20 @@ setup(
         'tqdm',
         'wrapt',
         'xxhash',
+        'Cython',
     ],
+    setup_requires=[
+        "setuptools>=18.0",
+        "Cython",
+    ],
+    ext_modules=cythonize(
+        [join('src', 'hangar', 'backends', 'specs.pyx'),
+         join('src', 'hangar', 'backends', 'specparse.pyx')],
+        compiler_directives={
+            'language_level': 3,
+            'embedsignature': True,
+            'emit_code_comments': True
+        }),
     entry_points={
         'console_scripts': ['hangar = hangar.cli:main']
     },

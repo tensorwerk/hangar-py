@@ -2,7 +2,7 @@ from pathlib import Path
 import warnings
 from collections import defaultdict, namedtuple
 from contextlib import contextmanager
-from typing import Optional, Tuple, Any, Dict, Sequence
+from typing import Optional, Tuple, Any, Dict, Sequence, List
 from weakref import proxy
 
 import lmdb
@@ -14,11 +14,7 @@ from .arrayset_nested import (
     SubsampleReader, SubsampleWriter,
     SubsampleReaderModifier, SubsampleWriterModifier,
 )
-from ..backends import (
-    BACKEND_ACCESSOR_MAP,
-    backend_decoder,
-    is_local_backend,
-)
+from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records.parsing import hash_data_db_key_from_raw_key, RawArraysetSchemaVal
 from ..records.queries import RecordQuery
 from ..txnctx import TxnRegister
@@ -120,9 +116,9 @@ class Backend:
     """
 
     @staticmethod
-    def contains_remote_backend(used_backends) -> True:
+    def contains_remote_backend(used_backends: List[str]) -> True:
         has_remote = False
-        if not all([is_local_backend(be) for be in used_backends]):
+        if not all([bool(be[0] != '5') for be in used_backends]):
             has_remote = True
         return has_remote
 
