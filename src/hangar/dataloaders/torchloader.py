@@ -36,7 +36,7 @@ def make_torch_dataset(arraysets,
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.arrayset.ArraysetDataReader` or Sequence
+    arraysets : :class:`~hangar.columns.arrayset.Arraysets` or Sequence
         A arrayset object, a tuple of arrayset object or a list of arrayset
         objects.
     keys : Sequence[str]
@@ -106,7 +106,7 @@ class TorchDataset(torchdata.Dataset):
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.arrayset.ArraysetDataReader` or Sequence
+    arraysets : :class:`~hangar.columns.arrayset.Arraysets` or Sequence
         A list/tuple of hangar_arrayset objects with same length and contains
         same keys. This class doesn't do any explicit check for length or the
         key names and assumes those all the arraysets are valid as per the

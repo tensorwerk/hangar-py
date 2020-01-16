@@ -9,7 +9,7 @@ from typing import Optional
 import lmdb
 
 from .mixins import GetMixin
-from .arrayset import Arraysets
+from .columns import Arraysets
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
@@ -190,12 +190,12 @@ class ReaderCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`~.arrayset.Arraysets` contains all methods
+            The class :class:`~.columns.arrayset.Arraysets` contains all methods
             accessible by this property accessor
 
         Returns
         -------
-        :class:`~.arrayset.Arraysets`
+        :class:`~.columns.arrayset.Arraysets`
             weakref proxy to the arraysets object which behaves exactly like a
             arraysets accessor class but which can be invalidated when the writer
             lock is released.
@@ -689,12 +689,12 @@ class WriterCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`~.arrayset.Arraysets` contains all methods accessible
+            The class :class:`~.columns.arrayset.Arraysets` contains all methods accessible
             by this property accessor
 
         Returns
         -------
-        :class:`~.arrayset.Arraysets`
+        :class:`~.columns.arrayset.Arraysets`
             weakref proxy to the arraysets object which behaves exactly like a
             arraysets accessor class but which can be invalidated when the writer
             lock is released.

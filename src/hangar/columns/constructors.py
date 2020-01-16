@@ -9,8 +9,8 @@ import lmdb
 import numpy as np
 from wrapt import ObjectProxy
 
-from .aset_flat import SampleReaderModifier, SampleWriterModifier
-from .aset_nested import (
+from .arrayset_flat import SampleReaderModifier, SampleWriterModifier
+from .arrayset_nested import (
     SubsampleReader, SubsampleWriter,
     SubsampleReaderModifier, SubsampleWriterModifier,
 )

@@ -770,7 +770,7 @@ class TestRemoveData:
         assert 1 in aset['foo']
 
 
-# ------------------------------ Container Introspection --------------------------------------------
+# ------------------------------ Container Introspection -----------------------------------
 
 
 class TestContainerIntrospection:
@@ -880,20 +880,36 @@ class TestContainerIntrospection:
                 assert_equal(v, subsample_data[k])
 
     def test_get_sample_test_subsample_contains_remote_references_property(self, initialized_arrayset, subsample_data_map):
-        """TODO: test case where there are actually remote references present.
-        """
         aset = initialized_arrayset
+        # test works before add remote references
+        aset.contains_remote_references is False
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
             assert sample.contains_remote_references is False
 
+        # add subsamples which are not local to each subsample
+        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+        aset.contains_remote_references is True
+        for sample_name, subsample_data in subsample_data_map.items():
+            sample = aset.get(sample_name)
+            assert sample.contains_remote_references is True
+
     def test_get_sample_test_subsample_remote_reference_keys_property(self, initialized_arrayset, subsample_data_map):
-        """TODO: test case where there are actually remote references present.
-        """
         aset = initialized_arrayset
+        # test works before add remote references
+        assert aset.remote_reference_keys == ()
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
             assert sample.remote_reference_keys == ()
+
+        # add subsamples which are not local to each subsample
+        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+        assert aset.remote_reference_keys == (2, 'foo') or ('foo', 2)
+        for sample_name, subsample_data in subsample_data_map.items():
+            sample = aset.get(sample_name)
+            assert sample.remote_reference_keys == (50,)
 
 
 # ------------------------------ Getting Data --------------------------------------------
@@ -922,7 +938,7 @@ class TestGetDataMethods:
                 assert_equal(res, subsample_value)
 
     def test_getitem_sample_getitem_subsample(self, initialized_arrayset, subsample_data_map):
-        from hangar.columns.aset_nested import SubsampleReader
+        from hangar.columns.arrayset_nested import SubsampleReader
 
         aset = initialized_arrayset
         for sample_name, subsample_data in subsample_data_map.items():
@@ -1146,6 +1162,26 @@ class TestGetDataMethods:
                 assert subsample_name in aset[sample_name]
                 assert subsample_name in subsample_data_map[sample_name]
 
+    def test_get_sample_keys_method(self, initialized_arrayset):
+        from collections.abc import Iterator
+        aset = initialized_arrayset
+
+        assert isinstance(aset.keys(), Iterator)
+        res = list(aset.keys())
+        assert len(res) == 2
+        assert 2 and 'foo' in res
+
+    def test_get_sample_keys_method_local_only(self, initialized_arrayset):
+        from collections.abc import Iterator
+        aset = initialized_arrayset
+        # add subsamples which are not local to each subsample
+        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+
+        assert isinstance(aset.keys(local=True), Iterator)
+        res = list(aset.keys(local=True))
+        assert len(res) == 1
+        assert 2 in res
+
     def test_get_sample_subsample_keys_method(self, initialized_arrayset, subsample_data_map):
         from collections.abc import Iterator
 
@@ -1158,17 +1194,56 @@ class TestGetDataMethods:
                 assert k in subsample_data
 
     def test_get_sample_subsample_keys_method_local_only(self, initialized_arrayset, subsample_data_map):
-        """TODO: test case where there are actually remote references present.
-        """
         from collections.abc import Iterator
-
         aset = initialized_arrayset
+        # add subsamples which are not local to each subsample
+        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
+
+            # test local only properties
             assert isinstance(sample.keys(local=True), Iterator)
             res = list(sample.keys(local=True))
+            assert len(res) == len(subsample_data)
             for k in res:
                 assert k in subsample_data
+                assert k != 50
+
+            # compare to local+remote properties
+            assert isinstance(sample.keys(local=False), Iterator)
+            res = list(sample.keys(local=False))
+            assert len(res) == len(subsample_data) + 1
+            assert 50 in res
+            for k in res:
+                assert k in list(subsample_data.keys()) + [50]
+
+    def test_get_sample_values_method(self, initialized_arrayset):
+        from hangar.columns.arrayset_nested import SubsampleReader
+        from collections.abc import Iterator
+        aset = initialized_arrayset
+
+        assert isinstance(aset.values(), Iterator)
+        res = list(aset.values())
+        assert len(res) == 2
+        for sample in res:
+            assert sample.sample == 'foo' or 2
+            assert isinstance(sample, SubsampleReader)
+
+    def test_get_sample_values_method_local_only(self, initialized_arrayset):
+        from hangar.columns.arrayset_nested import SubsampleReader
+        from collections.abc import Iterator
+        aset = initialized_arrayset
+        # add subsamples which are not local to each subsample
+        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+
+        assert isinstance(aset.values(local=True), Iterator)
+        res = list(aset.values(local=True))
+        assert len(res) == 1
+        sample = res[0]
+        assert sample.sample == 2
+        assert isinstance(sample, SubsampleReader)
 
     def test_get_sample_subsample_values_method(self, initialized_arrayset, subsample_data_map):
         from collections.abc import Iterator
@@ -1182,17 +1257,59 @@ class TestGetDataMethods:
                 assert any([np.allclose(v, arr) for arr in subsample_data.values()])
 
     def test_get_sample_subsample_values_method_local_only(self, initialized_arrayset, subsample_data_map):
-        """TODO: test case where there are actually remote references present.
-        """
         from collections.abc import Iterator
 
         aset = initialized_arrayset
+        # add subsamples which are not local to each subsample
+        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
+
+            # test local only properties
             assert isinstance(sample.values(local=True), Iterator)
             res = list(sample.values(local=True))
+            assert len(res) == len(subsample_data)
             for v in res:
                 assert any([np.allclose(v, arr) for arr in subsample_data.values()])
+
+            # test local+remote properties
+            if initialized_arrayset.iswriteable is True:
+                with pytest.raises(FileNotFoundError):
+                    list(sample.values(local=False))
+            else:
+                with pytest.raises(KeyError):
+                    list(sample.values(local=False))
+
+    def test_get_sample_items_method(self, initialized_arrayset):
+        from hangar.columns.arrayset_nested import SubsampleReader
+        from collections.abc import Iterator
+        aset = initialized_arrayset
+
+        assert isinstance(aset.items(), Iterator)
+        res = list(aset.items())
+        assert len(res) == 2
+        for sample_name, sample in res:
+            assert sample_name == 2 or 'foo'
+            assert isinstance(sample, SubsampleReader)
+            assert sample_name == sample.sample
+
+    def test_get_sample_items_method_local_only(self, initialized_arrayset):
+        from hangar.columns.arrayset_nested import SubsampleReader
+        from collections.abc import Iterator
+        aset = initialized_arrayset
+        # add subsamples which are not local to each subsample
+        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+
+        assert isinstance(aset.items(local=True), Iterator)
+        res = list(aset.items(local=True))
+        assert len(res) == 1
+        sample_name, sample = res[0]
+        assert sample_name == 2
+        assert isinstance(sample, SubsampleReader)
+        assert sample.sample == sample_name
+
 
     def test_get_sample_subsample_items_method(self, initialized_arrayset, subsample_data_map):
         from collections.abc import Iterator
@@ -1206,17 +1323,86 @@ class TestGetDataMethods:
                 assert_equal(v, subsample_data[k])
 
     def test_get_sample_subsample_items_method_local_only(self, initialized_arrayset, subsample_data_map):
-        """TODO: test case where there are actually remote references present.
-        """
         from collections.abc import Iterator
 
         aset = initialized_arrayset
+        # add subsamples which are not local to each subsample
+        aset['foo']._subsamples[50] = aset['foo']._subsamples[1]._replace(backend='50')
+        aset[2]._subsamples[50] = aset[2]._subsamples['bar']._replace(backend='50')
+
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
+
+            # test local only properties
             assert isinstance(sample.items(local=True), Iterator)
             res = list(sample.items(local=True))
+            assert len(res) == len(subsample_data)
             for k, v in res:
                 assert_equal(v, subsample_data[k])
+                assert k != 50
+
+            # test local+remote properties
+            if initialized_arrayset.iswriteable is True:
+                with pytest.raises(FileNotFoundError):
+                    list(sample.items(local=False))
+            else:
+                with pytest.raises(KeyError):
+                    list(sample.items(local=False))
+
+    @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset3_backend", fixed_shape_backend_params)
+    def test_arrayset_remote_references_property_with_none(
+            self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
+    ):
+        co = repo.checkout(write=True)
+        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray,
+                                           backend_opts=aset1_backend, contains_subsamples=True)
+        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int,
+                                           backend_opts=aset2_backend, contains_subsamples=True)
+        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32,
+                                           backend_opts=aset3_backend, contains_subsamples=True)
+        with aset1 as d1, aset2 as d2, aset3 as d3:
+            d1[1] = {11: randomsizedarray}
+            d2[1] = {21: np.ones((2, 2), dtype=np.int)}
+            d3[1] = {31: np.ones((3, 4), dtype=np.float32)}
+
+        assert co.arraysets.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
+        assert co.arraysets.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
+        co.close()
+
+    @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset3_backend", fixed_shape_backend_params)
+    def test_arrayset_remote_references_property_with_remotes(
+            self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
+    ):
+        co = repo.checkout(write=True)
+        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray,
+                                           backend_opts=aset1_backend, contains_subsamples=True)
+        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int,
+                                           backend_opts=aset2_backend, contains_subsamples=True)
+        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32,
+                                           backend_opts=aset3_backend, contains_subsamples=True)
+        with aset1 as d1, aset2 as d2, aset3 as d3:
+            d1[1] = {11: randomsizedarray}
+            d2[1] = {21: np.ones((2, 2), dtype=np.int)}
+            d3[1] = {31: np.ones((3, 4), dtype=np.float32)}
+
+        assert co.arraysets.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
+        assert co.arraysets.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
+        co.commit('hello')
+        co.close()
+        co = repo.checkout()
+        # perform the mock
+        template = co._arraysets._arraysets['aset1']._samples[1]._subsamples[11]
+        co._arraysets._arraysets['aset1']._samples[1]._subsamples[12] = template._replace(backend='50')
+        template = co._arraysets._arraysets['aset2']._samples[1]._subsamples[21]
+        co._arraysets._arraysets['aset2']._samples[1]._subsamples[22] = template._replace(backend='50')
+        assert co.arraysets.contains_remote_references == {'aset1': True, 'aset2': True, 'aset3': False}
+        assert co.arraysets.remote_sample_keys == {'aset1': (1,), 'aset2': (1,), 'aset3': ()}
+        co.close()
+
 
 
 class TestWriteThenReadCheckout:

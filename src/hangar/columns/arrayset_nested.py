@@ -832,7 +832,7 @@ class SubsampleReaderModifier(object):
             on some remote server. True if all sample data is available on the
             machine's local disk.
         """
-        return not all(map(lambda x: x.contains_remote_references, self._samples.values()))
+        return all(map(lambda x: x.contains_remote_references, self._samples.values()))
 
     @property
     def remote_reference_keys(self) -> Tuple[KeyType]:

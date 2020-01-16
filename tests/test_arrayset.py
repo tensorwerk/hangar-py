@@ -143,6 +143,55 @@ class TestDataWithFixedSizedArrayset(object):
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset3_backend", fixed_shape_backend_params)
+    def test_arrayset_remote_references_property_with_none(
+            self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
+    ):
+        co = repo.checkout(write=True)
+        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
+        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
+        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
+
+        with aset1 as d1, aset2 as d2, aset3 as d3:
+            d1[1] = randomsizedarray
+            d2[1] = np.ones((2, 2), dtype=np.int)
+            d3[1] = np.ones((3, 4), dtype=np.float32)
+
+        assert co.arraysets.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
+        assert co.arraysets.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
+        co.close()
+
+    @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset3_backend", fixed_shape_backend_params)
+    def test_arrayset_remote_references_property_with_remotes(
+            self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
+    ):
+        co = repo.checkout(write=True)
+        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
+        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
+        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
+
+        with aset1 as d1, aset2 as d2, aset3 as d3:
+            d1[1] = randomsizedarray
+            d2[1] = np.ones((2, 2), dtype=np.int)
+            d3[1] = np.ones((3, 4), dtype=np.float32)
+
+        assert co.arraysets.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
+        assert co.arraysets.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
+        co.commit('hello')
+        co.close()
+        co = repo.checkout()
+        # perform the mock
+        template = co._arraysets._arraysets['aset1']._samples[1]
+        co._arraysets._arraysets['aset1']._samples[12] = template._replace(backend='50')
+        co._arraysets._arraysets['aset2']._samples[22] = template._replace(backend='50')
+        assert co.arraysets.contains_remote_references == {'aset1': True, 'aset2': True, 'aset3': False}
+        assert co.arraysets.remote_sample_keys == {'aset1': (12,), 'aset2': (22,), 'aset3': ()}
+        co.close()
+
+    @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset3_backend", fixed_shape_backend_params)
     def test_iterating_over(self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []

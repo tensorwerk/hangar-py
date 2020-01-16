@@ -54,7 +54,7 @@ def make_tf_dataset(arraysets,
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.arrayset.ArraysetDataReader` or Sequence
+    arraysets : :class:`~hangar.columns.arrayset.Arraysets` or Sequence
         A arrayset object, a tuple of arrayset object or a list of arrayset
         objects`
     keys : Sequence[str]

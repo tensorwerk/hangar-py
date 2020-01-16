@@ -21,12 +21,11 @@ from .utils import is_suitable_user_key, is_ascii
 class MetadataReader(object):
     """Class implementing get access to the metadata in a repository.
 
-    Unlike the :class:`~.arrayset.ArraysetDataReader` and
-    :class:`~.arrayset.ArraysetDataWriter`, the equivalent Metadata classes do
-    not need a factory function or class to coordinate access through the
-    checkout. This is primarily because the metadata is only stored at a single
-    level, and because the long term storage is must simpler than for array
-    data (just write to a lmdb database).
+    Unlike the :class:`~.columns.arrayset.Arraysets` and the equivalent
+    Metadata classes do not need a factory function or class to coordinate
+    access through the checkout. This is primarily because the metadata is
+    only stored at a single level, and because the long term storage is
+    must simpler than for array data (just write to a lmdb database).
 
     .. note::
 
@@ -258,7 +257,7 @@ class MetadataReader(object):
 class MetadataWriter(MetadataReader):
     """Class implementing write access to repository metadata.
 
-    Similar to the :class:`~.arrayset.ArraysetDataWriter`, this class
+    Similar to the :class:`~.columns.arrayset.ArraysetDataWriter`, this class
     inherits the functionality of the :class:`~.metadata.MetadataReader` for reading. The
     only difference is that the reader will be initialized with data records
     pointing to the staging area, and not a commit which is checked out.

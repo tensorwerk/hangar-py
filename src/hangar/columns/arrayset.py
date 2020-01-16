@@ -5,19 +5,19 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 import lmdb
 import numpy as np
 
-from .backends import parse_user_backend_opts
-from .txnctx import TxnRegister
-from .records.hashmachine import schema_hash_digest
-from .records.parsing import (
+from ..backends import parse_user_backend_opts
+from ..txnctx import TxnRegister
+from ..records.hashmachine import schema_hash_digest
+from ..records.parsing import (
     arrayset_record_count_range_key,
     arrayset_record_schema_db_key_from_raw_key,
     arrayset_record_schema_db_val_from_raw_val,
     arrayset_record_schema_raw_val_from_db_val,
-    hash_schema_db_key_from_raw_key,
+    hash_schema_db_key_from_raw_key
 )
-from .records.queries import RecordQuery
-from .utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
-from .columns import AsetTxn, Sample, Subsample, ModifierTypes
+from ..records.queries import RecordQuery
+from ..utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
+from . import AsetTxn, Sample, Subsample, ModifierTypes, WriterModifierTypes
 
 KeyType = Union[str, int]
 
@@ -242,12 +242,12 @@ class Arraysets(object):
         """
         return list(self._arraysets.keys())
 
-    def values(self):  # -> Iterable[Union[ArraysetDataReader, ArraysetDataWriter]]:
+    def values(self) -> Iterable[ModifierTypes]:
         """yield all arrayset object instances in the checkout.
 
         Yields
         -------
-        Iterable[Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]]
+        Iterable[ModifierTypes]
             Generator of ArraysetData accessor objects (set to read or write mode
             as appropriate)
         """
@@ -256,12 +256,12 @@ class Arraysets(object):
             wr = cm_weakref_obj_proxy(asetObj)
             yield wr
 
-    def items(self):  # -> Iterable[Tuple[str, Union[ArraysetDataReader, ArraysetDataWriter]]]:
+    def items(self) -> Iterable[Tuple[str, ModifierTypes]]:
         """generator providing access to arrayset_name, :class:`Arraysets`
 
         Yields
         ------
-        Iterable[Tuple[str, Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]]]
+        Iterable[Tuple[str, ModifierTypes]]
             returns two tuple of all all arrayset names/object pairs in the checkout.
         """
         for asetN in list(self._arraysets.keys()):
@@ -269,7 +269,7 @@ class Arraysets(object):
             wr = cm_weakref_obj_proxy(asetObj)
             yield (asetN, wr)
 
-    def get(self, name: str):  # -> Union[ArraysetDataReader, ArraysetDataWriter]:
+    def get(self, name: str) -> ModifierTypes:
         """Returns a arrayset access object.
 
         This can be used in lieu of the dictionary style access.
@@ -281,7 +281,7 @@ class Arraysets(object):
 
         Returns
         -------
-        Union[:class:`.ArraysetDataReader`, :class:`.ArraysetDataWriter`]
+        ModifierTypes
             ArraysetData accessor (set to read or write mode as appropriate) which
             governs interaction with the data
 
@@ -355,7 +355,7 @@ class Arraysets(object):
                       variable_shape: bool = False,
                       contains_subsamples: bool = False,
                       *,
-                      backend_opts: Optional[Union[str, dict]] = None):  # -> ArraysetDataWriter:
+                      backend_opts: Optional[Union[str, dict]] = None) -> WriterModifierTypes:
         """Initializes a arrayset in the repository.
 
         Arraysets are groups of related data pieces (samples). All samples within
@@ -399,7 +399,7 @@ class Arraysets(object):
 
         Returns
         -------
-        :class:`.ArraysetDataWriter`
+        WriterModifierTypes
             instance object of the initialized arrayset.
 
         Raises
@@ -586,7 +586,7 @@ class Arraysets(object):
         :class:`.Arraysets`
             Interface class with write-enabled attributes activated and any
             arraysets existing initialized in write mode via
-            :class:`.arrayset.ArraysetDataWriter`.
+            :class:`.columns.arrayset.ArraysetDataWriter`.
         """
 
         arraysets = {}
@@ -613,7 +613,7 @@ class Arraysets(object):
     @classmethod
     def _from_commit(cls, repo_pth: Path, hashenv: lmdb.Environment,
                      cmtrefenv: lmdb.Environment):
-        """Class method factory to checkout :class:`.arrayset.Arraysets` in read-only mode
+        """Class method factory to checkout :class:`.columns.arrayset.Arraysets` in read-only mode
 
         This is not a user facing operation, and should never be manually called
         in normal operation. For read mode, no locks need to be verified, but
@@ -633,7 +633,7 @@ class Arraysets(object):
         -------
         :class:`.Arraysets`
             Interface class with all write-enabled attributes deactivated
-            arraysets initialized in read mode via :class:`.arrayset.ArraysetDataReader`.
+            arraysets initialized in read mode via :class:`.columns.arrayset.ArraysetDataReader`.
         """
         arraysets = {}
         txnctx = AsetTxn(cmtrefenv, hashenv, None)

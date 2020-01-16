@@ -107,25 +107,9 @@ def aset_samples_var_shape_initialized_repo(request, repo) -> Repository:
     yield repo
 
 
-@pytest.fixture(params=variable_shape_backend_params)
-def aset_subsamples_var_shape_initialized_repo(request, repo) -> Repository:
-    co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(
-        name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend_opts=request.param, contains_subsamples=True)
-    co.commit('this is a commit message')
-    co.close()
-    yield repo
-
-
 @pytest.fixture()
 def aset_samples_initialized_w_checkout(aset_samples_initialized_repo) -> WriterCheckout:
     co = aset_samples_initialized_repo.checkout(write=True)
-    yield co
-    co.close()
-
-@pytest.fixture()
-def aset_subsamples_initialized_w_checkout(aset_subsamples_initialized_repo) -> WriterCheckout:
-    co = aset_subsamples_initialized_repo.checkout(write=True)
     yield co
     co.close()
 

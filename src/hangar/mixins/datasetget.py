@@ -69,7 +69,7 @@ class GetMixin:
 
         .. warning::
 
-            It is possible for an :class:`~.arrayset.Arraysets` name to be an
+            It is possible for an :class:`~.columns.arrayset.Arraysets` name to be an
             invalid field name for a ``namedtuple`` object. The python docs state:
 
                 Any valid Python identifier may be used for a fieldname except for
@@ -177,7 +177,7 @@ class GetMixin:
 
         Returns
         -------
-        :class:`~.arrayset.Arraysets`
+        :class:`~.columns.arrayset.Arraysets`
             single arrayset parameter, no samples specified
 
         :class:`numpy.ndarray`
@@ -259,7 +259,7 @@ class GetMixin:
 
         Returns
         -------
-        :class:`~.arrayset.Arraysets`
+        :class:`~.columns.arrayset.Arraysets`
             single arrayset parameter, no samples specified
 
         :class:`numpy.ndarray`

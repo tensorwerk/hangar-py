@@ -1,5 +1,5 @@
 def valfilter(predicate, d, factory=dict):
-    """ Filter items in dictionary by value
+    """ Filter items in dictionary by values that are true.
 
     >>> iseven = lambda x: x % 2 == 0
     >>> d = {1: 2, 2: 3, 3: 4, 4: 5}
@@ -7,9 +7,7 @@ def valfilter(predicate, d, factory=dict):
     {1: 2, 3: 4}
 
     See Also:
-        keyfilter
-        itemfilter
-        valmap
+        valfilterfalse
     """
     rv = factory()
     for k, v in d.items():
@@ -19,17 +17,15 @@ def valfilter(predicate, d, factory=dict):
 
 
 def valfilterfalse(predicate, d, factory=dict):
-    """ Filter items in dictionary by value
+    """ Filter items in dictionary by values which are false.
 
     >>> iseven = lambda x: x % 2 == 0
     >>> d = {1: 2, 2: 3, 3: 4, 4: 5}
-    >>> valfilter(iseven, d)
-    {1: 2, 3: 4}
+    >>> valfilterfalse(iseven, d)
+    {2: 3, 4: 5}
 
     See Also:
-        keyfilter
-        itemfilter
-        valmap
+        valfilter
     """
     rv = factory()
     for k, v in d.items():
