@@ -290,6 +290,7 @@ class HDF5_00_FileHandles(object):
         self.rFp: HDF5_00_MapTypes = {}
         self.wFp: HDF5_00_MapTypes = {}
         self.Fp: HDF5_00_MapTypes = ChainMap(self.rFp, self.wFp)
+        self.rDatasets = {}
         self.wdset: h5py.Dataset = None
 
         self.mode: Optional[str] = None
@@ -326,6 +327,7 @@ class HDF5_00_FileHandles(object):
         del state['rFp']
         del state['wFp']
         del state['Fp']
+        del state['rDatasets']
         return state
 
     def __setstate__(self, state: dict) -> None:  # pragma: no cover
@@ -335,6 +337,7 @@ class HDF5_00_FileHandles(object):
         self.rFp = {}
         self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
+        self.rDatasets = {}
         self.open(mode=self.mode)
 
     @property
@@ -416,6 +419,9 @@ class HDF5_00_FileHandles(object):
             except AttributeError:
                 pass
             del self.rFp[uid]
+
+        for dsetuid in list(self.rDatasets.keys()):
+            del self.rDatasets[dsetuid]
 
     @staticmethod
     def delete_in_process_data(repo_path: Path, *, remote_operation=False) -> None:
@@ -686,36 +692,49 @@ class HDF5_00_FileHandles(object):
         arrSize = int(np.prod(hashVal.shape))
         dsetCol = f'/{hashVal.dataset}'
         srcSlc = (hashVal.dataset_idx, self.slcExpr[0:arrSize])
+        rdictkey = f'{hashVal.uid}{dsetCol}'
 
         if self.schema_dtype:  # if is not None
             destArr = np.empty((arrSize,), self.schema_dtype)
-            try:
-                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
-            except TypeError:
-                self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
-                self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
-            except KeyError:
-                process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
-                if Path(process_dir, f'{hashVal.uid}.hdf5').is_file():
-                    file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.hdf5')
-                    self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
+            if rdictkey in self.rDatasets:
+                self.rDatasets[rdictkey].read_direct(destArr, srcSlc, None)
+            else:
+                try:
                     self.Fp[hashVal.uid][dsetCol].read_direct(destArr, srcSlc, None)
-                else:
-                    raise
+                    self.rDatasets[rdictkey] = self.Fp[hashVal.uid][dsetCol]
+                except TypeError:
+                    self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
+                    self.rDatasets[rdictkey] = self.Fp[hashVal.uid][dsetCol]
+                    self.rDatasets[rdictkey].read_direct(destArr, srcSlc, None)
+                except KeyError:
+                    process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
+                    if Path(process_dir, f'{hashVal.uid}.hdf5').is_file():
+                        file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.hdf5')
+                        self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
+                        self.rDatasets[rdictkey] = self.Fp[hashVal.uid][dsetCol]
+                        self.rDatasets[rdictkey].read_direct(destArr, srcSlc, None)
+                    else:
+                        raise
         else:
-            try:
-                destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
-            except TypeError:
-                self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
-                destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
-            except KeyError:
-                process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
-                if Path(process_dir, f'{hashVal.uid}.hdf5').is_file():
-                    file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.hdf5')
-                    self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
+            if rdictkey in self.rDatasets:
+                destArr = self.rDatasets[rdictkey][srcSlc]
+            else:
+                try:
                     destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
-                else:
-                    raise
+                    self.rDatasets[rdictkey] = self.Fp[hashVal.uid][dsetCol]
+                except TypeError:
+                    self.Fp[hashVal.uid] = self.Fp[hashVal.uid]()
+                    destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
+                    self.rDatasets[rdictkey] = self.Fp[hashVal.uid][dsetCol]
+                except KeyError:
+                    process_dir = self.STAGEDIR if self.mode == 'a' else self.STOREDIR
+                    if Path(process_dir, f'{hashVal.uid}.hdf5').is_file():
+                        file_pth = self.DATADIR.joinpath(f'{hashVal.uid}.hdf5')
+                        self.rFp[hashVal.uid] = h5py.File(file_pth, 'r', swmr=True, libver='latest')
+                        destArr = self.Fp[hashVal.uid][dsetCol][srcSlc]
+                        self.rDatasets[rdictkey] = self.Fp[hashVal.uid][dsetCol]
+                    else:
+                        raise
 
         out = destArr.reshape(hashVal.shape)
         if xxh64_hexdigest(out) != hashVal.checksum:

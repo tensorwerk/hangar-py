@@ -386,7 +386,8 @@ def arrayset_record_schema_db_key_from_raw_key(aset_name):
 
 
 def arrayset_record_schema_db_val_from_raw_val(schema_hash,
-                                               schema_is_var, schema_max_shape,
+                                               schema_is_var,
+                                               schema_max_shape,
                                                schema_dtype,
                                                schema_default_backend,
                                                schema_default_backend_opts,
