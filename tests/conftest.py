@@ -19,9 +19,22 @@ variable_shape_backend_params = ['00', '10']
 fixed_shape_backend_params = ['00', '01', '10']
 
 
+@pytest.fixture(scope='class')
+def classrepo(tmp_path_factory) -> Repository:
+    old_map_size = hangar.constants.LMDB_SETTINGS['map_size']
+    hangar.constants.LMDB_SETTINGS['map_size'] = 2_000_000
+    hangar.txnctx.TxnRegisterSingleton._instances = {}
+    pth = tmp_path_factory.mktemp('classrepo')
+    repo_obj = Repository(path=str(pth), exists=False)
+    repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
+    yield repo_obj
+    hangar.constants.LMDB_SETTINGS['map_size'] = old_map_size
+    repo_obj._env._close_environments()
+
+
 @pytest.fixture()
 def managed_tmpdir(monkeypatch, tmp_path):
-    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
     hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)

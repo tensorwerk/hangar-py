@@ -5,7 +5,7 @@
 cdef class HDF5_01_DataHashSpec:
 
     def __init__(self, str backend, str uid, str checksum, str dataset,
-                 unsigned int dataset_idx, tuple shape):
+                 int dataset_idx, tuple shape):
 
         self.backend = backend
         self.uid = uid
@@ -35,7 +35,7 @@ cdef class HDF5_01_DataHashSpec:
 cdef class HDF5_00_DataHashSpec:
 
     def __init__(self, str backend, str uid, str checksum,
-                 str dataset, unsigned int dataset_idx, tuple shape):
+                 str dataset, int dataset_idx, tuple shape):
 
         self.backend = backend
         self.uid = uid
@@ -65,7 +65,7 @@ cdef class HDF5_00_DataHashSpec:
 cdef class NUMPY_10_DataHashSpec:
 
     def __init__(self, str backend, str uid, str checksum,
-                 unsigned int collection_idx, tuple shape):
+                 int collection_idx, tuple shape):
 
         self.backend = backend
         self.uid = uid

@@ -155,7 +155,7 @@ class Arraysets(object):
         """
         return self.get(key)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value):  # lgtm [py/unexpected-raise-in-special-method]
         """Specifically prevent use dict style setting for arrayset objects.
 
         Arraysets must be created using the method :meth:`init_arrayset`.

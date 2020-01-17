@@ -2,34 +2,34 @@
 
 cdef class HDF5_01_DataHashSpec:
 
-    cdef public str backend
-    cdef public str uid
-    cdef public str checksum
-    cdef public str dataset
-    cdef public unsigned int dataset_idx
-    cdef public tuple shape
+    cdef readonly str backend
+    cdef readonly str uid
+    cdef readonly str checksum
+    cdef readonly str dataset
+    cdef readonly int dataset_idx
+    cdef readonly tuple shape
 
 
 cdef class HDF5_00_DataHashSpec:
 
-    cdef public str backend
-    cdef public str uid
-    cdef public str checksum
-    cdef public str dataset
-    cdef public unsigned int dataset_idx
-    cdef public tuple shape
+    cdef readonly str backend
+    cdef readonly str uid
+    cdef readonly str checksum
+    cdef readonly str dataset
+    cdef readonly int dataset_idx
+    cdef readonly tuple shape
 
 
 cdef class NUMPY_10_DataHashSpec:
 
-    cdef public str backend
-    cdef public str uid
-    cdef public str checksum
-    cdef public unsigned int collection_idx
-    cdef public tuple shape
+    cdef readonly str backend
+    cdef readonly str uid
+    cdef readonly str checksum
+    cdef readonly int collection_idx
+    cdef readonly tuple shape
 
 
 cdef class REMOTE_50_DataHashSpec:
 
-    cdef public str backend
-    cdef public str schema_hash
+    cdef readonly str backend
+    cdef readonly str schema_hash

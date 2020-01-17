@@ -11,8 +11,10 @@ cdef HDF5_01_DataHashSpec HDF5_01_Parser(str inp):
     cdef str fmt, uid, cksum, dset, dset_idx
     cdef tuple shape_tup
     cdef list shape_list = []
-    cdef unsigned int dataset_idx_int, i, c, cc
-    cdef unsigned int n = len(inp)
+    cdef int dataset_idx_int
+    cdef unsigned char i, c, cc
+    cdef Py_ssize_t n = len(inp)
+    cdef HDF5_01_DataHashSpec res
 
     c = 0
     cc = 0
@@ -30,7 +32,7 @@ cdef HDF5_01_DataHashSpec HDF5_01_Parser(str inp):
                 dset_idx = inp[c:i]
             c = i + 1
             cc = cc + 1
-    shape_vs = inp[c:]
+    shape_vs = inp[c:n]
 
     c = 0
     n = len(shape_vs)
@@ -38,20 +40,23 @@ cdef HDF5_01_DataHashSpec HDF5_01_Parser(str inp):
         if shape_vs[i] == ' ':
             shape_list.append(int(shape_vs[c:i]))
             c = i + 1
-    if shape_vs[c:] != '':
+    if shape_vs[c:n] != '':
         shape_list.append(int(shape_vs[c:]))
 
     shape_tup = tuple(shape_list)
     dataset_idx_int = int(dset_idx)
-    return HDF5_01_DataHashSpec(fmt, uid, cksum, dset, dataset_idx_int, shape_tup)
+    res = HDF5_01_DataHashSpec(fmt, uid, cksum, dset, dataset_idx_int, shape_tup)
+    return res
 
 
 cdef HDF5_00_DataHashSpec HDF5_00_Parser(str inp):
     cdef str fmt, uid, cksum, dset, dset_idx
     cdef tuple shape_tup
     cdef list shape_list = []
-    cdef unsigned int dataset_idx_int, i, c, cc
-    cdef unsigned int n = len(inp)
+    cdef int dataset_idx_int
+    cdef unsigned char i, c, cc
+    cdef Py_ssize_t n = len(inp)
+    cdef HDF5_00_DataHashSpec res
 
     c = 0
     cc = 0
@@ -69,7 +74,7 @@ cdef HDF5_00_DataHashSpec HDF5_00_Parser(str inp):
                 dset_idx = inp[c:i]
             c = i + 1
             cc = cc + 1
-    shape_vs = inp[c:]
+    shape_vs = inp[c:n]
 
     c = 0
     n = len(shape_vs)
@@ -77,20 +82,23 @@ cdef HDF5_00_DataHashSpec HDF5_00_Parser(str inp):
         if shape_vs[i] == ' ':
             shape_list.append(int(shape_vs[c:i]))
             c = i + 1
-    if shape_vs[c:] != '':
+    if shape_vs[c:n] != '':
         shape_list.append(int(shape_vs[c:]))
 
     shape_tup = tuple(shape_list)
     dataset_idx_int = int(dset_idx)
-    return HDF5_00_DataHashSpec(fmt, uid, cksum, dset, dataset_idx_int, shape_tup)
+    res = HDF5_00_DataHashSpec(fmt, uid, cksum, dset, dataset_idx_int, shape_tup)
+    return res
 
 
 cdef NUMPY_10_DataHashSpec NUMPY_10_Parser(str inp):
     cdef str fmt, uid, cksum, collection_idx
     cdef tuple shape_tup
     cdef list shape_list = []
-    cdef unsigned int collection_idx_int, i, c, cc
-    cdef unsigned int n = len(inp)
+    cdef int collection_idx_int
+    cdef unsigned char i, c, cc
+    cdef Py_ssize_t n = len(inp)
+    cdef NUMPY_10_DataHashSpec res
 
     c = 0
     cc = 0
@@ -106,7 +114,7 @@ cdef NUMPY_10_DataHashSpec NUMPY_10_Parser(str inp):
                 collection_idx = inp[c:i]
             c = i + 1
             cc = cc + 1
-    shape_vs = inp[c:]
+    shape_vs = inp[c:n]
 
     c = 0
     n = len(shape_vs)
@@ -114,30 +122,33 @@ cdef NUMPY_10_DataHashSpec NUMPY_10_Parser(str inp):
         if shape_vs[i] == ' ':
             shape_list.append(int(shape_vs[c:i]))
             c = i + 1
-    if shape_vs[c:] != '':
+    if shape_vs[c:n] != '':
         shape_list.append(int(shape_vs[c:]))
 
     shape_tup = tuple(shape_list)
     collection_idx_int = int(collection_idx)
-    return NUMPY_10_DataHashSpec(fmt, uid, cksum, collection_idx_int, shape_tup)
+    res = NUMPY_10_DataHashSpec(fmt, uid, cksum, collection_idx_int, shape_tup)
+    return res
 
 
 
 cdef REMOTE_50_DataHashSpec REMOTE_50_Parser(str inp):
     cdef str fmt, schema_hash
     cdef unsigned int i, c
-    cdef unsigned int n = len(inp)
+    cdef Py_ssize_t n = len(inp)
+    cdef REMOTE_50_DataHashSpec res
+
     c = 0
     for i in range(n):
         if inp[i] == ':':
             fmt = inp[c:i]
             c = i + 1
     schema_hash = inp[c:]
-    return REMOTE_50_DataHashSpec(fmt, schema_hash)
+    res = REMOTE_50_DataHashSpec(fmt, schema_hash)
+    return res
 
 
-
-def backend_decoder(bytes inp):
+cpdef object backend_decoder(bytes inp):
     cdef str backend, inp_str
     inp_str = inp.decode('utf-8')
     backend = inp_str[:2]

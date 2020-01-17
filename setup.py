@@ -84,7 +84,7 @@ setup(
         compiler_directives={
             'language_level': 3,
             'embedsignature': True,
-            'emit_code_comments': True
+            'emit_code_comments': True,
         }),
     entry_points={
         'console_scripts': ['hangar = hangar.cli:main']
