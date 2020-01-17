@@ -1169,8 +1169,8 @@ def test_reader_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array
 
 
 @pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
-def test_reader_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(
-    aset_samples_initialized_repo, array5by7, invalid_name):
+def test_reader_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(aset_samples_initialized_repo, array5by7, invalid_name):
+
     wco = aset_samples_initialized_repo.checkout(write=True)
     wco.arraysets['writtenaset'][0] = array5by7
     array10 = np.arange(10, dtype=np.float32)

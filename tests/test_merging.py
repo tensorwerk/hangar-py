@@ -260,7 +260,7 @@ class TestMetadataConflicts(object):
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.metadata.remove('hello')
+        del co.metadata['hello']
         co.commit('this was the removal of the hello key on testbranch')
         co.close()
 
@@ -285,12 +285,12 @@ class TestMetadataConflicts(object):
     def test_no_conflict_both_remove(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.metadata.remove('hello')
+        del co.metadata['hello']
         co.commit('commit on master removing hellow')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.metadata.remove('hello')
+        del co.metadata['hello']
         co.commit('this was the removal of the hello key on testbranch')
         co.close()
 

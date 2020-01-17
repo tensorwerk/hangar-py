@@ -944,14 +944,46 @@ class TestDataWithFixedSizedArrayset(object):
         assert_equal(co.arraysets['aset']['1'], randomsizedarray)
         co.close()
 
-    def test_writer_context_manager_metadata_add(self, repo):
+    def test_writer_context_manager_metadata_update_iterable(self, repo):
         co = repo.checkout(write=True)
         with co.metadata as metadata:
-            metadata.add('key', 'val')
+            metadata.update([('key', 'val'), ('hello', 'world')])
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
         assert co.metadata['key'] == 'val'
+        assert co.metadata['hello'] == 'world'
+        co.close()
+
+    def test_writer_context_manager_metadata_update_dict(self, repo):
+        co = repo.checkout(write=True)
+        with co.metadata as metadata:
+            metadata.update({'key': 'val'})
+        co.commit('this is a commit message')
+        co.close()
+        co = repo.checkout()
+        assert co.metadata['key'] == 'val'
+        co.close()
+
+    def test_writer_context_manager_metadata_update_kwargs(self, repo):
+        co = repo.checkout(write=True)
+        with co.metadata as metadata:
+            metadata.update(key='val')
+        co.commit('this is a commit message')
+        co.close()
+        co = repo.checkout()
+        assert co.metadata['key'] == 'val'
+        co.close()
+
+    def test_writer_context_manager_metadata_update_dict_kwargs(self, repo):
+        co = repo.checkout(write=True)
+        with co.metadata as metadata:
+            metadata.update({'key': 'val'}, hello='world')
+        co.commit('this is a commit message')
+        co.close()
+        co = repo.checkout()
+        assert co.metadata['key'] == 'val'
+        assert co.metadata['hello'] == 'world'
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
@@ -964,7 +996,7 @@ class TestDataWithFixedSizedArrayset(object):
         with co.metadata as metadata:
             newarr = randomsizedarray + 1
             aset['2'] = newarr
-            metadata.add('key', 'val')
+            metadata.update({'key': 'val'})
         co.commit('this is a commit message')
         co.close()
 

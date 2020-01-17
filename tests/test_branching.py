@@ -113,8 +113,7 @@ def test_delete_branch_raises_runtime_error_when_history_not_merged(aset_samples
         repo.remove_branch('testdelete')
 
 
-def test_delete_branch_completes_when_history_not_merged_but_force_option_set(
-    aset_samples_initialized_repo):
+def test_delete_branch_completes_when_history_not_merged_but_force_option_set(aset_samples_initialized_repo):
     repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'
@@ -179,8 +178,7 @@ def test_delete_branch_raises_permission_error_if_writer_lock_held(aset_samples_
     co.close()
 
 
-def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_head(
-    aset_samples_initialized_repo):
+def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_head(aset_samples_initialized_repo):
     repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'

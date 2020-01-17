@@ -29,7 +29,7 @@ class TestCheckout(object):
         arrayset_name = 'aset'
         r_ds = w_checkout.arraysets.init_arrayset(name=arrayset_name, prototype=array5by7)
         r_ds['1'] = array5by7
-        w_checkout.metadata.add('init', 'array5by7 added')
+        w_checkout.metadata.update({'init': 'array5by7 added'})
         w_checkout.commit('init')
         r1_checkout = repo.checkout()
         r2_checkout = repo.checkout()
@@ -47,7 +47,7 @@ class TestCheckout(object):
         with pytest.raises(TypeError):
             co.arraysets.init_arrayset(name='aset', shape=(5, 7), dtype=np.float64)
         with pytest.raises(AttributeError):
-            co.metadata.add('a', 'b')
+            co.metadata.update({'a': 'b'})
         co.close()
 
     def test_writer_aset_obj_not_accessible_after_close(self, two_commit_filled_samples_repo):
@@ -170,8 +170,7 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             aset[klist[0]]
 
-    def test_writer_arrayset_context_manager_not_accessible_after_close(self,
-                                                                        two_commit_filled_samples_repo):
+    def test_writer_arrayset_context_manager_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
         aset = co.arraysets['writtenaset']
@@ -198,8 +197,7 @@ class TestCheckout(object):
         with pytest.raises(ReferenceError):
             md.__dict__
 
-    def test_writer_metadata_obj_not_accessible_after_commit_and_close(self,
-                                                                       aset_samples_initialized_repo):
+    def test_writer_metadata_obj_not_accessible_after_commit_and_close(self, aset_samples_initialized_repo):
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
         md = co.metadata
@@ -280,7 +278,7 @@ class TestCheckout(object):
         with pytest.raises(PermissionError):
             co.arraysets['aset']['1'] = array5by7
         with pytest.raises(PermissionError):
-            co.metadata.add('a', 'b')
+            co.metadata.update({'a': 'b'})
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_operate_on_arrayset_samples_after_commiting_but_not_closing_checkout(self, aset_backend, repo, array5by7):
@@ -413,7 +411,7 @@ class TestBranchingMergingInCheckout(object):
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch.name)
         assert co._branch_name == branch.name
         co.arraysets['writtenaset']['1'] = array5by7
-        co.metadata.add('a', 'b')
+        co.metadata.update({'a': 'b'})
         co.commit('this is a commit message')
         co.close()
         aset_samples_initialized_repo.merge('test merge', 'master', branch.name)
@@ -436,14 +434,14 @@ class TestBranchingMergingInCheckout(object):
         branch1 = aset_samples_initialized_repo.create_branch('testbranch1')
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         co.arraysets['writtenaset']['1'] = array5by7
-        co.metadata.add('a1', 'b1')
+        co.metadata.update({'a1': 'b1'})
         co.commit('this is a commit message')
         co.close()
 
         branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
         co.arraysets['writtenaset']['2'] = array5by7
-        co.metadata.add('a2', 'b2')
+        co.metadata.update({'a2': 'b2'})
         co.commit('this is a commit message')
         co.close()
 
@@ -485,14 +483,14 @@ class TestBranchingMergingInCheckout(object):
 
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         co.arraysets['writtenaset']['1'] = array5by7
-        co.metadata.add('a', 'b')
+        co.metadata.update({'a': 'b'})
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
         newarray = np.zeros_like(array5by7)
         co.arraysets['writtenaset']['1'] = newarray
-        co.metadata.add('a', 'c')
+        co.metadata.update({'a': 'c'})
         co.commit('this is a commit message')
         co.close()
 
@@ -563,8 +561,7 @@ def test_full_from_short_commit_digest(two_commit_filled_samples_repo):
         expand_short_commit_digest(repo._env.refenv, 'zzzzzzzzzzzzzzzzzzzzzzzzzzzz')
 
 
-def test_writer_context_manager_objects_are_gc_removed_after_co_close(
-    two_commit_filled_samples_repo):
+def test_writer_context_manager_objects_are_gc_removed_after_co_close(two_commit_filled_samples_repo):
 
     repo = two_commit_filled_samples_repo
     co = repo.checkout(write=True)
@@ -598,8 +595,7 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(
     co.close()
 
 
-def test_reader_context_manager_objects_are_gc_removed_after_co_close(
-    two_commit_filled_samples_repo):
+def test_reader_context_manager_objects_are_gc_removed_after_co_close(two_commit_filled_samples_repo):
 
     repo = two_commit_filled_samples_repo
     co = repo.checkout(write=False)

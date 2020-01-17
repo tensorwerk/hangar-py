@@ -1,6 +1,6 @@
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Optional, Union, Iterator, Tuple, Dict
+from typing import Optional, Union, Iterator, Tuple, Dict, Mapping, List, Sequence, Any, Iterable
 
 import lmdb
 
@@ -12,10 +12,17 @@ from .records.parsing import (
     metadata_record_db_key_from_raw_key,
     metadata_record_db_val_from_raw_val,
     metadata_record_raw_val_from_db_val,
+    generate_sample_name,
 )
 from .records.queries import RecordQuery
 from .txnctx import TxnRegister
 from .utils import is_suitable_user_key, is_ascii
+
+
+KeyTypes = Union[str, int]
+KeyValMap = Mapping[KeyTypes, str]
+KeyValType = Union[Tuple[KeyTypes, str], List[Union[KeyTypes, str]]]
+MapKeyValType = Union[KeyValMap, Sequence[KeyValType]]
 
 
 class MetadataReader(object):
@@ -74,7 +81,7 @@ class MetadataReader(object):
         self._stack: Optional[ExitStack] = None
         self._enter_count: int = 0
 
-        self._mspecs: Dict[Union[str, int], bytes] = {}
+        self._mspecs: Dict[KeyTypes, bytes] = {}
         metaNamesSpec = RecordQuery(dataenv).metadata_records()
         for metaNames, metaSpec in metaNamesSpec:
             labelKey = hash_meta_db_key_from_raw_key(metaSpec.meta_hash)
@@ -103,29 +110,12 @@ class MetadataReader(object):
         """
         return len(self._mspecs)
 
-    def __getitem__(self, key: Union[str, int]) -> str:
-        """Retrieve a metadata sample with a key. Convenience method for dict style access.
-
-        .. seealso:: :meth:`get`
-
-        Parameters
-        ----------
-        key : Union[str, int]
-            metadata key to retrieve from the checkout
-
-        Returns
-        -------
-        string
-            value of the metadata key/value pair stored in the checkout.
-        """
-        return self.get(key)
-
-    def __contains__(self, key: Union[str, int]) -> bool:
+    def __contains__(self, key: KeyTypes) -> bool:
         """Determine if a key with the provided name is in the metadata
 
         Parameters
         ----------
-        key : Union[str, int]
+        key : KeyTypes
             key to check for containment testing
 
         Returns
@@ -133,13 +123,10 @@ class MetadataReader(object):
         bool
             True if key exists, False otherwise
         """
-        if key in self._mspecs:
-            return True
-        else:
-            return False
+        return True if key in self._mspecs else False
 
-    def __iter__(self) -> Iterator[Union[int, str]]:
-        return self.keys()
+    def __iter__(self) -> Iterator[KeyTypes]:
+        yield from self.keys()
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar Metadata\
@@ -168,90 +155,111 @@ class MetadataReader(object):
         """
         return False if self._mode == 'r' else True
 
-    def keys(self) -> Iterator[Union[str, int]]:
-        """generator which yields the names of every metadata piece in the checkout.
+    def __getitem__(self, key: KeyTypes) -> str:
+        """Retrieve a metadata sample with a key. Convenience method for dict style access.
 
-        For write enabled checkouts, is technically possible to iterate over the
-        metadata object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginning the loop.) While
-        not necessary for read checkouts, we perform the same operation for both
-        read and write checkouts in order in order to avoid differences.
+        .. seealso:: :meth:`get`
 
-        Yields
-        ------
-        Iterator[Union[str, int]]
-            keys of one metadata sample at a time
+        Parameters
+        ----------
+        key : KeyTypes
+            metadata key to retrieve from the checkout
+
+        Returns
+        -------
+        string
+            value of the metadata key/value pair stored in the checkout.
         """
-        for name in tuple(self._mspecs.keys()):
-            yield name
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            metaVal = self._labelTxn.get(self._mspecs[key])
+            meta_val = hash_meta_raw_val_from_db_val(metaVal)
+            return meta_val
 
-    def values(self) -> Iterator[str]:
-        """generator yielding all metadata values in the checkout
-
-        For write enabled checkouts, is technically possible to iterate over the
-        metadata object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginning the loop.) While
-        not necessary for read checkouts, we perform the same operation for both
-        read and write checkouts in order in order to avoid differences.
-
-        Yields
-        ------
-        Iterator[str]
-            values of one metadata piece at a time
-        """
-        for name in tuple(self._mspecs.keys()):
-            yield self.get(name)
-
-    def items(self) -> Iterator[Tuple[Union[str, int], str]]:
-        """generator yielding key/value for all metadata recorded in checkout.
-
-        For write enabled checkouts, is technically possible to iterate over the
-        metadata object while adding/deleting data, in order to avoid internal
-        python runtime errors (``dictionary changed size during iteration`` we
-        have to make a copy of they key list before beginning the loop.) While
-        not necessary for read checkouts, we perform the same operation for both
-        read and write checkouts in order in order to avoid differences.
-
-        Yields
-        ------
-        Iterator[Tuple[Union[str, int], np.ndarray]]
-            metadata key and stored value for every piece in the checkout.
-        """
-        for name in tuple(self._mspecs.keys()):
-            yield (name, self.get(name))
-
-    def get(self, key: Union[str, int]) -> str:
+    def get(self, key: KeyTypes, default: Optional[Any] = None) -> str:
         """retrieve a piece of metadata from the checkout.
 
         Parameters
         ----------
-        key : Union[str, int]
+        key : KeyTypes
             The name of the metadata piece to retrieve.
+        default : Optional[Any]
+            If key is not found in metadata records, returns this value instead
+            of raising an exception like :meth:`__getitem__` does.
 
         Returns
         -------
         str
             The stored metadata value associated with the key.
+        """
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
-        Raises
+    def _mode_aware_key_looper(self) -> Iterable[KeyTypes]:
+        """Generate keys for iteration with dict update safety ensured.
+
+        Returns
+        -------
+        Iterable[KeyTypes]
+            metadata keys
+        """
+        if self._mode == 'r':
+            yield from self._mspecs.keys()
+        else:
+            yield from tuple(self._mspecs.keys())
+
+    def keys(self) -> Iterable[KeyTypes]:
+        """generator which yields the names of every metadata piece in the checkout.
+
+        If accessed by a write-enabled checkout, runtime safety is guarrenteed
+        even if items are added / removed / modified while iterating over
+        results of this method. (Also true for read-only checkouts.)
+
+        Yields
         ------
-        ValueError
-            If the `key` is not str type or contains whitespace or non
-            alpha-numeric characters.
-        KeyError
-            If no metadata exists in the checkout with the provided key.
+        Iterable[KeyTypes]
+            keys of one metadata sample at a time
+        """
+        yield from self._mode_aware_key_looper()
+
+    def values(self) -> Iterable[str]:
+        """generator yielding all metadata values in the checkout
+
+        If accessed by a write-enabled checkout, runtime safety is guarrenteed
+        even if items are added / removed / modified while iterating over
+        results of this method. (Also true for read-only checkouts.)
+
+        Yields
+        ------
+        Iterable[str]
+            values of one metadata piece at a time
         """
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
-            try:
-                metaVal = self._labelTxn.get(self._mspecs[key])
-                meta_val = hash_meta_raw_val_from_db_val(metaVal)
-            except KeyError:
-                raise KeyError(f'The checkout does not contain metadata with key: {key}')
-        return meta_val
+            for key in self._mode_aware_key_looper():
+                yield self[key]
+
+    def items(self) -> Iterable[Tuple[KeyTypes, str]]:
+        """generator yielding key/value for all metadata recorded in checkout.
+
+        If accessed by a write-enabled checkout, runtime safety is guarrenteed
+        even if items are added / removed / modified while iterating over
+        results of this method. (Also true for read-only checkouts.)
+
+        Yields
+        ------
+        Iterable[Tuple[KeyTypes, np.ndarray]]
+            metadata key and stored value for every piece in the checkout.
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            for key in self._mode_aware_key_looper():
+                yield (key, self[key])
 
 
 class MetadataWriter(MetadataReader):
@@ -303,84 +311,23 @@ class MetadataWriter(MetadataReader):
         self._stack = None
         self._enter_count -= 1
 
-    def __setitem__(self, key: Union[str, int], value: str) -> Union[str, int]:
-        """Store a key/value pair as metadata. Convenience method to :meth:`add`.
-
-        .. seealso:: :meth:`add`
-
-        Parameters
-        ----------
-        key : Union[str, int]
-            name of the key to add as metadata
-        value : string
-            value to add as metadata
-
-        Returns
-        -------
-        Union[str, int]
-            key of the stored metadata sample (assuming operation was successful)
+    def __set_arg_validate(self, key: KeyTypes, val: str) -> None:
+        """Verify user provided key/value pair is valid, raising ValueError if problem.
         """
-        return self.add(key, value)
+        if not is_suitable_user_key(key):
+            raise ValueError(
+                f'Metadata key {key} of type {type(key)} invalid. Must be int '
+                f'ascii string with only alpha-numeric / "." "_" "-" characters. '
+                f'Must be <= 64 characters long.')
+        elif not (isinstance(val, str) and is_ascii(val)):
+            raise ValueError(f'Metadata Value `{val}` not valid. Must be ascii str')
 
-    def __delitem__(self, key: Union[str, int]) -> Union[str, int]:
-        """Remove a key/value pair from metadata. Convenience method to :meth:`remove`.
-
-        .. seealso:: :meth:`remove` for the function this calls into.
-
-        Parameters
-        ----------
-        key : Union[str, int]
-            Name of the metadata piece to remove.
-
-        Returns
-        -------
-        Union[str, int]
-            Metadata key removed from the checkout (assuming operation successful)
-        """
-        return self.remove(key)
-
-    def add(self, key: Union[str, int], value: str) -> Union[str, int]:
-        """Add a piece of metadata to the staging area of the next commit.
-
-        Parameters
-        ----------
-        key : Union[str, int]
-            Name of the metadata piece, alphanumeric ascii characters only.
-        value : string
-            Metadata value to store in the repository, any length of valid
-            ascii characters.
-
-        Returns
-        -------
-        Union[str, int]
-            The name of the metadata key written to the database if the
-            operation succeeded.
-
-        Raises
-        ------
-        ValueError
-            If the `key` contains any whitespace or non alpha-numeric
-            characters or is longer than 64 characters.
-        ValueError
-            If the `value` contains any non ascii characters.
-        """
-        try:
-            if not is_suitable_user_key(key):
-                raise ValueError(
-                    f'Metadata key: {key} of type: {type(key)} invalid. Must be int '
-                    f'ascii string with only alpha-numeric / "." "_" "-" characters. '
-                    f'Must be <= 64 characters long.')
-            elif not (isinstance(value, str) and is_ascii(value)):
-                raise ValueError(
-                    f'Metadata Value: `{value}` not allowed. Must be ascii-only string')
-        except ValueError as e:
-            raise e from None
-
+    def _perform_set(self, key: KeyTypes, val: str):
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
 
-            val_hash = metadata_hash_digest(value=value)
+            val_hash = metadata_hash_digest(value=val)
             hashKey = hash_meta_db_key_from_raw_key(val_hash)
             metaRecKey = metadata_record_db_key_from_raw_key(key)
             metaRecVal = metadata_record_db_val_from_raw_val(val_hash)
@@ -390,46 +337,134 @@ class MetadataWriter(MetadataReader):
                 existingMetaRec = metadata_record_raw_val_from_db_val(existingMetaRecVal)
                 # check if meta record already exists with same key/val
                 if val_hash == existingMetaRec.meta_hash:
-                    return key
+                    return
 
             # write new data if label hash does not exist
             existingHashVal = self._labelTxn.get(hashKey, default=False)
             if existingHashVal is False:
-                hashVal = hash_meta_db_val_from_raw_val(value)
+                hashVal = hash_meta_db_val_from_raw_val(val)
                 self._labelTxn.put(hashKey, hashVal)
 
             self._dataTxn.put(metaRecKey, metaRecVal)
             self._mspecs[key] = hashKey
-            return key
+            return
 
-    def remove(self, key: Union[str, int]) -> Union[str, int]:
-        """Remove a piece of metadata from the staging area of the next commit.
+    def __setitem__(self, key: KeyTypes, value: str) -> None:
+        """Store a key/value pair as metadata. Convenience method to :meth:`add`.
+
+        .. seealso:: :meth:`update`
 
         Parameters
         ----------
-        key : Union[str, int]
-            Metadata name to remove.
+        key : KeyTypes
+            Name of the metadata piece, alphanumeric ascii characters only.
+        value : string
+            Metadata value to store in the repository, any length of valid
+            ascii characters.
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            self.__set_arg_validate(key, value)
+            self._perform_set(key, value)
 
-        Returns
-        -------
-        Union[str, int]
-            Name of the metadata key/value pair removed, if the operation was
-            successful.
+    def update(self, other: Union[None, MapKeyValType] = None, **kwargs) -> None:
+        """Store some data with the key/value pairs from other, overwriting existing keys.
+
+        :meth:`update` implements functionality similar to python's builtin
+        :meth:`dict.update` method, accepting either a dictionary or other
+        iterable (of length two) listing key / value pairs.
+
+        Parameters
+        ----------
+        other : Union[None, MapKeyValType], optional
+            Accepts either another dictionary object or an iterable of
+            key/value pairs (as tuples or other iterables of length two).
+            mapping sample names to :class:`str` instances, If sample
+            name is string type, can only contain alpha-numeric ascii
+            characters (in addition to '-', '.', '_'). Int key must be >= 0.
+            By default, None.
+        **kwargs
+            keyword arguments provided will be saved with keywords as sample keys
+            (string type only) and values as string instances.
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+
+            if other and not isinstance(other, dict):
+                other = dict(other)
+            elif other is None:
+                other = {}
+            if kwargs:
+                # we have to merge kwargs dict with `other` before operating on
+                # either so all validation and writing occur atomically
+                other.update(kwargs)
+
+            for key, val in other.items():
+                self.__set_arg_validate(key, val)
+            for key, val in other.items():
+                self._perform_set(key, val)
+
+    def append(self, value: str) -> KeyTypes:
+        """TODO: is this the right way we should be handling unnamed samples?
+        """
+        with ExitStack() as stack:
+            if not self._is_conman:
+                stack.enter_context(self)
+            key = generate_sample_name()
+            self.__set_arg_validate(key, value)
+            self._perform_set(key, value)
+            return key
+
+    def __delitem__(self, key: KeyTypes):
+        """Remove a key/value pair from metadata.
+
+        .. seealso:: :meth:`pop` for an atomic get value and delete operation
+
+        Parameters
+        ----------
+        key : KeyTypes
+            Name of the metadata piece to remove.
 
         Raises
         ------
         KeyError
-            If the checkout does not contain metadata with the provided key.
+            If no item exists with the specified key
         """
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
 
             if key not in self._mspecs:
-                raise KeyError(f'No metadata exists with key: {key}')
+                raise KeyError(key)
             metaRecKey = metadata_record_db_key_from_raw_key(key)
             delete_succeeded = self._dataTxn.delete(metaRecKey)
             if delete_succeeded is False:
-                raise KeyError(f'No metadata exists with key: {key}')
+                raise RuntimeError(
+                    f'Internal error, could not delete metadata key `{key}` with '
+                    f' metaRecKey `{metaRecKey}` from refs db even though in memory '
+                    f'verification succeeded. Please report to hangar dev team.')
             del self._mspecs[key]
-            return key
+
+    def pop(self, key: KeyTypes) -> str:
+        """Retrieve some value for some key(s) and delete it in the same operation.
+
+        Parameters
+        ----------
+        key : KeysType
+            Sample key to remove
+
+        Returns
+        -------
+        str
+            Upon success, the value of the removed key.
+
+        Raises
+        ------
+        KeyError
+            If there is no sample with some key in the arrayset.
+        """
+        value = self[key]
+        del self[key]
+        return value
