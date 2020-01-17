@@ -739,8 +739,6 @@ def test_writer_co_aset_removes_all_samples_and_arrayset_still_exists(aset_sampl
     del wco.arraysets['writtenaset']
 
     assert len(wco.arraysets) == 0
-    with pytest.raises(ReferenceError):
-        len(wset)
     with pytest.raises(KeyError):
         len(wco.arraysets['writtenaset'])
     wco.close()

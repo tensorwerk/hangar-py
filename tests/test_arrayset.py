@@ -792,8 +792,6 @@ class TestDataWithFixedSizedArrayset(object):
         assert len(co.arraysets) == 0
         with pytest.raises(KeyError):
             len(co.arraysets['writtenaset'])
-        with pytest.raises(ReferenceError):
-            len(wset)
         co.commit('this is a commit message')
         co.close()
 

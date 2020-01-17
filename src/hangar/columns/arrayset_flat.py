@@ -1,4 +1,4 @@
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from pathlib import Path
 from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Type, Optional, Any
 
@@ -410,6 +410,13 @@ class SampleReaderModifier(object):
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
+    def _destruct(self):
+        with suppress(AttributeError, TypeError):
+            self._close()
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)
+
 
 class SampleWriterModifier(SampleReaderModifier):
 
@@ -795,3 +802,14 @@ class SampleWriterModifier(SampleReaderModifier):
         self._dflt_schema_hash = schema_hash
         self._schema_spec = rawAsetSchema
         return
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+
+        super()._destruct()
+        with suppress(AttributeError, TypeError):
+            self._close()
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)

@@ -1,4 +1,4 @@
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from pathlib import Path
 from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 
@@ -16,7 +16,7 @@ from ..records.parsing import (
     hash_schema_db_key_from_raw_key
 )
 from ..records.queries import RecordQuery
-from ..utils import cm_weakref_obj_proxy, is_suitable_user_key, is_ascii
+from ..utils import is_suitable_user_key, is_ascii
 from . import AsetTxn, Sample, Subsample, ModifierTypes, WriterModifierTypes
 
 KeyType = Union[str, int]
@@ -255,8 +255,7 @@ class Arraysets(object):
         """
         for asetN in list(self._arraysets.keys()):
             asetObj = self._arraysets[asetN]
-            wr = cm_weakref_obj_proxy(asetObj)
-            yield wr
+            yield asetObj
 
     def items(self) -> Iterable[Tuple[str, ModifierTypes]]:
         """generator providing access to arrayset_name, :class:`Arraysets`
@@ -268,8 +267,7 @@ class Arraysets(object):
         """
         for asetN in list(self._arraysets.keys()):
             asetObj = self._arraysets[asetN]
-            wr = cm_weakref_obj_proxy(asetObj)
-            yield (asetN, wr)
+            yield (asetN, asetObj)
 
     def get(self, name: str) -> ModifierTypes:
         """Returns a arrayset access object.
@@ -292,12 +290,11 @@ class Arraysets(object):
         KeyError
             If no arrayset with the given name exists in the checkout
         """
+
         try:
-            wr = cm_weakref_obj_proxy(self._arraysets[name])
-            return wr
+            return self._arraysets[name]
         except KeyError:
-            e = KeyError(f'No arrayset exists with name: {name}')
-            raise e from None
+            raise KeyError(f'No arrayset exists with name: {name}')
 
 # ------------------------ Writer-Enabled Methods Only ------------------------------
 
@@ -573,6 +570,23 @@ class Arraysets(object):
         return aset_name
 
 # ------------------------ Class Factory Functions ------------------------------
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+
+        with suppress(AttributeError, TypeError):
+            self._close()
+
+        for asetn in list(self._arraysets.keys()):
+            with suppress(AttributeError, TypeError):
+                self._arraysets[asetn]._destruct()
+            del self._arraysets[asetn]
+
+        for attr in list(dir(self)):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)
+
 
     @classmethod
     def _from_staging_area(cls, repo_pth: Path, hashenv: lmdb.Environment,

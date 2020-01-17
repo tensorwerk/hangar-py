@@ -1,4 +1,4 @@
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from pathlib import Path
 from typing import Optional, Union, Iterator, Tuple, Dict, Mapping, List, Sequence, Any, Iterable
 
@@ -261,6 +261,14 @@ class MetadataReader(object):
             for key in self._mode_aware_key_looper():
                 yield (key, self[key])
 
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)
+
 
 class MetadataWriter(MetadataReader):
     """Class implementing write access to repository metadata.
@@ -468,3 +476,12 @@ class MetadataWriter(MetadataReader):
         value = self[key]
         del self[key]
         return value
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+
+        super()._destruct()
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)

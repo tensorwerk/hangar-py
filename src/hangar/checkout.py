@@ -14,7 +14,6 @@ from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
 from .metadata import MetadataReader, MetadataWriter
 from .records import commiting, hashs, heads
-from .utils import cm_weakref_obj_proxy
 
 
 class ReaderCheckout(GetMixin):
@@ -196,13 +195,12 @@ class ReaderCheckout(GetMixin):
         Returns
         -------
         :class:`~.columns.arrayset.Arraysets`
-            weakref proxy to the arraysets object which behaves exactly like a
+            the arraysets object which behaves exactly like a
             arraysets accessor class but which can be invalidated when the writer
             lock is released.
         """
         self._verify_alive()
-        wr = cm_weakref_obj_proxy(self._arraysets)
-        return wr
+        return self._arraysets
 
     @property
     def metadata(self) -> MetadataReader:
@@ -221,8 +219,7 @@ class ReaderCheckout(GetMixin):
             released.
         """
         self._verify_alive()
-        wr = cm_weakref_obj_proxy(self._metadata)
-        return wr
+        return self._metadata
 
     @property
     def diff(self) -> ReaderUserDiff:
@@ -269,44 +266,17 @@ class ReaderCheckout(GetMixin):
         multiple simultaneous read checkouts.
         """
         self._verify_alive()
-
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        with suppress(AttributeError):
-            self._arraysets._close()
+        with suppress(AttributeError, TypeError):
+            self._arraysets._destruct()
+        with suppress(AttributeError, TypeError):
+            self._metadata._destruct()
 
-        for asetn in (self._arraysets._arraysets.keys()):
-            for attr in list(self._arraysets._arraysets[asetn].__dir__()):
-                with suppress(AttributeError, TypeError):
-                    delattr(self._arraysets._arraysets[asetn], attr)
-
-        for attr in list(self._arraysets.__dir__()):
+        for attr in dir(self):
             with suppress(AttributeError, TypeError):
-                # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
-                delattr(self._arraysets, f'_self_{attr}')
-
-        for attr in list(self._metadata.__dir__()):
-            with suppress(AttributeError, TypeError):
-                # adding `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
-                delattr(self._metadata, f'_self_{attr}')
-
-        with suppress(AttributeError):
-            del self._arraysets
-        with suppress(AttributeError):
-            del self._metadata
-        with suppress(AttributeError):
-            del self._differ
-
-        del self._stack
-        del self._commit_hash
-        del self._repo_path
-        del self._labelenv
-        del self._dataenv
-        del self._hashenv
-        del self._branchenv
-        del self._refenv
-        del self._enter_count
+                delattr(self, attr)
         atexit.unregister(self.close)
         return
 
@@ -460,8 +430,10 @@ class WriterCheckout(GetMixin):
             self._writer_lock
         except AttributeError:
             with suppress(AttributeError):
+                self._arraysets._destruct()
                 del self._arraysets
             with suppress(AttributeError):
+                self._metadata._destruct()
                 del self._metadata
             with suppress(AttributeError):
                 del self._differ
@@ -473,8 +445,10 @@ class WriterCheckout(GetMixin):
             heads.acquire_writer_lock(self._branchenv, self._writer_lock)
         except PermissionError as e:
             with suppress(AttributeError):
+                self._arraysets._destruct()
                 del self._arraysets
             with suppress(AttributeError):
+                self._metadata._destruct()
                 del self._metadata
             with suppress(AttributeError):
                 del self._differ
@@ -695,13 +669,12 @@ class WriterCheckout(GetMixin):
         Returns
         -------
         :class:`~.columns.arrayset.Arraysets`
-            weakref proxy to the arraysets object which behaves exactly like a
+            the arraysets object which behaves exactly like a
             arraysets accessor class but which can be invalidated when the writer
             lock is released.
         """
         self._verify_alive()
-        wr = cm_weakref_obj_proxy(self._arraysets)
-        return wr
+        return self._arraysets
 
     @property
     def metadata(self) -> MetadataWriter:
@@ -715,13 +688,12 @@ class WriterCheckout(GetMixin):
         Returns
         -------
         MetadataWriter
-            weakref proxy to the metadata object which behaves exactly like a
+            the metadata object which behaves exactly like a
             metadata class but which can be invalidated when the writer lock is
             released.
         """
         self._verify_alive()
-        wr = cm_weakref_obj_proxy(self._metadata)
-        return wr
+        return self._metadata
 
     @property
     def diff(self) -> WriterUserDiff:
@@ -946,48 +918,17 @@ class WriterCheckout(GetMixin):
         writes until it has been manually cleared.
         """
         self._verify_alive()
-
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        if hasattr(self, '_arraysets') and (getattr(self, '_arraysets') is not None):
-            self._arraysets._close()
-
-            for asetn in (self._arraysets._arraysets.keys()):
-                for attr in list(self._arraysets._arraysets[asetn].__dir__()):
-                    with suppress(AttributeError, TypeError):
-                        delattr(self._arraysets._arraysets[asetn], attr)
-
-            for attr in list(self._arraysets.__dir__()):
-                with suppress(AttributeError, TypeError):
-                    # prepending `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
-                    delattr(self._arraysets, f'_self_{attr}')
-
-        if hasattr(self, '_metadata') and (getattr(self, '_arraysets') is not None):
-            for attr in list(self._metadata.__dir__()):
-                with suppress(AttributeError, TypeError):
-                    # prepending `_self_` addresses `WeakrefProxy` in `wrapt.ObjectProxy`
-                    delattr(self._metadata, f'_self_{attr}')
-
-        with suppress(AttributeError):
-            del self._arraysets
-        with suppress(AttributeError):
-            del self._metadata
-        with suppress(AttributeError):
-            del self._differ
+        with suppress(AttributeError, TypeError):
+            self._arraysets._destruct()
+        with suppress(AttributeError, TypeError):
+            self._metadata._destruct()
 
         heads.release_writer_lock(self._branchenv, self._writer_lock)
-
-        del self._stack
-        del self._refenv
-        del self._hashenv
-        del self._labelenv
-        del self._stageenv
-        del self._branchenv
-        del self._stagehashenv
-        del self._repo_path
-        del self._writer_lock
-        del self._branch_name
-        del self._enter_count
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)
         atexit.unregister(self.close)
         return

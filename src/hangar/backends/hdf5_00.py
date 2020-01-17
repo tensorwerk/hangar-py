@@ -161,7 +161,6 @@ Technical Notes
 """
 import logging
 import os
-import re
 import time
 from collections import ChainMap
 from functools import partial
@@ -191,6 +190,8 @@ set_blosc_nthreads()
 
 # ----------------------------- Configuration ---------------------------------
 
+_FmtCode = '00'
+
 # contents of a single hdf5 file
 COLLECTION_SIZE = 250
 COLLECTION_COUNT = 100
@@ -201,10 +202,6 @@ CHUNK_MAX_RDCC_NBYTES = 100_000_000
 CHUNK_RDCC_W0 = 0.75
 
 # -------------------------------- Parser Implementation ----------------------
-
-_FmtCode = '00'
-# match and remove the following characters: '['   ']'   '('   ')'   ','
-_SRe = re.compile('[,\(\)\[\]]')
 
 
 def hdf5_00_encode(uid: str, cksum: str, dset: str, dset_idx: int,
@@ -231,7 +228,7 @@ def hdf5_00_encode(uid: str, cksum: str, dset: str, dset_idx: int,
     bytes
         hash data db value recording all input specifications.
     """
-    return f'00:{uid}:{cksum}:{dset}:{dset_idx}:{_SRe.sub("", str(shape))}'.encode()
+    return f'00:{uid}:{cksum}:{dset}:{dset_idx}:{" ".join(str(i) for i in shape)}'.encode()
 
 
 # ------------------------- Accessor Object -----------------------------------

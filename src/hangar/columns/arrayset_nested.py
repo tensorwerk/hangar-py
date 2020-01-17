@@ -1,4 +1,4 @@
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from pathlib import Path
 from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
 from weakref import proxy
@@ -6,7 +6,7 @@ from weakref import proxy
 import numpy as np
 
 from .utils import valfilter, valfilterfalse
-from ..utils import is_suitable_user_key, cm_weakref_obj_proxy
+from ..utils import is_suitable_user_key
 from ..backends import (
     backend_decoder,
     parse_user_backend_opts,
@@ -47,6 +47,8 @@ class SubsampleName(NamedTuple):
 
 
 class SubsampleReader(object):
+
+    __slots__ = ('_asetn', '_samplen', '_be_fs', '_subsamples', '_mode')
 
     def __init__(self, asetn: str, samplen: str, be_handles: BACKEND_ACCESSOR_MAP,
                  specs: Dict[KeyType, DataHashSpecsType]):
@@ -331,8 +333,15 @@ class SubsampleReader(object):
         except KeyError:
             return default
 
+    def _destruct(self):
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)
+
 
 class SubsampleWriter(SubsampleReader):
+
+    __slots__ = ('_txnctx', '_stack')
 
     def __init__(self, aset_txn_ctx, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -606,6 +615,14 @@ class SubsampleWriter(SubsampleReader):
         del self[key]
         return value
 
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        super()._destruct()
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)
+
 
 SubsampleTypes = Union[SubsampleReader, SubsampleWriter]
 
@@ -696,8 +713,7 @@ class SubsampleReaderModifier(object):
         SubsampleTypes
             Sample accessor corresponding to the given key
         """
-        sample = self._samples[key]
-        return cm_weakref_obj_proxy(sample)
+        return self._samples[key]
 
     def __iter__(self) -> Iterable[KeyType]:
         """Create iterator yielding an arrayset sample key for every call to ``next``.
@@ -967,6 +983,22 @@ class SubsampleReaderModifier(object):
         except KeyError:
             return default
 
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+
+        with suppress(AttributeError, TypeError):
+            self._close()
+
+        for samplen in list(self._samples.keys()):
+            with suppress(AttributeError, TypeError):
+                self._samples[samplen]._destruct()
+            del self._samples[samplen]
+
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)
+
 
 class SubsampleWriterModifier(SubsampleReaderModifier):
 
@@ -1137,6 +1169,8 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             subsample_keys = list(sample.keys())
             for subkey in subsample_keys:
                 del sample[subkey]
+
+            self._samples[key]._destruct()
             del self._samples[key]
 
     def pop(self, key: KeyType) -> Dict[KeyType, KeyArrMap]:
@@ -1236,3 +1270,14 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         self._dflt_schema_hash = schema_hash
         self._schema_spec = rawAsetSchema
         return
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+
+        with suppress(AttributeError, TypeError):
+            self._close()
+        super()._destruct()
+        for attr in dir(self):
+            with suppress(AttributeError, TypeError):
+                delattr(self, attr)

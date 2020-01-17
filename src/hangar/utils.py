@@ -6,15 +6,12 @@ import re
 import string
 import time
 import types
-import weakref
 from collections import deque
-from functools import partial
 from io import StringIO
 from itertools import tee, filterfalse, count
-from typing import Union, Any
+from typing import Union
 
 import blosc
-import wrapt
 
 from . import __version__
 from .constants import DIR_HANGAR
@@ -83,34 +80,6 @@ def random_string(n: int = 8) -> str:
     """
     letters = ''.join([string.ascii_lowercase, string.digits])
     return ''.join(random.choice(letters) for i in range(n))
-
-
-def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
-    """Creates a weakproxy reference honoring optional use context managers.
-
-    This is required because (for some unknown reason) `weakproxy`
-    references will not actually pass through the `__enter__` attribute of
-    the referred object's instance. As such, these are manually set to the
-    appropriate values on the `weakproxy` object. The final `weakproxy` is
-    in turn referenced by an object proxy so that all calls to the
-    methods/attributes are passed through uniformly.
-
-    Parameters
-    ----------
-    obj: Any
-        object instance implementing the __enter__ and __exit__ methods which
-        should be passed through as a weakref proxy object
-
-    Returns
-    -------
-    ObjectProxy
-        object analogous to a plain weakproxy object.
-    """
-    wr = weakref.proxy(obj)
-    setattr(wr, '__enter__', partial(obj.__class__.__enter__, wr))
-    setattr(wr, '__exit__', partial(obj.__class__.__exit__, wr))
-    obj_proxy = wrapt.ObjectProxy(wr)
-    return obj_proxy
 
 
 def tb_params_last_called(tb: types.TracebackType):

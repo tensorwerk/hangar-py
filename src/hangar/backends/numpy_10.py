@@ -77,7 +77,6 @@ Technical Notes
    methods when reading from disk.
 """
 import os
-import re
 from collections import ChainMap
 from functools import partial
 from pathlib import Path
@@ -93,14 +92,12 @@ from .specs import NUMPY_10_DataHashSpec
 
 # ----------------------------- Configuration ---------------------------------
 
+_FmtCode = '10'
+
 # number of subarray contents of a single numpy memmap file
 COLLECTION_SIZE = 1000
 
 # -------------------------------- Parser Implementation ----------------------
-
-_FmtCode = '10'
-# # match and remove the following characters: '['   ']'   '('   ')'   ','
-_SRe = re.compile('[,\(\)\[\]]')
 
 
 def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> bytes:
@@ -124,7 +121,7 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
     bytes
         hash data db value recording all input specifications
     """
-    return f'10:{uid}:{cksum}:{collection_idx}:{_SRe.sub("", str(shape))}'.encode()
+    return f'10:{uid}:{cksum}:{collection_idx}:{" ".join(str(i) for i in shape)}'.encode()
 
 
 # ------------------------- Accessor Object -----------------------------------

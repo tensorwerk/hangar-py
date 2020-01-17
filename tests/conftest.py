@@ -21,14 +21,29 @@ fixed_shape_backend_params = ['00', '01', '10']
 
 @pytest.fixture(scope='class')
 def classrepo(tmp_path_factory) -> Repository:
+
+    old00_count = hangar.backends.hdf5_00.COLLECTION_COUNT
+    old00_size = hangar.backends.hdf5_00.COLLECTION_SIZE
+    old01_count = hangar.backends.hdf5_01.COLLECTION_COUNT
+    old01_size = hangar.backends.hdf5_01.COLLECTION_SIZE
+    hangar.backends.hdf5_00.COLLECTION_COUNT = 5
+    hangar.backends.hdf5_00.COLLECTION_SIZE = 10
+    hangar.backends.hdf5_01.COLLECTION_COUNT = 5
+    hangar.backends.hdf5_01.COLLECTION_SIZE = 10
+
     old_map_size = hangar.constants.LMDB_SETTINGS['map_size']
     hangar.constants.LMDB_SETTINGS['map_size'] = 2_000_000
     hangar.txnctx.TxnRegisterSingleton._instances = {}
+
     pth = tmp_path_factory.mktemp('classrepo')
     repo_obj = Repository(path=str(pth), exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     yield repo_obj
     hangar.constants.LMDB_SETTINGS['map_size'] = old_map_size
+    hangar.backends.hdf5_00.COLLECTION_COUNT = old00_count
+    hangar.backends.hdf5_00.COLLECTION_SIZE = old00_size
+    hangar.backends.hdf5_01.COLLECTION_COUNT = old01_count
+    hangar.backends.hdf5_01.COLLECTION_SIZE = old01_size
     repo_obj._env._close_environments()
 
 

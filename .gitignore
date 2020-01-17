@@ -4,6 +4,9 @@
 *.c
 *.so
 
+# cython annotation files
+src/hangar/backends/*.html
+
 # Packages
 *.egg
 *.egg-info
