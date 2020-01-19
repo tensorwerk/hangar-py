@@ -89,9 +89,9 @@ def initialized_arrayset_read_only(backend_param, contains_subsamples, classrepo
     else:
         aset.update(sample_data_map)
 
-    co.commit(f'done {backend_param}{contains_subsamples}')
+    digest = co.commit(f'done {backend_param}{contains_subsamples}')
     co.close()
-    nco = classrepo.checkout(write=False)
+    nco = classrepo.checkout(write=False, commit=digest)
     yield nco.arraysets[f'foo{backend_param}{int(contains_subsamples)}']
     nco.close()
 
@@ -108,6 +108,9 @@ class TestPickleableArraysets:
         else:
             pkl = pickle.dumps(aset, protocol=pickle.HIGHEST_PROTOCOL)
             assert isinstance(pkl, bytes)
+
+
+class TestLoadableArraysets:
 
     def test_is_pickle_is_loadable(self, initialized_arrayset_read_only, sample_data_map, subsample_data_map):
         import pickle

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import weakref
 import warnings
@@ -50,7 +49,7 @@ class Repository(object):
         permissions to write to that location. Default = True
     """
 
-    def __init__(self, path: Union[str, os.PathLike], exists: bool = True):
+    def __init__(self, path: Union[str, Path], exists: bool = True):
 
         if isinstance(path, (str, bytes)):
             path = Path(path)

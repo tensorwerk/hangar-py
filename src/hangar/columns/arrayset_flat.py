@@ -1,12 +1,11 @@
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Type, Optional, Any
-from .utils import reader_checkout_only
 
 import numpy as np
 
-from .utils import valfilter, valfilterfalse
-from ..utils import is_suitable_user_key
+from ..utils import is_suitable_user_key, valfilter, valfilterfalse
+from ..op_state import reader_checkout_only
 from ..backends import (
     backend_decoder,
     parse_user_backend_opts,
@@ -114,7 +113,7 @@ class SampleReaderModifier(object):
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar Sample Arrayset \
-                \n    Arrayset Name             : {self._asetn}\
+                \n    Arrayset Name            : {self._asetn}\
                 \n    Schema Hash              : {self._dflt_schema_hash}\
                 \n    Variable Shape           : {bool(int(self._schema_variable))}\
                 \n    (max) Shape              : {self._schema_max_shape}\
@@ -228,7 +227,7 @@ class SampleReaderModifier(object):
         spec = self._samples[key]
         return self._be_fs[spec.backend].read_data(spec)
 
-    def get(self, key: KeyType, default: Any = None) -> np.ndarray:
+    def get(self, key: KeyType, default: Any = None) -> Union[np.ndarray, Any]:
         """Retrieve the data associated with some sample key
 
         Parameters
@@ -798,6 +797,7 @@ class SampleWriterModifier(SampleReaderModifier):
                                          size=proto.size,
                                          dtype_num=proto.dtype.num,
                                          variable_shape=self.variable_shape,
+                                         contains_subsamples=self.contains_subsamples,
                                          backend_code=beopts.backend,
                                          backend_opts=beopts.opts)
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.arrayset)

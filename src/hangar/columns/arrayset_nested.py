@@ -1,13 +1,12 @@
-from contextlib import ExitStack, suppress
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
 from weakref import proxy
-from .utils import reader_checkout_only
 
 import numpy as np
 
-from .utils import valfilter, valfilterfalse
-from ..utils import is_suitable_user_key
+from ..op_state import reader_checkout_only
+from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 from ..backends import (
     backend_decoder,
     parse_user_backend_opts,
@@ -1298,6 +1297,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
                                          size=proto.size,
                                          dtype_num=proto.dtype.num,
                                          variable_shape=self.variable_shape,
+                                         contains_subsamples=self.contains_subsamples,
                                          backend_code=beopts.backend,
                                          backend_opts=beopts.opts)
         asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.arrayset)

@@ -1,5 +1,4 @@
 import logging
-import os
 from pathlib import Path
 import tempfile
 import time
@@ -361,8 +360,8 @@ class Remotes(object):
 
         with tempfile.TemporaryDirectory() as tempD:
             # share unpacked ref db between dependent methods
-            tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_SETTINGS)
+            tmpDF = Path(tempD, 'test.lmdb')
+            tmpDB = lmdb.open(path=str(tmpDF), **LMDB_SETTINGS)
             try:
                 allHashs = set()
                 # all history argument
@@ -505,8 +504,8 @@ class Remotes(object):
             m_labels, m_schemas = set(), set()
             m_schema_hashs = defaultdict(set)
             with tempfile.TemporaryDirectory() as tempD:
-                tmpDF = os.path.join(tempD, 'test.lmdb')
-                tmpDB = lmdb.open(path=tmpDF, **LMDB_SETTINGS)
+                tmpDF = Path(tempD, 'test.lmdb')
+                tmpDB = lmdb.open(path=str(tmpDF), **LMDB_SETTINGS)
                 for commit in tqdm(m_commits, desc='counting objects'):
                     # share unpacked ref db between dependent methods
                     with tmpDB.begin(write=True) as txn:

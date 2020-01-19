@@ -18,7 +18,7 @@ except ImportError:
 @pytest.mark.skipif(skipTorch is False,
                     reason='pytorch installed for test requiring it to not be')
 def test_no_torch_installed_raises_error_on_dataloader_import():
-    with pytest.raises(ImportError, match='Could not import torch'):
+    with pytest.raises(ImportError):
         from hangar import make_torch_dataset
         make_torch_dataset(None)
 
@@ -270,7 +270,7 @@ except ImportError:
 @pytest.mark.skipif(skipTF is False,
                     reason='tensorflow installed for test requiring it to not be')
 def test_no_tf_installed_raises_error_on_dataloader_import():
-    with pytest.raises(ImportError, match='Could not import tensorflow'):
+    with pytest.raises(ImportError):
         from hangar import make_tf_dataset
         make_tf_dataset(None)
 

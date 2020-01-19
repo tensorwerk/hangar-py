@@ -1,4 +1,4 @@
-from contextlib import ExitStack, suppress
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 
@@ -16,8 +16,8 @@ from ..records.parsing import (
     hash_schema_db_key_from_raw_key
 )
 from ..records.queries import RecordQuery
+from ..op_state import writer_checkout_only
 from ..utils import is_suitable_user_key, is_ascii
-from .utils import writer_checkout_only
 from . import AsetTxn, Sample, Subsample, ModifierTypes, WriterModifierTypes
 
 KeyType = Union[str, int]
@@ -31,18 +31,16 @@ class ArraysetConstructors(type):
     accessable as a bound method. This is important because Arrayset
     class instances are user facing; the ability to construct a new
     object modifying or accessing repo state/data should never be
-    available to users.
+    available.
     """
 
     def _from_staging_area(cls, repo_pth: Path, hashenv: lmdb.Environment,
                            stageenv: lmdb.Environment,
                            stagehashenv: lmdb.Environment):
-        """Class method factory to checkout :class:`Arraysets` in write-enabled mode
+        """Class method factory to checkout :class:`Arraysets` in write mode
 
-        This is not a user facing operation, and should never be manually
-        called in normal operation. Once you get here, we currently assume that
-        verification of the write lock has passed, and that write operations
-        are safe.
+        Once you get here, we assume the write lock verification has
+        passed, and that write operations are safe to perform.
 
         Parameters
         ----------
@@ -58,9 +56,8 @@ class ArraysetConstructors(type):
         Returns
         -------
         :class:`.Arraysets`
-            Interface class with write-enabled attributes activated and any
-            arraysets existing initialized in write mode via
-            :class:`.columns.arrayset.ArraysetDataWriter`.
+            Interface class with write-enabled attributes activate which contains
+            live arrayset data accessors in `write` mode.
         """
 
         arraysets = {}
@@ -86,12 +83,10 @@ class ArraysetConstructors(type):
 
     def _from_commit(cls, repo_pth: Path, hashenv: lmdb.Environment,
                      cmtrefenv: lmdb.Environment):
-        """Class method factory to checkout :class:`.columns.arrayset.Arraysets` in read-only mode
+        """Class method factory to checkout :class:`.Arraysets` in read-only mode
 
-        This is not a user facing operation, and should never be manually called
-        in normal operation. For read mode, no locks need to be verified, but
-        construction should occur through the interface to the
-        :class:`Arraysets` class.
+        For read mode, no locks need to be verified, but construction should
+        occur through this interface only.
 
         Parameters
         ----------
@@ -105,8 +100,8 @@ class ArraysetConstructors(type):
         Returns
         -------
         :class:`.Arraysets`
-            Interface class with all write-enabled attributes deactivated
-            arraysets initialized in read mode via :class:`.columns.arrayset.ArraysetDataReader`.
+            Interface class with write-enabled attributes deactivated which
+            contains live arrayset data accessors in `read-only` mode.
         """
         arraysets = {}
         txnctx = AsetTxn(cmtrefenv, hashenv, None)
@@ -273,7 +268,10 @@ class Arraysets(metaclass=ArraysetConstructors):
             specified. If the arrayset was checked out with write-enabled,
             return writer object, otherwise return read only object.
         """
-        return self.get(key)
+        try:
+            return self._arraysets[key]
+        except KeyError:
+            raise KeyError(f'No arrayset exists with name: {key}')
 
     def __contains__(self, key: str) -> bool:
         """Determine if a arrayset with a particular name is stored in the checkout
@@ -419,11 +417,7 @@ class Arraysets(metaclass=ArraysetConstructors):
         KeyError
             If no arrayset with the given name exists in the checkout
         """
-
-        try:
-            return self._arraysets[name]
-        except KeyError:
-            raise KeyError(f'No arrayset exists with name: {name}')
+        return self[name]
 
     # ------------------------ Writer-Enabled Methods Only ------------------------------
 
@@ -587,6 +581,7 @@ class Arraysets(metaclass=ArraysetConstructors):
                                          size=prototype.size,
                                          dtype_num=prototype.dtype.num,
                                          variable_shape=variable_shape,
+                                         contains_subsamples=contains_subsamples,
                                          backend_code=beopts.backend,
                                          backend_opts=beopts.opts)
 

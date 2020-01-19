@@ -86,9 +86,10 @@ import numpy as np
 from numpy.lib.format import open_memmap
 from xxhash import xxh64_hexdigest
 
-from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
-from ..utils import random_string
 from .specs import NUMPY_10_DataHashSpec
+from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
+from ..op_state import reader_checkout_only, writer_checkout_only
+from ..utils import random_string
 
 # ----------------------------- Configuration ---------------------------------
 
@@ -121,7 +122,8 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
     bytes
         hash data db value recording all input specifications
     """
-    return f'10:{uid}:{cksum}:{collection_idx}:{" ".join(str(i) for i in shape)}'.encode()
+    shape_str = " ".join([str(i) for i in shape])
+    return f'10:{uid}:{cksum}:{collection_idx}:{shape_str}'.encode()
 
 
 # ------------------------- Accessor Object -----------------------------------
@@ -152,6 +154,7 @@ class NUMPY_10_FileHandles(object):
         self.STOREDIR: Path = Path(self.repo_path, DIR_DATA_STORE, _FmtCode)
         self.DATADIR.mkdir(exist_ok=True)
 
+    @reader_checkout_only
     def __getstate__(self) -> dict:
         """ensure multiprocess operations can pickle relevant data.
         """
@@ -182,13 +185,28 @@ class NUMPY_10_FileHandles(object):
     def backend_opts(self):
         return self._dflt_backend_opts
 
+    @writer_checkout_only
+    def _backend_opts_set(self, val):
+        """Nonstandard descriptor method. See notes in ``backend_opts.setter``.
+        """
+        self._dflt_backend_opts = val
+        return
+
     @backend_opts.setter
-    def backend_opts(self, val):
-        if self.mode == 'a':
-            self._dflt_backend_opts = val
-            return
-        else:
-            raise AttributeError(f"can't set property in read only mode")
+    def backend_opts(self, value):
+        """
+        Using seperate setter method (with ``@writer_checkout_only`` decorator
+        applied) due to bug in python <3.8.
+
+        From: https://bugs.python.org/issue19072
+            > The classmethod decorator when applied to a function of a class,
+            > does not honour the descriptor binding protocol for whatever it
+            > wraps. This means it will fail when applied around a function which
+            > has a decorator already applied to it and where that decorator
+            > expects that the descriptor binding protocol is executed in order
+            > to properly bind the function to the class.
+        """
+        return self._backend_opts_set(value)
 
     def open(self, mode: str, *, remote_operation: bool = False):
         """open numpy file handle coded directories
@@ -369,8 +387,5 @@ class NUMPY_10_FileHandles(object):
 
         destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
         self.wFp[self.w_uid][destSlc] = array
-        hashVal = numpy_10_encode(uid=self.w_uid,
-                                  cksum=checksum,
-                                  collection_idx=self.hIdx,
-                                  shape=array.shape)
-        return hashVal
+        self.wFp[self.w_uid].flush()
+        return numpy_10_encode(self.w_uid, checksum, self.hIdx, array.shape)

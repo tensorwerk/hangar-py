@@ -161,7 +161,7 @@ Technical Notes
 """
 import logging
 import os
-import time
+from contextlib import suppress
 from collections import ChainMap
 from functools import partial
 from pathlib import Path
@@ -181,10 +181,11 @@ finally:
     _logger.setLevel(_initialLevel)
 from xxhash import xxh64_hexdigest
 
+from .specs import HDF5_00_DataHashSpec
 from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..utils import find_next_prime, random_string, set_blosc_nthreads
-from .specs import HDF5_00_DataHashSpec
+from ..op_state import reader_checkout_only, writer_checkout_only
 
 set_blosc_nthreads()
 
@@ -204,8 +205,7 @@ CHUNK_RDCC_W0 = 0.75
 # -------------------------------- Parser Implementation ----------------------
 
 
-def hdf5_00_encode(uid: str, cksum: str, dset: str, dset_idx: int,
-                   shape: Tuple[int]) -> bytes:
+def hdf5_00_encode(uid: str, cksum: str, dset: int, dset_idx: int, shape: Tuple[int]) -> bytes:
     """converts the hdf5 data has spec to an appropriate db value
 
     Parameters
@@ -214,7 +214,7 @@ def hdf5_00_encode(uid: str, cksum: str, dset: str, dset_idx: int,
         the file name prefix which the data is written to.
     cksum : int
         xxhash_64.hex_digest checksum of the data bytes in numpy array form.
-    dset : str
+    dset : int
         collection (ie. hdf5 dataset) name to find this data piece.
     dset_idx : int
         collection first axis index in which this data piece resides.
@@ -228,7 +228,8 @@ def hdf5_00_encode(uid: str, cksum: str, dset: str, dset_idx: int,
     bytes
         hash data db value recording all input specifications.
     """
-    return f'00:{uid}:{cksum}:{dset}:{dset_idx}:{" ".join(str(i) for i in shape)}'.encode()
+    shape_str = " ".join([str(i) for i in shape])
+    return f'00:{uid}:{cksum}:{dset}:{dset_idx}:{shape_str}'.encode()
 
 
 # ------------------------- Accessor Object -----------------------------------
@@ -255,7 +256,7 @@ class HDF5_00_FileHandles(object):
         self.wFp: HDF5_00_MapTypes = {}
         self.Fp: HDF5_00_MapTypes = ChainMap(self.rFp, self.wFp)
         self.rDatasets = {}
-        self.wdset: h5py.Dataset = None
+        self.wdset: Optional[h5py.Dataset] = None
 
         self.mode: Optional[str] = None
         self.hIdx: Optional[int] = None
@@ -282,6 +283,7 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
             self.wFp[self.w_uid].flush()
 
+    @reader_checkout_only
     def __getstate__(self) -> dict:
         """ensure multiprocess operations can pickle relevant data.
         """
@@ -291,6 +293,7 @@ class HDF5_00_FileHandles(object):
         del state['wFp']
         del state['Fp']
         del state['rDatasets']
+        del state['wdset']
         return state
 
     def __setstate__(self, state: dict) -> None:  # pragma: no cover
@@ -301,19 +304,35 @@ class HDF5_00_FileHandles(object):
         self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
         self.rDatasets = {}
+        self.wdset = None
         self.open(mode=self.mode)
 
     @property
     def backend_opts(self):
         return self._dflt_backend_opts
 
+    @writer_checkout_only
+    def _backend_opts_set(self, val):
+        """Nonstandard descriptor method. See notes in ``backend_opts.setter``.
+        """
+        self._dflt_backend_opts = val
+        return
+
     @backend_opts.setter
-    def backend_opts(self, val):
-        if self.mode == 'a':
-            self._dflt_backend_opts = val
-            return
-        else:
-            raise AttributeError(f"can't set property in read only mode")
+    def backend_opts(self, value):
+        """
+        Using seperate setter method (with ``@writer_checkout_only`` decorator
+        applied) due to bug in python <3.8.
+
+        From: https://bugs.python.org/issue19072
+            > The classmethod decorator when applied to a function of a class,
+            > does not honour the descriptor binding protocol for whatever it
+            > wraps. This means it will fail when applied around a function which
+            > has a decorator already applied to it and where that decorator
+            > expects that the descriptor binding protocol is executed in order
+            > to properly bind the function to the class.
+        """
+        return self._backend_opts_set(value)
 
     def open(self, mode: str, *, remote_operation: bool = False):
         """Open an hdf5 file handle in the Handler Singleton
@@ -363,28 +382,22 @@ class HDF5_00_FileHandles(object):
                 self.wFp[self.w_uid]['/'].attrs.modify('next_location', (self.hNextPath, self.hIdx))
                 self.wFp[self.w_uid]['/'].attrs.modify('collections_remaining', self.hColsRemain)
                 self.wFp[self.w_uid].flush()
-                self.hMaxSize = None
-                self.hNextPath = None
-                self.hIdx = None
-                self.hColsRemain = None
-                self.w_uid = None
-                self.wdset = None
             for uid in list(self.wFp.keys()):
-                try:
+                with suppress(AttributeError):
                     self.wFp[uid].close()
-                except AttributeError:
-                    pass
                 del self.wFp[uid]
+            self.wdset = None
+            self.hMaxSize = None
+            self.hNextPath = None
+            self.hIdx = None
+            self.hColsRemain = None
+            self.w_uid = None
 
         for uid in list(self.rFp.keys()):
-            try:
+            with suppress(AttributeError):
                 self.rFp[uid].close()
-            except AttributeError:
-                pass
             del self.rFp[uid]
-
-        for dsetuid in list(self.rDatasets.keys()):
-            del self.rDatasets[dsetuid]
+        self.rDatasets = {}
 
     @staticmethod
     def delete_in_process_data(repo_path: Path, *, remote_operation=False) -> None:
@@ -440,11 +453,6 @@ class HDF5_00_FileHandles(object):
             None indicates no shuffle should be applied.
         """
         # ---- blosc hdf5 plugin filters ----
-        _blosc_shuffle = {
-            None: 0,
-            'none': 0,
-            'byte': 1,
-            'bit': 2}
         _blosc_compression = {
             'blosc:blosclz': 0,
             'blosc:lz4': 1,
@@ -452,26 +460,13 @@ class HDF5_00_FileHandles(object):
             # Not built 'snappy': 3,
             'blosc:zlib': 4,
             'blosc:zstd': 5}
-        _blosc_complevel = {
-            **{i: i for i in range(10)},
-            None: 9,
-            'none': 9}
+        _blosc_shuffle = {None: 0, 'none': 0, 'byte': 1, 'bit': 2}
+        _blosc_complevel = {**{i: i for i in range(10)}, None: 9, 'none': 9}
 
         # ---- h5py built in filters ----
-        _lzf_gzip_shuffle = {
-            None: False,
-            False: False,
-            'none': False,
-            True: True,
-            'byte': True}
-        _lzf_complevel = {
-            False: None,
-            None: None,
-            'none': None}
-        _gzip_complevel = {
-            **{i: i for i in range(10)},
-            None: 4,
-            'none': 4}
+        _lzf_gzip_shuffle = {None: False, False: False, 'none': False, True: True, 'byte': True}
+        _lzf_complevel = {False: None, None: None, 'none': None}
+        _gzip_complevel = {**{i: i for i in range(10)}, None: 4, 'none': 4}
 
         if complib.startswith('blosc'):
             args = {
@@ -593,6 +588,7 @@ class HDF5_00_FileHandles(object):
                                   rdcc_w0=CHUNK_RDCC_W0,
                                   rdcc_nslots=rdcc_nslots_prime_val)
         self.w_uid = uid
+        self.wdset = None
         self.hNextPath = 0
         self.hIdx = 0
         self.hColsRemain = COLLECTION_COUNT
@@ -636,7 +632,6 @@ class HDF5_00_FileHandles(object):
             self.wFp[self.w_uid].swmr_mode = True
         except ValueError:
             assert self.wFp[self.w_uid].swmr_mode is True
-
         self.wdset = self.wFp[self.w_uid][f'/{self.hNextPath}']
 
     def read_data(self, hashVal: HDF5_00_DataHashSpec) -> np.ndarray:
@@ -731,6 +726,7 @@ class HDF5_00_FileHandles(object):
         if self.w_uid in self.wFp:
             self.hIdx += 1
             if self.hIdx >= self.hMaxSize:
+                self.wdset.flush()
                 self.hIdx = 0
                 self.hNextPath += 1
                 self.hColsRemain -= 1
@@ -746,4 +742,5 @@ class HDF5_00_FileHandles(object):
         destSlc = (self.hIdx, self.slcExpr[0:array.size])
         flat_arr = np.ravel(array)
         self.wdset.write_direct(flat_arr, None, destSlc)
+        self.wdset.flush()
         return hdf5_00_encode(self.w_uid, checksum, self.hNextPath, self.hIdx, array.shape)

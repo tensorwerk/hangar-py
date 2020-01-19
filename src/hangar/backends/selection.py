@@ -188,7 +188,7 @@ def backend_opts_from_heuristics(backend: str,
         opts = {}
     elif backend == '00':
         import h5py
-        opts = {
+        stdopts = {
             'default': {
                 'shuffle': None,
                 'complib': 'blosc:zstd',
@@ -201,10 +201,13 @@ def backend_opts_from_heuristics(backend: str,
             },
         }
         hdf5BloscAvail = h5py.h5z.filter_avail(32001)
-        opts = opts['default'] if hdf5BloscAvail else opts['backup']
+        opts = stdopts['default'] if hdf5BloscAvail else stdopts['backup']
+        if opts['complib'].startswith('blosc:') and array.nbytes < 16:
+            # cannot have compression buffer size < 16 bytes with blosc lib.
+            opts = stdopts['backup']
     elif backend == '01':
         import h5py
-        opts = {
+        stdopts = {
             'default': {
                 'shuffle': 'byte',
                 'complib': 'blosc:lz4hc',
@@ -217,7 +220,10 @@ def backend_opts_from_heuristics(backend: str,
             },
         }
         hdf5BloscAvail = h5py.h5z.filter_avail(32001)
-        opts = opts['default'] if hdf5BloscAvail else opts['backup']
+        opts = stdopts['default'] if hdf5BloscAvail else stdopts['backup']
+        if opts['complib'].startswith('blosc:') and array.nbytes < 16:
+            # cannot have compression buffer size < 16 bytes with blosc lib.
+            opts = stdopts['backup']
     elif backend == '50':
         opts = {}
     else:
@@ -274,6 +280,17 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
             raise ValueError(f'Backend specifier: {backend_opts} not known')
         backend = backend_opts['backend']
         opts = {k: v for k, v in backend_opts.items() if k != 'backend'}
+        if backend in ['00', '01'] and 'complib' in opts:
+            if opts['complib'].startswith('blosc:') and prototype.nbytes < 16:
+                # cannot have compression buffer size < 16 bytes with blosc lib.
+                raise ValueError(
+                    f'Blosc compression for backend {backend} is not supported for '
+                    f'arrays less than 16 bytes in size. Schema with specified shape '
+                    f'{prototype.shape} and dtype "{prototype.dtype}" '
+                    f'(itemsize={prototype.itemsize}B) totals {prototype.nbytes}B. '
+                    f'To resolve either modify schema shape / dtype, or select '
+                    f'another complib / backend.'
+                )
     elif backend_opts is None:
         backend = backend_from_heuristics(array=prototype,
                                           variable_shape=variable_shape)

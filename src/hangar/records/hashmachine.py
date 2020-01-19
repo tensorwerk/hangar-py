@@ -52,7 +52,8 @@ def array_hash_digest(array: np.ndarray, *, tcode='0') -> str:
 
 
 def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
-                       variable_shape: bool, backend_code: str, backend_opts: dict,
+                       variable_shape: bool, contains_subsamples: bool,
+                       backend_code: str, backend_opts: dict,
                        *, tcode: str = '1') -> str:
     """Generate the schema hash for some schema specification
 
@@ -67,6 +68,8 @@ def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
     variable_shape : bool
         can samples contain dimensions with lower length then the a dimension's
         max size?
+    contains_subsamples : bool
+        does the schema contain subsamples?
     backend_code : str
         backend format code which specified backend new samples writes to this
         schema are stored in.
@@ -83,8 +86,8 @@ def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
     """
     if tcode == '1':
         optsHsh = json.dumps(backend_opts, separators=(',', ':')).encode()
-        schema_pack = struct.pack(f'<{len(shape)}QQB?2s{len(optsHsh)}s', *shape,
-                                  size, dtype_num, variable_shape,
+        schema_pack = struct.pack(f'<{len(shape)}QQB??2s{len(optsHsh)}s', *shape,
+                                  size, dtype_num, variable_shape, contains_subsamples,
                                   backend_code.encode(), optsHsh)
         schemaHsh = blake2b(schema_pack, digest_size=6)
         res = f'1={schemaHsh.hexdigest()}'

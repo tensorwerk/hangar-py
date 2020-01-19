@@ -10,10 +10,7 @@ from .records.commiting import (
     get_commit_spec,
     tmp_cmt_env,
 )
-from .records.heads import (
-    get_branch_head_commit,
-    get_branch_names,
-)
+from .records.heads import get_branch_head_commit, get_branch_names
 from .records.parsing import (
     arrayset_record_schema_raw_key_from_db_key,
     arrayset_record_schema_raw_val_from_db_val,

@@ -5,7 +5,6 @@ import platform
 import shutil
 import tempfile
 import warnings
-from os.path import join as pjoin
 from typing import MutableMapping, Optional
 
 import lmdb

@@ -2,19 +2,14 @@ import warnings
 from collections import namedtuple
 from typing import Sequence
 from .common import GroupedAsets
-import importlib.util
 
-from ..utils import LazyLoader
 
 try:
-    torchExists = importlib.util.find_spec('torch')
-    if not torchExists:
-        raise ModuleNotFoundError
-    torchdata = LazyLoader('torchdata', globals(), 'torch.utils.data')
+    from torch.utils import data as torchdata
 except (ImportError, ModuleNotFoundError):
     raise ImportError(
         'Could not import "pytorch" library. Ensure library is '
-        'installed correctly to use pytorch dataloader functions')
+        'installed correctly to use pytorch dataloader functions') from None
 
 
 def make_torch_dataset(arraysets,

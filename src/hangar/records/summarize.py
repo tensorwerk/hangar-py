@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import time
 from io import StringIO
@@ -121,7 +120,7 @@ def summary(env, *, branch='', commit='') -> StringIO:
 
     Parameters
     ----------
-    env : :class:`Environments`
+    env : :class:`..context.Environments`
         class which contains all of the lmdb environments pre-initialized for use.
     commit : str
         commit hash to query. if left empty, HEAD commit is used (Default value = '')
@@ -158,7 +157,7 @@ def summary(env, *, branch='', commit='') -> StringIO:
         buf.write(f'================== \n')
         buf.write(f'| Repository Info \n')
         buf.write(f'|----------------- \n')
-        buf.write(f'|  Base Directory: {os.path.dirname(env.repo_path)} \n')
+        buf.write(f'|  Base Directory: {str(env.repo_path.parent)} \n')
         buf.write(f'|  Disk Usage: {humanBytes} \n')
         buf.write(f' \n')
 

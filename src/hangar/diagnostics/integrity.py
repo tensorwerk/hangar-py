@@ -1,6 +1,5 @@
 from pathlib import Path
 import warnings
-import sys
 
 import lmdb
 import numpy as np
@@ -9,32 +8,7 @@ from tqdm import tqdm
 from ..backends import BACKEND_ACCESSOR_MAP
 from ..txnctx import TxnRegister
 from ..records import commiting, hashmachine, hashs, parsing, queries, heads
-from ..utils import tb_params_last_called
-
-
-def report_corruption_risk_on_parsing_error(func):
-    """Decorator adding try/except handling non-explicit exceptions.
-
-    Explicitly raised RuntimeErrors generally point to corrupted data
-    identified by a cryptographic hash mismatch. However, in order to get to
-    the point where such quantities can be processes, a non-trivial amount of
-    parsing machinery must be run. Should any error be thrown in the parse
-    machinery due to corrupted values, this method raises the exception in a
-    useful form; providing traceback context, likely root cause (displayed to
-    users), and the offending arguments passed to the function which threw the
-    error.
-    """
-    def wrapped(*args, **kwargs):
-        try:
-            func(*args, **kwargs)
-        except RuntimeError as e:
-            raise e
-        except Exception as e:
-            raise RuntimeError(
-                f'Corruption detected during {func.__name__}. Most likely this is the '
-                f'result of unparsable record values. Exception msg `{str(e)}`. Params '
-                f'`{tb_params_last_called(sys.exc_info()[2])}`') from e
-    return wrapped
+from ..op_state import report_corruption_risk_on_parsing_error
 
 
 @report_corruption_risk_on_parsing_error
@@ -82,6 +56,7 @@ def _verify_schema_integrity(hashenv: lmdb.Environment):
             size=int(np.prod(val.schema_max_shape)),
             dtype_num=val.schema_dtype,
             variable_shape=val.schema_is_var,
+            contains_subsamples=val.schema_contains_subsamples,
             backend_code=val.schema_default_backend,
             backend_opts=val.schema_default_backend_opts,
             tcode=tcode)

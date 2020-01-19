@@ -60,6 +60,7 @@ from typing import Optional
 import numpy as np
 
 from .specs import REMOTE_50_DataHashSpec
+from ..op_state import writer_checkout_only, reader_checkout_only
 
 # -------------------------------- Parser Implementation ----------------------
 
@@ -95,17 +96,46 @@ class REMOTE_50_Handler(object):
     def __exit__(self, *exc):
         return
 
+    @reader_checkout_only
+    def __getstate__(self) -> dict:
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        self.close()
+        state = self.__dict__.copy()
+        return state
+
+    def __setstate__(self, state: dict) -> None:  # pragma: no cover
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        self.__dict__.update(state)
+        self.open(mode=self.mode)
+
     @property
     def backend_opts(self):
         return self._dflt_backend_opts
 
+    @writer_checkout_only
+    def _backend_opts_set(self, val):
+        """Nonstandard descriptor method. See notes in ``backend_opts.setter``.
+        """
+        self._dflt_backend_opts = val
+        return
+
     @backend_opts.setter
-    def backend_opts(self, val):
-        if self.mode == 'a':
-            self._dflt_backend_opts = val
-            return
-        else:
-            raise AttributeError(f"can't set property in read only mode")
+    def backend_opts(self, value):
+        """
+        Using seperate setter method (with ``@writer_checkout_only`` decorator
+        applied) due to bug in python <3.8.
+
+        From: https://bugs.python.org/issue19072
+            > The classmethod decorator when applied to a function of a class,
+            > does not honour the descriptor binding protocol for whatever it
+            > wraps. This means it will fail when applied around a function which
+            > has a decorator already applied to it and where that decorator
+            > expects that the descriptor binding protocol is executed in order
+            > to properly bind the function to the class.
+        """
+        return self._backend_opts_set(value)
 
     def open(self, mode, *args, **kwargs):
         self.mode = mode

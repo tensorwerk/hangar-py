@@ -1,11 +1,9 @@
-import importlib
 import os
 from pathlib import Path
 import random
 import re
 import string
 import time
-import types
 from collections import deque
 from io import StringIO
 from itertools import tee, filterfalse, count
@@ -15,36 +13,6 @@ import blosc
 
 from . import __version__
 from .constants import DIR_HANGAR
-
-
-class LazyLoader(types.ModuleType):
-    """Lazily import a module, mainly to avoid pulling in large dependencies."""
-
-    def __init__(self, local_name, parent_module_globals, name):
-        self._local_name = local_name
-        self._parent_module_globals = parent_module_globals
-        super(LazyLoader, self).__init__(name)
-
-    def _load(self):
-        """Load the module and insert it into the parent's globals.
-
-        Import the target module and insert it into the parent's namespace
-        Update this object's dict so that if someone keeps a reference to the
-        LazyLoader, lookups are efficient (__getattr__ is only called on
-        lookups that fail).
-        """
-        module = importlib.import_module(self.__name__)
-        self._parent_module_globals[self._local_name] = module
-        self.__dict__.update(module.__dict__)
-        return module
-
-    def __getattr__(self, item):
-        module = self._load()
-        return getattr(module, item)
-
-    def __dir__(self):
-        module = self._load()
-        return dir(module)
 
 
 def set_blosc_nthreads() -> int:  # pragma: no cover
@@ -80,37 +48,6 @@ def random_string(n: int = 8) -> str:
     """
     letters = ''.join([string.ascii_lowercase, string.digits])
     return ''.join(random.choice(letters) for i in range(n))
-
-
-def tb_params_last_called(tb: types.TracebackType):
-    """Get parameters of the last function called before exception thrown.
-
-    Parameters
-    ----------
-    tb : types.TracebackType
-        traceback object returned as the third item from sys.exc_info()
-        corresponding to an exception raised in the last stack frame.
-
-    Returns
-    -------
-    object
-        parameters passed to the last function called before the exception was
-        thrown.
-    """
-    while tb.tb_next:
-        tb = tb.tb_next
-    frame = tb.tb_frame
-    code = frame.f_code
-    argcount = code.co_argcount
-    if code.co_flags & 4:  # *args
-        argcount += 1
-    if code.co_flags & 8:  # **kwargs
-        argcount += 1
-    names = code.co_varnames[:argcount]
-    params = {}
-    for name in names:
-        params[name] = frame.f_locals.get(name, '<deleted>')
-    return params
 
 
 _SuitableCharRE = re.compile(r'[\w\.\-\_]+\Z', flags=re.ASCII)
@@ -166,6 +103,42 @@ def is_ascii(str_data: str) -> bool:
     except (UnicodeEncodeError, AttributeError):
         return False
     return True
+
+
+def valfilter(predicate, d, factory=dict):
+    """ Filter items in dictionary by values that are true.
+
+    >>> iseven = lambda x: x % 2 == 0
+    >>> d = {1: 2, 2: 3, 3: 4, 4: 5}
+    >>> valfilter(iseven, d)
+    {1: 2, 3: 4}
+
+    See Also:
+        valfilterfalse
+    """
+    rv = factory()
+    for k, v in d.items():
+        if predicate(v):
+            rv[k] = v
+    return rv
+
+
+def valfilterfalse(predicate, d, factory=dict):
+    """ Filter items in dictionary by values which are false.
+
+    >>> iseven = lambda x: x % 2 == 0
+    >>> d = {1: 2, 2: 3, 3: 4, 4: 5}
+    >>> valfilterfalse(iseven, d)
+    {2: 3, 4: 5}
+
+    See Also:
+        valfilter
+    """
+    rv = factory()
+    for k, v in d.items():
+        if not predicate(v):
+            rv[k] = v
+    return rv
 
 
 def pairwise(iterable):
