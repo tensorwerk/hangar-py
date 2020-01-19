@@ -43,8 +43,10 @@ class TestArraysetSetup:
         import hangar
         co = aset_subsamples_initialized_repo.checkout()
         assert isinstance(co, hangar.checkout.ReaderCheckout)
-        assert co.arraysets.init_arrayset is None
-        assert co.arraysets.delete is None
+        with pytest.raises(PermissionError):
+            assert co.arraysets.init_arrayset('foo')
+        with pytest.raises(PermissionError):
+            assert co.arraysets.delete('foo')
         assert len(co.arraysets['writtenaset']) == 0
         co.close()
 

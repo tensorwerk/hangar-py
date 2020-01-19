@@ -883,11 +883,8 @@ def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
     First calculate the digest of each element in the input iterable. As these
     elements contain the record type (meta key, arrayset name, sample key) as
     well as the data hash digest, any modification of any reference record will
-    result in a different digest for that element.
-
-    Then sort the resulting digests (so that there is no dependency on the
-    order of elements in input) and join all elements into single serialized
-    bytestring.
+    result in a different digest for that element. Then join all elements into
+    single serialized bytestring.
 
     The output of this method is the hash digest of the serialized bytestring.
 
@@ -902,9 +899,10 @@ def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
     str
         calculated digest of the commit ref record component
     """
-    joined_db_kvs = sorted(map(_hash_func, joined_db_kvs))
-    joined_digests = CMT_DIGEST_JOIN_KEY.join(joined_db_kvs).encode()
-    return _hash_func(joined_digests)
+    kv_digests = map(_hash_func, joined_db_kvs)
+    joined_digests = CMT_DIGEST_JOIN_KEY.join(kv_digests).encode()
+    res = _hash_func(joined_digests)
+    return res
 
 
 def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> DigestAndBytes:

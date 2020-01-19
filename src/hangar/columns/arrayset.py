@@ -17,9 +17,120 @@ from ..records.parsing import (
 )
 from ..records.queries import RecordQuery
 from ..utils import is_suitable_user_key, is_ascii
+from .utils import writer_checkout_only
 from . import AsetTxn, Sample, Subsample, ModifierTypes, WriterModifierTypes
 
 KeyType = Union[str, int]
+
+
+class ArraysetConstructors(type):
+    """Metaclass defining constructor methods for Arraysets object.
+
+    Rather than using @classmethod decorator, we use a metaclass so that
+    the instances of the Arrayset class do not have the constructors
+    accessable as a bound method. This is important because Arrayset
+    class instances are user facing; the ability to construct a new
+    object modifying or accessing repo state/data should never be
+    available to users.
+    """
+
+    def _from_staging_area(cls, repo_pth: Path, hashenv: lmdb.Environment,
+                           stageenv: lmdb.Environment,
+                           stagehashenv: lmdb.Environment):
+        """Class method factory to checkout :class:`Arraysets` in write-enabled mode
+
+        This is not a user facing operation, and should never be manually
+        called in normal operation. Once you get here, we currently assume that
+        verification of the write lock has passed, and that write operations
+        are safe.
+
+        Parameters
+        ----------
+        repo_pth : Path
+            directory path to the hangar repository on disk
+        hashenv : lmdb.Environment
+            environment where tensor data hash records are open in write mode.
+        stageenv : lmdb.Environment
+            environment where staging records (dataenv) are opened in write mode.
+        stagehashenv: lmdb.Environment
+            environment where the staged hash records are stored in write mode
+
+        Returns
+        -------
+        :class:`.Arraysets`
+            Interface class with write-enabled attributes activated and any
+            arraysets existing initialized in write mode via
+            :class:`.columns.arrayset.ArraysetDataWriter`.
+        """
+
+        arraysets = {}
+        txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
+        query = RecordQuery(stageenv)
+        stagedSchemaSpecs = query.schema_specs()
+        for asetName, schemaSpec in stagedSchemaSpecs.items():
+            if schemaSpec.schema_contains_subsamples:
+                setup_args = Subsample().generate_writer(
+                    txnctx=txnctx,
+                    aset_name=asetName,
+                    path=repo_pth,
+                    schema_specs=schemaSpec)
+            else:
+                setup_args = Sample().generate_writer(
+                    txnctx=txnctx,
+                    aset_name=asetName,
+                    path=repo_pth,
+                    schema_specs=schemaSpec)
+            arraysets[asetName] = setup_args.modifier
+
+        return cls('a', repo_pth, arraysets, hashenv, stageenv, stagehashenv, txnctx)
+
+    def _from_commit(cls, repo_pth: Path, hashenv: lmdb.Environment,
+                     cmtrefenv: lmdb.Environment):
+        """Class method factory to checkout :class:`.columns.arrayset.Arraysets` in read-only mode
+
+        This is not a user facing operation, and should never be manually called
+        in normal operation. For read mode, no locks need to be verified, but
+        construction should occur through the interface to the
+        :class:`Arraysets` class.
+
+        Parameters
+        ----------
+        repo_pth : Path
+            directory path to the hangar repository on disk
+        hashenv : lmdb.Environment
+            environment where tensor data hash records are open in read-only mode.
+        cmtrefenv : lmdb.Environment
+            environment where staging checkout records are opened in read-only mode.
+
+        Returns
+        -------
+        :class:`.Arraysets`
+            Interface class with all write-enabled attributes deactivated
+            arraysets initialized in read mode via :class:`.columns.arrayset.ArraysetDataReader`.
+        """
+        arraysets = {}
+        txnctx = AsetTxn(cmtrefenv, hashenv, None)
+        query = RecordQuery(cmtrefenv)
+        cmtSchemaSpecs = query.schema_specs()
+
+        for asetName, schemaSpec in cmtSchemaSpecs.items():
+            if schemaSpec.schema_contains_subsamples:
+                setup_args = Subsample().generate_reader(
+                    txnctx=txnctx,
+                    aset_name=asetName,
+                    path=repo_pth,
+                    schema_specs=schemaSpec)
+            else:
+                setup_args = Sample().generate_reader(
+                    txnctx=txnctx,
+                    aset_name=asetName,
+                    path=repo_pth,
+                    schema_specs=schemaSpec)
+
+            arraysets[asetName] = setup_args.modifier
+
+        return cls('r', repo_pth, arraysets, None, None, None, None)
+
 
 """
 Constructor and Interaction Class for Arraysets
@@ -27,7 +138,7 @@ Constructor and Interaction Class for Arraysets
 """
 
 
-class Arraysets(object):
+class Arraysets(metaclass=ArraysetConstructors):
     """Common access patterns and initialization/removal of arraysets in a checkout.
 
     This object is the entry point to all tensor data stored in their individual
@@ -79,24 +190,10 @@ class Arraysets(object):
         self._repo_pth = repo_pth
         self._arraysets = arraysets
 
-        if self._mode == 'a':
-            self._hashenv = hashenv
-            self._dataenv = dataenv
-            self._stagehashenv = stagehashenv
-            self._txnctx = txnctx
-
-        self.__setup()
-
-    def __setup(self):
-        """Do not allow users to use internal functions
-        """
-        self._from_commit = None  # should never be able to access
-        self._from_staging_area = None  # should never be able to access
-        if self._mode == 'r':
-            self.init_arrayset = None
-            self.delete = None
-            self.__delitem__ = None
-            self.__setitem__ = None
+        self._hashenv = hashenv
+        self._dataenv = dataenv
+        self._stagehashenv = stagehashenv
+        self._txnctx = txnctx
 
     def _open(self):
         for v in self._arraysets.values():
@@ -105,6 +202,29 @@ class Arraysets(object):
     def _close(self):
         for v in self._arraysets.values():
             v._close()
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        self._close()
+        for arrayset in self._arraysets.values():
+            arrayset._destruct()
+        for attr in list(self.__dict__.keys()):
+            delattr(self, attr)
+
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible
+         for deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
 
 # ------------- Methods Available To Both Read & Write Checkouts ------------------
 
@@ -155,20 +275,6 @@ class Arraysets(object):
         """
         return self.get(key)
 
-    def __setitem__(self, key, value):  # lgtm [py/unexpected-raise-in-special-method]
-        """Specifically prevent use dict style setting for arrayset objects.
-
-        Arraysets must be created using the method :meth:`init_arrayset`.
-
-        Raises
-        ------
-        PermissionError
-            This operation is not allowed under any circumstance
-
-        """
-        msg = f'Not allowed! To add a arrayset use `init_arrayset` method.'
-        raise PermissionError(msg)
-
     def __contains__(self, key: str) -> bool:
         """Determine if a arrayset with a particular name is stored in the checkout
 
@@ -196,6 +302,29 @@ class Arraysets(object):
     @property
     def _is_conman(self):
         return bool(self._is_conman_counter)
+
+    def _any_is_conman(self) -> bool:
+        """Determine if self or any contains arrayset class is conman.
+
+        Returns
+        -------
+        bool
+            [description]
+        """
+        res = any([self._is_conman, *[x._is_conman for x in self._arraysets.values()]])
+        return res
+
+    def __enter__(self):
+        with ExitStack() as stack:
+            for asetN in list(self._arraysets.keys()):
+                stack.enter_context(self._arraysets[asetN])
+            self._is_conman_counter += 1
+            self._stack = stack.pop_all()
+        return self
+
+    def __exit__(self, *exc):
+        self._is_conman_counter -= 1
+        self._stack.close()
 
     @property
     def iswriteable(self) -> bool:
@@ -296,19 +425,9 @@ class Arraysets(object):
         except KeyError:
             raise KeyError(f'No arrayset exists with name: {name}')
 
-# ------------------------ Writer-Enabled Methods Only ------------------------------
+    # ------------------------ Writer-Enabled Methods Only ------------------------------
 
-    def _any_is_conman(self) -> bool:
-        """Determine if self or any contains arrayset class is conman.
-
-        Returns
-        -------
-        bool
-            [description]
-        """
-        res = any([self._is_conman, *[x._is_conman for x in self._arraysets.values()]])
-        return res
-
+    @writer_checkout_only
     def __delitem__(self, key: str) -> str:
         """remove a arrayset and all data records if write-enabled process.
 
@@ -334,18 +453,7 @@ class Arraysets(object):
                 'Not allowed while any arraysets class is opened in a context manager')
         return self.delete(key)
 
-    def __enter__(self):
-        with ExitStack() as stack:
-            for asetN in list(self._arraysets.keys()):
-                stack.enter_context(self._arraysets[asetN])
-            self._is_conman_counter += 1
-            self._stack = stack.pop_all()
-        return self
-
-    def __exit__(self, *exc):
-        self._is_conman_counter -= 1
-        self._stack.close()
-
+    @writer_checkout_only
     def init_arrayset(self,
                       name: str,
                       shape: Union[int, Tuple[int]] = None,
@@ -436,8 +544,7 @@ class Arraysets(object):
             If the specified backend is not valid.
         """
         if self._any_is_conman():
-            raise PermissionError(
-                'Not allowed while any arraysets class is opened in a context manager')
+            raise PermissionError('Not allowed while context manager is used.')
 
         # ------------- Checks for argument validity --------------------------
 
@@ -519,6 +626,7 @@ class Arraysets(object):
 
         return self.get(name)
 
+    @writer_checkout_only
     def delete(self, aset_name: str) -> str:
         """remove the arrayset and all data contained within it.
 
@@ -568,121 +676,3 @@ class Arraysets(object):
             datatxn.delete(asetSchemaKey)
 
         return aset_name
-
-# ------------------------ Class Factory Functions ------------------------------
-
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-
-        with suppress(AttributeError, TypeError):
-            self._close()
-
-        for asetn in list(self._arraysets.keys()):
-            with suppress(AttributeError, TypeError):
-                self._arraysets[asetn]._destruct()
-            del self._arraysets[asetn]
-
-        for attr in list(dir(self)):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)
-
-
-    @classmethod
-    def _from_staging_area(cls, repo_pth: Path, hashenv: lmdb.Environment,
-                           stageenv: lmdb.Environment,
-                           stagehashenv: lmdb.Environment):
-        """Class method factory to checkout :class:`Arraysets` in write-enabled mode
-
-        This is not a user facing operation, and should never be manually
-        called in normal operation. Once you get here, we currently assume that
-        verification of the write lock has passed, and that write operations
-        are safe.
-
-        Parameters
-        ----------
-        repo_pth : Path
-            directory path to the hangar repository on disk
-        hashenv : lmdb.Environment
-            environment where tensor data hash records are open in write mode.
-        stageenv : lmdb.Environment
-            environment where staging records (dataenv) are opened in write mode.
-        stagehashenv: lmdb.Environment
-            environment where the staged hash records are stored in write mode
-
-        Returns
-        -------
-        :class:`.Arraysets`
-            Interface class with write-enabled attributes activated and any
-            arraysets existing initialized in write mode via
-            :class:`.columns.arrayset.ArraysetDataWriter`.
-        """
-
-        arraysets = {}
-        txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
-        query = RecordQuery(stageenv)
-        stagedSchemaSpecs = query.schema_specs()
-        for asetName, schemaSpec in stagedSchemaSpecs.items():
-            if schemaSpec.schema_contains_subsamples:
-                setup_args = Subsample().generate_writer(
-                    txnctx=txnctx,
-                    aset_name=asetName,
-                    path=repo_pth,
-                    schema_specs=schemaSpec)
-            else:
-                setup_args = Sample().generate_writer(
-                    txnctx=txnctx,
-                    aset_name=asetName,
-                    path=repo_pth,
-                    schema_specs=schemaSpec)
-            arraysets[asetName] = setup_args.modifier
-
-        return cls('a', repo_pth, arraysets, hashenv, stageenv, stagehashenv, txnctx)
-
-    @classmethod
-    def _from_commit(cls, repo_pth: Path, hashenv: lmdb.Environment,
-                     cmtrefenv: lmdb.Environment):
-        """Class method factory to checkout :class:`.columns.arrayset.Arraysets` in read-only mode
-
-        This is not a user facing operation, and should never be manually called
-        in normal operation. For read mode, no locks need to be verified, but
-        construction should occur through the interface to the
-        :class:`Arraysets` class.
-
-        Parameters
-        ----------
-        repo_pth : Path
-            directory path to the hangar repository on disk
-        hashenv : lmdb.Environment
-            environment where tensor data hash records are open in read-only mode.
-        cmtrefenv : lmdb.Environment
-            environment where staging checkout records are opened in read-only mode.
-
-        Returns
-        -------
-        :class:`.Arraysets`
-            Interface class with all write-enabled attributes deactivated
-            arraysets initialized in read mode via :class:`.columns.arrayset.ArraysetDataReader`.
-        """
-        arraysets = {}
-        txnctx = AsetTxn(cmtrefenv, hashenv, None)
-        query = RecordQuery(cmtrefenv)
-        cmtSchemaSpecs = query.schema_specs()
-
-        for asetName, schemaSpec in cmtSchemaSpecs.items():
-            if schemaSpec.schema_contains_subsamples:
-                setup_args = Subsample().generate_reader(
-                    txnctx=txnctx,
-                    aset_name=asetName,
-                    path=repo_pth,
-                    schema_specs=schemaSpec)
-            else:
-                setup_args = Sample().generate_reader(
-                    txnctx=txnctx,
-                    aset_name=asetName,
-                    path=repo_pth,
-                    schema_specs=schemaSpec)
-
-            arraysets[asetName] = setup_args.modifier
-
-        return cls('r', repo_pth, arraysets, None, None, None, None)

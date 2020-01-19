@@ -254,15 +254,14 @@ class Subsample(Backend):
         dtype = np.typeDict[schema_specs.schema_dtype]
 
         used_backends, has_remote_backend, _sspecs = self._common_setup(txnctx, aset_name)
-        file_handles = ObjectProxy(self.read_open_file_handles(used_backends, path, shape, dtype))
+        file_handles = self.read_open_file_handles(used_backends, path, shape, dtype)
         file_handles['enter_count'] = 0
-        file_handle_proxy = proxy(file_handles)
         sspecs = {}
         for sample_key, subsample_key_specs in _sspecs.items():
             sspecs[sample_key] = SubsampleReader(
                 asetn=aset_name,
                 samplen=sample_key,
-                be_handles=file_handle_proxy,
+                be_handles=file_handles,
                 specs=subsample_key_specs)
 
         modifier = SubsampleReaderModifier(aset_name=aset_name,

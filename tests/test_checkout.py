@@ -44,7 +44,7 @@ class TestCheckout(object):
 
     def test_write_with_read_checkout(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout()
-        with pytest.raises(TypeError):
+        with pytest.raises(PermissionError):
             co.arraysets.init_arrayset(name='aset', shape=(5, 7), dtype=np.float64)
         with pytest.raises(AttributeError):
             co.metadata.update({'a': 'b'})
@@ -57,14 +57,12 @@ class TestCheckout(object):
         aset = co.arraysets['writtenaset']
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             asets.iswriteable
-        assert asets.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             shouldFail = asets['writtenaset']
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset.iswriteable
-        assert aset.__dict__ == {}
 
     def test_writer_aset_obj_arrayset_iter_values_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
@@ -75,9 +73,8 @@ class TestCheckout(object):
         co.close()
 
         for oldObj in oldObjs:
-            with pytest.raises(Exception):
+            with pytest.raises(PermissionError):
                 oldObj.arrayset
-            assert oldObj.__dict__ == {}
 
     def test_writer_aset_obj_arrayset_iter_items_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
@@ -89,9 +86,8 @@ class TestCheckout(object):
 
         for name, obj in oldObjs.items():
             assert isinstance(name, str)
-            with pytest.raises(Exception):
+            with pytest.raises(PermissionError):
                 obj.arrayset
-            assert obj.__dict__ == {}
 
     def test_writer_aset_obj_not_accessible_after_commit_and_close(self,
                                                                    aset_samples_initialized_repo, array5by7):
@@ -103,15 +99,13 @@ class TestCheckout(object):
         co.commit('hey there')
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             asets.iswriteable
-        assert asets.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             shouldFail = asets['writtenaset']
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset.iswriteable
-        assert aset.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             shouldFail = aset['1']
 
     def test_reader_aset_obj_not_accessible_after_close(self, two_commit_filled_samples_repo):
@@ -121,14 +115,12 @@ class TestCheckout(object):
         aset = co.arraysets['writtenaset']
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             asets.iswriteable
-        assert asets.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             shouldFail = asets['writtenaset']
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset.iswriteable
-        assert aset.__dict__ == {}
 
     def test_reader_aset_obj_arrayset_iter_values_not_accessible_after_close(self,
                                                                              two_commit_filled_samples_repo):
@@ -140,9 +132,8 @@ class TestCheckout(object):
         co.close()
 
         for oldObj in oldObjs:
-            with pytest.raises(Exception):
+            with pytest.raises(PermissionError):
                 oldObj.arrayset
-            assert oldObj.__dict__ == {}
 
     def test_reader_aset_obj_arrayset_iter_items_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
@@ -154,9 +145,8 @@ class TestCheckout(object):
 
         for name, obj in oldObjs.items():
             assert isinstance(name, str)
-            with pytest.raises(Exception):
+            with pytest.raises(PermissionError):
                 obj.arrayset
-            assert obj.__dict__ == {}
 
     def test_reader_arrayset_context_manager_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
@@ -169,13 +159,11 @@ class TestCheckout(object):
                 a = ds
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             a.arrayset
-        assert a.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             ds.arrayset
-        assert ds.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset[klist[0]]
 
     def test_writer_arrayset_context_manager_not_accessible_after_close(self, two_commit_filled_samples_repo):
@@ -189,13 +177,11 @@ class TestCheckout(object):
             a['1232'] = np.random.randn(5, 7).astype(np.float32)
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             a.arrayset
-        assert a.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             ds.arrayset
-        assert ds.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset['1232']
 
     def test_writer_metadata_obj_not_accessible_after_close(self, aset_samples_initialized_repo):
@@ -204,7 +190,7 @@ class TestCheckout(object):
         md = co.metadata
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             md.iswriteable
         assert md.__dict__ == {}
 
@@ -216,10 +202,10 @@ class TestCheckout(object):
         co.commit('test commit')
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             md.iswriteable
         assert md.__dict__ == {}
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             shouldFail = md['hello']
 
     def test_reader_metadata_obj_not_accessible_after_close(self, aset_samples_initialized_repo):
@@ -227,7 +213,7 @@ class TestCheckout(object):
         co = repo.checkout(write=False)
         md = co.metadata
         co.close()
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             md.iswriteable
         assert md.__dict__ == {}
 
@@ -246,9 +232,8 @@ class TestCheckout(object):
         w_co.commit('hello commit')
         w_co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset.arrayset
-        assert aset.__dict__ == {}
 
     def test_close_write_does_not_invalidate_read_checkout(self, aset_samples_initialized_repo, array5by7):
         repo = aset_samples_initialized_repo
@@ -261,9 +246,8 @@ class TestCheckout(object):
         w_co.commit('hello commit')
         w_co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset.arrayset
-        assert aset.__dict__ == {}
 
         assert 'writtenaset' in r_co.arraysets
         assert len(r_co.metadata) == 0
@@ -278,11 +262,11 @@ class TestCheckout(object):
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout(write=True)
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset['1'] = array5by7
             co.commit('this is a commit message')
         co.close()
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset['1']
 
     def test_operate_on_closed_checkout(self, repo, array5by7):
@@ -307,7 +291,7 @@ class TestCheckout(object):
         assert np.allclose(aset['2'], array5by7)
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset.name
 
     def test_operate_on_metadata_after_commiting_but_not_closing_checkout(self, repo, array5by7):
@@ -322,9 +306,9 @@ class TestCheckout(object):
         assert md['foo'] == 'bar'
         co.close()
 
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             md.get('foo')
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             md['hello']
 
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
@@ -344,9 +328,9 @@ class TestCheckout(object):
 
         with pytest.raises(PermissionError):
             co.arraysets
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             asets.iswriteable
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset2.name
 
     def test_with_wrong_argument_value(self, repo):
@@ -380,7 +364,7 @@ class TestCheckout(object):
         co.reset_staging_area()
         # behavior expected after reset
         assert len(co.arraysets) == 1
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             aset2['0']
         with pytest.raises(KeyError):
             co.arraysets['arange']
@@ -406,7 +390,7 @@ class TestCheckout(object):
         # behavior expected after reset
         assert len(co.metadata) == 1
         assert co.metadata['hello'] == 'world'
-        with pytest.raises(Exception):
+        with pytest.raises(PermissionError):
             assert len(md) == 1
         with pytest.raises(KeyError):
             co.metadata['foo']
@@ -587,7 +571,8 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(two_commit
 
     assert co.close() is None
     assert m.__dict__ == {}
-    assert d.__dict__ == {}
+    with pytest.raises(PermissionError):
+        d.arrayset
     with pytest.raises(PermissionError):
         co.arraysets
     assert co.__dict__ == {}
@@ -625,7 +610,8 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(two_commit
     assert co.close() is None
 
     assert m.__dict__ == {}
-    assert d.__dict__ == {}
+    with pytest.raises(PermissionError):
+        d.arrayset
     with pytest.raises(AttributeError):
         co._arraysets
     with pytest.raises(AttributeError):

@@ -152,6 +152,25 @@ class NUMPY_10_FileHandles(object):
         self.STOREDIR: Path = Path(self.repo_path, DIR_DATA_STORE, _FmtCode)
         self.DATADIR.mkdir(exist_ok=True)
 
+    def __getstate__(self) -> dict:
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        self.close()
+        state = self.__dict__.copy()
+        del state['rFp']
+        del state['wFp']
+        del state['Fp']
+        return state
+
+    def __setstate__(self, state: dict) -> None:  # pragma: no cover
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        self.__dict__.update(state)
+        self.rFp = {}
+        self.wFp = {}
+        self.Fp = ChainMap(self.rFp, self.wFp)
+        self.open(mode=self.mode)
+
     def __enter__(self):
         return self
 

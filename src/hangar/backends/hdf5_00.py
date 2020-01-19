@@ -286,7 +286,6 @@ class HDF5_00_FileHandles(object):
         """ensure multiprocess operations can pickle relevant data.
         """
         self.close()
-        time.sleep(0.1)  # buffer time
         state = self.__dict__.copy()
         del state['rFp']
         del state['wFp']

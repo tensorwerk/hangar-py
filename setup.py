@@ -81,8 +81,8 @@ setup(
     ext_modules=cythonize(
         [join('src', 'hangar', 'backends', 'specs.pyx'),
          join('src', 'hangar', 'backends', 'specparse.pyx')],
-        annotate=True,
-        force=True,
+        # annotate=True,
+        # force=True,
         compiler_directives={
             'language_level': 3,
             'embedsignature': True,

@@ -2,6 +2,7 @@ from contextlib import ExitStack, suppress
 from pathlib import Path
 from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
 from weakref import proxy
+from .utils import reader_checkout_only
 
 import numpy as np
 
@@ -48,7 +49,8 @@ class SubsampleName(NamedTuple):
 
 class SubsampleReader(object):
 
-    __slots__ = ('_asetn', '_samplen', '_be_fs', '_subsamples', '_mode')
+    __slots__ = ('_asetn', '_samplen', '_be_fs', '_subsamples', '_mode', '_stack')
+    _attrs = __slots__
 
     def __init__(self, asetn: str, samplen: str, be_handles: BACKEND_ACCESSOR_MAP,
                  specs: Dict[KeyType, DataHashSpecsType]):
@@ -58,6 +60,7 @@ class SubsampleReader(object):
         self._be_fs = be_handles
         self._subsamples = specs
         self._mode = 'r'
+        self._stack: Optional[ExitStack] = None
 
     @property
     def _debug_(self):  # pragma: no cover
@@ -105,6 +108,23 @@ class SubsampleReader(object):
     def __exit__(self, *exc):
         self._enter_count -= 1
         return
+
+    @reader_checkout_only
+    def __getstate__(self) -> dict:
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        return {slot: getattr(self, slot) for slot in self.__slots__}
+
+    def __setstate__(self, state: dict) -> None:
+        """ensure multiprocess operations can pickle relevant data.
+
+        Technically should be decorated with @reader_checkout_only,
+        but since at instance creation that is not an attribute,
+        the decorator won't know. Since only readers can be pickled,
+        This isn't much of an issue.
+        """
+        for slot, value in state.items():
+            setattr(self, slot, value)
 
     def __len__(self) -> int:
         return len(self._subsamples)
@@ -334,14 +354,30 @@ class SubsampleReader(object):
             return default
 
     def _destruct(self):
-        for attr in dir(self):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        for attr in self._attrs:
+            delattr(self, attr)
+
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible
+         for deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
 
 
 class SubsampleWriter(SubsampleReader):
 
-    __slots__ = ('_txnctx', '_stack')
+    __slots__ = ('_txnctx',)
+    _attrs = __slots__ + SubsampleReader.__slots__
 
     def __init__(self, aset_txn_ctx, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -615,19 +651,17 @@ class SubsampleWriter(SubsampleReader):
         del self[key]
         return value
 
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-        super()._destruct()
-        for attr in dir(self):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)
-
 
 SubsampleTypes = Union[SubsampleReader, SubsampleWriter]
 
 
 class SubsampleReaderModifier(object):
+
+    __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path', '_stack',
+                 '_schema_spec', '_schema_variable', '_schema_dtype_num',
+                 '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
+                 '_dflt_backend_opts', '_contains_subsamples')
+    _attrs = __slots__
 
     def __init__(self,
                  aset_name: str,
@@ -699,6 +733,23 @@ class SubsampleReaderModifier(object):
     def __exit__(self, *exc):
         self._enter_count -= 1
         return
+
+    @reader_checkout_only
+    def __getstate__(self) -> dict:
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        return {slot: getattr(self, slot) for slot in self.__slots__}
+
+    def __setstate__(self, state: dict) -> None:
+        """ensure multiprocess operations can pickle relevant data.
+
+        Technically should be decorated with @reader_checkout_only,
+        but since at instance creation that is not an attribute,
+        the decorator won't know. Since only readers can be pickled,
+        This isn't much of an issue.
+        """
+        for slot, value in state.items():
+            setattr(self, slot, value)
 
     def __getitem__(self, key: KeyType) -> SubsampleTypes:
         """Get the sample access class for some sample key.
@@ -986,21 +1037,31 @@ class SubsampleReaderModifier(object):
     def _destruct(self):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
+        self._close()
+        for sample in self._samples.values():
+            sample._destruct()
+        for attr in self._attrs:
+            delattr(self, attr)
 
-        with suppress(AttributeError, TypeError):
-            self._close()
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
 
-        for samplen in list(self._samples.keys()):
-            with suppress(AttributeError, TypeError):
-                self._samples[samplen]._destruct()
-            del self._samples[samplen]
-
-        for attr in dir(self):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)
+         Only runs after a call to :meth:`_destruct`, which is responsible
+         for deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
 
 
 class SubsampleWriterModifier(SubsampleReaderModifier):
+
+    __slots__ = ('_txnctx',)
+    _attrs = __slots__ + SubsampleReaderModifier.__slots__
 
     def __init__(self, aset_txn_ctx: AsetTxnType, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1039,8 +1100,8 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         CompatibleArray
             compatible and reason field
         """
-        SCHEMA_DTYPE = self._schema_spec.schema_dtype
-        MAX_SHAPE = self._schema_spec.schema_max_shape
+        SCHEMA_DTYPE = self._schema_dtype_num
+        MAX_SHAPE = self._schema_max_shape
 
         reason = ''
         if not isinstance(data, np.ndarray):
@@ -1270,14 +1331,3 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         self._dflt_schema_hash = schema_hash
         self._schema_spec = rawAsetSchema
         return
-
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-
-        with suppress(AttributeError, TypeError):
-            self._close()
-        super()._destruct()
-        for attr in dir(self):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)

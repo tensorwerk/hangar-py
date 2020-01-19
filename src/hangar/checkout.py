@@ -269,14 +269,10 @@ class ReaderCheckout(GetMixin):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        with suppress(AttributeError, TypeError):
-            self._arraysets._destruct()
-        with suppress(AttributeError, TypeError):
-            self._metadata._destruct()
-
-        for attr in dir(self):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)
+        self._arraysets._destruct()
+        self._metadata._destruct()
+        for attr in list(self.__dict__.keys()):
+            delattr(self, attr)
         atexit.unregister(self.close)
         return
 
@@ -882,7 +878,13 @@ class WriterCheckout(GetMixin):
             e = RuntimeError(f'No changes made in staging area. No reset necessary.')
             raise e from None
 
-        self._arraysets._close()
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        if hasattr(self._arraysets, '_destruct'):
+            self._arraysets._destruct()
+        if hasattr(self._metadata, '_destruct'):
+            self._metadata._destruct()
+
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
         hashs.backends_remove_in_process_data(self._repo_path)
@@ -921,14 +923,12 @@ class WriterCheckout(GetMixin):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        with suppress(AttributeError, TypeError):
+        if hasattr(self._arraysets, '_destruct'):
             self._arraysets._destruct()
-        with suppress(AttributeError, TypeError):
+        if hasattr(self._metadata, '_destruct'):
             self._metadata._destruct()
-
         heads.release_writer_lock(self._branchenv, self._writer_lock)
-        for attr in dir(self):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)
+        for attr in list(self.__dict__.keys()):
+            delattr(self, attr)
         atexit.unregister(self.close)
         return

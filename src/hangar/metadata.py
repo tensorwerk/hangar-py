@@ -264,10 +264,22 @@ class MetadataReader(object):
     def _destruct(self):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
+        for attr in list(self.__dict__.keys()):
+            delattr(self, attr)
 
-        for attr in dir(self):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible
+         for deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
 
 
 class MetadataWriter(MetadataReader):
@@ -480,8 +492,5 @@ class MetadataWriter(MetadataReader):
     def _destruct(self):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
-
-        super()._destruct()
-        for attr in dir(self):
-            with suppress(AttributeError, TypeError):
-                delattr(self, attr)
+        for attr in list(self.__dict__.keys()):
+            delattr(self, attr)

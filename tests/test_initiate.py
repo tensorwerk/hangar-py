@@ -161,9 +161,13 @@ def test_force_release_writer_lock(managed_tmpdir, monkeypatch):
     co._writer_lock = 'lololol'
     with pytest.raises(RuntimeError):
         monkeypatch.setattr(co, '_verify_alive', mock_true)
+        monkeypatch.setattr(co._arraysets, '_destruct', mock_true)
+        monkeypatch.setattr(co._metadata, '_destruct', mock_true)
         co.close()
     # replace, but rest of object is closed
     monkeypatch.setattr(co, '_writer_lock', orig_lock)
+    monkeypatch.delattr(co._arraysets, '_destruct')
+    monkeypatch.delattr(co._metadata, '_destruct')
     co.close()
     repo._env._close_environments()
 

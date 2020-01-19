@@ -24,8 +24,12 @@ class TestArrayset(object):
         import hangar
         co = aset_samples_initialized_repo.checkout()
         assert isinstance(co, hangar.checkout.ReaderCheckout)
-        assert co.arraysets.init_arrayset is None
-        assert co.arraysets.delete is None
+        with pytest.raises(PermissionError):
+            assert co.arraysets.init_arrayset('foo')
+        with pytest.raises(PermissionError):
+            co.arraysets.delete('foo')
+        with pytest.raises(PermissionError):
+            del co.arraysets['foo']
         assert len(co.arraysets['writtenaset']) == 0
         co.close()
 
@@ -1058,7 +1062,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_set_item_arrayset_fails(self, aset_samples_initialized_repo):
         co = aset_samples_initialized_repo.checkout(write=True)
-        with pytest.raises(PermissionError, match='Not allowed! To add a arrayset'):
+        with pytest.raises(AttributeError):
             co.arraysets['newaset'] = co.arraysets['writtenaset']
         co.close()
 
@@ -1329,7 +1333,7 @@ class TestMultiprocessArraysetReads(object):
         nco = repo.checkout(write=True)
         ds = nco.arraysets['writtenaset']
         keys = [i for i in range(20)]
-        with pytest.raises(TypeError):
+        with pytest.raises(PermissionError):
             with get_context('spawn').Pool(2) as P:
                 cmtData = P.map(ds.get, keys)
         nco.close()
