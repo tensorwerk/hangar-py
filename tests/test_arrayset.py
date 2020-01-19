@@ -141,6 +141,30 @@ class TestArrayset(object):
         assert_equal(aset2['1'], arr2)
         co.close()
 
+    @pytest.mark.parametrize('write', [True, False])
+    @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
+    def test_getattr_does_not_raise_permission_error_if_alive(self, aset_backend, write, repo):
+        co = repo.checkout(write=True)
+        arr = np.arange(10, dtype=np.int64)
+        aset = co.arraysets.init_arrayset('aset1', shape=10, dtype=np.int64, backend_opts=aset_backend)
+        aset['1'] = arr
+        co.commit('hello')
+        co.close()
+        co = repo.checkout(write=write)
+        aset = co.arraysets['aset1']
+
+        assert hasattr(aset, 'doesnotexist') is False  # does not raise error
+        assert hasattr(aset, '_mode') is True
+        with pytest.raises(AttributeError):
+            assert getattr(aset, 'doesnotexist')
+        assert getattr(aset, '_mode') == 'a' if write else 'r'
+
+        co.close()
+        with pytest.raises(PermissionError):
+            hasattr(aset, 'doesnotexist')
+        with pytest.raises(PermissionError):
+            hasattr(aset, '_mode')
+
 
 class TestDataWithFixedSizedArrayset(object):
 

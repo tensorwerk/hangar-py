@@ -646,7 +646,6 @@ def initialized_arrayset(write_enabled, backend_param, classrepo, subsample_data
     aset.update(subsample_data_map)
     co.commit(f'done {backend_param}{write_enabled}')
     co.close()
-    print(f'here {backend_param} {write_enabled}')
     if write_enabled:
         nco = classrepo.checkout(write=True)
         yield nco.arraysets[f'foo{backend_param}{int(write_enabled)}']
@@ -827,6 +826,37 @@ class TestContainerIntrospection:
         del aset._samples['foo']._subsamples[50]
         del aset._samples[2]._subsamples[50]
 
+    def test_getattr_does_not_raise_permission_error_if_alive(self, initialized_arrayset):
+        aset = initialized_arrayset
+
+        assert hasattr(aset, 'doesnotexist') is False  # does not raise error
+        assert hasattr(aset, '_mode') is True
+        with pytest.raises(AttributeError):
+            assert getattr(aset, 'doesnotexist')
+        assert getattr(aset, '_mode') == 'a' if aset.iswriteable else 'r'
+
+        sample = aset['foo']
+        assert hasattr(sample, 'doesnotexist') is False  # does not raise error
+        assert hasattr(sample, '_mode') is True
+        with pytest.raises(AttributeError):
+            assert getattr(sample, 'doesnotexist')
+        assert getattr(sample, '_mode') == 'a' if aset.iswriteable else 'r'
+
+        # mock up destruct call in sample and aset.
+        original = getattr(aset, '_mode')
+        delattr(aset, '_mode')
+        delattr(sample, '_mode')
+        with pytest.raises(PermissionError):
+            hasattr(aset, 'doesnotexist')
+        with pytest.raises(PermissionError):
+            hasattr(aset, '_mode')
+
+        with pytest.raises(PermissionError):
+            hasattr(sample, 'doesnotexist')
+        with pytest.raises(PermissionError):
+            hasattr(sample, '_mode')
+        setattr(aset, '_mode', original)
+        setattr(sample, '_mode', original)
 
 # ------------------------------ Getting Data --------------------------------------------
 

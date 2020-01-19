@@ -346,6 +346,31 @@ class TestCheckout(object):
         # unregister close operation as conftest will close env before this is called.
         atexit.unregister(co.close)
 
+
+    @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
+    @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
+    def test_reset_staging_area_no_changes_made_does_not_work(self, aset1_backend, aset2_backend, repo, array5by7):
+        co = repo.checkout(write=True)
+        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
+        aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
+        aset['1'] = array5by7
+        aset2['0'] = np.arange(50)
+        co.commit('hi')
+
+        # verifications before reset
+        assert np.allclose(aset2['0'], np.arange(50))
+        assert len(co.arraysets) == 2
+        assert co.arraysets['arange'].iswriteable
+
+        with pytest.raises(RuntimeError, match='No changes made'):
+            co.reset_staging_area()
+
+        # verifications after reset
+        assert np.allclose(aset2['0'], np.arange(50))
+        assert len(co.arraysets) == 2
+        assert co.arraysets['arange'].iswriteable
+        co.close()
+
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     def test_reset_staging_area_clears_arraysets(self, aset1_backend, aset2_backend, repo, array5by7):

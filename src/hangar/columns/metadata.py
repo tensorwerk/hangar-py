@@ -286,7 +286,7 @@ class MetadataWriter(MetadataReader):
     """Class implementing write access to repository metadata.
 
     Similar to the :class:`~.columns.arrayset.ArraysetDataWriter`, this class
-    inherits the functionality of the :class:`~.metadata.MetadataReader` for reading. The
+    inherits the functionality of the :class:`~.columns.metadata.MetadataReader` for reading. The
     only difference is that the reader will be initialized with data records
     pointing to the staging area, and not a commit which is checked out.
 
@@ -460,7 +460,7 @@ class MetadataWriter(MetadataReader):
                 raise KeyError(key)
             metaRecKey = metadata_record_db_key_from_raw_key(key)
             delete_succeeded = self._dataTxn.delete(metaRecKey)
-            if delete_succeeded is False:
+            if delete_succeeded is False:  # pragma: no cover
                 raise RuntimeError(
                     f'Internal error, could not delete metadata key `{key}` with '
                     f' metaRecKey `{metaRecKey}` from refs db even though in memory '
@@ -488,9 +488,3 @@ class MetadataWriter(MetadataReader):
         value = self[key]
         del self[key]
         return value
-
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-        for attr in list(self.__dict__.keys()):
-            delattr(self, attr)

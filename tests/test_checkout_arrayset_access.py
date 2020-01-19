@@ -5,6 +5,24 @@ import numpy as np
 # -------------------------- Reader Checkout ----------------------------------
 
 
+@pytest.mark.parametrize('write', [True, False])
+def test_arrayset_getattr_does_not_raise_permission_error_if_alive(write, aset_samples_initialized_repo):
+    co = aset_samples_initialized_repo.checkout(write=write)
+    asets = co.arraysets
+
+    assert hasattr(asets, 'doesnotexist') is False  # does not raise error
+    assert hasattr(asets, '_mode') is True
+    with pytest.raises(AttributeError):
+        assert getattr(asets, 'doesnotexist')
+    assert getattr(asets, '_mode') == 'a' if write else 'r'
+
+    co.close()
+    with pytest.raises(PermissionError):
+        hasattr(asets, 'doesnotexist')
+    with pytest.raises(PermissionError):
+        hasattr(asets, '_mode')
+
+
 @pytest.mark.parametrize("samplename", ['0', '-1', 1, 0, 1000, 'alkea'])
 def test_write_single_arrayset_single_sample(aset_samples_initialized_repo, array5by7, samplename):
     wco = aset_samples_initialized_repo.checkout(write=True)

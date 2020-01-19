@@ -64,7 +64,7 @@ Subsample Level Arrayset Data
 Metadata
 --------
 
-.. autoclass:: hangar.metadata.MetadataWriter()
+.. autoclass:: hangar.columns.metadata.MetadataWriter()
    :members:
    :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
@@ -122,7 +122,7 @@ Subsample Level Arrayset Data
 Metadata
 --------
 
-.. autoclass:: hangar.metadata.MetadataReader()
+.. autoclass:: hangar.columns.metadata.MetadataReader()
    :members:
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__

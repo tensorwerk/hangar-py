@@ -30,18 +30,18 @@ jobs:
         cd asv_bench/
         asv machine --yes
         asv continuous --split origin/master HEAD | tee -a asv_continuous.log
+      shell: bash
+      continue-on-error: true
+    - name: Show Comparison
+      run: |
+        cd asv_bench/
         asv compare --split origin/master HEAD | tee -a asv_compare.log
-        if [[ $(cat asv_continuous.log | grep "failed") ]]; then
-          echo "Benchmarks Run With Errors"
-          echo "$(cat asv_continuous.log)"
-          echo "$(cat asv_compare.log)"
+        if [[ $(cat asv_continuous.log | grep "PERFORMANCE DECREASED") ]]; then
+          echo "Benchmarks Performance Decreased"
           exit 1
-        elif [[ $(cat asv_compare.log | grep "PERFORMANCE DECREASED") ]]; then
-          echo "Benchmarks Decreased Performance"
-          echo "$(cat asv_continuous.log)"
-          echo "$(cat asv_compare.log)"
-          exit 1
+        elif [[ $(cat asv_continuous.log | grep "PERFORMANCE INCREASED") ]]; then
+          echo "Benchmark Performance Increased"
         else
-          echo "Benchmarks Run Without Errors"
+          echo "Benchmarks Run Without Errors, No Significant Change."
         fi
       shell: bash

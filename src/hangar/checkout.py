@@ -207,7 +207,7 @@ class ReaderCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`~hangar.metadata.MetadataReader` contains all methods
+            The class :class:`~hangar.columns.metadata.MetadataReader` contains all methods
             accessible by this property accessor
 
         Returns
@@ -677,7 +677,7 @@ class WriterCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`hangar.metadata.MetadataWriter` contains all methods
+            The class :class:`hangar.columns.metadata.MetadataWriter` contains all methods
             accessible by this property accessor
 
         Returns

@@ -252,6 +252,109 @@ class TestMetadata(object):
             assert f'k_{i}' in co.metadata
         co.close()
 
+    def test_loop_through_in_cm(self, repo):
+        co = repo.checkout(write=True)
+        limit = 10
+        for i in range(limit):
+            co.metadata.update({f'k_{i}': f'v_{i}'})
+        co.commit('this is a commit message')
+        co.close()
+
+        co = repo.checkout()
+        with co.metadata as meta:
+            for i, (k, v) in enumerate(meta.items()):
+                assert k == f'k_{i}'
+                assert v == f'v_{i}'
+            for i, k in enumerate(meta.keys()):
+                assert meta[k] == f'v_{i}'
+            for i, k in enumerate(meta):
+                assert meta[k] == f'v_{i}'
+            for i, v in enumerate(meta.values()):
+                assert meta[f'k_{i}'] == v
+            for i in range(limit):
+                assert f'k_{i}' in meta
+        co.close()
+
+    def test_append_metadata(self, repo):
+        co = repo.checkout(write=True)
+        limit, kvs = 10, []
+
+        for i in range(limit):
+            kvs.append((f'k_{i}', f'v_{i}'))
+            co.metadata.update({f'k_{i}': f'v_{i}'})
+        assert len(co.metadata) == limit
+
+        for i in range(limit, limit + 5):
+            gen_key = co.metadata.append(f'v_{i}')
+            assert isinstance(gen_key, str)
+            kvs.append((gen_key, f'v_{i}'))
+        assert len(co.metadata) == limit + 5
+
+        assert len(kvs) == len(co.metadata)
+        for k, v in kvs:
+            assert k in co.metadata
+            assert co.metadata[k] == v
+        co.close()
+
+    def test_append_metadata_in_cm(self, repo):
+        co = repo.checkout(write=True)
+        limit, kvs = 10, []
+
+        with co.metadata as meta:
+            for i in range(limit):
+                kvs.append((f'k_{i}', f'v_{i}'))
+                meta.update({f'k_{i}': f'v_{i}'})
+            assert len(meta) == limit
+
+            for i in range(limit, limit + 5):
+                gen_key = meta.append(f'v_{i}')
+                assert isinstance(gen_key, str)
+                kvs.append((gen_key, f'v_{i}'))
+            assert len(meta) == limit + 5
+
+            assert len(kvs) == len(meta)
+            for k, v in kvs:
+                assert k in meta
+                assert meta[k] == v
+        co.close()
+
+    def test_pop(self, repo):
+        co = repo.checkout(write=True)
+        limit, kvs = 10, []
+
+        for i in range(limit):
+            kvs.append((f'k_{i}', f'v_{i}'))
+            co.metadata.update({f'k_{i}': f'v_{i}'})
+        assert len(co.metadata) == limit
+
+        remaining = len(co.metadata)
+        for k, v in kvs:
+            res = co.metadata.pop(k)
+            remaining -= 1
+            assert res == v
+            assert k not in co.metadata
+            assert len(co.metadata) == remaining
+        co.close()
+
+    def test_pop_in_cm(self, repo):
+        co = repo.checkout(write=True)
+        limit, kvs = 10, []
+
+        with co.metadata as meta:
+            for i in range(limit):
+                kvs.append((f'k_{i}', f'v_{i}'))
+                meta.update({f'k_{i}': f'v_{i}'})
+            assert len(meta) == limit
+
+            remaining = len(meta)
+            for k, v in kvs:
+                res = meta.pop(k)
+                remaining -= 1
+                assert res == v
+                assert k not in meta
+                assert len(meta) == remaining
+        co.close()
+
 
 def test_get_multi_threading_pool(repo):
     from multiprocessing import dummy

@@ -50,6 +50,10 @@ def classrepo(tmp_path_factory) -> Repository:
 @pytest.fixture()
 def managed_tmpdir(monkeypatch, tmp_path):
     monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
+    monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 10)
+    monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 50)
+    monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 10)
+    monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 50)
     hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
