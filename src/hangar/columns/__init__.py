@@ -18,9 +18,11 @@ ModifierTypes = Union[
 WriterModifierTypes = Union[SubsampleWriterModifier, SampleWriterModifier]
 
 from .arrayset import Arraysets
+from .metadata import MetadataReader, MetadataWriter
 
 __all__ = ('Arraysets', 'Sample', 'Subsample', 'AsetTxn',
            'SubsampleReaderModifier', 'SubsampleWriterModifier',
            'SubsampleReader', 'SubsampleWriter',
            'SampleReaderModifier', 'SampleWriterModifier',
-           'ModifierTypes', 'WriterModifierTypes')
+           'ModifierTypes', 'WriterModifierTypes',
+           'MetadataReader', 'MetadataWriter')

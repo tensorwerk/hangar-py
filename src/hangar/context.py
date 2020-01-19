@@ -108,7 +108,7 @@ class Environments(object):
     def init_repo(self,
                   user_name: str,
                   user_email: str,
-                  remove_old: bool = False) -> os.PathLike:
+                  remove_old: bool = False) -> Path:
         """Create a new hangar repositiory at the specified environment path.
 
         Parameters
@@ -148,7 +148,7 @@ class Environments(object):
         userConf = {'USER': {'name': user_name, 'email': user_email}}
         CFG = configparser.ConfigParser()
         CFG.read_dict(userConf)
-        with open(pjoin(self.repo_path, CONFIG_USER_NAME), 'w') as f:
+        with self.repo_path.joinpath(CONFIG_USER_NAME).open('w') as f:
             CFG.write(f)
 
         readmeTxt = readme_contents(user_name, user_email)

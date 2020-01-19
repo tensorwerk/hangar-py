@@ -1,11 +1,11 @@
-from contextlib import ExitStack, suppress
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Optional, Union, Iterator, Tuple, Dict, Mapping, List, Sequence, Any, Iterable
 
 import lmdb
 
-from .records.hashmachine import metadata_hash_digest
-from .records.parsing import (
+from ..records.hashmachine import metadata_hash_digest
+from ..records.parsing import (
     hash_meta_db_key_from_raw_key,
     hash_meta_db_val_from_raw_val,
     hash_meta_raw_val_from_db_val,
@@ -14,9 +14,9 @@ from .records.parsing import (
     metadata_record_raw_val_from_db_val,
     generate_sample_name,
 )
-from .records.queries import RecordQuery
-from .txnctx import TxnRegister
-from .utils import is_suitable_user_key, is_ascii
+from ..records.queries import RecordQuery
+from ..txnctx import TxnRegister
+from ..utils import is_suitable_user_key, is_ascii
 
 
 KeyTypes = Union[str, int]

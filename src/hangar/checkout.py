@@ -9,10 +9,9 @@ from typing import Optional
 import lmdb
 
 from .mixins import GetMixin
-from .columns import Arraysets
+from .columns import Arraysets, MetadataReader, MetadataWriter
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
-from .metadata import MetadataReader, MetadataWriter
 from .records import commiting, hashs, heads
 
 
