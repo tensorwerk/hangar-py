@@ -1,6 +1,8 @@
 # memory efficient container classes for data backends specs.
 # Allow for attribute access similar to named tuples.
 
+include "common.pxi"
+
 
 cdef class HDF5_01_DataHashSpec:
 

@@ -1,3 +1,16 @@
+"""
+Portions of this code have been taken and modified from the "PyTables" project.
+
+URL:      https://github.com/PyTables/PyTables
+File:     tables/leaf.py
+Commit:   1e7b14e87507c2392265321fe18b2f1f5920ea7f
+Accessed: 23 JAN 2020
+
+PyTables License
+-------------------------------------------------------------------------------
+License: BSD
+URL:     https://github.com/PyTables/PyTables/blob/1e7b14e875/LICENSE.txt
+"""
 import numpy as np
 import math
 
@@ -27,16 +40,16 @@ def _limit_es(expected_mb):
 
 def _calc_chunksize(expected_mb):
     """Compute the optimum HDF5 chunksize for I/O purposes.
-    Rational: HDF5 takes the data in bunches of chunksize length to
-    write the on disk. A BTree in memory is used to map structures on
-    disk. The more chunks that are allocated for a dataset the larger
-    the B-tree. Large B-trees take memory and causes file storage
-    overhead as well as more disk I/O and higher contention for the meta
-    data cache.  You have to balance between memory and I/O overhead
-    (small B-trees) and time to access to data (big B-trees).
-    The tuning of the chunksize parameter affects the performance and
-    the memory consumed. This is based on my own experiments and, as
-    always, your mileage may vary.
+
+    Rational: HDF5 takes the data in bunches of chunksize length to write the
+    on disk. A BTree in memory is used to map structures on disk. The more
+    chunks that are allocated for a dataset the larger the B-tree. Large
+    B-trees take memory and causes file storage overhead as well as more disk
+    I/O and higher contention for the meta data cache.  You have to balance
+    between memory and I/O overhead (small B-trees) and time to access to data
+    (big B-trees). The tuning of the chunksize parameter affects the
+    performance and the memory consumed. This is based on my own experiments
+    and, as always, your mileage may vary.
     """
 
     expected_mb = _limit_es(expected_mb)
@@ -54,18 +67,18 @@ def _rowsize(shape, maindim, itemsize):
         Shape of the sample to fit in the row
 
     maindim:
-        The dimension along which iterators work.
-        Its value is 0 (i.e. the first dimension) when the dataset is not
-        extendable, and self.extdim (where available) for extendable ones.
+        The dimension along which iterators work. Its value is 0 (i.e. the
+        first dimension) when the dataset is not extendable, and self.extdim
+        (where available) for extendable ones.
 
     itemsize:
         nbytes of each element
 
-    The meaning of *atomic* is that individual elements of a cell can
-    not be extracted directly by indexing (i.e.  __getitem__()) the
-    dataset; e.g. if a dataset has shape (2, 2) and its atoms have
-    shape (3,), to get the third element of the cell at (1, 0) one
-    should use dataset[1,0][2] instead of dataset[1,0,2].
+    The meaning of *atomic* is that individual elements of a cell can not be
+    extracted directly by indexing (i.e.  __getitem__()) the dataset; e.g. if a
+    dataset has shape (2, 2) and its atoms have shape (3,), to get the third
+    element of the cell at (1, 0) one should use dataset[1,0][2] instead of
+    dataset[1,0,2].
     """
     rowsize = itemsize
     for i, dim in enumerate(shape):
@@ -87,9 +100,9 @@ def calc_chunkshape(shape, expectedrows, itemsize, maindim):
         nbytes of each element
 
     maindim:
-        The dimension along which iterators work.
-        Its value is 0 (i.e. the first dimension) when the dataset is not
-        extendable, and self.extdim (where available) for extendable ones.
+        The dimension along which iterators work. Its value is 0 (i.e. the
+        first dimension) when the dataset is not extendable, and self.extdim
+        (where available) for extendable ones.
 
         may want to set to shape.index(max(shape))
     """

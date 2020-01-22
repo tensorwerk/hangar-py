@@ -1,7 +1,8 @@
 # decoding methods to convert from byte string -> spec struct.
 
-cimport hangar.backends.specs
-from hangar.backends.specs cimport HDF5_01_DataHashSpec, \
+include "common.pxi"
+
+from .specs cimport HDF5_01_DataHashSpec, \
     HDF5_00_DataHashSpec, \
     NUMPY_10_DataHashSpec, \
     REMOTE_50_DataHashSpec

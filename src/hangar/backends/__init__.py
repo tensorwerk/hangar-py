@@ -1,12 +1,5 @@
 from typing import Union
 
-from .selection import (
-    BACKEND_ACCESSOR_MAP,
-    AccessorMapType,
-    backend_from_heuristics,
-    backend_opts_from_heuristics,
-    parse_user_backend_opts,
-)
 from .specs import (
     HDF5_00_DataHashSpec,
     HDF5_01_DataHashSpec,
@@ -14,6 +7,14 @@ from .specs import (
     REMOTE_50_DataHashSpec,
 )
 from .specparse import backend_decoder
+
+from .selection import (
+    BACKEND_ACCESSOR_MAP,
+    AccessorMapType,
+    backend_from_heuristics,
+    backend_opts_from_heuristics,
+    parse_user_backend_opts,
+)
 
 DataHashSpecsType = Union[
     HDF5_00_DataHashSpec,

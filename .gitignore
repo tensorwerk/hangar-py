@@ -3,6 +3,7 @@
 # C extensions
 *.c
 *.so
+cython_debug/
 
 # cython annotation files
 src/hangar/backends/*.html

@@ -221,7 +221,7 @@ finally:
 from xxhash import xxh64_hexdigest
 
 
-from .specs import HDF5_01_DataHashSpec
+from . import HDF5_01_DataHashSpec
 from .chunk import calc_chunkshape
 from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA

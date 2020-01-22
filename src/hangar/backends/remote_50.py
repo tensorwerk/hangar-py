@@ -59,7 +59,7 @@ from typing import Optional
 
 import numpy as np
 
-from .specs import REMOTE_50_DataHashSpec
+from . import REMOTE_50_DataHashSpec
 from ..op_state import writer_checkout_only, reader_checkout_only
 
 # -------------------------------- Parser Implementation ----------------------

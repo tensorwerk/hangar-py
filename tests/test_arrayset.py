@@ -1434,7 +1434,7 @@ class TestMultiprocessArraysetReads(object):
                 assert not np.allclose(v, mysample)
 
         added_value_exists_on_later_iteration = False
-        for v in ds.values():
+        for v in aset.values():
             if np.allclose(v, mysample):
                 added_value_exists_on_later_iteration = True
                 break
@@ -1457,7 +1457,7 @@ class TestMultiprocessArraysetReads(object):
                 assert k != '1232'
 
         added_value_exists_on_later_iteration = False
-        for k, v in ds.items():
+        for k, v in aset.items():
             if (k == '1232') and np.allclose(v, mysample):
                 added_value_exists_on_later_iteration = True
                 break
