@@ -10,8 +10,9 @@ matrix:
       env:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
-        - TOXENV=py37-cover-ml,report
-        - SCRIPTPARAMS="-- -n 2 -p no:sugar"
+        - TOXENV=py37-covno-mlyes,py37-covyes-mlyes,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       after_success:
         - codecov
 
@@ -20,8 +21,9 @@ matrix:
       language: shell
       env:
         - PATH=/c/Python37:/c/Python37/Scripts:$PATH
-        - TOXENV=py37-cover-ml,report
-        - SCRIPTPARAMS="-- -n 2 -p no:sugar"
+        - TOXENV=py37-covno-mlyes,py37-covyes-mlyes,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       before_install:
         - choco install python --version 3.7.5
         - python -m pip install --upgrade pip
@@ -35,8 +37,9 @@ matrix:
       env:
         - TR_PYTHON_VERSION=3.7.5
         - PYENV_VERSION=3.7.5
-        - TOXENV=py37-cover-ml,report
-        - SCRIPTPARAMS="-- -n 2 -p no:sugar"
+        - TOXENV=py37-covno-mlyes,py37-covyes-mlyes,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       addons:
         homebrew:
           packages:
@@ -61,8 +64,9 @@ matrix:
       env:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
-        - TOXENV=py36-cover,report
-        - SCRIPTPARAMS="-- -n 2 -p no:sugar"
+        - TOXENV=py36-covno-mlno,py36-covyes-mlno,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       after_success:
         - codecov
 
@@ -71,8 +75,9 @@ matrix:
       language: shell
       env:
         - PATH=/c/Python36:/c/Python36/Scripts:$PATH
-        - TOXENV=py36-cover,report
-        - SCRIPTPARAMS="-- -n 2 -p no:sugar"
+        - TOXENV=py36-covno-mlno,py36-covyes-mlno,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       before_install:
         - choco install python --version 3.6.8
         - python -m pip install --upgrade pip
@@ -86,8 +91,9 @@ matrix:
       env:
         - TR_PYTHON_VERSION=3.6.8
         - PYENV_VERSION=3.6.8
-        - TOXENV=py36-cover,report
-        - SCRIPTPARAMS="-- -n 2 -p no:sugar"
+        - PYTEST_XDIST_PROC_NR="2"
+        - TOXENV=py36-covno-mlno,py36-covyes-mlno,report
+        - SCRIPTPARAMS="-- -p no:sugar"
       addons:
         homebrew:
           packages:

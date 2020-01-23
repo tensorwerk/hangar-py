@@ -38,7 +38,7 @@ class LazyCommandClass(dict):
     """
 
     def __contains__(self, key):
-        return key in ['build_ext', 'bdist_wheel'] or super().__contains__(key)
+        return key in ['build_ext', 'bdist_wheel', 'sdist'] or super().__contains__(key)
 
     def __setitem__(self, key, value):
         if key == 'build_ext':
@@ -50,12 +50,13 @@ class LazyCommandClass(dict):
             return self.make_build_ext_cmd()
         elif key == 'bdist_wheel':
             return self.make_bdist_wheel_cmd()
+        elif key  == 'sdist':
+            return self.make_sdist_cmd()
         else:
             return super().__getitem__(key)
 
     def make_build_ext_cmd(self):
-        """
-        :return: A command class implementing 'build_ext'.
+        """Returns a command class implementing 'build_ext'.
         """
         from Cython.Distutils.build_ext import new_build_ext as cython_build_ext
         from Cython.Compiler.Main import default_options
@@ -75,8 +76,7 @@ class LazyCommandClass(dict):
         return build_ext
 
     def make_bdist_wheel_cmd(self):
-        """
-        :return: A command class implementing 'bdist_wheel'.
+        """Returns a command class implementing 'bdist_wheel'.
         """
         from wheel.bdist_wheel import bdist_wheel
 
@@ -87,6 +87,18 @@ class LazyCommandClass(dict):
 
         return bdist_wheel_cmd
 
+    def make_sdist_cmd(self):
+        """A command class implementing 'sdist'.
+        """
+        from distutils.command.sdist import sdist as _sdist
+
+        class sdist(_sdist):
+            def run(self):
+                # Make sure the compiled Cython files in the distribution are up-to-date
+                # so we generate .c files correctly (.so will be removed)
+                _sdist.run(self)
+
+        return sdist
 
 # Pass command line flags to setup.py script
 # handle --lflags=[FLAGS] --cflags=[FLAGS]
@@ -137,7 +149,7 @@ SHORT_DESCRIPTION = (
 
 SETUP_REQUIRES = [
     'cython>=0.27',
-    'setuptools>=18.0',
+    'setuptools>=40.0',
     'wheel>=0.30',
 ]
 
@@ -176,9 +188,9 @@ setup(
     platforms=['any'],
     # Module Source Files
     ext_modules=__extensions,
-    py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     packages=find_packages('src'),
     package_dir={'': 'src'},
+    package_data={'': ['*.ini', '*.proto']},
     include_package_data=True,
     zip_safe=False,
     entry_points={
@@ -188,7 +200,7 @@ setup(
     python_requires='>= 3.6.0',
     install_requires=INSTALL_REQUIRES,
     setup_requires=SETUP_REQUIRES,
-    # hooks into `bdist_wheel`, `bdist_ext` commands.
+    # hooks into `sdist`, `bdist_wheel`, `bdist_ext` commands.
     cmdclass=LazyCommandClass(),
     # PyPi classifiers
     # http://pypi.python.org/pypi?%3Aaction=list_classifiers

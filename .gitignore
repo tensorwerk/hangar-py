@@ -7,6 +7,7 @@ cython_debug/
 
 # cython annotation files
 src/hangar/backends/*.html
+docs/_build
 
 # Packages
 *.egg
@@ -26,6 +27,7 @@ lib
 lib64
 venv*/
 pyvenv*/
+MANIFEST
 
 # Installer logs
 pip-log.txt
