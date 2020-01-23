@@ -88,7 +88,7 @@ def reader_checkout_only(wrapped, instance, args, kwargs) -> types.MethodType:
         return wrapped(*args, **kwargs)
 
 
-def tb_params_last_called(tb: types.TracebackType):
+def tb_params_last_called(tb: types.TracebackType) -> dict:
     """Get parameters of the last function called before exception thrown.
 
     Parameters
@@ -99,7 +99,7 @@ def tb_params_last_called(tb: types.TracebackType):
 
     Returns
     -------
-    object
+    dict
         parameters passed to the last function called before the exception was
         thrown.
     """

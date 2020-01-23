@@ -295,7 +295,7 @@ class HDF5_01_FileHandles(object):
         self.wFp: HDF5_01_MapTypes = {}
         self.Fp: HDF5_01_MapTypes = ChainMap(self.rFp, self.wFp)
         self.rDatasets = {}
-        self.wdset: h5py.Dataset = {}
+        self.wdset: h5py.Dataset = None
 
         self.mode: Optional[str] = None
         self.hIdx: Optional[int] = None
@@ -643,7 +643,7 @@ class HDF5_01_FileHandles(object):
             assert self.wFp[self.w_uid].swmr_mode is True
         self.wdset = self.wFp[self.w_uid][f'/{self.hNextPath}']
 
-    def read_data(self, hashVal: HDF5_01_DataHashSpec, *, _SLC=np.s_) -> np.ndarray:
+    def read_data(self, hashVal: HDF5_01_DataHashSpec) -> np.ndarray:
         """Read data from an hdf5 file handle at the specified locations
 
         Parameters
@@ -657,7 +657,7 @@ class HDF5_01_FileHandles(object):
             requested data
         """
         dsetCol = f'/{hashVal.dataset}'
-        srcSlc = (hashVal.dataset_idx, *(_SLC[0:dim] for dim in hashVal.shape))
+        srcSlc = (hashVal.dataset_idx, *[slice(0, dim) for dim in hashVal.shape])
         rdictkey = f'{hashVal.uid}{dsetCol}'
 
         if self.schema_dtype:  # if is not None
@@ -710,7 +710,7 @@ class HDF5_01_FileHandles(object):
                     f'DATA CORRUPTION Checksum {xxh64_hexdigest(destArr)} != recorded {hashVal}')
         return destArr
 
-    def write_data(self, array: np.ndarray, *, remote_operation: bool = False, _SLC=np.s_) -> bytes:
+    def write_data(self, array: np.ndarray, *, remote_operation: bool = False) -> bytes:
         """verifies correctness of array data and performs write operation.
 
         Parameters
@@ -746,7 +746,7 @@ class HDF5_01_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        destSlc = (self.hIdx, *(_SLC[0:dim] for dim in array.shape))
+        destSlc = (self.hIdx, *[slice(0, dim) for dim in array.shape])
         self.wdset.write_direct(array, None, destSlc)
         self.wdset.flush()
         res = hdf5_01_encode(self.w_uid, checksum, self.hNextPath, self.hIdx, array.shape)

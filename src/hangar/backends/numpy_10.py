@@ -145,9 +145,6 @@ class NUMPY_10_FileHandles(object):
         self.w_uid: str = None
         self.hIdx: int = None
 
-        self.slcExpr = np.s_
-        self.slcExpr.maketuple = False
-
         self.STAGEDIR: Path = Path(self.repo_path, DIR_DATA_STAGE, _FmtCode)
         self.REMOTEDIR: Path = Path(self.repo_path, DIR_DATA_REMOTE, _FmtCode)
         self.DATADIR: Path = Path(self.repo_path, DIR_DATA, _FmtCode)
@@ -338,8 +335,7 @@ class NUMPY_10_FileHandles(object):
           all future reads of the subarray from that process, but which would
           not be persisted to disk.
         """
-        srcSlc = (self.slcExpr[hashVal.collection_idx],
-                  *(self.slcExpr[0:x] for x in hashVal.shape))
+        srcSlc = (hashVal.collection_idx, *[slice(0, x) for x in hashVal.shape])
         try:
             res = self.Fp[hashVal.uid][srcSlc]
         except TypeError:
@@ -385,7 +381,7 @@ class NUMPY_10_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
+        destSlc = (self.hIdx, *[slice(0, x) for x in array.shape])
         self.wFp[self.w_uid][destSlc] = array
         self.wFp[self.w_uid].flush()
         return numpy_10_encode(self.w_uid, checksum, self.hIdx, array.shape)

@@ -265,9 +265,6 @@ class HDF5_00_FileHandles(object):
         self.hNextPath: Optional[int] = None
         self.hColsRemain: Optional[int] = None
 
-        self.slcExpr = np.s_
-        self.slcExpr.maketuple = False
-
         self.STAGEDIR: Path = Path(self.path, DIR_DATA_STAGE, _FmtCode)
         self.REMOTEDIR: Path = Path(self.path, DIR_DATA_REMOTE, _FmtCode)
         self.STOREDIR: Path = Path(self.path, DIR_DATA_STORE, _FmtCode)
@@ -647,9 +644,11 @@ class HDF5_00_FileHandles(object):
         np.array
             requested data.
         """
-        arrSize = int(np.prod(hashVal.shape))
+        arrSize = 1
+        for dim in hashVal.shape:
+            arrSize *= dim
+        srcSlc = (hashVal.dataset_idx, slice(0, arrSize))
         dsetCol = f'/{hashVal.dataset}'
-        srcSlc = (hashVal.dataset_idx, self.slcExpr[0:arrSize])
         rdictkey = f'{hashVal.uid}{dsetCol}'
 
         if self.schema_dtype:  # if is not None
@@ -739,7 +738,7 @@ class HDF5_00_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        destSlc = (self.hIdx, self.slcExpr[0:array.size])
+        destSlc = (self.hIdx, slice(0, array.size))
         flat_arr = np.ravel(array)
         self.wdset.write_direct(flat_arr, None, destSlc)
         self.wdset.flush()
