@@ -567,6 +567,29 @@ class TestDataWithFixedSizedArrayset(object):
         assert_equal(aset[1], array5by7+1)
         assert_equal(aset['bar'], array5by7 + 2)
 
+    def test_update_with_dict_and_kwargs_does_not_modify_input_in_calling_scopy(
+        self, aset_samples_initialized_w_checkout, array5by7
+    ):
+        """ensure bug does not revert.
+
+        Had a case where if dict was passed as ``other`` along with kwargs, the operation
+        would complete as normally, but when control returned to the caller the original
+        dict passed in as ``other`` would have been silently merged with the kwargs.
+        """
+        aset = aset_samples_initialized_w_checkout.arraysets['writtenaset']
+        data_map = {
+            'foo': array5by7,
+            1: array5by7+1,
+        }
+        data_map_before = list(data_map.keys())
+        aset.update(data_map, bar=array5by7+2)
+        # in bug case, would now observe that data_map would have been
+        # silently modified in a method analogous to calling:
+        #
+        #   ``data_map.update({'bar': np.array})``
+        #
+        assert list(data_map.keys()) == data_map_before
+
     @pytest.mark.parametrize('data_map', [
         ['foo', {'bar': np.random.random((5, 7))}],
         ['foo', 'bar', np.random.random((5, 7))],

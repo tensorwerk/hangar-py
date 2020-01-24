@@ -581,8 +581,11 @@ class SubsampleWriter(SubsampleReader):
             if not self._is_conman:
                 stack.enter_context(self)
 
-            if other and not isinstance(other, dict):
-                other = dict(other)
+            if other:
+                if not isinstance(other, dict):
+                    other = dict(other)
+                else:
+                    other = other.copy()
             elif other is None:
                 other = {}
             if kwargs:
@@ -1196,8 +1199,11 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             if not self._is_conman:
                 stack.enter_context(self)
 
-            if other and not isinstance(other, dict):
-                other = dict(other)
+            if other:
+                if not isinstance(other, dict):
+                    other = dict(other)
+                else:
+                    other = other.copy()
             elif other is None:
                 other = {}
             if kwargs:

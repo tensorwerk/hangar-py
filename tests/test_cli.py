@@ -1012,7 +1012,7 @@ class TestShow(object):
             assert res.exit_code == 0
             res = runner.invoke(
                 cli.view_data, [aset_name, 'data', 'wrongstartpoint', '--format', 'ext'], obj=repo)
-            assert 'No expanded commit hash found for short: wrongstartpoint' in str(res.exception)
+            assert "No matching commit hash found" in str(res.exception)
 
     def test_show_with_wrong_arg(self, monkeypatch, written_repo_with_1_sample):
         repo = written_repo_with_1_sample

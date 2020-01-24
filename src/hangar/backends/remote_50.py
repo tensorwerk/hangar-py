@@ -97,7 +97,7 @@ class REMOTE_50_Handler(object):
         return
 
     @reader_checkout_only
-    def __getstate__(self) -> dict:
+    def __getstate__(self) -> dict:  # pragma: no cover
         """ensure multiprocess operations can pickle relevant data.
         """
         self.close()

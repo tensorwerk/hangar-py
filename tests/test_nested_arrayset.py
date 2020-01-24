@@ -226,10 +226,12 @@ def backend_params(request):
 def subsample_writer_written_aset(backend_params, repo, monkeypatch):
     from hangar.backends import hdf5_00
     from hangar.backends import hdf5_01
+    from hangar.backends import numpy_10
     monkeypatch.setattr(hdf5_00, 'COLLECTION_COUNT', 5)
     monkeypatch.setattr(hdf5_00, 'COLLECTION_SIZE', 10)
     monkeypatch.setattr(hdf5_01, 'COLLECTION_COUNT', 5)
     monkeypatch.setattr(hdf5_01, 'COLLECTION_SIZE', 10)
+    monkeypatch.setattr(numpy_10, 'COLLECTION_SIZE', 10)
 
     co = repo.checkout(write=True)
     aset = co.arraysets.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
@@ -247,6 +249,54 @@ class TestAddData:
         assert added is None
         assert len(aset._samples) == len(iterable_samples)
         for sample_idx, sample_data in enumerate(iterable_samples):
+            assert f'sample{sample_idx}' in aset._samples
+
+    def test_update_sample_kwargs_only_empty_arrayset(self, subsample_writer_written_aset, iterable_subsamples):
+        aset = subsample_writer_written_aset
+        added = aset.update(fookwarg=iterable_subsamples)
+        assert added is None
+        assert len(aset._samples) == 1
+        assert 'fookwarg' in aset._samples
+
+        added = aset.update(bar=iterable_subsamples, baz=iterable_subsamples)
+        assert added is None
+        assert len(aset._samples) == 3
+        assert 'bar' in aset._samples
+        assert 'baz' in aset._samples
+        for subsample_idx, _data in enumerate(iterable_subsamples):
+            assert f'subsample{subsample_idx}' in aset._samples['fookwarg']._subsamples
+            assert f'subsample{subsample_idx}' in aset._samples['bar']._subsamples
+            assert f'subsample{subsample_idx}' in aset._samples['baz']._subsamples
+
+    def test_update_sample_kwargs_and_other_dict_doesnt_modify_input_in_calling_scope(
+        self, subsample_writer_written_aset, iterable_subsamples, iterable_samples
+    ):
+        """ensure bug does not revert.
+
+        Had a case where if dict was passed as ``other`` along with kwargs, the operation
+        would complete as normally, but when control returned to the caller the original
+        dict passed in as ``other`` would have been silently merged with the kwargs.
+        """
+        aset = subsample_writer_written_aset
+        if not isinstance(iterable_samples, dict):
+            return
+        iterable_samples_before = list(iterable_samples.items())
+
+        aset.update(iterable_samples, kwargadded=iterable_subsamples)
+        # in bug case, would now observe that iterable_samples would have been
+        # silently modified in a method analogous to calling:
+        #
+        #   ``iterable_samples.update({'kwargadded': iterable_subsamples})``
+        #
+        assert list(iterable_samples.items()) == iterable_samples_before
+
+    def test_update_sample_kwargs_and_iterably_empty_arrayset(self, subsample_writer_written_aset, iterable_subsamples, iterable_samples):
+        aset = subsample_writer_written_aset
+        aset.update(iterable_samples, fookwarg=iterable_subsamples)
+        assert len(aset._samples) == len(iterable_samples) + 1
+
+        assert 'fookwarg' in aset._samples
+        for sample_idx in range(len(iterable_samples)):
             assert f'sample{sample_idx}' in aset._samples
 
     def test_update_sample_subsamples_duplicate_data_does_not_save_new(self, subsample_writer_written_aset, iterable_samples):
@@ -323,6 +373,59 @@ class TestAddData:
             assert 'foo' in aset._samples[f'sample{sample_idx}']._subsamples
             for subsample_idx in range(len(iterable_subsamples)):
                 assert f'subsample{subsample_idx}' in aset._samples[f'sample{sample_idx}']._subsamples
+
+    def test_update_subsamples_via_kwargs_empty_arrayset(self, multi_item_generator, subsample_writer_written_aset):
+        aset = subsample_writer_written_aset
+        for sample_idx in range(multi_item_generator):
+            aset[f'sample{sample_idx}'] = {'foo': np.arange(4, dtype=np.uint8).reshape(2, 2) + 10}
+            aset[f'sample{sample_idx}'].update(bar=np.arange(4, dtype=np.uint8).reshape(2, 2) + 20)
+        assert len(aset._samples) == multi_item_generator
+
+        for sample_idx in range(multi_item_generator):
+            assert f'sample{sample_idx}' in aset._samples
+            assert len(aset._samples[f'sample{sample_idx}']._subsamples) == 2
+            assert 'foo' in aset._samples[f'sample{sample_idx}']._subsamples
+            assert 'bar' in aset._samples[f'sample{sample_idx}']._subsamples
+
+    def test_update_subsamples_kwargs_and_other_dict_doesnt_modify_input_in_calling_scopy(
+        self, multi_item_generator, subsample_writer_written_aset, iterable_subsamples
+    ):
+        """ensure bug does not revert.
+
+        Had a case where if dict was passed as ``other`` along with kwargs, the operation
+        would complete as normally, but when control returned to the caller the original
+        dict passed in as ``other`` would have been silently merged with the kwargs.
+        """
+        aset = subsample_writer_written_aset
+        if not isinstance(iterable_subsamples, dict):
+            return
+        iterable_subsamples_before = list(iterable_subsamples.keys())
+
+        for sample_idx in range(multi_item_generator):
+            aset[f'sample{sample_idx}'] = {'foo': np.arange(4, dtype=np.uint8).reshape(2, 2) + 10}
+            aset[f'sample{sample_idx}'].update(iterable_subsamples, kwargadded=np.arange(4, dtype=np.uint8).reshape(2, 2))
+            # in bug case, would now observe that iterable_subsamples would have been
+            # silently modified in a method analogous to calling:
+            #
+            #   ``iterable_subsamples.update({'kwargadded': np.array})``
+            #
+            assert list(iterable_subsamples.keys()) == iterable_subsamples_before
+        assert list(iterable_subsamples.keys()) == iterable_subsamples_before
+
+    def test_update_subsamples_via_kwargs_and_iterable_empty_arrayset(
+        self, multi_item_generator, subsample_writer_written_aset, iterable_subsamples
+    ):
+        aset = subsample_writer_written_aset
+        for sample_idx in range(multi_item_generator):
+            aset[f'sample{sample_idx}'] = {'foo': np.arange(4, dtype=np.uint8).reshape(2, 2) + 10}
+            aset[f'sample{sample_idx}'].update(iterable_subsamples, bar=np.arange(4, dtype=np.uint8).reshape(2, 2))
+        assert len(aset._samples) == multi_item_generator
+
+        for sample_idx in range(multi_item_generator):
+            assert f'sample{sample_idx}' in aset._samples
+            assert len(aset._samples[f'sample{sample_idx}']._subsamples) == len(iterable_subsamples) + 2
+            assert 'foo' in aset._samples[f'sample{sample_idx}']._subsamples
+            assert 'bar' in aset._samples[f'sample{sample_idx}']._subsamples
 
     @pytest.mark.parametrize('backend', fixed_shape_backend_params)
     def test_update_subsamples_context_manager(self, backend, multi_item_generator,
@@ -681,6 +784,22 @@ class TestRemoveData:
         del aset['foo'][0]
         assert 0 not in aset._samples['foo']._subsamples
         assert 0 not in aset['foo']
+
+    def test_delitem_sample_nonexisting_keys_fails(self, initialized_arrayset_write_only):
+        aset = initialized_arrayset_write_only
+        assert 'doesnotexist' not in aset._samples
+        assert 'doesnotexist' not in aset
+        with pytest.raises(KeyError):
+            del aset['doesnotexist']
+
+    def test_delitem_single_subsample_nonexisting_key_fails(self, initialized_arrayset_write_only):
+        aset = initialized_arrayset_write_only
+        assert 'foo' in aset._samples
+        assert 'foo' in aset
+        assert 'doesnotexist' not in aset._samples['foo']._subsamples
+        assert 'doesnotexist' not in aset['foo']
+        with pytest.raises(KeyError):
+            del aset['foo']['doesnotexist']
 
     def test_delitem_multiple_samples_fails_keyerror(self, initialized_arrayset_write_only):
         aset = initialized_arrayset_write_only

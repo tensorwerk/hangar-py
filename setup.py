@@ -3,14 +3,15 @@
 import os
 import platform
 import sys
+from os.path import join
 from distutils.sysconfig import get_config_var
 from distutils.version import LooseVersion
-from glob import glob
-from os.path import basename, join, splitext
 from setuptools import setup, Extension, find_packages
+
 
 # Use `setup.py [] --debug` for a debug build of hangar
 HANGAR_DEBUG_BUILD = False
+
 
 # Set deployment target for mac
 #

@@ -579,7 +579,7 @@ def test_full_from_short_commit_digest(two_commit_filled_samples_repo):
         found_cmt = expand_short_commit_digest(repo._env.refenv, short_cmt)
         assert found_cmt == full_cmt
 
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match='No matching commit hash found starting with'):
         expand_short_commit_digest(repo._env.refenv, 'zzzzzzzzzzzzzzzzzzzzzzzzzzzz')
 
 

@@ -73,8 +73,6 @@ def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> st
         if shortHashExists is True:
             commitKey = cursor.key()
             commit_key = commit_parent_raw_key_from_db_key(commitKey)
-            if commit_key.startswith(commit_hash) is False:
-                raise KeyError(f'No expanded commit hash found for short: {commit_hash}')
             cursor.next()
             cursor.next()
             nextHashExist = cursor.next()
@@ -87,7 +85,7 @@ def expand_short_commit_digest(refenv: lmdb.Environment, commit_hash: str) -> st
             else:
                 return commit_key
         else:
-            raise KeyError(f'No expanded commit hash found for short: {commit_hash}')
+            raise KeyError(f'No matching commit hash found starting with: {commit_hash}')
 
 
 def check_commit_hash_in_history(refenv, commit_hash):
