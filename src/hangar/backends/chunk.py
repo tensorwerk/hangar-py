@@ -67,9 +67,9 @@ def _rowsize(shape, maindim, itemsize):
         Shape of the sample to fit in the row
 
     maindim:
-        The dimension along which iterators work. Its value is 0 (i.e. the
-        first dimension) when the dataset is not extendable, and self.extdim
-        (where available) for extendable ones.
+        The dimension along which iterators work. Its value is 0 (i.e. the first
+        dimension) when the dataset is not extendable, and self.extdim (where
+        available) for extendable ones.
 
     itemsize:
         nbytes of each element
@@ -100,9 +100,9 @@ def calc_chunkshape(shape, expectedrows, itemsize, maindim):
         nbytes of each element
 
     maindim:
-        The dimension along which iterators work. Its value is 0 (i.e. the
-        first dimension) when the dataset is not extendable, and self.extdim
-        (where available) for extendable ones.
+        The dimension along which iterators work. Its value is 0 (i.e. the first
+        dimension) when the dataset is not extendable, and self.extdim (where
+        available) for extendable ones.
 
         may want to set to shape.index(max(shape))
     """

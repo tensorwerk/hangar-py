@@ -235,7 +235,7 @@ def server_instance(managed_tmpdir, worker_id):
     yield address
 
     hangserver.close()
-    server.stop(0.1)
+    server.stop(0.05)
     time.sleep(0.1)
     if platform.system() == 'Windows':
         time.sleep(0.1)
@@ -243,6 +243,7 @@ def server_instance(managed_tmpdir, worker_id):
 
 @pytest.fixture()
 def written_two_cmt_server_repo(server_instance, two_commit_filled_samples_repo) -> tuple:
+    time.sleep(0.1)  # wait for ready
     two_commit_filled_samples_repo.remote.add('origin', server_instance)
     success = two_commit_filled_samples_repo.remote.push('origin', 'master')
     assert success == 'master'

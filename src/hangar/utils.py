@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-import random
+import secrets
 import re
 import string
 import time
@@ -38,7 +38,10 @@ def set_blosc_nthreads() -> int:  # pragma: no cover
     return nUsed
 
 
-def random_string(n: int = 8) -> str:
+def random_string(
+    n: int = 8,
+    *, _ALPHABET=''.join([string.ascii_lowercase, string.digits])
+) -> str:
     """Generate a random string of lowercase ascii letters and digits.
 
     Parameters
@@ -46,8 +49,8 @@ def random_string(n: int = 8) -> str:
     n: int, optional
         The number of characters which the output string will have. Default = 6
     """
-    letters = ''.join([string.ascii_lowercase, string.digits])
-    return ''.join(random.choice(letters) for i in range(n))
+    token = [secrets.choice(_ALPHABET) for i in range(n)]
+    return ''.join(token)
 
 
 _SuitableCharRE = re.compile(r'[\w\.\-\_]+\Z', flags=re.ASCII)

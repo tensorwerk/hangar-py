@@ -1,6 +1,8 @@
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
+from typing import (
+    Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
+)
 from weakref import proxy
 
 import numpy as np
@@ -558,7 +560,7 @@ class SubsampleWriter(SubsampleReader):
             return key
 
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
-        """Store some data with the key/value pairs from other, overwriting existing keys.
+        """Store data with the key/value pairs, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
         :meth:`dict.update` method, accepting either a dictionary or other
@@ -567,12 +569,11 @@ class SubsampleWriter(SubsampleReader):
         Parameters
         ----------
         other : Union[None, MapKeyArrType], optional
-            Accepts either another dictionary object or an iterable of
-            key/value pairs (as tuples or other iterables of length two).
-            mapping sample names to :class:`np.ndarray` instances, If sample
-            name is string type, can only contain alpha-numeric ascii
-            characters (in addition to '-', '.', '_'). Int key must be >= 0.
-            By default, None.
+            Accepts either another dictionary object or an iterable of key/value
+            pairs (as tuples or other iterables of length two). mapping sample
+            names to :class:`np.ndarray` instances, If sample name is string type,
+            can only contain alpha-numeric ascii characters (in addition to '-',
+            '.', '_'). Int key must be >= 0. By default, None.
         **kwargs
             keyword arguments provided will be saved with keywords as subsample
             keys (string type only) and values as np.array instances.
@@ -745,10 +746,9 @@ class SubsampleReaderModifier(object):
     def __setstate__(self, state: dict) -> None:
         """ensure multiprocess operations can pickle relevant data.
 
-        Technically should be decorated with @reader_checkout_only,
-        but since at instance creation that is not an attribute,
-        the decorator won't know. Since only readers can be pickled,
-        This isn't much of an issue.
+        Technically should be decorated with @reader_checkout_only, but since
+        at instance creation that is not an attribute, the decorator won't
+        know. Since only readers can be pickled, This isn't much of an issue.
         """
         for slot, value in state.items():
             setattr(self, slot, value)
@@ -801,18 +801,18 @@ class SubsampleReaderModifier(object):
     def _open(self):
         for val in self._be_fs.values():
             try:
-                # since we are storing non backend accessor information in the be_fs
-                # weakref proxy for the purpose of memory savings, not all elements
-                # have a `open` method
+                # since we are storing non backend accessor information in the
+                # be_fs weakref proxy for the purpose of memory savings, not
+                # all elements have a `open` method
                 val.open(mode=self._mode)
             except AttributeError:
                 pass
 
     def _close(self):
         for val in self._be_fs.values():
-            # since we are storing non backend accessor information in the be_fs
-            # weakref proxy for the purpose of memory savings, not all elements
-            # have a `close` method
+            # since we are storing non backend accessor information in the
+            # be_fs weakref proxy for the purpose of memory savings, not all
+            # elements have a `close` method
             try:
                 val.close()
             except AttributeError:
