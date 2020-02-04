@@ -119,10 +119,9 @@ class SubsampleReader(object):
     def __setstate__(self, state: dict) -> None:
         """ensure multiprocess operations can pickle relevant data.
 
-        Technically should be decorated with @reader_checkout_only,
-        but since at instance creation that is not an attribute,
-        the decorator won't know. Since only readers can be pickled,
-        This isn't much of an issue.
+        Technically should be decorated with @reader_checkout_only, but since
+        at instance creation that is not an attribute, the decorator won't
+        know. Since only readers can be pickled, This isn't much of an issue.
         """
         for slot, value in state.items():
             setattr(self, slot, value)
@@ -145,21 +144,20 @@ class SubsampleReader(object):
         ----------
         key : GetKeysType
             Sample key to retrieve from the arrayset. Alternatively, ``slice``
-            syntax can be used to retrieve a
-            selection of subsample keys/values. An empty slice (``:`` == ``slice(None)``)
-            or ``Ellipsis`` (``...``) will return all subsample keys/values.
-            Passing a non-empty slice (``[1:5] == slice(1, 5)``) will select
-            keys to retrieve by enumerating all subsamples and retrieving
-            the element (key) for each step across the range. Note: order of
-            enumeration is not guaranteed; do not rely on any ordering observed
-            when using this method.
+            syntax can be used to retrieve a selection of subsample
+            keys/values. An empty slice (``: == slice(None)``) or ``Ellipsis``
+            (``...``) will return all subsample keys/values. Passing a
+            non-empty slice (``[1:5] == slice(1, 5)``) will select keys to
+            retrieve by enumerating all subsamples and retrieving the element
+            (key) for each step across the range. Note: order of enumeration is
+            not guaranteed; do not rely on any ordering observed when using
+            this method.
 
         Returns
         -------
         Union[:class:`numpy.ndarray`, KeyArrMap]
-            Sample array data corresponding to the provided key. or
-            dictionary of subsample keys/data if Ellipsis or slice
-            passed in as key.
+            Sample array data corresponding to the provided key. or dictionary
+            of subsample keys/data if Ellipsis or slice passed in as key.
 
         Raises
         ------
@@ -220,8 +218,8 @@ class SubsampleReader(object):
         Returns
         -------
         KeyArrMap
-            Dictionary mapping subsample name(s) (keys) to their stored
-            values as :class:`np.ndarray` instances.
+            Dictionary mapping subsample name(s) (keys) to their stored values
+            as :class:`numpy.ndarray` instances.
         """
         return self[...]
 
@@ -231,8 +229,8 @@ class SubsampleReader(object):
         Parameters
         ----------
         local : bool
-            True if keys should be returned which only exist on the local machine.
-            Fale if remote sample keys should be excluded.
+            True if keys should be returned which only exist on the local
+            machine. False if remote sample keys should be excluded.
 
         Returns
         -------
@@ -254,16 +252,16 @@ class SubsampleReader(object):
     def contains_remote_references(self) -> bool:
         """Bool indicating all subsamples in sample arrayset exist on local disk.
 
-        The data associated with subsamples referencing some remore server will
+        The data associated with subsamples referencing some remote server will
         need to be downloaded (``fetched`` in the hangar vocabulary) before
         they can be read into memory.
 
         Returns
         -------
         bool
-            False if at least one subsample in the arrayset references data stored
-            on some remote server. True if all sample data is available on the
-            machine's local disk.
+            False if at least one subsample in the arrayset references data
+            stored on some remote server. True if all sample data is available
+            on the machine's local disk.
         """
         return not all(map(lambda x: x.islocal, self._subsamples.values()))
 
@@ -363,8 +361,8 @@ class SubsampleReader(object):
     def __getattr__(self, name):
         """Raise permission error after checkout is closed.
 
-         Only runs after a call to :meth:`_destruct`, which is responsible
-         for deleting all attributes from the object instance.
+         Only runs after a call to :meth:`_destruct`, which is responsible for
+         deleting all attributes from the object instance.
         """
         try:
             self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
@@ -526,9 +524,9 @@ class SubsampleWriter(SubsampleReader):
 
             :meth:`add` for the actual method called.
 
-            :meth:`update` for an implementation analogous to python's built in
-            :meth:`dict.update` method which accepts a dict or iterable of key/value
-            pairs to add in the same operation.
+            :meth:`update` for an implementation analogous to python's built
+            in :meth:`dict.update` method which accepts a dict or iterable of
+            key/value pairs to add in the same operation.
 
         Parameters
         ----------
@@ -544,12 +542,29 @@ class SubsampleWriter(SubsampleReader):
             self._perform_set(key, value)
 
     def append(self, value: np.ndarray) -> KeyType:
-        """TODO: is this the right way we should be handling unnamed samples?
+        """Store some data in a subsample with an automatically generated key.
 
-        Thesis:
-            Rather than have seperate arraysets for each named and unnamed sample type,
-            you should be able to append to any arrayset without a name, and one will be
-            generated for you?
+        This method should only be used if the context some piece of data is
+        used in is independent from it's value (ie. when reading data back,
+        there is no useful information which needs to be conveyed between the
+        data source's name/id and the value of that piece of information.)
+        Think carefully before going this route, as this posit does not apply
+        to many common use cases.
+
+        .. seealso::
+
+            In order to store the data with a user defined key, use
+            :meth:`update` or :meth:`__setitem__`
+
+        Parameters
+        ----------
+        value: :class:`numpy.ndarray`
+            Piece of data to store in the arrayset.
+
+        Returns
+        -------
+        KeyType
+            Name of the generated key this data is stored with.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -626,7 +641,7 @@ class SubsampleWriter(SubsampleReader):
             if isRecordDeleted is False:
                 raise RuntimeError(
                     f'Internal error. Not able to delete key {key} from staging '
-                    f'db even though existance passed in memory verification. '
+                    f'db even though existence passed in memory verification. '
                     f'Please report this message in full to the hangar development team.',
                     f'Specified key: <{type(key)} {key}>', f'Calculated dbKey: <{dbKey}>',
                     f'isRecordDeleted: <{isRecordDeleted}>', f'DEBUG STRING: {self._debug_}')
@@ -769,7 +784,7 @@ class SubsampleReaderModifier(object):
         return self._samples[key]
 
     def __iter__(self) -> Iterable[KeyType]:
-        """Create iterator yielding an arrayset sample key for every call to ``next``.
+        """Create iterator yielding an arrayset sample keys.
 
         Yields
         -------
@@ -866,8 +881,8 @@ class SubsampleReaderModifier(object):
         Parameters
         ----------
         local : bool
-            True if keys should be returned which only exist on the local machine.
-            Fale if remote sample keys should be excluded.
+            True if keys should be returned which only exist on the local
+            machine. False if remote sample keys should be excluded.
 
         Returns
         -------
@@ -889,16 +904,16 @@ class SubsampleReaderModifier(object):
     def contains_remote_references(self) -> bool:
         """Bool indicating all subsamples in sample arrayset exist on local disk.
 
-        The data associated with subsamples referencing some remore server will
+        The data associated with subsamples referencing some remote server will
         need to be downloaded (``fetched`` in the hangar vocabulary) before
         they can be read into memory.
 
         Returns
         -------
         bool
-            False if at least one subsample in the arrayset references data stored
-            on some remote server. True if all sample data is available on the
-            machine's local disk.
+            False if at least one subsample in the arrayset references data
+            stored on some remote server. True if all sample data is available
+            on the machine's local disk.
         """
         return all(map(lambda x: x.contains_remote_references, self._samples.values()))
 
@@ -1157,7 +1172,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
                 raise e
 
     def __setitem__(self, key: KeyType, value: MapKeyArrType) -> None:
-        """Store some subsample key / subsample data map pairs, overwriting existing keys.
+        """Store some subsample key / subsample data map, overwriting existing keys.
 
         .. seealso::
 
@@ -1175,7 +1190,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
                other: Union[None, Dict[KeyType, MapKeyArrType],
                             Sequence[Sequence[Union[KeyType, MapKeyArrType]]]] = None,
                **kwargs) -> None:
-        """Store some data with the key/value pairs from other, overwriting existing keys.
+        """Store some data with the key/value pairs, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
         :meth:`dict.update` method, accepting either a dictionary or other
@@ -1186,14 +1201,14 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         other : Union[None, Dict[KeyType, MapKeyArrType],
                       Sequence[Sequence[Union[KeyType, MapKeyArrType]]]]
 
-            Dictionary mapping sample names to subsample data maps. Or Squence
-            (list or tuple) where element one is the sample name and element two is
-            a subsample data map.
+            Dictionary mapping sample names to subsample data maps. Or Sequence
+            (list or tuple) where element one is the sample name and element
+            two is a subsample data map.
 
         **kwargs :
             keyword arguments provided will be saved with keywords as sample
-            keys (string type only) and values as a mapping of subarray keys to
-            :class:`np.ndarray` instances.
+            keys (string type only) and values as a mapping of subarray keys
+            to :class:`np.ndarray` instances.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -1207,7 +1222,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             elif other is None:
                 other = {}
             if kwargs:
-                # we have to merge kwargs dict with `other` before operating on either
+                # we merge kwargs dict with `other` before operating on either
                 # so all necessary validation and writing occur atomically
                 other.update(kwargs)
 
@@ -1224,8 +1239,8 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
 
         .. seealso::
 
-            :meth:`delete` for the actual implementation of the method and docstring
-            for this methods parameters
+            :meth:`delete` for the actual implementation of the method and
+            docstring for this methods parameters
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -1276,10 +1291,10 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         ----------
         backend_opts : Union[str, dict]
             If str, backend format code to specify, opts are automatically
-            inferred. If dict, key ``backend`` must have a valid backend format code
-            value, and the rest of the items are assumed to be valid specs for that
-            particular backend. If none, both backend and opts are inferred from
-            the array prototype
+            inferred. If dict, key ``backend`` must have a valid backend format
+            code value, and the rest of the items are assumed to be valid specs
+            for that particular backend. If none, both backend and opts are
+            inferred from the array prototype
 
         Raises
         ------

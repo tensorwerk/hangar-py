@@ -15,7 +15,7 @@ class CursorRangeIterator:
             open database transaction to read values from
         startRangeKey : bytes
             range in which to iterate cursor over until end of db or out of
-            lecicographic range.
+            lexicographic range.
         keys : bool, optional
             If True, yield metadata keys encountered, if False only values
             are returned. By default, True.

@@ -26,12 +26,11 @@ KeyType = Union[str, int]
 class ArraysetConstructors(type):
     """Metaclass defining constructor methods for Arraysets object.
 
-    Rather than using @classmethod decorator, we use a metaclass so that
-    the instances of the Arrayset class do not have the constructors
-    accessable as a bound method. This is important because Arrayset
-    class instances are user facing; the ability to construct a new
-    object modifying or accessing repo state/data should never be
-    available.
+    Rather than using @classmethod decorator, we use a metaclass so that the
+    instances of the Arrayset class do not have the constructors accessible as
+    a bound method. This is important because Arrayset class instances are user
+    facing; the ability to construct a new object modifying or accessing repo
+    state/data should never be available.
     """
 
     def _from_staging_area(cls, repo_pth: Path, hashenv: lmdb.Environment,
@@ -136,11 +135,11 @@ Constructor and Interaction Class for Arraysets
 class Arraysets(metaclass=ArraysetConstructors):
     """Common access patterns and initialization/removal of arraysets in a checkout.
 
-    This object is the entry point to all tensor data stored in their individual
-    arraysets. Each arrayset contains a common schema which dictates the general
-    shape, dtype, and access patters which the backends optimize access for. The
-    methods contained within allow us to create, remove, query, and access these
-    collections of common tensors.
+    This object is the entry point to all tensor data stored in their
+    individual arraysets. Each arrayset contains a common schema which dictates
+    the general shape, dtype, and access patters which the backends optimize
+    access for. The methods contained within allow us to create, remove, query,
+    and access these collections of common tensors.
     """
 
     def __init__(self,
@@ -440,7 +439,7 @@ class Arraysets(metaclass=ArraysetConstructors):
         Raises
         ------
         PermissionError
-            If any enclosed arrayset is opned in a connection manager.
+            If any enclosed arrayset is opened in a connection manager.
         """
         if self._any_is_conman():
             raise PermissionError(
@@ -461,9 +460,9 @@ class Arraysets(metaclass=ArraysetConstructors):
 
         Arrayset columns are created in order to store some arbitrary
         collection of data pieces (arrays). Items need not be related to
-        eachother in any direct capactity; the only criteria hangar requires is
+        each-other in any direct capacity; the only criteria hangar requires is
         that all pieces of data stored in the arrayset have a compatible schema
-        with eachother (more on this below). Each piece of data is indexed by
+        with each-other (more on this below). Each piece of data is indexed by
         some key (either user defined or automatically generated depending on
         the user's preferences). Both single level stores (sample keys mapping
         to data on disk) and nested stores (where some sample key maps to an
@@ -475,7 +474,7 @@ class Arraysets(metaclass=ArraysetConstructors):
         behavior) or variable per sample. For fixed dimension sizes, all data
         pieces written to the arrayset must have the same shape & size which
         was specified at the time the arrayset column was initialized.
-        Alternativly, variable sized arraysets can write data pieces with
+        Alternatively, variable sized arraysets can write data pieces with
         dimensions of any size (up to a specified maximum).
 
 
@@ -502,7 +501,7 @@ class Arraysets(metaclass=ArraysetConstructors):
             was specified) defaults to False.
         contains_subsamples : bool, optional
             True if the arrayset column should store data in a nested structure.
-            In this scheme, a sample key is used to index an aribrary number of
+            In this scheme, a sample key is used to index an arbitrary number of
             subsamples which map some (sub)key to some piece of data. If False,
             sample keys map directly to a single piece of data; essentially
             acting as a single level key/value store. By default, False.
@@ -622,12 +621,12 @@ class Arraysets(metaclass=ArraysetConstructors):
         return self.get(name)
 
     @writer_checkout_only
-    def delete(self, aset_name: str) -> str:
+    def delete(self, arrayset: str) -> str:
         """remove the arrayset and all data contained within it.
 
         Parameters
         ----------
-        aset_name : str
+        arrayset : str
             name of the arrayset to remove
 
         Returns
@@ -650,15 +649,15 @@ class Arraysets(metaclass=ArraysetConstructors):
             datatxn = TxnRegister().begin_writer_txn(self._dataenv)
             stack.callback(TxnRegister().commit_writer_txn, self._dataenv)
 
-            if aset_name not in self._arraysets:
-                e = KeyError(f'Cannot remove: {aset_name}. Key does not exist.')
+            if arrayset not in self._arraysets:
+                e = KeyError(f'Cannot remove: {arrayset}. Key does not exist.')
                 raise e from None
 
-            self._arraysets[aset_name]._close()
-            self._arraysets.__delitem__(aset_name)
+            self._arraysets[arrayset]._close()
+            self._arraysets.__delitem__(arrayset)
             with datatxn.cursor() as cursor:
                 cursor.first()
-                asetRangeKey = arrayset_record_count_range_key(aset_name)
+                asetRangeKey = arrayset_record_count_range_key(arrayset)
                 recordsExist = cursor.set_range(asetRangeKey)
                 while recordsExist:
                     k = cursor.key()
@@ -667,7 +666,7 @@ class Arraysets(metaclass=ArraysetConstructors):
                     else:
                         recordsExist = False
 
-            asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(aset_name)
+            asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(arrayset)
             datatxn.delete(asetSchemaKey)
 
-        return aset_name
+        return arrayset

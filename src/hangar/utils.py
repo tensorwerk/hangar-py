@@ -183,7 +183,6 @@ def ilen(iterable):
         4
 
     This consumes the iterable, so handle with care.
-
     """
     counter = count()
     deque(zip(iterable, counter), maxlen=0)

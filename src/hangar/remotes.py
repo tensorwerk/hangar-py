@@ -317,7 +317,7 @@ class Remotes(object):
         Returns
         -------
         List[str]
-            commit hashs of the data which was returned.
+            commit hashes of the data which was returned.
 
         Raises
         ------
@@ -350,7 +350,7 @@ class Remotes(object):
         if retrieve_all_history is True:
             if isinstance(max_num_bytes, int):
                 raise ValueError(
-                    f'setting the maximum number of bytes transfered and requesting '
+                    f'setting the maximum number of bytes transferred and requesting '
                     f'all history are incompatible arguments.')
             else:
                 hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)

@@ -48,8 +48,8 @@ class SampleReaderModifier(object):
     the behavior of read and write checkouts is slightly unique, with the main
     difference being that ``"read-only"`` checkouts implement both thread and
     process safe access methods. This is not possible for ``"write-enabled"``
-    checkouts, and attempts at multiprocess/threaded writes will generally
-    fail with cryptic error messages.
+    checkouts, and attempts at multiprocess/threaded writes will generally fail
+    with cryptic error messages.
     """
 
     __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path',
@@ -147,10 +147,9 @@ class SampleReaderModifier(object):
     def __setstate__(self, state: dict) -> None:
         """ensure multiprocess operations can pickle relevant data.
 
-        Technically should be decorated with @reader_checkout_only,
-        but since at instance creation that is not an attribute,
-        the decorator won't know. Since only readers can be pickled,
-        This isn't much of an issue.
+        Technically should be decorated with @reader_checkout_only, but since
+        at instance creation that is not an attribute, the decorator won't
+        know. Since only readers can be pickled, This isn't much of an issue.
         """
         for slot, value in state.items():
             setattr(self, slot, value)
@@ -162,7 +161,7 @@ class SampleReaderModifier(object):
         return
 
     def __iter__(self) -> Iterable[KeyType]:
-        """Create iterator yielding an arrayset sample key for every call to ``next``.
+        """Create iterator yielding an arrayset sample keys.
 
         Yields
         -------
@@ -284,7 +283,7 @@ class SampleReaderModifier(object):
     def contains_remote_references(self) -> bool:
         """Bool indicating if all samples in arrayset exist on local disk.
 
-        The data associated with samples referencing some remore server will
+        The data associated with samples referencing some remote server will
         need to be downloaded (``fetched`` in the hangar vocabulary) before
         they can be read into memory.
 
@@ -431,8 +430,8 @@ class SampleReaderModifier(object):
     def __getattr__(self, name):
         """Raise permission error after checkout is closed.
 
-         Only runs after a call to :meth:`_destruct`, which is responsible
-         for deleting all attributes from the object instance.
+         Only runs after a call to :meth:`_destruct`, which is responsible for
+         deleting all attributes from the object instance.
         """
         try:
             self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
@@ -594,10 +593,10 @@ class SampleWriterModifier(SampleReaderModifier):
         Parameters
         ----------
         key : KeyType, optional
-            name to assign to the same (assuming the arrayset accepts named
+            name to assign to the sample (assuming the arrayset accepts named
             samples), If str, can only contain alpha-numeric ascii characters
-            (in addition to '-', '.', '_'). Integer key must be >= 0. by default
-            None
+            (in addition to '-', '.', '_'). Integer key must be >= 0. by
+            default, None
         value : :class:`numpy.ndarray`
             data to store as a sample in the arrayset.
 
@@ -628,12 +627,27 @@ class SampleWriterModifier(SampleReaderModifier):
             self._perform_set(key, value)
 
     def append(self, value: np.ndarray) -> KeyType:
-        """TODO: is this the right way we should be handling unnamed samples?
+        """Store some data in a sample with an automatically generated key.
 
-        Thesis:
-            Rather than have seperate arraysets for each named and unnamed sample type,
-            you should be able to append to any arrayset without a name, and one will be
-            generated for you?
+        This method should only be used if the context some piece of data is
+        used in is independent from it's value (ie. when reading data back,
+        there is no useful information which needs to be conveyed between the
+        data source's name/id and the value of that piece of information.)
+        Think carefully before going this route, as this posit does not apply
+        to many common use cases.
+
+        To store the data with a user defined key, use :meth:`update` or
+        :meth:`__setitem__`
+
+        Parameters
+        ----------
+        value: :class:`numpy.ndarray`
+            Piece of data to store in the arrayset.
+
+        Returns
+        -------
+        KeyType
+            Name of the generated key this data is stored with.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -657,8 +671,8 @@ class SampleWriterModifier(SampleReaderModifier):
             key/value pairs (as tuples or other iterables of length two).
             mapping sample names to :class:`np.ndarray` instances, If sample
             name is string type, can only contain alpha-numeric ascii
-            characters (in addition to '-', '.', '_'). Int key must be >= 0.
-            By default, None.
+            characters (in addition to '-', '.', '_'). Int key must be >= 0. By
+            default, None.
         **kwargs
             keyword arguments provided will be saved with keywords as sample keys
             (string type only) and values as np.array instances.
@@ -773,10 +787,10 @@ class SampleWriterModifier(SampleReaderModifier):
         ----------
         backend_opts : Optional[Union[str, dict]]
             If str, backend format code to specify, opts are automatically
-            inferred. If dict, key ``backend`` must have a valid backend format code
-            value, and the rest of the items are assumed to be valid specs for that
-            particular backend. If none, both backend and opts are inferred from
-            the array prototype
+            inferred. If dict, key ``backend`` must have a valid backend format
+            code value, and the rest of the items are assumed to be valid specs
+            for that particular backend. If none, both backend and opts are
+            inferred from the array prototype
 
         Raises
         ------

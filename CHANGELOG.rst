@@ -5,10 +5,27 @@ Change Log
 `In-Progress`_
 ==============
 
+Improvements
+------------
+
+* Memory usage of arrayset checkouts has been reduced by ~70% by using C-structs for allocating
+  sample record locating info.
+  (`#179 <https://github.com/tensorwerk/hangar-py/pull/179>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Read times from the ``HDF5_00`` and ``HDF5_01`` backend have been reduced by 33-38% (or more for
+  arraysets with many samples) by eliminating redundant computation of chunked storage B-Tree.
+  (`#179 <https://github.com/tensorwerk/hangar-py/pull/179>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Commit times and checkout times have been reduced by 11-18% by optimizing record parsing and
+  memory allocation.
+  (`#179 <https://github.com/tensorwerk/hangar-py/pull/179>`__) `@rlizzo <https://github.com/rlizzo>`__
+
 
 New Features
 ------------
 
+* Arraysets can now contain "nested subsamples" under a common sample key.
+  (`#179 <https://github.com/tensorwerk/hangar-py/pull/179>`__) `@rlizzo <https://github.com/rlizzo>`__
+* New API to add and remove samples from and arrayset.
+  (`#179 <https://github.com/tensorwerk/hangar-py/pull/179>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added ``repo.size_nbytes`` and ``repo.size_human`` to report disk usage of a repository on disk.
   (`#174 <https://github.com/tensorwerk/hangar-py/pull/174>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added method to traverse the entire repository history and cryptographically verify integrity.
@@ -20,12 +37,16 @@ Bug Fixes
 
 * Backend data stores no longer use file symlinks, improving compatibility with some types file systems.
   (`#171 <https://github.com/tensorwerk/hangar-py/pull/171>`__) `@rlizzo <https://github.com/rlizzo>`__
+* All arrayset types ("flat" and "nested subsamples") and backend readers can now be pickled -- for parallel
+  processing -- in a read-only checkout.
+  (`#179 <https://github.com/tensorwerk/hangar-py/pull/179>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 Breaking changes
 ----------------
 
-* New backend record serialization format is incompatible with repositories written in version 0.4.0 or earlier.
+* New backend record serialization format is incompatible with repositories written in version 0.4 or earlier.
+* New arrayset API is incompatible with Hangar API in version 0.4 or earlier.
 
 
 `v0.4.0`_ (2019-11-21)

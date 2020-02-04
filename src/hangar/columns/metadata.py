@@ -427,7 +427,27 @@ class MetadataWriter(MetadataReader):
                 self._perform_set(key, val)
 
     def append(self, value: str) -> KeyTypes:
-        """TODO: is this the right way we should be handling unnamed samples?
+        """Store some data with an automatically generated key.
+
+        This method should only be used if the context some piece of data is
+        used in is independent from it's value (ie. when reading data back,
+        there is no useful information which needs to be conveyed between the
+        data source's name/id and the value of that piece of information.)
+        Think carefully before going this route, as this posit does not apply
+        to many common use cases.
+
+        To store the data with a user defined key, use :meth:`update` or
+        :meth:`__setitem__`
+
+        Parameters
+        ----------
+        value: str
+            Piece of data to store in the arrayset.
+
+        Returns
+        -------
+        KeyTypes
+            Name of the generated key this data is stored with.
         """
         with ExitStack() as stack:
             if not self._is_conman:
