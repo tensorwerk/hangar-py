@@ -1,9 +1,6 @@
 # memory efficient container classes for data backends specs.
 # Allow for attribute access similar to named tuples.
 
-include "common.pxi"
-
-
 cdef class HDF5_01_DataHashSpec:
 
     def __init__(self, str backend, str uid, str checksum, str dataset,

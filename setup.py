@@ -15,8 +15,8 @@ HANGAR_DEBUG_BUILD = False
 
 # Set deployment target for mac
 #
-# Need to ensure thatextensions are built for macos 10.9 when compiling on a
-# 10.9 system or above, overriding distutils behaviour which is to target
+# Need to ensure that extensions are built for macos 10.9 when compiling on a
+# 10.9 system or above, overriding distutils behavior which is to target
 # the version used to build the current python binary.
 #
 # TO OVERRIDE:

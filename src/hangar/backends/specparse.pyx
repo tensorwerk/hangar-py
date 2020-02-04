@@ -1,7 +1,5 @@
 # decoding methods to convert from byte string -> spec struct.
 
-include "common.pxi"
-
 from .specs cimport HDF5_01_DataHashSpec, \
     HDF5_00_DataHashSpec, \
     NUMPY_10_DataHashSpec, \
@@ -14,7 +12,7 @@ cdef HDF5_01_DataHashSpec HDF5_01_Parser(str inp):
     cdef list shape_list = []
     cdef int dataset_idx_int
     cdef unsigned char i, c, cc
-    cdef Py_ssize_t n = len(inp)
+    cdef unsigned char n = len(inp)
     cdef HDF5_01_DataHashSpec res
 
     c = 0
@@ -56,7 +54,7 @@ cdef HDF5_00_DataHashSpec HDF5_00_Parser(str inp):
     cdef list shape_list = []
     cdef int dataset_idx_int
     cdef unsigned char i, c, cc
-    cdef Py_ssize_t n = len(inp)
+    cdef unsigned char n = len(inp)
     cdef HDF5_00_DataHashSpec res
 
     c = 0
@@ -98,7 +96,7 @@ cdef NUMPY_10_DataHashSpec NUMPY_10_Parser(str inp):
     cdef list shape_list = []
     cdef int collection_idx_int
     cdef unsigned char i, c, cc
-    cdef Py_ssize_t n = len(inp)
+    cdef unsigned char n = len(inp)
     cdef NUMPY_10_DataHashSpec res
 
     c = 0
@@ -135,8 +133,8 @@ cdef NUMPY_10_DataHashSpec NUMPY_10_Parser(str inp):
 
 cdef REMOTE_50_DataHashSpec REMOTE_50_Parser(str inp):
     cdef str fmt, schema_hash
-    cdef unsigned int i, c
-    cdef Py_ssize_t n = len(inp)
+    cdef unsigned char i, c
+    cdef unsigned char n = len(inp)
     cdef REMOTE_50_DataHashSpec res
 
     c = 0
