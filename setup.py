@@ -170,7 +170,7 @@ INSTALL_REQUIRES = [
 
 setup(
     name='hangar',
-    version='0.5.0.dev0',
+    version='0.5.0.dev1',
     license='Apache 2.0',
     # Package Meta Info (for PyPi)
     description=SHORT_DESCRIPTION,

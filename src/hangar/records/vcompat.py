@@ -126,6 +126,7 @@ incompatible_changes_after = [
     Version('0.3.0'),
     Version('0.4.0'),
     Version('0.5.0.dev0'),
+    Version('0.5.0.dev1'),
 ]
 
 
