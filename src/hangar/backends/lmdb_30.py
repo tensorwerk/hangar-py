@@ -4,15 +4,18 @@ from collections import ChainMap
 from itertools import permutations
 from functools import partial
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import Optional
 import string
 import shutil
 
 from xxhash import xxh64_hexdigest
 import lmdb
 
+from . import LMDB_30_DataHashSpec
+from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..utils import random_string
 from ..op_state import reader_checkout_only
+
 
 LMDB_SETTINGS = {
     'map_size': 300_000_000,
@@ -23,34 +26,10 @@ LMDB_SETTINGS = {
 }
 _FmtCode = '30'
 
-DIR_DATA = 'data'
-DIR_DATA_STORE = 'store_data'
-DIR_DATA_STAGE = 'stage_data'
-DIR_DATA_REMOTE = 'remote_data'
 
-
-class LMDB_30_DataHashSpec(NamedTuple):
-    backend: str
-    uid: str
-    row_idx: str
-    checksum: str
-
-    @property
-    def is_local(self):
-        return True
-
-
-def LMDB_30_encode(uid, row_idx, checksum):
+def lmdb_30_encode(uid, row_idx, checksum):
     res = f'{_FmtCode}:{uid}:{row_idx}:{checksum}'
     return res.encode()
-
-
-def LMDB_30_decode(inp):
-    str_inp = inp.decode()
-    backend, uid, row_idx, checksum = str_inp.split(':')
-    assert backend == _FmtCode  # temp during development
-    res = LMDB_30_DataHashSpec(backend, uid, row_idx, checksum)
-    return res
 
 
 def generate():
@@ -122,7 +101,7 @@ class LMDB_30_FileHandles:
         ----------
         mode : str
             one of `r` or `a` for read only / read-write.
-        repote_operation : optional, kwarg only, bool
+        remote_operation : optional, kwarg only, bool
             if this lmdb data is being created from a remote fetch operation, then
             we don't open any files for reading, and only open files for writing
             which exist in the remote data dir. (default is false, which means that
@@ -224,9 +203,6 @@ class LMDB_30_FileHandles:
         str
             requested data.
         """
-        uid = hashVal.uid
-        rowidx = hashVal.row_idx
-
         try:
             with self.Fp[hashVal.uid].begin(write=False) as txn:
                 res = txn.get(hashVal.row_idx.encode(), default=False)
@@ -276,7 +252,7 @@ class LMDB_30_FileHandles:
             try:
                 row_idx = next(self.row_idx)
             except StopIteration:
-                self.create_schema(remote_operation=remote_operation)
+                self._create_schema(remote_operation=remote_operation)
                 return self.write_data(data, remote_operation=remote_operation)
         else:
             self._create_schema(remote_operation=remote_operation)
@@ -288,7 +264,7 @@ class LMDB_30_FileHandles:
             with self.wFp[self.w_uid].begin(write=True) as txn:
                 txn.put(encoded_row_idx, encoded_data, append=True)
         except lmdb.MapFullError:
-            self.create_schema(remote_operation=remote_operation)
+            self._create_schema(remote_operation=remote_operation)
             return self.write_data(data, remote_operation=remote_operation)
 
-        return LMDB_30_encode(self.w_uid, row_idx, checksum)
+        return lmdb_30_encode(self.w_uid, row_idx, checksum)

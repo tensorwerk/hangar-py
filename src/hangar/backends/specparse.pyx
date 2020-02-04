@@ -3,6 +3,7 @@
 from .specs cimport HDF5_01_DataHashSpec, \
     HDF5_00_DataHashSpec, \
     NUMPY_10_DataHashSpec, \
+    LMDB_30_DataHashSpec, \
     REMOTE_50_DataHashSpec
 
 
@@ -130,6 +131,30 @@ cdef NUMPY_10_DataHashSpec NUMPY_10_Parser(str inp):
     return res
 
 
+cdef LMDB_30_DataHashSpec LMDB_30_Parser(str inp):
+    cdef str fmt, uid, row_idx, checksum
+    cdef unsigned char i, c, cc
+    cdef unsigned char n = len(inp)
+    cdef LMDB_30_DataHashSpec res
+
+    c = 0
+    cc = 0
+    for i in range(n):
+        if inp[i] == ':':
+            if cc == 0:
+                fmt = inp[c:i]
+            elif cc == 1:
+                uid = inp[c:i]
+            elif cc == 2:
+                row_idx = inp[c:i]
+            c = i + 1
+            cc = cc + 1
+    checksum = inp[c:n]
+
+    res = LMDB_30_DataHashSpec(fmt, uid, row_idx, checksum)
+    return res
+
+
 
 cdef REMOTE_50_DataHashSpec REMOTE_50_Parser(str inp):
     cdef str fmt, schema_hash
@@ -157,6 +182,8 @@ cpdef object backend_decoder(bytes inp):
         return HDF5_01_Parser(inp_str)
     elif backend == '10':
         return NUMPY_10_Parser(inp_str)
+    elif backend == '30':
+        return LMDB_30_Parser(inp_str)
     elif backend == '50':
         return REMOTE_50_Parser(inp_str)
     else:

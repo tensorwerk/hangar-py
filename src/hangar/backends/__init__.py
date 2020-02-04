@@ -4,6 +4,7 @@ from .specs import (
     HDF5_00_DataHashSpec,
     HDF5_01_DataHashSpec,
     NUMPY_10_DataHashSpec,
+    LMDB_30_DataHashSpec,
     REMOTE_50_DataHashSpec,
 )
 from .specparse import backend_decoder
@@ -20,6 +21,7 @@ DataHashSpecsType = Union[
     HDF5_00_DataHashSpec,
     HDF5_01_DataHashSpec,
     NUMPY_10_DataHashSpec,
+    LMDB_30_DataHashSpec,
     REMOTE_50_DataHashSpec,
 ]
 
