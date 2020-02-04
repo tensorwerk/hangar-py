@@ -29,7 +29,7 @@ from .._version import parse as version_parse
 from .._version import Version
 
 
-cycle_list = [str(c).rjust(5, '0') for c in range(99_999)]
+cycle_list = (str(c).rjust(4, '0') for c in range(9_999))
 NAME_CYCLER = cycle(cycle_list)
 RANDOM_NAME_SEED = str(randint(0, 999_999_999)).rjust(0, '0')
 perf_counter()  # call to init monotonic start point
@@ -37,7 +37,7 @@ perf_counter()  # call to init monotonic start point
 
 def generate_sample_name() -> str:
     ncycle = next(NAME_CYCLER)
-    if ncycle == '00000':
+    if ncycle == '0000':
         sleep(0.001)
 
     sec, subsec = str(perf_counter()).split('.')
@@ -234,26 +234,28 @@ The following records can be parsed:
 # ------------------- named tuple classes used ----------------------
 
 
-RawDataRecordKey = NamedTuple('RawDataRecordKey', [
-    ('aset_name', str),
-    ('data_name', Union[str, int])])
-RawDataRecordKey.__doc__ = 'Represents a Data Sample Record Key'
+class RawDataRecordKey(NamedTuple):
+    """Represents a Data Sample Record Key"""
+    aset_name: str = None
+    data_name: Union[str, int] = None
+    subsample: Union[str, int] = None
 
 
-RawDataRecordVal = NamedTuple('RawDataRecordVal', [
-    ('data_hash', str)])
-RawDataRecordVal.__doc__ = 'Represents a Data Sample Record Hash Value'
+class RawDataRecordVal(NamedTuple):
+    """Represents a Data Sample Record Hash Value"""
+    data_hash: str
 
 
-RawArraysetSchemaVal = NamedTuple('RawArraysetSchemaVal', [
-    ('schema_hash', str),
-    ('schema_dtype', int),
-    ('schema_is_var', bool),
-    ('schema_max_shape', tuple),
-    ('schema_is_named', bool),
-    ('schema_default_backend', str),
-    ('schema_default_backend_opts', dict)])
-RawArraysetSchemaVal.__doc__ = 'Information Specifying a Arrayset Schema'
+class RawArraysetSchemaVal(NamedTuple):
+    """Information Specifying a Arrayset Schema"""
+    schema_hash: str
+    schema_dtype: int
+    schema_is_var: bool
+    schema_max_shape: tuple
+    schema_default_backend: str
+    schema_default_backend_opts: dict
+    schema_contains_subsamples: bool
+
 
 """
 Parsing functions to convert lmdb data record keys/vals to/from python vars
@@ -277,10 +279,20 @@ def data_record_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_STGARR)) -> Ra
         Tuple containing the record aset_name, data_name
     """
     key = db_key.decode()
-    aset_name, data_name = key[_SPLT:].split(SEP_KEY)
-    if data_name[0] == K_INT:
-        data_name = int(data_name[1:])
-    return RawDataRecordKey(aset_name, data_name)
+    key_items = key[_SPLT:].split(SEP_KEY)
+
+    if len(key_items) == 2:
+        aset, sample = key_items
+        if sample[0] == K_INT:
+            sample = int(sample[1:])
+        return RawDataRecordKey(aset, sample)
+    else:
+        aset, sample, subsample = key_items
+        if sample[0] == K_INT:
+            sample = int(sample[1:])
+        if subsample[0] == K_INT:
+            subsample = int(subsample[1:])
+        return RawDataRecordKey(aset, sample, subsample)
 
 
 def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
@@ -302,15 +314,18 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
 # -------------------- raw (python) -> db -----------------------------
 
 
-def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int]) -> bytes:
+def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int], *,
+                                    subsample: Union[str, int] = None) -> bytes:
     """converts a python record spec into the appropriate lmdb key
 
     Parameters
     ----------
     aset_name : string
         name of the arrayset for the record
-    data_name : Union[string, int]
+    data_name : Union[str, int]
         name of the data sample for the record
+    subsample : Union[str, int], optional
+        name of the subsample for the record, default = None
 
     Returns
     -------
@@ -318,10 +333,16 @@ def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int]) 
         Byte encoded db record key
     """
     if isinstance(data_name, int):
-        record_key = f'{K_STGARR}{aset_name}{SEP_KEY}{K_INT}{data_name}'.encode()
+        data_part = f'{K_STGARR}{aset_name}{SEP_KEY}{K_INT}{data_name}'
     else:
-        record_key = f'{K_STGARR}{aset_name}{SEP_KEY}{data_name}'.encode()
-    return record_key
+        data_part = f'{K_STGARR}{aset_name}{SEP_KEY}{data_name}'
+
+    if isinstance(subsample, int):
+        return f'{data_part}{SEP_KEY}{K_INT}{subsample}'.encode()
+    elif isinstance(subsample, str):
+        return f'{data_part}{SEP_KEY}{subsample}'.encode()
+    else:
+        return data_part.encode()
 
 
 def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
@@ -365,10 +386,12 @@ def arrayset_record_schema_db_key_from_raw_key(aset_name):
 
 
 def arrayset_record_schema_db_val_from_raw_val(schema_hash,
-                                               schema_is_var, schema_max_shape,
-                                               schema_dtype, schema_is_named,
+                                               schema_is_var,
+                                               schema_max_shape,
+                                               schema_dtype,
                                                schema_default_backend,
-                                               schema_default_backend_opts):
+                                               schema_default_backend_opts,
+                                               schema_contains_subsamples):
     """Format the db_value which includes all details of the arrayset schema.
 
     Parameters
@@ -385,13 +408,13 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         corresponding dimension here.
     schema_dtype : int
         The datatype numeric code (`np.dtype.num`) of the arrayset. All input
-        tensors must exactally match this datatype.
-    schema_is_named : bool
-        Are samples in the arraysets identifiable with names, or not.
+        tensors must exactly match this datatype.
     schema_default_backend : str
         backend specification for the schema default backend.
     schema_default_backend_opts : dict
         filter options for the default schema backend writer.
+    schema_contains_subsamples: bool
+        **TODO**
 
     Returns
     -------
@@ -403,9 +426,9 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         'schema_dtype': schema_dtype,
         'schema_is_var': schema_is_var,
         'schema_max_shape': schema_max_shape,
-        'schema_is_named': schema_is_named,
         'schema_default_backend': schema_default_backend,
         'schema_default_backend_opts': schema_default_backend_opts,
+        'schema_contains_subsamples': schema_contains_subsamples,
     }
     db_schema_val = json.dumps(schema_val, separators=(',', ':')).encode()
     return db_schema_val
@@ -462,11 +485,16 @@ Functions to convert metadata records to/from python objects
 -------------------------------------------------------------
 """
 
-MetadataRecordKey = NamedTuple('MetadataRecordKey', [('meta_name', Union[str, int])])
-MetadataRecordKey.__doc__ = 'Represents a Metadata Sample Record Key'
 
-MetadataRecordVal = NamedTuple('MetadataRecordVal', [('meta_hash', str)])
-MetadataRecordVal.__doc__ = 'Represents a Metadata Sample Record Hash Value'
+class MetadataRecordKey(NamedTuple):
+    """Represents a Metadata Sample Record Key"""
+    meta_name: Union[str, int]
+
+
+class MetadataRecordVal(NamedTuple):
+    """Represents a Metadata Sample Record Hash Value"""
+    meta_hash: str
+
 
 # -------------------- db -> raw (python) -----------------------------
 
@@ -694,38 +722,37 @@ The parsers defined in this section handle commit (ref) records
 """
 
 
-CommitAncestorSpec = NamedTuple('CommitAncestorSpec', [
-    ('is_merge_commit', bool),
-    ('master_ancestor', str),
-    ('dev_ancestor', str),
-])
+class CommitAncestorSpec(NamedTuple):
+    is_merge_commit: bool
+    master_ancestor: str
+    dev_ancestor: str
 
-CommitUserSpec = NamedTuple('CommitUserSpec', [
-    ('commit_time', float),
-    ('commit_message', str),
-    ('commit_user', str),
-    ('commit_email', str),
-])
 
-DigestAndUserSpec = NamedTuple('DigestAndUserSpec', [
-    ('digest', str),
-    ('user_spec', CommitUserSpec)
-])
+class CommitUserSpec(NamedTuple):
+    commit_time: float
+    commit_message: str
+    commit_user: str
+    commit_email: str
 
-DigestAndAncestorSpec = NamedTuple('DigestAndAncestorSpec', [
-    ('digest', str),
-    ('ancestor_spec', CommitAncestorSpec)
-])
 
-DigestAndBytes = NamedTuple('DigestAndBytes', [
-    ('digest', str),
-    ('raw', bytes),
-])
+class DigestAndUserSpec(NamedTuple):
+    digest: str
+    user_spec: CommitUserSpec
 
-DigestAndDbRefs = NamedTuple('DigestAndDbRefs', [
-    ('digest', str),
-    ('db_kvs', Tuple[Tuple[bytes, bytes]])
-])
+
+class DigestAndAncestorSpec(NamedTuple):
+    digest: str
+    ancestor_spec: CommitAncestorSpec
+
+
+class DigestAndBytes(NamedTuple):
+    digest: str
+    raw: bytes
+
+
+class DigestAndDbRefs(NamedTuple):
+    digest: str
+    db_kvs: Union[Tuple, Tuple[Tuple[bytes, bytes]]]
 
 
 def _hash_func(recs: bytes) -> str:
@@ -856,11 +883,8 @@ def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
     First calculate the digest of each element in the input iterable. As these
     elements contain the record type (meta key, arrayset name, sample key) as
     well as the data hash digest, any modification of any reference record will
-    result in a different digest for that element.
-
-    Then sort the resulting digests (so that there is no dependency on the
-    order of elements in input) and join all elements into single serialized
-    bytestring.
+    result in a different digest for that element. Then join all elements into
+    single serialized bytestring.
 
     The output of this method is the hash digest of the serialized bytestring.
 
@@ -875,9 +899,10 @@ def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
     str
         calculated digest of the commit ref record component
     """
-    joined_db_kvs = sorted(map(_hash_func, joined_db_kvs))
-    joined_digests = CMT_DIGEST_JOIN_KEY.join(joined_db_kvs).encode()
-    return _hash_func(joined_digests)
+    kv_digests = map(_hash_func, joined_db_kvs)
+    joined_digests = CMT_DIGEST_JOIN_KEY.join(kv_digests).encode()
+    res = _hash_func(joined_digests)
+    return res
 
 
 def commit_ref_db_val_from_raw_val(db_kvs: Iterable[Tuple[bytes, bytes]]) -> DigestAndBytes:

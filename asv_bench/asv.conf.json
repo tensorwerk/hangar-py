@@ -76,6 +76,11 @@
     //     "six": ["", null],        // test with and without six installed
     //     "pip+emcee": [""],   // emcee is only available for install with pip.
     // },
+    "matrix": {
+        "req": {
+            "Cython": [],  // latest version of Cython
+        },
+    },
 
     // Combinations of libraries/python versions can be excluded/included
     // from the set to test. Each entry is a dictionary containing additional
@@ -132,7 +137,7 @@
     // `asv` will cache results of the recent builds in each
     // environment, making them faster to install next time.  This is
     // the number of builds to keep, per environment.
-    "build_cache_size": 1
+    "build_cache_size": 2
 
     // The commits after which the regression search in `asv publish`
     // should start looking for regressions. Dictionary whose keys are

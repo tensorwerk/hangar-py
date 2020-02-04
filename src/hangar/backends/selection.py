@@ -83,37 +83,14 @@ Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the
 process.
 """
-from typing import Dict, Union, Callable, Mapping, NamedTuple, Optional
+from typing import Dict, Union, NamedTuple, Optional
 
 import numpy as np
 
-from .hdf5_00 import HDF5_00_FileHandles, hdf5_00_decode, HDF5_00_DataHashSpec
-from .hdf5_01 import HDF5_01_FileHandles, hdf5_01_decode, HDF5_01_DataHashSpec
-from .numpy_10 import NUMPY_10_FileHandles, numpy_10_decode, NUMPY_10_DataHashSpec
-from .remote_50 import REMOTE_50_Handler, remote_50_decode, REMOTE_50_DataHashSpec
-
-
-# -------------------------- Parser Types and Mapping -------------------------
-
-
-_DataHashSpecs = Union[
-    HDF5_00_DataHashSpec,
-    HDF5_01_DataHashSpec,
-    NUMPY_10_DataHashSpec,
-    REMOTE_50_DataHashSpec]
-
-_ParserMap = Mapping[bytes, Callable[[bytes], _DataHashSpecs]]
-
-BACKEND_DECODER_MAP: _ParserMap = {
-    # LOCALS -> [00:50]
-    b'00': hdf5_00_decode,
-    b'01': hdf5_01_decode,
-    b'10': numpy_10_decode,
-    b'20': None,               # tiledb_20 - Reserved
-    # REMOTES -> [50:100]
-    b'50': remote_50_decode,
-    b'60': None,               # url_60 - Reserved
-}
+from .hdf5_00 import HDF5_00_FileHandles
+from .hdf5_01 import HDF5_01_FileHandles
+from .numpy_10 import NUMPY_10_FileHandles
+from .remote_50 import REMOTE_50_Handler
 
 
 # ------------------------ Accessor Types and Mapping -------------------------
@@ -121,9 +98,9 @@ BACKEND_DECODER_MAP: _ParserMap = {
 
 _BeAccessors = Union[HDF5_00_FileHandles, HDF5_01_FileHandles,
                      NUMPY_10_FileHandles, REMOTE_50_Handler]
-_AccessorMap = Dict[str, _BeAccessors]
+AccessorMapType = Dict[str, Union[_BeAccessors, None]]
 
-BACKEND_ACCESSOR_MAP: _AccessorMap = {
+BACKEND_ACCESSOR_MAP: AccessorMapType = {
     # LOCALS -> [0:50]
     '00': HDF5_00_FileHandles,
     '01': HDF5_01_FileHandles,
@@ -135,29 +112,6 @@ BACKEND_ACCESSOR_MAP: _AccessorMap = {
 }
 
 
-# ------------------------ Selector Functions ---------------------------------
-
-
-def backend_decoder(db_val: bytes) -> _DataHashSpecs:
-    """Determine backend and decode specification for a raw hash record value.
-
-    Parameters
-    ----------
-    db_val : bytes
-        unmodified record specification bytes retrieved for a particular hash
-
-    Returns
-    -------
-    namedtuple
-        decoded specification with fields filled out uniquely for each backend.
-        The only field common to all backends is located at index [0] with the
-        field name `backend`.
-    """
-    parser = BACKEND_DECODER_MAP[db_val[:2]]
-    decoded = parser(db_val)
-    return decoded
-
-
 # --------------------------- Backend Heuristics ------------------------------
 
 
@@ -165,7 +119,6 @@ BackendOpts = NamedTuple('BackendOpts', [('backend', str), ('opts', dict)])
 
 
 def backend_from_heuristics(array: np.ndarray,
-                            named_samples: bool,
                             variable_shape: bool) -> str:
     """Given a prototype array, attempt to select the appropriate backend.
 
@@ -173,8 +126,6 @@ def backend_from_heuristics(array: np.ndarray,
     ----------
     array : np.ndarray
         prototype array to determine the appropriate backend for.
-    named_samples : bool
-        If the samples in the arrayset have names associated with them.
     variable_shape : bool
         If this is a variable sized arrayset.
 
@@ -203,16 +154,8 @@ def backend_from_heuristics(array: np.ndarray,
     return backend
 
 
-def is_local_backend(be_loc: _DataHashSpecs) -> bool:
-    if be_loc[0].startswith('5'):
-        return False
-    else:
-        return True
-
-
 def backend_opts_from_heuristics(backend: str,
                                  array: np.ndarray,
-                                 named_samples: bool,
                                  variable_shape: bool) -> dict:
     """Generate default backend opt args for a backend and array sample.
 
@@ -223,8 +166,6 @@ def backend_opts_from_heuristics(backend: str,
     array : np.ndarray
         sample (prototype) of the array data which the backend opts will be
         applied to
-    named_samples : bool
-        If the samples in the arrayset have names associated with them.
     variable_shape : bool
         If this is a variable sized arrayset.
 
@@ -247,7 +188,7 @@ def backend_opts_from_heuristics(backend: str,
         opts = {}
     elif backend == '00':
         import h5py
-        opts = {
+        stdopts = {
             'default': {
                 'shuffle': None,
                 'complib': 'blosc:zstd',
@@ -260,10 +201,13 @@ def backend_opts_from_heuristics(backend: str,
             },
         }
         hdf5BloscAvail = h5py.h5z.filter_avail(32001)
-        opts = opts['default'] if hdf5BloscAvail else opts['backup']
+        opts = stdopts['default'] if hdf5BloscAvail else stdopts['backup']
+        if opts['complib'].startswith('blosc:') and array.nbytes < 16:
+            # cannot have compression buffer size < 16 bytes with blosc lib.
+            opts = stdopts['backup']
     elif backend == '01':
         import h5py
-        opts = {
+        stdopts = {
             'default': {
                 'shuffle': 'byte',
                 'complib': 'blosc:lz4hc',
@@ -276,7 +220,10 @@ def backend_opts_from_heuristics(backend: str,
             },
         }
         hdf5BloscAvail = h5py.h5z.filter_avail(32001)
-        opts = opts['default'] if hdf5BloscAvail else opts['backup']
+        opts = stdopts['default'] if hdf5BloscAvail else stdopts['backup']
+        if opts['complib'].startswith('blosc:') and array.nbytes < 16:
+            # cannot have compression buffer size < 16 bytes with blosc lib.
+            opts = stdopts['backup']
     elif backend == '50':
         opts = {}
     else:
@@ -287,7 +234,6 @@ def backend_opts_from_heuristics(backend: str,
 
 def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
                             prototype: np.ndarray,
-                            named_samples: bool,
                             variable_shape: bool) -> BackendOpts:
     """Decide the backend and opts to apply given a users selection (or default `None` value)
 
@@ -302,8 +248,6 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
     prototype : np.ndarray
         Sample of the data array which will be save (same dtype and shape) to
         base the storage backend and opts on.
-    named_samples : bool
-        If the samples in the arrayset have names associated with them.
     variable_shape : bool
         If this is a variable sized arrayset.
 
@@ -330,20 +274,28 @@ def parse_user_backend_opts(backend_opts: Optional[Union[str, dict]],
             backend = backend_opts
             opts = backend_opts_from_heuristics(backend=backend,
                                                 array=prototype,
-                                                named_samples=named_samples,
                                                 variable_shape=variable_shape)
     elif isinstance(backend_opts, dict):
         if backend_opts['backend'] not in BACKEND_ACCESSOR_MAP:
             raise ValueError(f'Backend specifier: {backend_opts} not known')
         backend = backend_opts['backend']
         opts = {k: v for k, v in backend_opts.items() if k != 'backend'}
+        if backend in ['00', '01'] and 'complib' in opts:
+            if opts['complib'].startswith('blosc:') and prototype.nbytes < 16:
+                # cannot have compression buffer size < 16 bytes with blosc lib.
+                raise ValueError(
+                    f'Blosc compression for backend {backend} is not supported for '
+                    f'arrays less than 16 bytes in size. Schema with specified shape '
+                    f'{prototype.shape} and dtype "{prototype.dtype}" '
+                    f'(itemsize={prototype.itemsize}B) totals {prototype.nbytes}B. '
+                    f'To resolve either modify schema shape / dtype, or select '
+                    f'another complib / backend.'
+                )
     elif backend_opts is None:
         backend = backend_from_heuristics(array=prototype,
-                                          named_samples=named_samples,
                                           variable_shape=variable_shape)
         opts = backend_opts_from_heuristics(backend=backend,
                                             array=prototype,
-                                            named_samples=named_samples,
                                             variable_shape=variable_shape)
     else:
         raise ValueError(f'Backend opts value: {backend_opts} is invalid')

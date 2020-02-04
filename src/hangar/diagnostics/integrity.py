@@ -1,47 +1,18 @@
-import os
-import tempfile
+from pathlib import Path
 import warnings
-import sys
-from contextlib import closing
 
 import lmdb
 import numpy as np
 from tqdm import tqdm
 
-from .. import constants as c
-from ..backends import BACKEND_ACCESSOR_MAP, is_local_backend
+from ..backends import BACKEND_ACCESSOR_MAP
 from ..txnctx import TxnRegister
 from ..records import commiting, hashmachine, hashs, parsing, queries, heads
-from ..utils import tb_params_last_called
-
-
-def report_corruption_risk_on_parsing_error(func):
-    """Decorator adding try/except handling non-explicit exceptions.
-
-    Explicitly raised RuntimeErrors generally point to corrupted data
-    identified by a cryptographic hash mismatch. However, in order to get to
-    the point where such quantities can be processes, a non-trivial amount of
-    parsing machinery must be run. Should any error be thrown in the parse
-    machinery due to corrupted values, this method raises the exception in a
-    useful form; providing traceback context, likely root cause (displayed to
-    users), and the offending arguments passed to the function which threw the
-    error.
-    """
-    def wrapped(*args, **kwargs):
-        try:
-            func(*args, **kwargs)
-        except RuntimeError as e:
-            raise e
-        except Exception as e:
-            raise RuntimeError(
-                f'Corruption detected during {func.__name__}. Most likely this is the '
-                f'result of unparsable record values. Exception msg `{str(e)}`. Params '
-                f'`{tb_params_last_called(sys.exc_info()[2])}`') from e
-    return wrapped
+from ..op_state import report_corruption_risk_on_parsing_error
 
 
 @report_corruption_risk_on_parsing_error
-def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: os.PathLike):
+def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: Path):
 
     hq = hashs.HashQuery(hashenv)
     narrays, nremote = hq.num_arrays(), 0
@@ -52,7 +23,7 @@ def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: os.PathLike):
             if spec.backend not in bes:
                 bes[spec.backend] = BACKEND_ACCESSOR_MAP[spec.backend](repo_path, None, None)
                 bes[spec.backend].open(mode='r')
-            if is_local_backend(spec) is False:
+            if spec.islocal is False:
                 nremote += 1
                 continue
             arr = bes[spec.backend].read_data(spec)
@@ -82,10 +53,10 @@ def _verify_schema_integrity(hashenv: lmdb.Environment):
         tcode = hashmachine.hash_type_code_from_digest(digest)
         calc_digest = hashmachine.schema_hash_digest(
             shape=val.schema_max_shape,
-            size=np.prod(val.schema_max_shape),
+            size=int(np.prod(val.schema_max_shape)),
             dtype_num=val.schema_dtype,
-            named_samples=val.schema_is_named,
             variable_shape=val.schema_is_var,
+            contains_subsamples=val.schema_contains_subsamples,
             backend_code=val.schema_default_backend,
             backend_opts=val.schema_default_backend_opts,
             tcode=tcode)
@@ -161,44 +132,38 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
     try:
         with datatxn.cursor() as cur, labeltxn.cursor() as labcur:
             for cmt in tqdm(all_commits, desc='verifying commit ref digests'):
-                with tempfile.TemporaryDirectory() as tempD:
-                    tmpDF = os.path.join(tempD, f'{cmt}.lmdb')
-                    with closing(lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)) as tmpDB:
-                        try:
-                            commiting.unpack_commit_ref(refenv, tmpDB, cmt)
-                            rq = queries.RecordQuery(tmpDB)
-                            meta_digests = set(rq.metadata_hashes())
-                            array_data_digests = set(rq.data_hashes())
-                            schema_digests = set(rq.schema_hashes())
-                        except IOError as e:
-                            raise RuntimeError(str(e)) from e
+                with commiting.tmp_cmt_env(refenv, cmt) as tmpDB:
+                    rq = queries.RecordQuery(tmpDB)
+                    meta_digests = set(rq.metadata_hashes())
+                    array_data_digests = set(rq.data_hashes())
+                    schema_digests = set(rq.schema_hashes())
 
-                for datadigest in array_data_digests:
-                    dbk = parsing.hash_data_db_key_from_raw_key(datadigest)
-                    exists = cur.set_key(dbk)
-                    if exists is False:
-                        raise RuntimeError(
-                            f'Data corruption detected in commit refs. Commit `{cmt}` '
-                            f'references array data digest `{datadigest}` which does not '
-                            f'exist in data hash db.')
+                    for datadigest in array_data_digests:
+                        dbk = parsing.hash_data_db_key_from_raw_key(datadigest)
+                        exists = cur.set_key(dbk)
+                        if exists is False:
+                            raise RuntimeError(
+                                f'Data corruption detected in commit refs. Commit `{cmt}` '
+                                f'references array data digest `{datadigest}` which does not '
+                                f'exist in data hash db.')
 
-                for schemadigest in schema_digests:
-                    dbk = parsing.hash_schema_db_key_from_raw_key(schemadigest)
-                    exists = cur.set_key(dbk)
-                    if exists is False:
-                        raise RuntimeError(
-                            f'Data corruption detected in commit refs. Commit `{cmt}` '
-                            f'references schema digest `{schemadigest}` which does not '
-                            f'exist in data hash db.')
+                    for schemadigest in schema_digests:
+                        dbk = parsing.hash_schema_db_key_from_raw_key(schemadigest)
+                        exists = cur.set_key(dbk)
+                        if exists is False:
+                            raise RuntimeError(
+                                f'Data corruption detected in commit refs. Commit `{cmt}` '
+                                f'references schema digest `{schemadigest}` which does not '
+                                f'exist in data hash db.')
 
-                for metadigest in meta_digests:
-                    dbk = parsing.hash_meta_db_key_from_raw_key(metadigest)
-                    exists = labcur.set_key(dbk)
-                    if exists is False:
-                        raise RuntimeError(
-                            f'Data corruption detected in commit refs. Commit `{cmt}` '
-                            f'references metadata digest `{datadigest}` which does not '
-                            f'exist in label hash db.')
+                    for metadigest in meta_digests:
+                        dbk = parsing.hash_meta_db_key_from_raw_key(metadigest)
+                        exists = labcur.set_key(dbk)
+                        if exists is False:
+                            raise RuntimeError(
+                                f'Data corruption detected in commit refs. Commit `{cmt}` '
+                                f'references metadata digest `{datadigest}` which does not '
+                                f'exist in label hash db.')
     finally:
         TxnRegister().abort_reader_txn(labelenv)
         TxnRegister().abort_reader_txn(hashenv)
@@ -232,7 +197,7 @@ def run_verification(branchenv: lmdb.Environment,
                      hashenv: lmdb.Environment,
                      labelenv: lmdb.Environment,
                      refenv: lmdb.Environment,
-                     repo_path: os.PathLike):
+                     repo_path: Path):
 
     _verify_branch_integrity(branchenv, refenv)
     _verify_commit_tree_integrity(refenv)

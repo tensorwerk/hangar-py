@@ -24,20 +24,24 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install --upgrade setuptools virtualenv
-        pip install --upgrade asv
+        pip install git+https://github.com/airspeed-velocity/asv
     - name: Run Benchmarks
       run: |
         cd asv_bench/
         asv machine --yes
-        asv continuous origin/master HEAD | tee asv.log
-        asv compare origin/master HEAD
-        if [[ $(cat asv.log | grep "failed") ]]; then
-          echo "Benchmarks Run With Errors"
+        asv continuous --split origin/master HEAD | tee -a asv_continuous.log
+      shell: bash
+      continue-on-error: true
+    - name: Show Comparison
+      run: |
+        cd asv_bench/
+        asv compare --split origin/master HEAD | tee -a asv_compare.log
+        if [[ $(cat asv_continuous.log | grep "PERFORMANCE DECREASED") ]]; then
+          echo "Benchmarks Performance Decreased"
           exit 1
-        elif [[ $(cat asv.log | grep "PERFORMANCE DECREASED") ]]; then
-          echo "Benchmarks Decreased Performance"
-          exit 1
+        elif [[ $(cat asv_continuous.log | grep "PERFORMANCE INCREASED") ]]; then
+          echo "Benchmark Performance Increased"
         else
-          echo "Benchmarks Run Without Errors"
+          echo "Benchmarks Run Without Errors, No Significant Change."
         fi
       shell: bash

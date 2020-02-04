@@ -77,40 +77,28 @@ Technical Notes
    methods when reading from disk.
 """
 import os
-import re
 from collections import ChainMap
 from functools import partial
 from pathlib import Path
-from typing import MutableMapping, NamedTuple, Tuple, Optional
+from typing import MutableMapping, Optional
 
 import numpy as np
 from numpy.lib.format import open_memmap
 from xxhash import xxh64_hexdigest
 
+from . import NUMPY_10_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
+from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import random_string
 
 # ----------------------------- Configuration ---------------------------------
 
+_FmtCode = '10'
 
 # number of subarray contents of a single numpy memmap file
 COLLECTION_SIZE = 1000
 
-
 # -------------------------------- Parser Implementation ----------------------
-
-_FmtCode = '10'
-# # match and remove the following characters: '['   ']'   '('   ')'   ','
-_SRe = re.compile('[,\(\)\[\]]')
-
-
-NUMPY_10_DataHashSpec = NamedTuple('NUMPY_10_DataHashSpec', [
-    ('backend', str),
-    ('uid', str),
-    ('checksum', str),
-    ('collection_idx', int),
-    ('shape', Tuple[int])
-])
 
 
 def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> bytes:
@@ -134,26 +122,8 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
     bytes
         hash data db value recording all input specifications
     """
-    return f'10:{uid}:{cksum}:{collection_idx}:{_SRe.sub("", str(shape))}'.encode()
-
-
-def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
-    """converts a numpy data hash db val into a numpy data python spec
-
-    Parameters
-    ----------
-    db_val : bytes
-        data hash db val
-
-    Returns
-    -------
-    DataHashSpec
-        numpy data hash specification containing `backend`, `schema`, and
-        `uid`, `collection_idx` and `shape` fields.
-    """
-    _, uid, cksum, collection_idx, shape_vs = db_val.decode().split(':')
-    shape = tuple(map(int, shape_vs.split()))
-    return NUMPY_10_DataHashSpec('10', uid, cksum, int(collection_idx), shape)
+    shape_str = " ".join([str(i) for i in shape])
+    return f'10:{uid}:{cksum}:{collection_idx}:{shape_str}'.encode()
 
 
 # ------------------------- Accessor Object -----------------------------------
@@ -161,7 +131,7 @@ def numpy_10_decode(db_val: bytes) -> NUMPY_10_DataHashSpec:
 
 class NUMPY_10_FileHandles(object):
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
@@ -175,14 +145,31 @@ class NUMPY_10_FileHandles(object):
         self.w_uid: str = None
         self.hIdx: int = None
 
-        self.slcExpr = np.s_
-        self.slcExpr.maketuple = False
-
         self.STAGEDIR: Path = Path(self.repo_path, DIR_DATA_STAGE, _FmtCode)
         self.REMOTEDIR: Path = Path(self.repo_path, DIR_DATA_REMOTE, _FmtCode)
         self.DATADIR: Path = Path(self.repo_path, DIR_DATA, _FmtCode)
         self.STOREDIR: Path = Path(self.repo_path, DIR_DATA_STORE, _FmtCode)
         self.DATADIR.mkdir(exist_ok=True)
+
+    @reader_checkout_only
+    def __getstate__(self) -> dict:
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        self.close()
+        state = self.__dict__.copy()
+        del state['rFp']
+        del state['wFp']
+        del state['Fp']
+        return state
+
+    def __setstate__(self, state: dict) -> None:  # pragma: no cover
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        self.__dict__.update(state)
+        self.rFp = {}
+        self.wFp = {}
+        self.Fp = ChainMap(self.rFp, self.wFp)
+        self.open(mode=self.mode)
 
     def __enter__(self):
         return self
@@ -195,13 +182,28 @@ class NUMPY_10_FileHandles(object):
     def backend_opts(self):
         return self._dflt_backend_opts
 
+    @writer_checkout_only
+    def _backend_opts_set(self, val):
+        """Nonstandard descriptor method. See notes in ``backend_opts.setter``.
+        """
+        self._dflt_backend_opts = val
+        return
+
     @backend_opts.setter
-    def backend_opts(self, val):
-        if self.mode == 'a':
-            self._dflt_backend_opts = val
-            return
-        else:
-            raise AttributeError(f"can't set property in read only mode")
+    def backend_opts(self, value):
+        """
+        Using seperate setter method (with ``@writer_checkout_only`` decorator
+        applied) due to bug in python <3.8.
+
+        From: https://bugs.python.org/issue19072
+            > The classmethod decorator when applied to a function of a class,
+            > does not honour the descriptor binding protocol for whatever it
+            > wraps. This means it will fail when applied around a function which
+            > has a decorator already applied to it and where that decorator
+            > expects that the descriptor binding protocol is executed in order
+            > to properly bind the function to the class.
+        """
+        return self._backend_opts_set(value)
 
     def open(self, mode: str, *, remote_operation: bool = False):
         """open numpy file handle coded directories
@@ -246,7 +248,7 @@ class NUMPY_10_FileHandles(object):
             del self.rFp[k]
 
     @staticmethod
-    def delete_in_process_data(repo_path, *, remote_operation=False):
+    def delete_in_process_data(repo_path: Path, *, remote_operation: bool = False):
         """Removes some set of files entirely from the stage/remote directory.
 
         DANGER ZONE. This should essentially only be used to perform hard resets
@@ -254,7 +256,7 @@ class NUMPY_10_FileHandles(object):
 
         Parameters
         ----------
-        repo_path : str
+        repo_path : Path
             path to the repository on disk
         remote_operation : optional, kwarg only, bool
             If true, modify contents of the remote_dir, if false (default) modify
@@ -333,8 +335,7 @@ class NUMPY_10_FileHandles(object):
           all future reads of the subarray from that process, but which would
           not be persisted to disk.
         """
-        srcSlc = (self.slcExpr[hashVal.collection_idx],
-                  *(self.slcExpr[0:x] for x in hashVal.shape))
+        srcSlc = (hashVal.collection_idx, *[slice(0, x) for x in hashVal.shape])
         try:
             res = self.Fp[hashVal.uid][srcSlc]
         except TypeError:
@@ -380,10 +381,7 @@ class NUMPY_10_FileHandles(object):
         else:
             self._create_schema(remote_operation=remote_operation)
 
-        destSlc = (self.slcExpr[self.hIdx], *(self.slcExpr[0:x] for x in array.shape))
+        destSlc = (self.hIdx, *[slice(0, x) for x in array.shape])
         self.wFp[self.w_uid][destSlc] = array
-        hashVal = numpy_10_encode(uid=self.w_uid,
-                                  cksum=checksum,
-                                  collection_idx=self.hIdx,
-                                  shape=array.shape)
-        return hashVal
+        self.wFp[self.w_uid].flush()
+        return numpy_10_encode(self.w_uid, checksum, self.hIdx, array.shape)

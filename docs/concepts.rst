@@ -4,6 +4,14 @@
 Hangar Core Concepts
 ####################
 
+.. warning::
+
+  The usage info displayed in the ``latest`` build of the project
+  documentation do not reflect recent changes to the API and internal
+  structure of the project. They should not be relied on at the current
+  moment; they will be updated over the next weeks, and will be in line before
+  the next release.
+
 This document provides a high level overview of the problems Hangar is designed
 to solve and introduces the core concepts for beginning to use Hangar.
 

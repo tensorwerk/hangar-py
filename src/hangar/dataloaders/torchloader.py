@@ -2,19 +2,14 @@ import warnings
 from collections import namedtuple
 from typing import Sequence
 from .common import GroupedAsets
-import importlib.util
 
-from ..utils import LazyLoader
 
 try:
-    torchExists = importlib.util.find_spec('torch')
-    if not torchExists:
-        raise ModuleNotFoundError
-    torchdata = LazyLoader('torchdata', globals(), 'torch.utils.data')
+    from torch.utils import data as torchdata
 except (ImportError, ModuleNotFoundError):
     raise ImportError(
         'Could not import "pytorch" library. Ensure library is '
-        'installed correctly to use pytorch dataloader functions')
+        'installed correctly to use pytorch dataloader functions') from None
 
 
 def make_torch_dataset(arraysets,
@@ -36,7 +31,7 @@ def make_torch_dataset(arraysets,
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.arrayset.ArraysetDataReader` or Sequence
+    arraysets : :class:`~hangar.columns.arrayset.Arraysets` or Sequence
         A arrayset object, a tuple of arrayset object or a list of arrayset
         objects.
     keys : Sequence[str]
@@ -106,7 +101,7 @@ class TorchDataset(torchdata.Dataset):
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.arrayset.ArraysetDataReader` or Sequence
+    arraysets : :class:`~hangar.columns.arrayset.Arraysets` or Sequence
         A list/tuple of hangar_arrayset objects with same length and contains
         same keys. This class doesn't do any explicit check for length or the
         key names and assumes those all the arraysets are valid as per the

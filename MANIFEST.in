@@ -15,4 +15,5 @@ include README.rst
 
 include tox.ini .travis.yml mypy.ini
 
-global-exclude *.py[cod] __pycache__ *.so *.dylib
+global-exclude *.py[cod] *.so *.DS_Store
+global-exclude __pycache__ .mypy_cache .pytest_cache .hypothesis

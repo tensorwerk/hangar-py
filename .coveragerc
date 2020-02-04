@@ -1,17 +1,18 @@
 [paths]
-source = src
+source =
+   src
 
 [run]
 branch = True
-source =
-    src
-    tests
 parallel = True
+source =
+    hangar
+    tests
 omit =
-    src/hangar/__main__.py
-    src/hangar/remote/hangar_service_pb2.py
-    src/hangar/remote/hangar_service_pb2_grpc.py
-    src/hangar/remote/hangar_service_pb2.pyi
+    */hangar/__main__.py
+    */hangar_service_pb2.py
+    */hangar_service_pb2_grpc.py
+    */hangar_service_pb2.pyi
 
 [report]
 exclude_lines =

@@ -1,51 +1,18 @@
-import importlib
 import os
-import random
+from pathlib import Path
+import secrets
 import re
 import string
 import time
-import types
-import weakref
-from functools import partial
+from collections import deque
 from io import StringIO
-from itertools import tee, filterfalse
-from typing import Union, Any
+from itertools import tee, filterfalse, count
+from typing import Union
 
 import blosc
-import wrapt
 
 from . import __version__
 from .constants import DIR_HANGAR
-
-
-class LazyLoader(types.ModuleType):
-    """Lazily import a module, mainly to avoid pulling in large dependencies."""
-
-    def __init__(self, local_name, parent_module_globals, name):
-        self._local_name = local_name
-        self._parent_module_globals = parent_module_globals
-        super(LazyLoader, self).__init__(name)
-
-    def _load(self):
-        """Load the module and insert it into the parent's globals.
-
-        Import the target module and insert it into the parent's namespace
-        Update this object's dict so that if someone keeps a reference to the
-        LazyLoader, lookups are efficient (__getattr__ is only called on
-        lookups that fail).
-        """
-        module = importlib.import_module(self.__name__)
-        self._parent_module_globals[self._local_name] = module
-        self.__dict__.update(module.__dict__)
-        return module
-
-    def __getattr__(self, item):
-        module = self._load()
-        return getattr(module, item)
-
-    def __dir__(self):
-        module = self._load()
-        return dir(module)
 
 
 def set_blosc_nthreads() -> int:  # pragma: no cover
@@ -71,7 +38,10 @@ def set_blosc_nthreads() -> int:  # pragma: no cover
     return nUsed
 
 
-def random_string(n: int = 8) -> str:
+def random_string(
+    n: int = 8,
+    *, _ALPHABET=''.join([string.ascii_lowercase, string.digits])
+) -> str:
     """Generate a random string of lowercase ascii letters and digits.
 
     Parameters
@@ -79,67 +49,8 @@ def random_string(n: int = 8) -> str:
     n: int, optional
         The number of characters which the output string will have. Default = 6
     """
-    letters = ''.join([string.ascii_lowercase, string.digits])
-    return ''.join(random.choice(letters) for i in range(n))
-
-
-def cm_weakref_obj_proxy(obj: Any) -> wrapt.ObjectProxy:
-    """Creates a weakproxy reference honoring optional use context managers.
-
-    This is required because (for some unknown reason) `weakproxy`
-    references will not actually pass through the `__enter__` attribute of
-    the referred object's instance. As such, these are manually set to the
-    appropriate values on the `weakproxy` object. The final `weakproxy` is
-    in turn referenced by an object proxy so that all calls to the
-    methods/attributes are passed through uniformly.
-
-    Parameters
-    ----------
-    obj: Any
-        object instance implementing the __enter__ and __exit__ methods which
-        should be passed through as a weakref proxy object
-
-    Returns
-    -------
-    ObjectProxy
-        object analogous to a plain weakproxy object.
-    """
-    wr = weakref.proxy(obj)
-    setattr(wr, '__enter__', partial(obj.__class__.__enter__, wr))
-    setattr(wr, '__exit__', partial(obj.__class__.__exit__, wr))
-    obj_proxy = wrapt.ObjectProxy(wr)
-    return obj_proxy
-
-
-def tb_params_last_called(tb: types.TracebackType):
-    """Get parameters of the last function called before exception thrown.
-
-    Parameters
-    ----------
-    tb : types.TracebackType
-        traceback object returned as the third item from sys.exc_info()
-        corresponding to an exception raised in the last stack frame.
-
-    Returns
-    -------
-    object
-        parameters passed to the last function called before the exception was
-        thrown.
-    """
-    while tb.tb_next:
-        tb = tb.tb_next
-    frame = tb.tb_frame
-    code = frame.f_code
-    argcount = code.co_argcount
-    if code.co_flags & 4:  # *args
-        argcount += 1
-    if code.co_flags & 8:  # **kwargs
-        argcount += 1
-    names = code.co_varnames[:argcount]
-    params = {}
-    for name in names:
-        params[name] = frame.f_locals.get(name, '<deleted>')
-    return params
+    token = [secrets.choice(_ALPHABET) for i in range(n)]
+    return ''.join(token)
 
 
 _SuitableCharRE = re.compile(r'[\w\.\-\_]+\Z', flags=re.ASCII)
@@ -197,6 +108,42 @@ def is_ascii(str_data: str) -> bool:
     return True
 
 
+def valfilter(predicate, d, factory=dict):
+    """ Filter items in dictionary by values that are true.
+
+    >>> iseven = lambda x: x % 2 == 0
+    >>> d = {1: 2, 2: 3, 3: 4, 4: 5}
+    >>> valfilter(iseven, d)
+    {1: 2, 3: 4}
+
+    See Also:
+        valfilterfalse
+    """
+    rv = factory()
+    for k, v in d.items():
+        if predicate(v):
+            rv[k] = v
+    return rv
+
+
+def valfilterfalse(predicate, d, factory=dict):
+    """ Filter items in dictionary by values which are false.
+
+    >>> iseven = lambda x: x % 2 == 0
+    >>> d = {1: 2, 2: 3, 3: 4, 4: 5}
+    >>> valfilterfalse(iseven, d)
+    {2: 3, 4: 5}
+
+    See Also:
+        valfilter
+    """
+    rv = factory()
+    for k, v in d.items():
+        if not predicate(v):
+            rv[k] = v
+    return rv
+
+
 def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
     a, b = tee(iterable)
@@ -224,6 +171,22 @@ def unique_everseen(iterable, key=None):
             if k not in seen:
                 seen_add(k)
                 yield element
+
+
+def ilen(iterable):
+    """Return the number of items in *iterable*.
+
+        >>> ilen(x for x in range(1000000) if x % 3 == 0)
+        333334
+        >>> it = iter([0, 1, 2, False])
+        >>> ilen(it)
+        4
+
+    This consumes the iterable, so handle with care.
+    """
+    counter = count()
+    deque(zip(iterable, counter), maxlen=0)
+    return next(counter)
 
 
 def find_next_prime(N: int) -> int:
@@ -259,12 +222,12 @@ def find_next_prime(N: int) -> int:
             return n
 
 
-def file_size(p: os.PathLike) -> int:  # pragma: no cover
+def file_size(p: Path) -> int:  # pragma: no cover
     """Query the file size of a specific file
 
     Parameters
     ----------
-    p : os.PathLike
+    p : Path
         path to a file that exists on disk.
 
     Raises
@@ -277,14 +240,13 @@ def file_size(p: os.PathLike) -> int:  # pragma: no cover
     int
         nbytes the file consumes on disk.
     """
-    if not os.path.isfile(p):
-        err = f'Cannot query size of: {p}. File does not exist'
+    if not p.is_file():
+        err = f'Cannot query size of: {str(p)}. File does not exist'
         raise FileNotFoundError(err)
-    nbytes = os.stat(p).st_size
-    return nbytes
+    return p.stat().st_size
 
 
-def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
+def folder_size(p: Path, *, recurse: bool = False) -> int:
     """size of all files in a folder.
 
     Default is to not include subdirectories. Set "recurse=True"
@@ -292,7 +254,7 @@ def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
 
     Parameters
     ----------
-    p : os.PathLike
+    p : Path
         path to the repository on disk.
     recurse : bool, kwarg-only
         to calculate the full size of the repo (Default value = False)
@@ -303,25 +265,25 @@ def folder_size(p: os.PathLike, *, recurse: bool = False) -> int:
         number of bytes used up in the repo_path
     """
     total = 0
-    for entry in os.scandir(p):
-        if entry.is_file(follow_symlinks=False):
+    for entry in p.iterdir():
+        if entry.is_file() and not entry.is_symlink():
             total += entry.stat().st_size
-        elif (recurse is True) and (entry.is_dir(follow_symlinks=False) is True):
-            total += folder_size(entry.path, recurse=True)
+        elif recurse and entry.is_dir() and not entry.is_symlink():
+            total += folder_size(entry.resolve(), recurse=True)
     return total
 
 
-def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
+def is_valid_directory_path(p: Path) -> Path:
     """Check if path is directory which user has write permission to.
 
     Parameters
     ----------
-    p : os.PathLike
+    p : Path
         path to some location on disk
 
     Returns
     -------
-    os.PathLike
+    Path
         If successful, the path with any user constructions expanded
         (ie. `~/somedir` -> `/home/foo/somedir`)
 
@@ -334,16 +296,16 @@ def is_valid_directory_path(p: os.PathLike) -> os.PathLike:
     PermissionError
         If the user does not have write access to the specified path
     """
-    try:
-        usr_path = os.path.expanduser(p)
-    except TypeError:
+    if not isinstance(p, Path):
         msg = f'Path arg `p`: {p} of type: {type(p)} is not valid path specifier'
         raise TypeError(msg)
 
-    if not os.path.isdir(usr_path):
+    usr_path = p.expanduser().resolve(strict=True)
+
+    if not usr_path.is_dir():
         msg = f'Path arg `p`: {p} is not a directory.'
         raise NotADirectoryError(msg)
-    if not os.access(usr_path, os.W_OK):  # pragma: no cover
+    if not os.access(str(usr_path), os.W_OK):  # pragma: no cover
         msg = f'User does not have permission to write to directory path: {p}'
         raise PermissionError(msg)
 

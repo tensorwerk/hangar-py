@@ -54,19 +54,17 @@ Technical Notes
    actual retrieved data into suitable sized collections on a ``fetch-data()``
    operation
 """
-import os
-from typing import NamedTuple, Optional
+from pathlib import Path
+from typing import Optional
 
 import numpy as np
 
+from . import REMOTE_50_DataHashSpec
+from ..op_state import writer_checkout_only, reader_checkout_only
+
 # -------------------------------- Parser Implementation ----------------------
 
-
 _FmtCode = '50'
-REMOTE_50_DataHashSpec = NamedTuple('REMOTE_50_DataHashSpec', [
-    ('backend', str),
-    ('schema_hash', str)
-])
 
 
 def remote_50_encode(schema_hash: str = '') -> bytes:
@@ -80,29 +78,12 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
     return f'50:{schema_hash}'.encode()
 
 
-def remote_50_decode(db_val: bytes) -> REMOTE_50_DataHashSpec:
-    """converts a numpy data hash db val into a numpy data python spec
-
-    Parameters
-    ----------
-    db_val : bytes
-        data hash db val
-
-    Returns
-    -------
-    REMOTE_50_DataHashSpec
-        hash specification containing an identifies: `backend`, `schema_hash`
-    """
-    schema_hash = db_val.decode()[3:]
-    return REMOTE_50_DataHashSpec('50', schema_hash)
-
-
 # ------------------------- Accessor Object -----------------------------------
 
 
 class REMOTE_50_Handler(object):
 
-    def __init__(self, repo_path: os.PathLike, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
         self.repo_path = repo_path
         self.schema_shape = schema_shape
         self.schema_dtype = schema_dtype
@@ -115,17 +96,46 @@ class REMOTE_50_Handler(object):
     def __exit__(self, *exc):
         return
 
+    @reader_checkout_only
+    def __getstate__(self) -> dict:  # pragma: no cover
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        self.close()
+        state = self.__dict__.copy()
+        return state
+
+    def __setstate__(self, state: dict) -> None:  # pragma: no cover
+        """ensure multiprocess operations can pickle relevant data.
+        """
+        self.__dict__.update(state)
+        self.open(mode=self.mode)
+
     @property
     def backend_opts(self):
         return self._dflt_backend_opts
 
+    @writer_checkout_only
+    def _backend_opts_set(self, val):
+        """Nonstandard descriptor method. See notes in ``backend_opts.setter``.
+        """
+        self._dflt_backend_opts = val
+        return
+
     @backend_opts.setter
-    def backend_opts(self, val):
-        if self.mode == 'a':
-            self._dflt_backend_opts = val
-            return
-        else:
-            raise AttributeError(f"can't set property in read only mode")
+    def backend_opts(self, value):
+        """
+        Using seperate setter method (with ``@writer_checkout_only`` decorator
+        applied) due to bug in python <3.8.
+
+        From: https://bugs.python.org/issue19072
+            > The classmethod decorator when applied to a function of a class,
+            > does not honour the descriptor binding protocol for whatever it
+            > wraps. This means it will fail when applied around a function which
+            > has a decorator already applied to it and where that decorator
+            > expects that the descriptor binding protocol is executed in order
+            > to properly bind the function to the class.
+        """
+        return self._backend_opts_set(value)
 
     def open(self, mode, *args, **kwargs):
         self.mode = mode

@@ -185,9 +185,9 @@ class TestReaderWriterDiff(object):
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
-    def test_aset_addition_conflict(self, written_repo, writer):
+    def test_aset_addition_conflict(self, aset_samples_initialized_repo, writer):
         # t1
-        repo = written_repo
+        repo = aset_samples_initialized_repo
 
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='master')
@@ -208,9 +208,9 @@ class TestReaderWriterDiff(object):
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
-    def test_aset_removal_conflict(self, written_repo, writer):
+    def test_aset_removal_conflict(self, aset_samples_initialized_repo, writer):
         # t21 and t22
-        repo = written_repo
+        repo = aset_samples_initialized_repo
         co = repo.checkout(write=True, branch='master')
         co.arraysets.init_arrayset(name='testing_aset1', shape=(5, 7), dtype=np.float64)
         co.arraysets.init_arrayset(name='testing_aset2', shape=(5, 7), dtype=np.float64)
@@ -241,9 +241,9 @@ class TestReaderWriterDiff(object):
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
-    def test_aset_mutation_conflict(self, written_repo, writer):
+    def test_aset_mutation_conflict(self, aset_samples_initialized_repo, writer):
         # t3
-        repo = written_repo
+        repo = aset_samples_initialized_repo
         co = repo.checkout(write=True, branch='master')
         co.arraysets.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float64)
         co.commit('added aset')
@@ -338,8 +338,8 @@ class TestReaderWriterDiff(object):
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
-    def test_commits_inside_cm(self, written_repo, array5by7, writer):
-        repo = written_repo
+    def test_commits_inside_cm(self, aset_samples_initialized_repo, array5by7, writer):
+        repo = aset_samples_initialized_repo
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='testbranch')
         aset = co.arraysets['writtenaset']
@@ -368,8 +368,8 @@ class TestReaderWriterDiff(object):
 
 class TestWriterDiff(object):
 
-    def test_status_and_staged_meta(self, written_repo):
-        repo = written_repo
+    def test_status_and_staged_meta(self, aset_samples_initialized_repo):
+        repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
         co.metadata['hello_from_test'] = 'hai to test'
         assert co.diff.status() == 'DIRTY'
@@ -379,9 +379,9 @@ class TestWriterDiff(object):
         assert co.diff.status() == 'CLEAN'
         co.close()
 
-    def test_status_and_staged_samples(self, written_repo):
+    def test_status_and_staged_samples(self, aset_samples_initialized_repo):
         dummyData = np.zeros((5, 7))
-        repo = written_repo
+        repo = aset_samples_initialized_repo
         co = repo.checkout()
         with pytest.raises(AttributeError):
             co.diff.status()  # Read checkout doesn't have status()
@@ -400,8 +400,8 @@ class TestWriterDiff(object):
         assert co.diff.status() == 'CLEAN'
         co.close()
 
-    def test_status_and_staged_aset(self, written_repo):
-        repo = written_repo
+    def test_status_and_staged_aset(self, aset_samples_initialized_repo):
+        repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
         co.arraysets.init_arrayset(name='sampleaset', shape=(3, 5), dtype=np.float32)
         assert co.diff.status() == 'DIRTY'

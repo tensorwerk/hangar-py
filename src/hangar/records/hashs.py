@@ -1,5 +1,7 @@
+from pathlib import Path
+from typing import Iterable, List, Tuple, Union
+
 import lmdb
-from typing import Iterable, List, Tuple
 
 from .parsing import (
     arrayset_record_schema_raw_key_from_db_key,
@@ -9,12 +11,14 @@ from .parsing import (
     hash_schema_raw_key_from_db_key,
     RawArraysetSchemaVal,
 )
-from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder, _DataHashSpecs
+from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder, DataHashSpecsType
 from ..constants import K_HASH, K_SCHEMA
 from ..txnctx import TxnRegister
+from ..mixins import CursorRangeIterator
+from ..utils import ilen
 
 
-class HashQuery(object):
+class HashQuery(CursorRangeIterator):
     """Traverse and query contents contained in ``hashenv`` and ``labelenv`` dbs
 
     These methods operate on the databases which store the mapping of some data
@@ -35,7 +39,8 @@ class HashQuery(object):
 
     # ------------------ traversing the unpacked records ----------------------
 
-    def _traverse_all_hash_records(self, keys: bool = True, values: bool = True):
+    def _traverse_all_hash_records(self, keys: bool = True, values: bool = True
+                                   ) -> Iterable[Union[bytes, Tuple[bytes, bytes]]]:
         """PUll out all binary encoded data hash records.
 
         Parameters
@@ -48,55 +53,18 @@ class HashQuery(object):
         Yields
         -------
         Union[bytes, Tuple[bytes, bytes]]
-            bytes of keys if ``keys=True`` and ``values=False``
-
-            bytes of values if ``keys=False`` and ``values=True``
-
-            Tuple of bytes corresponding to ``(keys, values)`` if
-            ``keys=True`` and ``values=True``.
+            Iterable of schema record keys, values, or items tuple
         """
         startHashRangeKey = f'{K_HASH}'.encode()
-        len_RangeKey = len(startHashRangeKey)
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
-            with hashtxn.cursor() as cursor:
-                hashsExist = cursor.set_range(startHashRangeKey)
-                # divide loop into returned type sections as perf optimization
-                # (rather then if/else checking on every iteration of loop)
-                if keys and not values:
-                    while hashsExist:
-                        hashRecKey = cursor.key()
-                        if hashRecKey[:len_RangeKey] == startHashRangeKey:
-                            yield hashRecKey
-                            hashsExist = cursor.next()
-                            continue
-                        else:
-                            hashsExist = False
-                elif values and not keys:  # pragma: no cover
-                    while hashsExist:
-                        hashRecKey, hashRecVal = cursor.item()
-                        if hashRecKey[:len_RangeKey] == startHashRangeKey:
-                            yield hashRecVal
-                            hashsExist = cursor.next()
-                            continue
-                        else:
-                            hashsExist = False
-                elif keys and values:
-                    while hashsExist:
-                        hashRecKey, hashRecVal = cursor.item()
-                        if hashRecKey[:len_RangeKey] == startHashRangeKey:
-                            yield (hashRecKey, hashRecVal)
-                            hashsExist = cursor.next()
-                            continue
-                        else:
-                            hashsExist = False
-                else:  # pragma: no cover
-                    raise ValueError(f'Both keys and values argument cannot be False')
+            yield from self.cursor_range_iterator(hashtxn, startHashRangeKey, keys, values)
         finally:
             TxnRegister().abort_reader_txn(self._hashenv)
 
-    def _traverse_all_schema_records(self, keys: bool = True, values: bool = True):
-        """PUll out all binary encoded schema hash records.
+    def _traverse_all_schema_records(self, keys: bool = True, values: bool = True
+                                     ) -> Iterable[Union[bytes, Tuple[bytes, bytes]]]:
+        """Pull out all binary encoded schema hash records.
 
         Parameters
         ----------
@@ -108,61 +76,21 @@ class HashQuery(object):
         Yields
         -------
         Union[bytes, Tuple[bytes, bytes]]
-            bytes of keys if ``keys=True`` and ``values=False``
-
-            bytes of values if ``keys=False`` and ``values=True``
-
-            Tuple of bytes corresponding to ``(keys, values)`` if
-            ``keys=True`` and ``values=True``.
+            Iterable of schema record keys, values, or items tuple
         """
         startSchemaRangeKey = f'{K_SCHEMA}'.encode()
-        len_RangeKey = len(startSchemaRangeKey)
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
-            with hashtxn.cursor() as cursor:
-                schemasExist = cursor.set_range(startSchemaRangeKey)
-                # divide loop into returned type sections as perf optimization
-                # (rather then if/else checking on every iteration of loop)
-                if keys and not values:
-                    while schemasExist:
-                        schemaRecKey = cursor.key()
-                        if schemaRecKey[:len_RangeKey] == startSchemaRangeKey:
-                            yield schemaRecKey
-                            schemasExist = cursor.next()
-                            continue
-                        else:
-                            schemasExist = False
-                elif values and not keys:  # pragma: no cover
-                    while schemasExist:
-                        schemaRecKey, schemaRecVal = cursor.item()
-                        if schemaRecKey[:len_RangeKey] == startSchemaRangeKey:
-                            yield schemaRecVal
-                            schemasExist = cursor.next()
-                            continue
-                        else:
-                            schemasExist = False
-                elif keys and values:
-                    while schemasExist:
-                        schemaRecKey, schemaRecVal = cursor.item()
-                        if schemaRecKey[:len_RangeKey] == startSchemaRangeKey:
-                            yield (schemaRecKey, schemaRecVal)
-                            schemasExist = cursor.next()
-                            continue
-                        else:
-                            schemasExist = False
-                else:  # pragma: no cover
-                    raise ValueError(f'Both keys and values argument cannot be False')
+            yield from self.cursor_range_iterator(hashtxn, startSchemaRangeKey, keys, values)
         finally:
             TxnRegister().abort_reader_txn(self._hashenv)
 
     def list_all_hash_keys_raw(self) -> List[str]:
         recs = self._traverse_all_hash_records(keys=True, values=False)
-        out = list(map(hash_data_raw_key_from_db_key, recs))
-        return out
+        return list(map(hash_data_raw_key_from_db_key, recs))
 
     def gen_all_hash_keys_db(self) -> Iterable[bytes]:
-        recs = self._traverse_all_hash_records(keys=True, values=False)
-        return recs
+        return self._traverse_all_hash_records(keys=True, values=False)
 
     def num_arrays(self) -> int:
         num_total = self._hashenv.stat()['entries']
@@ -171,44 +99,37 @@ class HashQuery(object):
 
     def list_all_schema_keys_raw(self) -> List[str]:
         recs = self._traverse_all_schema_records(keys=True, values=False)
-        out = list(map(hash_schema_raw_key_from_db_key, recs))
-        return out
+        return list(map(hash_schema_raw_key_from_db_key, recs))
 
     def gen_all_schema_keys_db(self) -> Iterable[bytes]:
-        recs = self._traverse_all_schema_records(keys=True, values=False)
-        return recs
+        return self._traverse_all_schema_records(keys=True, values=False)
 
     def num_schemas(self) -> int:
-        recs = tuple(self._traverse_all_schema_records(keys=True, values=False))
-        return len(recs)
+        return ilen(self._traverse_all_schema_records(keys=True, values=False))
 
     def num_meta(self) -> int:
-        n = self._hashenv.stat()['entries']
-        return n
+        return self._hashenv.stat()['entries']
 
-    def gen_all_hash_keys_raw_array_vals_parsed(self) -> Iterable[Tuple[str, _DataHashSpecs]]:
-        recs = self._traverse_all_hash_records(keys=True, values=True)
-        for dbk, dbv in recs:
+    def gen_all_hash_keys_raw_array_vals_parsed(self) -> Iterable[Tuple[str, DataHashSpecsType]]:
+        for dbk, dbv in self._traverse_all_hash_records(keys=True, values=True):
             rawk = hash_data_raw_key_from_db_key(dbk)
             rawv = backend_decoder(dbv)
             yield (rawk, rawv)
 
     def gen_all_hash_keys_raw_meta_vals_parsed(self) -> Iterable[Tuple[str, str]]:
-        recs = self._traverse_all_hash_records(keys=True, values=True)
-        for dbk, dbv in recs:
+        for dbk, dbv in self._traverse_all_hash_records(keys=True, values=True):
             rawk = hash_data_raw_key_from_db_key(dbk)
             rawv = hash_meta_raw_val_from_db_val(dbv)
             yield (rawk, rawv)
 
     def gen_all_schema_keys_raw_vals_parsed(self) -> Iterable[Tuple[str, RawArraysetSchemaVal]]:
-        recs = self._traverse_all_schema_records(keys=True, values=True)
-        for dbk, dbv in recs:
+        for dbk, dbv in self._traverse_all_schema_records(keys=True, values=True):
             rawk = arrayset_record_schema_raw_key_from_db_key(dbk)
             rawv = arrayset_record_schema_raw_val_from_db_val(dbv)
             yield (rawk, rawv)
 
 
-def delete_in_process_data(repo_path, *, remote_operation=False):
+def backends_remove_in_process_data(repo_path: Path, *, remote_operation: bool = False):
     """DANGER! Permanently delete uncommitted data files/links for stage or remote area.
 
     This searches each backend accessors staged (or remote) folder structure for
@@ -217,7 +138,7 @@ def delete_in_process_data(repo_path, *, remote_operation=False):
 
     Parameters
     ----------
-    repo_path : str
+    repo_path : Path
         path to the repository on disk
     remote_operation : optional, kwarg only, bool
         If true, modify contents of the remote_dir, if false (default) modify

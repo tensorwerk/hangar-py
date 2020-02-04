@@ -1,5 +1,5 @@
 import logging
-import os
+from pathlib import Path
 import tempfile
 import time
 import warnings
@@ -49,7 +49,7 @@ class Remotes(object):
     def __init__(self, env: Environments):
 
         self._env: Environments = env
-        self._repo_path: os.PathLike = self._env.repo_path
+        self._repo_path: Path = self._env.repo_path
         self._client: Optional[HangarClient] = None
 
     def __verify_repo_initialized(self):
@@ -317,7 +317,7 @@ class Remotes(object):
         Returns
         -------
         List[str]
-            commit hashs of the data which was returned.
+            commit hashes of the data which was returned.
 
         Raises
         ------
@@ -350,7 +350,7 @@ class Remotes(object):
         if retrieve_all_history is True:
             if isinstance(max_num_bytes, int):
                 raise ValueError(
-                    f'setting the maximum number of bytes transfered and requesting '
+                    f'setting the maximum number of bytes transferred and requesting '
                     f'all history are incompatible arguments.')
             else:
                 hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)
@@ -360,8 +360,8 @@ class Remotes(object):
 
         with tempfile.TemporaryDirectory() as tempD:
             # share unpacked ref db between dependent methods
-            tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **LMDB_SETTINGS)
+            tmpDF = Path(tempD, 'test.lmdb')
+            tmpDB = lmdb.open(path=str(tmpDF), **LMDB_SETTINGS)
             try:
                 allHashs = set()
                 # all history argument
@@ -504,8 +504,8 @@ class Remotes(object):
             m_labels, m_schemas = set(), set()
             m_schema_hashs = defaultdict(set)
             with tempfile.TemporaryDirectory() as tempD:
-                tmpDF = os.path.join(tempD, 'test.lmdb')
-                tmpDB = lmdb.open(path=tmpDF, **LMDB_SETTINGS)
+                tmpDF = Path(tempD, 'test.lmdb')
+                tmpDB = lmdb.open(path=str(tmpDF), **LMDB_SETTINGS)
                 for commit in tqdm(m_commits, desc='counting objects'):
                     # share unpacked ref db between dependent methods
                     with tmpDB.begin(write=True) as txn:

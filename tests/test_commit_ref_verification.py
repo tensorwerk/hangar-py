@@ -1,12 +1,12 @@
 import pytest
 
 
-def test_verify_corruption_in_commit_ref_alerts(written_two_cmt_repo):
+def test_verify_corruption_in_commit_ref_alerts(two_commit_filled_samples_repo):
     from hangar.records.parsing import commit_ref_db_key_from_raw_key
     from hangar.records.parsing import commit_ref_raw_val_from_db_val
     from hangar.records.parsing import commit_ref_db_val_from_raw_val
 
-    repo = written_two_cmt_repo
+    repo = two_commit_filled_samples_repo
     history = repo.log(return_contents=True)
     head_commit = history['head']
 
@@ -32,12 +32,12 @@ def test_verify_corruption_in_commit_ref_alerts(written_two_cmt_repo):
         _ = repo.checkout(write=False, commit=head_commit)
 
 
-def test_verify_corruption_in_commit_parent_val_alerts(written_two_cmt_repo):
+def test_verify_corruption_in_commit_parent_val_alerts(two_commit_filled_samples_repo):
     from hangar.records.parsing import commit_parent_db_key_from_raw_key
     from hangar.records.parsing import commit_parent_raw_val_from_db_val
     from hangar.records.parsing import commit_parent_db_val_from_raw_val
 
-    repo = written_two_cmt_repo
+    repo = two_commit_filled_samples_repo
     history = repo.log(return_contents=True)
     head_commit = history['head']
 
@@ -62,12 +62,12 @@ def test_verify_corruption_in_commit_parent_val_alerts(written_two_cmt_repo):
         _ = repo.checkout(write=False, commit=head_commit)
 
 
-def test_verify_corruption_in_spec_val_alerts(written_two_cmt_repo):
+def test_verify_corruption_in_spec_val_alerts(two_commit_filled_samples_repo):
     from hangar.records.parsing import commit_spec_db_key_from_raw_key
     from hangar.records.parsing import commit_spec_db_val_from_raw_val
     from hangar.records.parsing import commit_spec_raw_val_from_db_val
 
-    repo = written_two_cmt_repo
+    repo = two_commit_filled_samples_repo
     history = repo.log(return_contents=True)
     head_commit = history['head']
 

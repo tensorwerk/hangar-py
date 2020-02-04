@@ -1,19 +1,5 @@
 matrix:
   include:
-    - name: "Build Docs"
-      os: linux
-      dist: xenial
-      language: python
-      python: '3.7'
-      cache: pip
-      env:
-        - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
-        - SEGFAULT_SIGNALS=all
-        - TOXENV=docs
-      addons:
-        apt_packages:
-          - pandoc
-
     # Cover 3.7 ML
     - name: "Linux Python 3.7 ML COVER: Run tests"
       os: linux
@@ -24,7 +10,9 @@ matrix:
       env:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
-        - TOXENV=py37-cover-ml,report
+        - TOXENV=py37-covno-mlyes,py37-covyes-mlyes,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       after_success:
         - codecov
 
@@ -33,7 +21,9 @@ matrix:
       language: shell
       env:
         - PATH=/c/Python37:/c/Python37/Scripts:$PATH
-        - TOXENV=py37-cover-ml,report
+        - TOXENV=py37-covno-mlyes,py37-covyes-mlyes,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       before_install:
         - choco install python --version 3.7.5
         - python -m pip install --upgrade pip
@@ -47,7 +37,9 @@ matrix:
       env:
         - TR_PYTHON_VERSION=3.7.5
         - PYENV_VERSION=3.7.5
-        - TOXENV=py37-cover-ml,report
+        - TOXENV=py37-covno-mlyes,py37-covyes-mlyes,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       addons:
         homebrew:
           packages:
@@ -72,7 +64,9 @@ matrix:
       env:
         - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
         - SEGFAULT_SIGNALS=all
-        - TOXENV=py36-cover,report
+        - TOXENV=py36-covno-mlno,py36-covyes-mlno,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       after_success:
         - codecov
 
@@ -81,7 +75,9 @@ matrix:
       language: shell
       env:
         - PATH=/c/Python36:/c/Python36/Scripts:$PATH
-        - TOXENV=py36-cover,report
+        - TOXENV=py36-covno-mlno,py36-covyes-mlno,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - SCRIPTPARAMS="-- -p no:sugar"
       before_install:
         - choco install python --version 3.6.8
         - python -m pip install --upgrade pip
@@ -95,7 +91,9 @@ matrix:
       env:
         - TR_PYTHON_VERSION=3.6.8
         - PYENV_VERSION=3.6.8
-        - TOXENV=py36-cover,report
+        - PYTEST_XDIST_PROC_NR="2"
+        - TOXENV=py36-covno-mlno,py36-covyes-mlno,report
+        - SCRIPTPARAMS="-- -p no:sugar"
       addons:
         homebrew:
           packages:
@@ -109,6 +107,21 @@ matrix:
         - directories:
           - $HOME/.cache/pip
           - $HOME/.cache/pyenv
+
+    - name: "Build Docs"
+      os: linux
+      dist: xenial
+      language: python
+      python: '3.7'
+      cache: pip
+      env:
+        - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
+        - SEGFAULT_SIGNALS=all
+        - TOXENV=docs
+        - SCRIPTPARAMS=""
+      addons:
+        apt_packages:
+          - pandoc
 
 before_install:
   - |
@@ -140,7 +153,7 @@ install:
   - tox --version
 
 script:
-  - tox -v
+  - tox -v $SCRIPTPARAMS
 
 after_failure:
   - more .tox/log/* | cat

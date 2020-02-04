@@ -40,7 +40,7 @@ class GroupedAsets(object):
             if aset.iswriteable is True:
                 raise TypeError(f'Cannot load arraysets opened in `write-enabled` checkout.')
             self.arrayset_array.append(aset)
-            self.arrayset_names.append(aset.name)
+            self.arrayset_names.append(aset.arrayset)
             aset_lens.add(len(aset))
             all_keys.append(set(aset.keys()))
             all_remote_keys.append(set(aset.remote_reference_keys))

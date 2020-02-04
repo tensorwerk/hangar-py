@@ -25,6 +25,16 @@ class TxnRegister(metaclass=TxnRegisterSingleton):
         self.WriterTxn: MutableMapping[lmdb.Environment, lmdb.Transaction] = {}
         self.ReaderTxn: MutableMapping[lmdb.Environment, lmdb.Transaction] = {}
 
+    @property
+    def _debug_(self):  # pragma: no cover
+        return {
+            '__class__': self.__class__,
+            'WriterAncestors': self.WriterAncestors,
+            'ReaderAncestors': self.ReaderAncestors,
+            'WriterTxn': self.WriterTxn,
+            'ReaderTxn': self.ReaderTxn,
+        }
+
     def begin_writer_txn(self, lmdbenv: lmdb.Environment,
                          buffer: bool = False) -> lmdb.Transaction:
         """Start a write enabled transaction on the given environment

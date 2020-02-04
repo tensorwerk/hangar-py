@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+from typing import Union
 import tempfile
 import warnings
 from concurrent import futures
@@ -18,7 +20,7 @@ from .content import ContentWriter
 from .. import constants as c
 from ..context import Environments
 from ..txnctx import TxnRegister
-from ..backends.selection import BACKEND_ACCESSOR_MAP, backend_decoder
+from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting, hashs, heads, parsing, queries, summarize
 from ..records.hashmachine import array_hash_digest, metadata_hash_digest
 from ..utils import set_blosc_nthreads
@@ -28,7 +30,10 @@ set_blosc_nthreads()
 
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
-    def __init__(self, repo_path, overwrite=False):
+    def __init__(self, repo_path: Union[str, bytes, Path], overwrite=False):
+
+        if isinstance(repo_path, (str, bytes)):
+            repo_path = Path(repo_path)
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
@@ -36,7 +41,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         self.env: Environments = envs
 
         try:
-            self.env._init_repo(
+            self.env.init_repo(
                 user_name='SERVER_USER',
                 user_email='SERVER_USER@HANGAR.SERVER',
                 remove_old=overwrite)
@@ -254,7 +259,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         """Return a packed byte representation of samples corresponding to a digest.
 
         Please see comments below which explain why not all requests are
-        guarrenteed to fully complete in one operation.
+        guaranteed to fully complete in one operation.
 
         We receive a list of digests to send to the client. One consideration
         we have is that there is no way to know how much memory will be used
@@ -644,7 +649,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         return reply
 
 
-def serve(hangar_path: os.PathLike,
+def serve(hangar_path: str,
           overwrite: bool = False,
           *,
           channel_address: str = None,

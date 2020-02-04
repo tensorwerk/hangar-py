@@ -85,8 +85,8 @@ def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, 
         for i in range(10):
             a[i] = array5by7 + i
 
-    wuid = aset._fs[be_code].w_uid
-    plist = aset._fs[be_code].wFp[wuid]['/0'].id.get_create_plist()
+    wuid = aset._be_fs[be_code].w_uid
+    plist = aset._be_fs[be_code].wFp[wuid]['/0'].id.get_create_plist()
     _, _, resopts, _ = plist.get_filter(0)
     res_clevel, res_cshuffle, res_clib = resopts[4:7]
     assert res_clevel == clevel
@@ -113,8 +113,8 @@ def test_arrayset_init_with_various_lzf_opts(repo, array5by7, cshuffle, cshuffle
         for i in range(10):
             a[i] = array5by7 + i
 
-    res_compression = aset._fs[be_code].wFp[aset._fs[be_code].w_uid]['/0'].compression
-    res_shuffle = aset._fs[be_code].wFp[aset._fs[be_code].w_uid]['/0'].shuffle
+    res_compression = aset._be_fs[be_code].wFp[aset._be_fs[be_code].w_uid]['/0'].compression
+    res_shuffle = aset._be_fs[be_code].wFp[aset._be_fs[be_code].w_uid]['/0'].shuffle
     assert res_compression == 'lzf'
     assert res_shuffle == cshuffleCode
     wco.commit('hi')
@@ -139,9 +139,9 @@ def test_arrayset_init_with_various_gzip_opts(repo, array5by7, clevel, cshuffle,
         for i in range(10):
             a[i] = array5by7 + i
 
-    res_compression = aset._fs[be_code].wFp[aset._fs[be_code].w_uid]['/0'].compression
-    res_compression_opts = aset._fs[be_code].wFp[aset._fs[be_code].w_uid]['/0'].compression_opts
-    res_shuffle = aset._fs[be_code].wFp[aset._fs[be_code].w_uid]['/0'].shuffle
+    res_compression = aset._be_fs[be_code].wFp[aset._be_fs[be_code].w_uid]['/0'].compression
+    res_compression_opts = aset._be_fs[be_code].wFp[aset._be_fs[be_code].w_uid]['/0'].compression_opts
+    res_shuffle = aset._be_fs[be_code].wFp[aset._be_fs[be_code].w_uid]['/0'].shuffle
     assert res_compression == 'gzip'
     assert res_shuffle == cshuffleCode
     assert res_compression_opts == clevel
@@ -169,8 +169,8 @@ def test_arrayset_overflows_collection_size_collection_count(be_code, repo, monk
         for i in range(500):
             proto[:] = i
             cm_aset[i] = proto
-    assert aset._fs[be_code].hColsRemain == 4
-    assert aset._fs[be_code].hMaxSize == 10
+    assert aset._be_fs[be_code].hColsRemain == 4
+    assert aset._be_fs[be_code].hMaxSize == 10
     wco.commit('hello')
 
     with aset as cm_aset:

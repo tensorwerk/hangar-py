@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 import time
 from io import StringIO
 
@@ -87,9 +87,9 @@ def details(env: lmdb.Environment, line_limit=100, line_length=100) -> StringIO:
     """
     buf = StringIO()
     buf.write('\n======================\n')
-    buf.write(f'{os.path.basename(env.path())}')
+    buf.write(f'{Path(env.path()).name}')
     try:
-        buf.write(f'File Size: {format_bytes(file_size(env.path()))}\n')
+        buf.write(f'File Size: {format_bytes(file_size(Path(env.path())))}\n')
     except FileNotFoundError:
         pass
     buf.write('======================\n\n')
@@ -120,7 +120,7 @@ def summary(env, *, branch='', commit='') -> StringIO:
 
     Parameters
     ----------
-    env : :class:`Environments`
+    env : :class:`..context.Environments`
         class which contains all of the lmdb environments pre-initialized for use.
     commit : str
         commit hash to query. if left empty, HEAD commit is used (Default value = '')
@@ -142,8 +142,9 @@ def summary(env, *, branch='', commit='') -> StringIO:
 
     spec = get_commit_spec(env.refenv, cmt)._asdict()
     if cmt == '':
-        print('No commits made')
-        return {}
+        buf = StringIO()
+        buf.write('No commits made')
+        return buf
 
     with tmp_cmt_env(env.refenv, cmt) as cmtrefenv:
         query = RecordQuery(cmtrefenv)
@@ -156,7 +157,7 @@ def summary(env, *, branch='', commit='') -> StringIO:
         buf.write(f'================== \n')
         buf.write(f'| Repository Info \n')
         buf.write(f'|----------------- \n')
-        buf.write(f'|  Base Directory: {os.path.dirname(env.repo_path)} \n')
+        buf.write(f'|  Base Directory: {str(env.repo_path.parent)} \n')
         buf.write(f'|  Disk Usage: {humanBytes} \n')
         buf.write(f' \n')
 
@@ -215,7 +216,6 @@ def status(branch_name: str, diff: DiffOut) -> StringIO:
         buf.write(f'| Schema: {len(df.schema)} \n')
         for k, v in df.schema.items():
             buf.write(f'|  - "{k}": \n')
-            buf.write(f'|       named: {v.schema_is_named} \n')
             buf.write(f'|       dtype: {np.dtype(np.typeDict[v.schema_dtype])} \n')
             buf.write(f'|       (max) shape: {v.schema_max_shape} \n')
             buf.write(f'|       variable shape: {v.schema_is_var} \n')

@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 import weakref
 import warnings
 from typing import Union, Optional, List
@@ -34,7 +34,7 @@ class Repository(object):
 
     Parameters
     ----------
-    path : str
+    path : Union[str, os.PathLike]
         local directory path where the Hangar repository exists (or initialized)
     exists : bool, optional
         True if a Hangar repository should exist at the given directory path.
@@ -49,14 +49,17 @@ class Repository(object):
         permissions to write to that location. Default = True
     """
 
-    def __init__(self, path: os.PathLike, exists: bool = True):
+    def __init__(self, path: Union[str, Path], exists: bool = True):
+
+        if isinstance(path, (str, bytes)):
+            path = Path(path)
 
         try:
             usr_path = is_valid_directory_path(path)
         except (TypeError, NotADirectoryError, PermissionError) as e:
             raise e from None
 
-        repo_pth = os.path.join(usr_path, DIR_HANGAR)
+        repo_pth = usr_path.joinpath(DIR_HANGAR)
         if exists is False:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', UserWarning)
@@ -64,7 +67,7 @@ class Repository(object):
         else:
             envs = Environments(pth=repo_pth)
 
-        self._repo_path: os.PathLike = repo_pth
+        self._repo_path: Path = repo_pth
         self._env: Environments = envs
         self._remote: Remotes = Remotes(self._env)
 
@@ -136,16 +139,16 @@ class Repository(object):
         return proxy
 
     @property
-    def path(self) -> os.PathLike:
+    def path(self) -> str:
         """Return the path to the repository on disk, read-only attribute
 
         Returns
         -------
-        os.PathLike
+        str
             path to the specified repository, not including `.hangar` directory
         """
         self.__verify_repo_initialized()
-        return os.path.dirname(self._repo_path)
+        return str(self._repo_path.parent)
 
     @property
     def writer_lock_held(self) -> bool:
@@ -346,7 +349,7 @@ class Repository(object):
              user_name: str,
              user_email: str,
              *,
-             remove_old: bool = False) -> os.PathLike:
+             remove_old: bool = False) -> str:
         """Initialize a Hangar repository at the specified directory path.
 
         This function must be called before a checkout can be performed.
@@ -363,13 +366,14 @@ class Repository(object):
 
         Returns
         -------
-        os.PathLike
+        str
             the full directory path where the Hangar repository was
             initialized on disk.
         """
-        pth = self._env._init_repo(
-            user_name=user_name, user_email=user_email, remove_old=remove_old)
-        return pth
+        pth = self._env.init_repo(user_name=user_name,
+                                  user_email=user_email,
+                                  remove_old=remove_old)
+        return str(pth)
 
     def log(self,
             branch: str = None,

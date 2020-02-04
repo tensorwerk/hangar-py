@@ -1,5 +1,4 @@
-import os
-from os.path import join as pjoin
+from pathlib import Path
 
 import lmdb
 
@@ -88,12 +87,12 @@ Initial checking of repository versions
 """
 
 
-def startup_check_repo_version(repo_path: os.PathLike) -> Version:
+def startup_check_repo_version(repo_path: Path) -> Version:
     """Determine repo version without having to have Environments ctx opened.
 
     Parameters
     ----------
-    repo_path : os.PathLike
+    repo_path : Path
         path to the repository directory on disk
 
     Returns
@@ -109,14 +108,14 @@ def startup_check_repo_version(repo_path: os.PathLike) -> Version:
         If for whatever reason, the branch file does not exist on disk.
         Execution should not reach this point.
     """
-    brch_fp = pjoin(repo_path, LMDB_BRANCH_NAME)
-    if not os.path.isfile(brch_fp):
+    brch_fp = repo_path.joinpath(LMDB_BRANCH_NAME)
+    if not brch_fp.is_file():
         msg = f'Hangar Internal Error, startup_check_repo_version did not find '\
               f'brch db at: {brch_fp}. Execution should never reach this point. '\
               f'Please report this error to Hangar developers.'
         raise RuntimeError(msg)
 
-    branchenv = lmdb.open(path=brch_fp, readonly=True, create=False, **LMDB_SETTINGS)
+    branchenv = lmdb.open(path=str(brch_fp), readonly=True, create=False, **LMDB_SETTINGS)
     spec = get_repository_software_version_spec(branchenv=branchenv)
     branchenv.close()
     return spec
@@ -127,6 +126,7 @@ incompatible_changes_after = [
     Version('0.3.0'),
     Version('0.4.0'),
     Version('0.5.0.dev0'),
+    Version('0.5.0.dev1'),
 ]
 
 

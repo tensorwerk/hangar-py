@@ -23,11 +23,13 @@ def test_valid_directory_path_errors_on_invalid_path_arg(pth):
 
 def test_valid_directory_path_recognizes_not_a_directory(managed_tmpdir):
     from hangar.utils import is_valid_directory_path
-    from os.path import join as pjoin
-    with open(pjoin(managed_tmpdir, 'test.txt'), 'w+') as f:
+    from pathlib import Path
+
+    test_pth = Path(managed_tmpdir, 'test.txt').resolve()
+    with test_pth.open('w+') as f:
         f.write('hello')
     with pytest.raises(NotADirectoryError):
-        is_valid_directory_path(pjoin(managed_tmpdir, 'test.txt'))
+        is_valid_directory_path(test_pth)
 
 
 @pytest.mark.parametrize('arg,expected', [

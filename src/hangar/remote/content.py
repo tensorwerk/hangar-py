@@ -137,7 +137,6 @@ class ContentWriter(object):
                     backend_opts = backend_opts_from_heuristics(
                         backend=backend,
                         array=proto,
-                        named_samples=schema_val.schema_is_named,
                         variable_shape=schema_val.schema_is_var)
         else:
             backend = schema_val.schema_default_backend

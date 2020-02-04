@@ -10,6 +10,8 @@ import pytest
 import numpy as np
 
 from hangar import Repository
+from hangar.checkout import WriterCheckout
+
 import hangar
 
 
@@ -17,9 +19,45 @@ variable_shape_backend_params = ['00', '10']
 fixed_shape_backend_params = ['00', '01', '10']
 
 
+@pytest.fixture(scope='class')
+def classrepo(tmp_path_factory) -> Repository:
+
+    old00_count = hangar.backends.hdf5_00.COLLECTION_COUNT
+    old00_size = hangar.backends.hdf5_00.COLLECTION_SIZE
+    old01_count = hangar.backends.hdf5_01.COLLECTION_COUNT
+    old01_size = hangar.backends.hdf5_01.COLLECTION_SIZE
+    old10_size = hangar.backends.numpy_10.COLLECTION_SIZE
+    hangar.backends.hdf5_00.COLLECTION_COUNT = 5
+    hangar.backends.hdf5_00.COLLECTION_SIZE = 10
+    hangar.backends.hdf5_01.COLLECTION_COUNT = 5
+    hangar.backends.hdf5_01.COLLECTION_SIZE = 10
+    hangar.backends.numpy_10.COLLECTION_SIZE = 10
+
+    old_map_size = hangar.constants.LMDB_SETTINGS['map_size']
+    hangar.constants.LMDB_SETTINGS['map_size'] = 2_000_000
+    hangar.txnctx.TxnRegisterSingleton._instances = {}
+
+    pth = tmp_path_factory.mktemp('classrepo')
+    repo_obj = Repository(path=str(pth), exists=False)
+    repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
+    yield repo_obj
+    hangar.constants.LMDB_SETTINGS['map_size'] = old_map_size
+    hangar.backends.hdf5_00.COLLECTION_COUNT = old00_count
+    hangar.backends.hdf5_00.COLLECTION_SIZE = old00_size
+    hangar.backends.hdf5_01.COLLECTION_COUNT = old01_count
+    hangar.backends.hdf5_01.COLLECTION_SIZE = old01_size
+    hangar.backends.numpy_10.COLLECTION_SIZE = old10_size
+    repo_obj._env._close_environments()
+
+
 @pytest.fixture()
 def managed_tmpdir(monkeypatch, tmp_path):
     monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
+    monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 10)
+    monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 50)
+    monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 10)
+    monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 50)
+    monkeypatch.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 50)
     hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
@@ -34,7 +72,16 @@ def repo(managed_tmpdir) -> Repository:
 
 
 @pytest.fixture()
-def written_repo(repo):
+def aset_samples_initialized_repo(repo) -> Repository:
+    co = repo.checkout(write=True)
+    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
+    co.commit('this is a commit message')
+    co.close()
+    yield repo
+
+
+@pytest.fixture()
+def aset_subsamples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
@@ -43,8 +90,8 @@ def written_repo(repo):
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
-def repo_with_20_samples(request, written_repo, array5by7):
-    co = written_repo.checkout(write=True)
+def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
+    co = aset_samples_initialized_repo.checkout(write=True)
     second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7, backend_opts=request.param)
     first_aset = co.arraysets['writtenaset']
     for i in range(0, 20):
@@ -54,12 +101,12 @@ def repo_with_20_samples(request, written_repo, array5by7):
         second_aset[str(i)] = array5by7
     co.commit('20 samples')
     co.close()
-    yield written_repo
+    yield aset_samples_initialized_repo
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
-def repo_with_300_samples(request, written_repo, array5by7):
-    co = written_repo.checkout(write=True)
+def repo_300_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
+    co = aset_samples_initialized_repo.checkout(write=True)
     aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
     with aset:
         for i in range(300):
@@ -67,16 +114,15 @@ def repo_with_300_samples(request, written_repo, array5by7):
             aset[i] = array5by7
     co.commit('1000 samples')
     co.close()
-    yield written_repo
+    yield aset_samples_initialized_repo
 
 
 @pytest.fixture()
-def dummy_repo(repo):
+def repo_20_filled_samples_meta(repo) -> Repository:
     # for diff testing
     dummyData = np.arange(50).astype(np.int64)
     co1 = repo.checkout(write=True, branch='master')
-    co1.arraysets.init_arrayset(
-        name='dummy', prototype=dummyData, named_samples=True)
+    co1.arraysets.init_arrayset(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
         co1.arraysets['dummy'][idx] = dummyData
@@ -88,7 +134,7 @@ def dummy_repo(repo):
 
 
 @pytest.fixture(params=variable_shape_backend_params)
-def variable_shape_written_repo(request, repo):
+def aset_samples_var_shape_initialized_repo(request, repo) -> Repository:
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(
         name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend_opts=request.param)
@@ -98,8 +144,8 @@ def variable_shape_written_repo(request, repo):
 
 
 @pytest.fixture()
-def w_checkout(written_repo):
-    co = written_repo.checkout(write=True)
+def aset_samples_initialized_w_checkout(aset_samples_initialized_repo) -> WriterCheckout:
+    co = aset_samples_initialized_repo.checkout(write=True)
     yield co
     co.close()
 
@@ -117,7 +163,7 @@ def randomsizedarray():
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
-def written_two_cmt_repo(request, repo, array5by7):
+def two_commit_filled_samples_repo(request, repo, array5by7) -> Repository:
     co = repo.checkout(write=True)
     co.arraysets.init_arrayset(
         name='writtenaset', shape=(5, 7), dtype=np.float32, backend_opts=request.param)
@@ -127,7 +173,7 @@ def written_two_cmt_repo(request, repo, array5by7):
 
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range((cIdx + 1) * 5):
                 arr = np.random.randn(*array5by7.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr
@@ -137,12 +183,11 @@ def written_two_cmt_repo(request, repo, array5by7):
 
 
 @pytest.fixture()
-def repo_1_br_no_conf(repo):
+def repo_1_br_no_conf(repo) -> Repository:
 
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch='master')
-    co1.arraysets.init_arrayset(
-        name='dummy', prototype=dummyData, named_samples=True)
+    co1.arraysets.init_arrayset(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
         co1.arraysets['dummy'][str(idx)] = dummyData
@@ -164,7 +209,7 @@ def repo_1_br_no_conf(repo):
 
 
 @pytest.fixture()
-def repo_2_br_no_conf(repo_1_br_no_conf):
+def repo_2_br_no_conf(repo_1_br_no_conf) -> Repository:
 
     dummyData = np.arange(50)
     repo = repo_1_br_no_conf
@@ -190,15 +235,16 @@ def server_instance(managed_tmpdir, worker_id):
     yield address
 
     hangserver.close()
-    server.stop(0.1)
+    server.stop(0.05)
     time.sleep(0.1)
     if platform.system() == 'Windows':
         time.sleep(0.1)
 
 
 @pytest.fixture()
-def written_two_cmt_server_repo(server_instance, written_two_cmt_repo) -> tuple:
-    written_two_cmt_repo.remote.add('origin', server_instance)
-    success = written_two_cmt_repo.remote.push('origin', 'master')
+def written_two_cmt_server_repo(server_instance, two_commit_filled_samples_repo) -> tuple:
+    time.sleep(0.1)  # wait for ready
+    two_commit_filled_samples_repo.remote.add('origin', server_instance)
+    success = two_commit_filled_samples_repo.remote.push('origin', 'master')
     assert success == 'master'
-    yield (server_instance, written_two_cmt_repo)
+    yield (server_instance, two_commit_filled_samples_repo)

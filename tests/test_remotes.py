@@ -66,10 +66,11 @@ def test_can_update_remote_after_removal(repo):
     assert new_name.address == 'test2'
 
 
-def test_server_is_started_multiple_times_via_ping_pong(server_instance, written_repo):
+def test_server_is_started_multiple_times_via_ping_pong(server_instance,
+                                                        aset_samples_initialized_repo):
     # start multiple times and test that pings go through multiple times
-    written_repo.remote.add('origin', server_instance)
-    roundTripTime = written_repo.remote.ping('origin')
+    aset_samples_initialized_repo.remote.add('origin', server_instance)
+    roundTripTime = aset_samples_initialized_repo.remote.ping('origin')
     assert isinstance(roundTripTime, float)
 
 
@@ -88,7 +89,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
         sampList = []
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range(nSamples):
                 arr = np.random.randn(*array5by7.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr
@@ -116,7 +117,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
 
         assert nco.arraysets['writtenaset'].contains_remote_references is True
         remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
-        assert [str(idx) for idx in range(len(sampList))] == remoteKeys
+        assert tuple([str(idx) for idx in range(len(sampList))]) == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
             assert sIdx in nco.arraysets['writtenaset']
@@ -145,7 +146,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
         masterSampList = []
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range(nMasterSamples):
                 arr = np.random.randn(*array5by7.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr
@@ -164,7 +165,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
         devSampList = []
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range(nDevSamples):
                 arr = np.random.randn(*array5by7.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr
@@ -195,7 +196,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         masterSampList = []
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range(nMasterSamples):
                 arr = np.random.randn(*array5by7.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr
@@ -217,7 +218,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
         devSampList = []
         with co.arraysets['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range(nDevSamples):
                 arr = np.random.randn(*array5by7.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr
@@ -245,7 +246,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
 
         assert nco.arraysets['writtenaset'].contains_remote_references is True
         remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
-        assert [str(idx) for idx in range(len(sampList))] == remoteKeys
+        assert tuple([str(idx) for idx in range(len(sampList))]) == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
             assert sIdx in nco.arraysets['writtenaset']
@@ -269,7 +270,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
 
         assert nco.arraysets['writtenaset'].contains_remote_references is True
         remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
-        assert [str(idx) for idx in range(len(sampList))] == remoteKeys
+        assert tuple([str(idx) for idx in range(len(sampList))]) == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
             assert sIdx in nco.arraysets['writtenaset']
@@ -339,8 +340,8 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         masterSampList2 = []
         with co.arraysets['writtenaset'] as d, co.arraysets['_two'] as dd:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
-                dd.remove(prevKey)
+                del d[prevKey]
+                del dd[prevKey]
 
             for sIdx in range(nMasterSamples):
                 arr1 = np.random.randn(*array5by7.shape).astype(np.float32) * 100
@@ -367,8 +368,8 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         devSampList2 = []
         with co.arraysets['writtenaset'] as d, co.arraysets['_two'] as dd:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
-                dd.remove(prevKey)
+                del d[prevKey]
+                del dd[prevKey]
 
             for sIdx in range(nDevSamples):
                 arr1 = np.random.randn(*array5by7.shape).astype(np.float32) * 100
@@ -629,7 +630,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance
         masterSampList = []
         with co.arraysets['aset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range(70):
                 arr = np.random.randn(50, 20).astype(np.float32)
                 d[str(sIdx)] = arr
@@ -683,7 +684,7 @@ def test_push_restricted_with_right_username_password(server_instance_push_restr
         masterSampList = []
         with co.arraysets['aset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range(70):
                 arr = np.random.randn(50, 20).astype(np.float32)
                 d[str(sIdx)] = arr
@@ -729,7 +730,7 @@ def test_push_restricted_wrong_user_and_password(server_instance_push_restricted
         masterSampList = []
         with co.arraysets['aset'] as d:
             for prevKey in list(d.keys())[1:]:
-                d.remove(prevKey)
+                del d[prevKey]
             for sIdx in range(70):
                 arr = np.random.randn(50, 20).astype(np.float32)
                 d[str(sIdx)] = arr

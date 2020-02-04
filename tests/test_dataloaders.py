@@ -18,7 +18,7 @@ except ImportError:
 @pytest.mark.skipif(skipTorch is False,
                     reason='pytorch installed for test requiring it to not be')
 def test_no_torch_installed_raises_error_on_dataloader_import():
-    with pytest.raises(ImportError, match='Could not import torch'):
+    with pytest.raises(ImportError):
         from hangar import make_torch_dataset
         make_torch_dataset(None)
 
@@ -27,8 +27,8 @@ def test_no_torch_installed_raises_error_on_dataloader_import():
                     reason='pytorch is not installed in the test environment.')
 class TestTorchDataLoader(object):
 
-    def test_warns_experimental(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_warns_experimental(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
@@ -37,8 +37,8 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_warns_arrayset_sample_size_mismatch(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_warns_arrayset_sample_size_mismatch(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout(write=True)
         second_aset = co.arraysets['second_aset']
         del second_aset['10']
@@ -53,8 +53,8 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_multiple_dataset_loader(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_multiple_dataset_loader(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout(write=True)
         second_aset = co.arraysets['second_aset']
         del second_aset['10']
@@ -83,8 +83,8 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout(write=True)
         first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
@@ -93,8 +93,8 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_with_keys(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_with_keys(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         aset = co.arraysets['writtenaset']
 
@@ -120,8 +120,8 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_with_index_range(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_with_index_range(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         aset = co.arraysets['writtenaset']
 
@@ -144,8 +144,8 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_field_names(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_field_names(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
@@ -162,8 +162,8 @@ class TestTorchDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend(self, repo_with_300_samples):
-        repo = repo_with_300_samples
+    def test_lots_of_data_with_multiple_backend(self, repo_300_filled_samples):
+        repo = repo_300_filled_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         torch_dset = make_torch_dataset([aset])
@@ -177,8 +177,9 @@ class TestTorchDataLoader(object):
                        strict=True,
                        reason="multiprocess workers does not run on windows")
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self, repo_with_300_samples):
-        repo = repo_with_300_samples
+    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self,
+                                                                           repo_300_filled_samples):
+        repo = repo_300_filled_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         torch_dset = make_torch_dataset([aset])
@@ -192,8 +193,8 @@ class TestTorchDataLoader(object):
                        strict=True,
                        reason="multiprocess workers does not run on windows")
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_two_aset_loader_two_worker_dataloader(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_two_aset_loader_two_worker_dataloader(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
@@ -269,7 +270,7 @@ except ImportError:
 @pytest.mark.skipif(skipTF is False,
                     reason='tensorflow installed for test requiring it to not be')
 def test_no_tf_installed_raises_error_on_dataloader_import():
-    with pytest.raises(ImportError, match='Could not import tensorflow'):
+    with pytest.raises(ImportError):
         from hangar import make_tf_dataset
         make_tf_dataset(None)
 
@@ -279,8 +280,8 @@ def test_no_tf_installed_raises_error_on_dataloader_import():
     reason='tensorflow is not installed in the test environment.')
 class TestTfDataLoader(object):
 
-    def test_warns_experimental(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_warns_experimental(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
@@ -289,8 +290,8 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_wans_arrayset_sample_size_mismatch(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_wans_arrayset_sample_size_mismatch(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout(write=True)
         second_aset = co.arraysets['second_aset']
         del second_aset['10']
@@ -305,8 +306,8 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_dataset_loader(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_dataset_loader(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
@@ -320,8 +321,8 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_with_keys(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_with_keys(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         aset = co.arraysets['writtenaset']
 
@@ -347,8 +348,8 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_with_index_range(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_with_index_range(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
         aset = co.arraysets['writtenaset']
 
@@ -371,8 +372,8 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_with_20_samples):
-        repo = repo_with_20_samples
+    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout(write=True)
         first_aset = co.arraysets['writtenaset']
         second_aset = co.arraysets['second_aset']
@@ -381,10 +382,10 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_variably_shaped(self, variable_shape_written_repo):
+    def test_variably_shaped(self, aset_samples_var_shape_initialized_repo):
         # Variably shaped test is required since the collation is dependent on
         # the way we return the data from generator
-        repo = variable_shape_written_repo
+        repo = aset_samples_var_shape_initialized_repo
         co = repo.checkout(write=True)
         aset = co.arraysets['writtenaset']
         for i in range(5, 10):
@@ -404,8 +405,8 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    def test_lots_of_data_with_multiple_backend(self, repo_with_300_samples):
-        repo = repo_with_300_samples
+    def test_lots_of_data_with_multiple_backend(self, repo_300_filled_samples):
+        repo = repo_300_filled_samples
         co = repo.checkout()
         aset = co.arraysets['aset']
         tf_dset = make_tf_dataset([aset])

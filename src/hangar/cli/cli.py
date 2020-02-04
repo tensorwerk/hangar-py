@@ -134,15 +134,16 @@ def arrayset(ctx):  # pragma: no cover
 @arrayset.command(name='create')
 @click.option('--variable-shape', 'variable_', is_flag=True, default=False,
               help='flag indicating sample dimensions can be any size up to max shape.')
-@click.option('--named/--not-named', default=True,
-              help='flag indicating if samples are named or not.')
+@click.option('--contains-subsamples', 'subsamples_', is_flag=True, default=False,
+              help=('flag indicating if this is a column which nests multiple '
+                    'subsamples under a common sample key.'))
 @click.argument('name', nargs=1, type=click.STRING, required=True)
 @click.argument('dtype', nargs=1, type=click.Choice([
-                'UINT8', 'INT8', 'UINT16', 'INT16', 'UINT32', 'INT32',
-                'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64']), required=True)
+    'UINT8', 'INT8', 'UINT16', 'INT16', 'UINT32', 'INT32',
+    'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64']), required=True)
 @click.argument('shape', nargs=-1, type=click.INT, required=True)
 @pass_repo
-def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
+def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_):
     """Create an arrayset with NAME and DTYPE of SHAPE.
 
     The arrayset will be created in the staging area / branch last used by a
@@ -175,15 +176,22 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, named):
 
           $ hangar arrayset create --variable-shape train_images UINT8 256 256 3
 
+    To specify that the column contains a nested set of subsample data under a
+    common sample key, the ``--contains-subsamples`` flag can be used.
+
+       .. code-block:: console
+
+          $ hangar arrayset create --contains-subsamples train_images UINT8 256 256 3
+
     """
     try:
         co = repo.checkout(write=True)
         aset = co.arraysets.init_arrayset(name=name,
                                           shape=shape,
                                           dtype=np.typeDict[dtype.lower()],
-                                          named_samples=named,
-                                          variable_shape=variable_)
-        click.echo(f'Initialized Arrayset: {aset.name}')
+                                          variable_shape=variable_,
+                                          contains_subsamples=subsamples_)
+        click.echo(f'Initialized Arrayset: {aset.arrayset}')
     except (ValueError, LookupError, PermissionError) as e:
         raise click.ClickException(e)
     finally:
@@ -204,7 +212,7 @@ def remove_arrayset(repo: Repository, name):
     """
     try:
         co = repo.checkout(write=True)
-        removed = co.arraysets.remove_aset(name)
+        removed = co.arraysets.delete(name)
         click.echo(f'Successfully removed arrayset: {removed}')
     except (ValueError, KeyError, PermissionError) as e:
         raise click.ClickException(e)
@@ -493,7 +501,7 @@ def branch_remove(repo: Repository, name, force):
               help='the ip to start the server on. default is `localhost`')
 @click.option('--port', default='50051', show_default=True,
               help='port to start the server on. default in `50051`')
-@click.option('--timeout', default=60*60*24, required=False, show_default=True,
+@click.option('--timeout', default=60 * 60 * 24, required=False, show_default=True,
               help='time (in seconds) before server is stopped automatically')
 def server(overwrite, ip, port, timeout):
     """Start a hangar server, initializing one if does not exist.
@@ -537,11 +545,13 @@ def server(overwrite, ip, port, timeout):
 # ---------------------------- Import Exporters -------------------------------
 
 
-@main.command(name='import', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
+@main.command(name='import',
+              context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
 @click.argument('arrayset', required=True)
 @click.argument('path',
                 required=True,
-                type=click.Path(exists=True, dir_okay=True, file_okay=True, readable=True, resolve_path=True))
+                type=click.Path(exists=True, dir_okay=True, file_okay=True, readable=True,
+                                resolve_path=True))
 @click.option('--branch', default=None, help='branch to import data')
 @click.option('--plugin', default=None, help='override auto-infered plugin')
 @click.option('--overwrite', is_flag=True,
@@ -591,14 +601,16 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
         co.close()
 
 
-@main.command(name='export', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
+@main.command(name='export',
+              context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
 @click.argument('arrayset', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
 @click.option('-o', '--out', 'outdir',
               nargs=1,
               required=False,
               default=os.getcwd(),
-              type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True, resolve_path=True),
+              type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True,
+                              resolve_path=True),
               help="Directory to export data")
 @click.option('-s', '--sample',
               nargs=1,
@@ -667,7 +679,8 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
         co.close()
 
 
-@main.command(name='view', context_settings=dict(allow_extra_args=True, ignore_unknown_options=True,))
+@main.command(name='view',
+              context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
 @click.argument('arrayset', nargs=1, type=str, required=True)
 @click.argument('sample', nargs=1, type=StrOrIntType(), required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)

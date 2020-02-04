@@ -260,7 +260,7 @@ class TestMetadataConflicts(object):
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.metadata.remove('hello')
+        del co.metadata['hello']
         co.commit('this was the removal of the hello key on testbranch')
         co.close()
 
@@ -285,12 +285,12 @@ class TestMetadataConflicts(object):
     def test_no_conflict_both_remove(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.metadata.remove('hello')
+        del co.metadata['hello']
         co.commit('commit on master removing hellow')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.metadata.remove('hello')
+        del co.metadata['hello']
         co.commit('this was the removal of the hello key on testbranch')
         co.close()
 
@@ -406,7 +406,7 @@ class TestArraysetSampleConflicts(object):
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.arraysets['dummy'].remove('0')
+        del co.arraysets['dummy']['0']
         co.commit('commit on testbranch with removal')
         co.close()
 
@@ -416,13 +416,13 @@ class TestArraysetSampleConflicts(object):
     def test_no_conflict_both_removal(self, repo_2_br_no_conf):
         repo = repo_2_br_no_conf
         co = repo.checkout(write=True, branch='master')
-        co.arraysets['dummy'].remove('0')
+        del co.arraysets['dummy']['0']
         del co.arraysets['dummy'][21]
         co.commit('commit on master with removal')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.arraysets['dummy'].remove('0')
+        del co.arraysets['dummy']['0']
         del co.arraysets['dummy'][10]
         co.commit('commit on testbranch with removal')
         co.close()

@@ -11,7 +11,7 @@ funneled through the :function:`select_merge_algorithm` function
     creating new branches from the last "good" state, after which new merge
     operations can be attempted (if desired.)
 """
-import os
+from pathlib import Path
 
 import lmdb
 
@@ -22,7 +22,7 @@ from .records.commiting import (
     replace_staging_area_with_refs,
     commit_records,
 )
-from .records.hashs import clear_stage_hash_records, delete_in_process_data
+from .records.hashs import clear_stage_hash_records, backends_remove_in_process_data
 from .records.heads import (
     get_staging_branch_head,
     get_branch_head_commit,
@@ -40,7 +40,7 @@ def select_merge_algorithm(message: str,
                            stagehashenv: lmdb.Environment,
                            master_branch: str,
                            dev_branch: str,
-                           repo_path: str,
+                           repo_path: Path,
                            *,
                            writer_uuid: str = 'MERGE_PROCESS') -> str:
     """Entry point to perform a merge.
@@ -65,7 +65,7 @@ def select_merge_algorithm(message: str,
         name of the branch to serve as a merge master
     dev_branch : str
         name of the branch to use as the feature branch
-    repo_path: str
+    repo_path: Path
         path to the repository on disk
     writer_uuid : str, optional, kwarg only
         if the merge method is called from the repo level, the default writer
@@ -153,7 +153,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
                         stagehashenv: lmdb.Environment,
                         master_branch: str,
                         new_masterHEAD: str,
-                        repo_path: os.PathLike) -> str:
+                        repo_path: Path) -> str:
     """Update branch head pointer to perform a fast-forward merge.
 
     This method does not check that it is safe to do this operation, all
@@ -173,7 +173,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
         name of the merge_master branch which should be updated
     new_masterHEAD : str
         commit hash to update the master_branch name to point to.
-    repo_path: os.PathLike
+    repo_path: Path
         path to the repository on disk.
 
     Returns
@@ -190,7 +190,7 @@ def _fast_forward_merge(branchenv: lmdb.Environment,
             branchenv=branchenv, branch_name=master_branch, commit_hash=new_masterHEAD)
         set_staging_branch_head(branchenv=branchenv, branch_name=master_branch)
 
-        delete_in_process_data(repo_path=repo_path)
+        backends_remove_in_process_data(repo_path=repo_path)
         clear_stage_hash_records(stagehashenv=stagehashenv)
 
     except ValueError as e:
@@ -212,7 +212,7 @@ def _three_way_merge(message: str,
                      stageenv: lmdb.Environment,
                      refenv: lmdb.Environment,
                      stagehashenv: lmdb.Environment,
-                     repo_path: os.PathLike) -> str:
+                     repo_path: Path) -> str:
     """Merge strategy with diff/patch computed from changes since last common ancestor.
 
     Parameters
@@ -238,7 +238,7 @@ def _three_way_merge(message: str,
         db where the merge commit records are stored.
     stagehashenv: lmdb.Environment
         db where the staged hash records are stored
-    repo_path: os.PathLike
+    repo_path: Path
         path to the repository on disk.
 
     Returns
@@ -276,7 +276,7 @@ def _three_way_merge(message: str,
                 for kv in cur.iternext(keys=True, values=True):
                     dbcont.append(kv)
 
-    delete_in_process_data(repo_path=repo_path)
+    backends_remove_in_process_data(repo_path=repo_path)
     replace_staging_area_with_refs(stageenv=stageenv, sorted_content=dbcont)
 
     commit_hash = commit_records(

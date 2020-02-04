@@ -5,8 +5,8 @@ import pytest
     'dummy branch', 'origin/master', '\nmaster', '\\master', 'master\n'
     'master\r\n', 'master ', 1412, 'foo !', 'foo@', 'foo#', 'foo$', '(foo)',
     'VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'])
-def test_create_branch_fails_invalid_name(written_repo, name):
-    repo = written_repo
+def test_create_branch_fails_invalid_name(aset_samples_initialized_repo, name):
+    repo = aset_samples_initialized_repo
     with pytest.raises(ValueError):
         repo.create_branch(name)
 
@@ -33,26 +33,26 @@ def test_can_create_new_branch_from_repo_with_one_commit(repo):
     assert branchRes.digest == expected_digest
 
 
-def test_cannot_duplicate_branch_name(written_repo):
-    written_repo.create_branch('testbranch')
+def test_cannot_duplicate_branch_name(aset_samples_initialized_repo):
+    aset_samples_initialized_repo.create_branch('testbranch')
     with pytest.raises(ValueError):
-        written_repo.create_branch('testbranch')
+        aset_samples_initialized_repo.create_branch('testbranch')
 
 
-def test_create_multiple_branches_different_name_same_commit(written_repo):
-    b1 = written_repo.create_branch('testbranch1')
-    b2 = written_repo.create_branch('testbranch2')
-    b3 = written_repo.create_branch('testbranch3')
+def test_create_multiple_branches_different_name_same_commit(aset_samples_initialized_repo):
+    b1 = aset_samples_initialized_repo.create_branch('testbranch1')
+    b2 = aset_samples_initialized_repo.create_branch('testbranch2')
+    b3 = aset_samples_initialized_repo.create_branch('testbranch3')
 
     assert b1.digest == b2.digest
     assert b2.digest == b3.digest
     assert b3.digest == b1.digest
-    assert written_repo.list_branches() == ['master', 'testbranch1', 'testbranch2', 'testbranch3']
+    assert aset_samples_initialized_repo.list_branches() == ['master', 'testbranch1', 'testbranch2', 'testbranch3']
 
 
-def test_create_branch_by_specifying_base_commit(written_repo):
+def test_create_branch_by_specifying_base_commit(aset_samples_initialized_repo):
 
-    repo = written_repo
+    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     first_digest = co.commit_hash
     co.metadata['foo'] = 'bar'
@@ -75,8 +75,8 @@ def test_create_branch_by_specifying_base_commit(written_repo):
     co.close()
 
 
-def test_remove_branch_works_when_commits_align(written_repo):
-    repo = written_repo
+def test_remove_branch_works_when_commits_align(aset_samples_initialized_repo):
+    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'
     masterHEAD = co.commit('second')
@@ -91,8 +91,8 @@ def test_remove_branch_works_when_commits_align(written_repo):
     assert repo.list_branches() == ['master']
 
 
-def test_delete_branch_raises_runtime_error_when_history_not_merged(written_repo):
-    repo = written_repo
+def test_delete_branch_raises_runtime_error_when_history_not_merged(aset_samples_initialized_repo):
+    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'
     masterHEAD = co.commit('second')
@@ -113,8 +113,8 @@ def test_delete_branch_raises_runtime_error_when_history_not_merged(written_repo
         repo.remove_branch('testdelete')
 
 
-def test_delete_branch_completes_when_history_not_merged_but_force_option_set(written_repo):
-    repo = written_repo
+def test_delete_branch_completes_when_history_not_merged_but_force_option_set(aset_samples_initialized_repo):
+    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'
     masterHEAD = co.commit('second')
@@ -137,8 +137,8 @@ def test_delete_branch_completes_when_history_not_merged_but_force_option_set(wr
     assert repo.list_branches() == ['master']
 
 
-def test_delete_branch_raises_value_error_if_invalid_branch_name(written_repo):
-    repo = written_repo
+def test_delete_branch_raises_value_error_if_invalid_branch_name(aset_samples_initialized_repo):
+    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'
     masterHEAD = co.commit('second')
@@ -157,8 +157,8 @@ def test_delete_branch_raises_value_error_if_invalid_branch_name(written_repo):
         repo.remove_branch('origin/master')
 
 
-def test_delete_branch_raises_permission_error_if_writer_lock_held(written_repo):
-    repo = written_repo
+def test_delete_branch_raises_permission_error_if_writer_lock_held(aset_samples_initialized_repo):
+    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'
     masterHEAD = co.commit('second')
@@ -178,8 +178,8 @@ def test_delete_branch_raises_permission_error_if_writer_lock_held(written_repo)
     co.close()
 
 
-def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_head(written_repo):
-    repo = written_repo
+def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_head(aset_samples_initialized_repo):
+    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'
     masterHEAD = co.commit('second')
@@ -196,8 +196,9 @@ def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_he
     assert repo.list_branches() == ['master', 'testdelete']
 
 
-def test_delete_branch_raises_permission_error_if_only_one_branch_left(written_repo):
-    repo = written_repo
+def test_delete_branch_raises_permission_error_if_only_one_branch_left(
+    aset_samples_initialized_repo):
+    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
     co.metadata['foo'] = 'bar'
     masterHEAD = co.commit('second')

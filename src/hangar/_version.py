@@ -15,20 +15,22 @@ URL:     https://github.com/pypa/packaging/blob/6a09d4015b/LICENSE
          https://github.com/pypa/packaging/blob/6a09d4015b/LICENSE.APACHE
          https://github.com/pypa/packaging/blob/6a09d4015b/LICENSE.BSD
 """
-import collections
-import itertools
 import re
+from collections import namedtuple
+from itertools import dropwhile
 from typing import Callable, Optional, SupportsInt, Tuple, Union
 
 __all__ = ["parse", "Version", "InvalidVersion", "VERSION_PATTERN"]
 
 
-_Version = collections.namedtuple(
+_Version = namedtuple(
     "_Version", ["epoch", "release", "dev", "pre", "post", "local"]
 )
 
 
 class InfinityType(object):
+    __slots__ = ()
+
     def __repr__(self) -> str:
         return "Infinity"
 
@@ -61,6 +63,8 @@ Infinity = InfinityType()
 
 
 class NegativeInfinityType(object):
+    __slots__ = ()
+
     def __repr__(self) -> str:
         return "-Infinity"
 
@@ -128,10 +132,15 @@ class InvalidVersion(ValueError):
     """
     An invalid version was found, users should refer to PEP 440.
     """
+    __slots__ = ()
 
 
 class _BaseVersion(object):
-    _key: CmpKey = None
+
+    __slots__ = ('_key',)
+
+    def __init__(self):
+        self._key: CmpKey = None
 
     def __hash__(self) -> int:
         return hash(self._key)
@@ -195,15 +204,18 @@ VERSION_PATTERN = r"""
     (?:\+(?P<local>[a-z0-9]+(?:[-_\.][a-z0-9]+)*))?       # local version
 """
 
+_REGEX = re.compile(r"^\s*" + VERSION_PATTERN + r"\s*$", re.VERBOSE | re.IGNORECASE)
+
 
 class Version(_BaseVersion):  # lgtm [py/missing-equals]
 
-    _regex = re.compile(r"^\s*" + VERSION_PATTERN + r"\s*$", re.VERBOSE | re.IGNORECASE)
+    __slots__ = ('_version',)
 
     def __init__(self, version: str) -> None:
-
+        super().__init__()
+        
         # Validate the version and parse it into pieces
-        match = self._regex.search(version)
+        match = _REGEX.search(version)
         if not match:
             raise InvalidVersion("Invalid version: '{0}'".format(version))
 
@@ -399,7 +411,7 @@ def _cmpkey(
     # re-reverse it back into the correct order and make it a tuple and use
     # that for our sorting key.
     _release = tuple(
-        reversed(list(itertools.dropwhile(lambda x: x == 0, reversed(release))))
+        reversed(list(dropwhile(lambda x: x == 0, reversed(release))))
     )
 
     # We need to "trick" the sorting algorithm to put 1.0.dev0 before 1.0a0.
