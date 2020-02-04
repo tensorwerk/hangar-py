@@ -91,13 +91,15 @@ from .hdf5_00 import HDF5_00_FileHandles
 from .hdf5_01 import HDF5_01_FileHandles
 from .numpy_10 import NUMPY_10_FileHandles
 from .remote_50 import REMOTE_50_Handler
+from .lmdb_30 import LMDB_30_FileHandles
 
 
 # ------------------------ Accessor Types and Mapping -------------------------
 
 
 _BeAccessors = Union[HDF5_00_FileHandles, HDF5_01_FileHandles,
-                     NUMPY_10_FileHandles, REMOTE_50_Handler]
+                     NUMPY_10_FileHandles, LMDB_30_FileHandles,
+                     REMOTE_50_Handler]
 AccessorMapType = Dict[str, Union[_BeAccessors, None]]
 
 BACKEND_ACCESSOR_MAP: AccessorMapType = {
@@ -106,6 +108,7 @@ BACKEND_ACCESSOR_MAP: AccessorMapType = {
     '01': HDF5_01_FileHandles,
     '10': NUMPY_10_FileHandles,
     '20': None,               # tiledb_20 - Reserved
+    '30': LMDB_30_FileHandles,
     # REMOTES -> [50:100]
     '50': REMOTE_50_Handler,
     '60': None,               # url_60 - Reserved
