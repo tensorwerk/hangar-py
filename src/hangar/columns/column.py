@@ -6,7 +6,7 @@ import lmdb
 import numpy as np
 
 from .constructors import ArraysetConstructors
-from ..backends import parse_user_backend_opts
+from ..backends import parse_user_backend_opts, BACKEND_OPTIONS_MAP, BACKEND_CAPABILITIES_MAP
 from ..txnctx import TxnRegister
 from ..records.hashmachine import schema_hash_digest
 from ..records.parsing import (
@@ -369,6 +369,8 @@ class Columns(metaclass=ArraysetConstructors):
                 raise ValueError(f'contains_subsamples argument must be bool, '
                                  f'not type {type(contains_subsamples)}')
 
+            option_definition = BACKEND_OPTIONS_MAP['30']
+            option_definition
 
         except (ValueError, LookupError) as e:
             raise e from None

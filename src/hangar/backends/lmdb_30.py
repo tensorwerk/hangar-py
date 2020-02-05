@@ -51,7 +51,7 @@ def lmdb_30_encode(uid, row_idx, checksum):
 
 class LMDB_30_Capabilities:
 
-    _allowed_dtypes = [str]
+    _allowed_dtypes = ['str']
     _init_requires = ['repo_path']
 
     def __init__(self):
@@ -64,12 +64,20 @@ class LMDB_30_Capabilities:
     @property
     def allowed(self):
         return {
-            'dtypes': self.allowed_dtypes
+            'dtype': self.allowed_dtypes
         }
 
     @property
     def init_requires(self):
         return self._init_requires
+
+    def isvalid(self, dtype):
+        return dtype in self._allowed_dtypes
+
+    def specifier(self, dtype):
+        if not self.isvalid(dtype):
+            raise ValueError(dtype)
+        return {'dtype': dtype}
 
 
 class LMDB_30_Options:
@@ -107,6 +115,11 @@ class LMDB_30_Options:
                 return False
 
         return True
+
+    def specifier(self, options):
+        if not self.isvalid(options):
+            raise ValueError(options)
+        return {'backend_options': options}
 
 
 class LMDB_30_FileHandles:

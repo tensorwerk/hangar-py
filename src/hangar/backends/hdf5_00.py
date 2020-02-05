@@ -238,10 +238,10 @@ def hdf5_00_encode(uid: str, cksum: str, dset: int, dset_idx: int, shape: Tuple[
 class HDF5_00_Capabilities:
 
     _allowed_dtypes = [
-        np.uint8, np.uint16, np.uint32, np.uint64,
-        np.int8, np.int16, np.int32, np.int64,
-        np.float16, np.float32, np.float64, np.float128,
-        np.bool
+        np.dtype(item) for item in [
+            np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
+            np.int8, np.int16, np.int32, np.int64,
+            np.float16, np.float32, np.float64, np.float128]
     ]
     _allowed_order = ['C']
     _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
@@ -285,41 +285,42 @@ class HDF5_00_Options:
         'shuffle': [True, False, None, 'none', 'byte', 'bit'],
     }
 
+    _required_if_set = {
+        'complib': {
+            'blosc:blosclz': ('complevel', [*(i for i in range(10)), 'none', None]),
+            'blosc:lz4': ('complevel', [*(i for i in range(10)), 'none', None]),
+            'blosc:lz4hc': ('complevel', [*(i for i in range(10)), 'none', None]),
+            'blosc:zlib': ('complevel', [*(i for i in range(10)), 'none', None]),
+            'blosc:zstd': ('complevel', [*(i for i in range(10)), 'none', None]),
+            'gzip': ('complevel', [*(i for i in range(10)), 'none', None]),
+        },
+        'complevel': {
+            i: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+                            'blosc:zlib', 'blosc:zstd', 'gzip']) for i in range(10)
+        },
+        'shuffle': {
+            'bit': ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+                                'blosc:zlib', 'blosc:zstd']),
+            'byte': ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+                                 'blosc:zlib', 'blosc:zstd']),
+            True: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+                               'blosc:zlib', 'blosc:zstd', 'gzip', 'lzf']),
+            False: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+                                'blosc:zlib', 'blosc:zstd', 'gzip', 'lzf']),
+        },
+    }
+
+    _invalid_if_set = {
+        'complib': {
+            'none': [('shuffle', [True, False, 'bit', 'byte']),
+                     ('complevel', [i for i in range(10)])],
+            None: [('shuffle', [True, False, 'bit', 'byte']),
+                   ('complevel', [i for i in range(10)])],
+        },
+    }
+
     def __init__(self):
-
-        self._required_if_set = {
-            'complib': {
-                'blosc:blosclz': ('complevel', [*(i for i in range(10)), 'none', None]),
-                'blosc:lz4': ('complevel', [*(i for i in range(10)), 'none', None]),
-                'blosc:lz4hc': ('complevel', [*(i for i in range(10)), 'none', None]),
-                'blosc:zlib': ('complevel', [*(i for i in range(10)), 'none', None]),
-                'blosc:zstd': ('complevel', [*(i for i in range(10)), 'none', None]),
-                'gzip': ('complevel', [*(i for i in range(10)), 'none', None]),
-            },
-            'complevel': {
-                i: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                                'blosc:zlib', 'blosc:zstd', 'gzip']) for i in range(10)
-            },
-            'shuffle': {
-                'bit': ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                                    'blosc:zlib', 'blosc:zstd']),
-                'byte': ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                                     'blosc:zlib', 'blosc:zstd']),
-                True: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                                   'blosc:zlib', 'blosc:zstd', 'gzip', 'lzf']),
-                False: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                                    'blosc:zlib', 'blosc:zstd', 'gzip', 'lzf']),
-            },
-        }
-
-        self._invalid_if_set = {
-            'complib': {
-                'none': [('shuffle', [True, False, 'bit', 'byte']),
-                         ('complevel', [i for i in range(10)])],
-                None: [('shuffle', [True, False, 'bit', 'byte']),
-                       ('complevel', [i for i in range(10)])],
-            },
-        }
+        pass
 
     @property
     def fields(self):
