@@ -89,7 +89,7 @@ from xxhash import xxh64_hexdigest
 from . import NUMPY_10_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import reader_checkout_only, writer_checkout_only
-from ..utils import random_string
+from ..utils import random_string, valfilter
 
 # ----------------------------- Configuration ---------------------------------
 
@@ -127,6 +127,77 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
 
 
 # ------------------------- Accessor Object -----------------------------------
+
+
+class NUMPY_10_Capabilities:
+
+    _allowed_dtypes = [
+        np.uint8, np.uint16, np.uint32, np.uint64,
+        np.int8, np.int16, np.int32, np.int64,
+        np.float16, np.float32, np.float64, np.float128,
+        np.bool
+    ]
+    _allowed_order = ['C']
+    _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
+
+    def __init__(self):
+        pass
+
+    @property
+    def allowed_dtypes(self):
+        return self._allowed_dtypes
+
+    @property
+    def allowed_order(self):
+        return self._allowed_order
+
+    @property
+    def allowed(self):
+        return {
+            'dtypes': self.allowed_dtypes,
+            'order': self.allowed_order,
+        }
+
+    @property
+    def init_requires(self):
+        return self._init_requires
+
+
+class NUMPY_10_Options:
+
+    _fields_and_required = {}
+    _permitted_values = {}
+
+    def __init__(self):
+        pass
+
+    @property
+    def fields(self):
+        return list(self._fields_and_required.keys())
+
+    @property
+    def required_fields(self):
+        return list(valfilter(bool, self._fields_and_required).keys())
+
+    @property
+    def default(self):
+        return {}
+
+    def isvalid(self, options):
+        if not isinstance(options, dict):
+            return False
+
+        for field in self.required_fields:
+            if field not in options:
+                return False
+
+        for opt, val in options.items():
+            if opt not in self._fields_and_required:
+                return False
+            if val not in self._permitted_values[opt]:
+                return False
+
+        return True
 
 
 class NUMPY_10_FileHandles(object):

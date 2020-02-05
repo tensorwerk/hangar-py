@@ -84,15 +84,15 @@ reaching out to the Hangar core development team so we can guide you through the
 process.
 """
 import string
-from typing import Dict, Union, NamedTuple, Optional
+from typing import Union, NamedTuple, Optional, Dict
 
 import numpy as np
 
-from .hdf5_00 import HDF5_00_FileHandles
-from .hdf5_01 import HDF5_01_FileHandles
-from .numpy_10 import NUMPY_10_FileHandles
-from .remote_50 import REMOTE_50_Handler
-from .lmdb_30 import LMDB_30_FileHandles
+from .hdf5_00 import HDF5_00_FileHandles, HDF5_00_Options, HDF5_00_Capabilities
+from .hdf5_01 import HDF5_01_FileHandles, HDF5_01_Options, HDF5_01_Capabilities
+from .numpy_10 import NUMPY_10_FileHandles, NUMPY_10_Options, NUMPY_10_Capabilities
+from .remote_50 import REMOTE_50_Handler, REMOTE_50_Options, REMOTE_50_Capabilities
+from .lmdb_30 import LMDB_30_FileHandles, LMDB_30_Options, LMDB_30_Capabilities
 
 
 # ------------------------ Accessor Types and Mapping -------------------------
@@ -101,18 +101,33 @@ from .lmdb_30 import LMDB_30_FileHandles
 _BeAccessors = Union[HDF5_00_FileHandles, HDF5_01_FileHandles,
                      NUMPY_10_FileHandles, LMDB_30_FileHandles,
                      REMOTE_50_Handler]
-AccessorMapType = Dict[str, Union[_BeAccessors, None]]
+AccessorMapType = Dict[str, _BeAccessors]
 
-BACKEND_ACCESSOR_MAP: AccessorMapType = {
-    # LOCALS -> [0:50]
+# Reserved Backend Codes: ['20', '60'] for ['tiledb_20', 'url_60']
+BACKEND_ACCESSOR_MAP = {
+    # LOCALS -> [00:50] + ['aa':'zz']
     '00': HDF5_00_FileHandles,
     '01': HDF5_01_FileHandles,
     '10': NUMPY_10_FileHandles,
-    '20': None,               # tiledb_20 - Reserved
     '30': LMDB_30_FileHandles,
-    # REMOTES -> [50:100]
+    # REMOTES -> [50:99] + ['AA':'ZZ']
     '50': REMOTE_50_Handler,
-    '60': None,               # url_60 - Reserved
+}
+
+BACKEND_OPTIONS_MAP = {
+    '00': HDF5_00_Options,
+    '01': HDF5_01_Options,
+    '10': NUMPY_10_Options,
+    '30': LMDB_30_Options,
+    '50': REMOTE_50_Options,
+}
+
+BACKEND_CAPABILITIES_MAP = {
+    '00': HDF5_00_Capabilities,
+    '01': HDF5_01_Capabilities,
+    '10': NUMPY_10_Capabilities,
+    '30': LMDB_30_Capabilities,
+    '50': REMOTE_50_Capabilities,
 }
 
 _local_prefixes = string.digits[0:5] + string.ascii_lowercase
@@ -218,14 +233,14 @@ def backend_opts_from_heuristics(backend: str,
         import h5py
         stdopts = {
             'default': {
-                'shuffle': 'byte',
                 'complib': 'blosc:lz4hc',
                 'complevel': 5,
+                'shuffle': 'byte',
             },
             'backup': {
-                'shuffle': 'byte',
                 'complib': 'lzf',
                 'complevel': None,
+                'shuffle': 'byte',
             },
         }
         hdf5BloscAvail = h5py.h5z.filter_avail(32001)

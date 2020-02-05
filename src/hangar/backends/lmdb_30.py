@@ -13,7 +13,7 @@ import lmdb
 
 from . import LMDB_30_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
-from ..utils import random_string
+from ..utils import random_string, valfilter
 from ..op_state import reader_checkout_only, writer_checkout_only
 
 
@@ -27,12 +27,7 @@ LMDB_SETTINGS = {
 _FmtCode = '30'
 
 
-def lmdb_30_encode(uid, row_idx, checksum):
-    res = f'{_FmtCode}:{uid}:{row_idx}:{checksum}'
-    return res.encode()
-
-
-def lexicographic_keys():
+def _lexicographic_keys():
     lexicographic_ids = ''.join([
         string.digits,
         string.ascii_uppercase,
@@ -47,6 +42,71 @@ def lexicographic_keys():
     for perm in p:
         res = ''.join(perm)
         yield res
+
+
+def lmdb_30_encode(uid, row_idx, checksum):
+    res = f'{_FmtCode}:{uid}:{row_idx}:{checksum}'
+    return res.encode()
+
+
+class LMDB_30_Capabilities:
+
+    _allowed_dtypes = [str]
+    _init_requires = ['repo_path']
+
+    def __init__(self):
+        pass
+
+    @property
+    def allowed_dtypes(self):
+        return self._allowed_dtypes
+
+    @property
+    def allowed(self):
+        return {
+            'dtypes': self.allowed_dtypes
+        }
+
+    @property
+    def init_requires(self):
+        return self._init_requires
+
+
+class LMDB_30_Options:
+
+    _fields_and_required = {}
+    _permitted_values = {}
+
+    def __init__(self):
+        pass
+
+    @property
+    def fields(self):
+        return list(self._fields_and_required.keys())
+
+    @property
+    def required_fields(self):
+        return list(valfilter(bool, self._fields_and_required).keys())
+
+    @property
+    def default(self):
+        return {}
+
+    def isvalid(self, options):
+        if not isinstance(options, dict):
+            return False
+
+        for field in self.required_fields:
+            if field not in options:
+                return False
+
+        for opt, val in options.items():
+            if opt not in self._fields_and_required:
+                return False
+            if val not in self._permitted_values[opt]:
+                return False
+
+        return True
 
 
 class LMDB_30_FileHandles:
@@ -213,7 +273,7 @@ class LMDB_30_FileHandles:
         self.wFp[uid] = lmdb.open(str(db_dir_path), **LMDB_SETTINGS)
 
         self.w_uid = uid
-        self.row_idx = lexicographic_keys()
+        self.row_idx = _lexicographic_keys()
 
         process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
         Path(process_dir, f'{uid}.lmdbdir').touch()
@@ -287,7 +347,6 @@ class LMDB_30_FileHandles:
             return self.write_data(data, remote_operation=remote_operation)
 
         encoded_row_idx = row_idx.encode()
-
         try:
             with self.wFp[self.w_uid].begin(write=True) as txn:
                 txn.put(encoded_row_idx, encoded_data, append=True)

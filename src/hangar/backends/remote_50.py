@@ -61,6 +61,7 @@ import numpy as np
 
 from . import REMOTE_50_DataHashSpec
 from ..op_state import writer_checkout_only, reader_checkout_only
+from ..utils import valfilter
 
 # -------------------------------- Parser Implementation ----------------------
 
@@ -81,14 +82,65 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
 # ------------------------- Accessor Object -----------------------------------
 
 
+class REMOTE_50_Capabilities:
+
+    _init_requires = ['repo_path']
+
+    def __init__(self):
+        pass
+
+    @property
+    def allowed(self):
+        return {}
+
+    @property
+    def init_requires(self):
+        return self._init_requires
+
+
+class REMOTE_50_Options:
+
+    _fields_and_required = {}
+    _permitted_values = {}
+
+    def __init__(self):
+        pass
+
+    @property
+    def fields(self):
+        return list(self._fields_and_required.keys())
+
+    @property
+    def required_fields(self):
+        return list(valfilter(bool, self._fields_and_required).keys())
+
+    @property
+    def default(self):
+        return {}
+
+    def isvalid(self, options):
+        if not isinstance(options, dict):
+            return False
+
+        for field in self.required_fields:
+            if field not in options:
+                return False
+
+        for opt, val in options.items():
+            if opt not in self._fields_and_required:
+                return False
+            if val not in self._permitted_values[opt]:
+                return False
+
+        return True
+
+
 class REMOTE_50_Handler(object):
 
-    def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: Path, *args, **kwargs):
         self.repo_path = repo_path
-        self.schema_shape = schema_shape
-        self.schema_dtype = schema_dtype
         self._dflt_backend_opts: Optional[dict] = None
-        self.mode: Optional[str] = None
+        self._mode: Optional[str] = None
 
     def __enter__(self):
         return self
@@ -108,7 +160,7 @@ class REMOTE_50_Handler(object):
         """ensure multiprocess operations can pickle relevant data.
         """
         self.__dict__.update(state)
-        self.open(mode=self.mode)
+        self.open(mode=self._mode)
 
     @property
     def backend_opts(self):
@@ -138,7 +190,7 @@ class REMOTE_50_Handler(object):
         return self._backend_opts_set(value)
 
     def open(self, mode, *args, **kwargs):
-        self.mode = mode
+        self._mode = mode
         return
 
     def close(self, *args, **kwargs):
