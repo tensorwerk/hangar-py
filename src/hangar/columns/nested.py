@@ -11,7 +11,7 @@ from typing import (
 
 import numpy as np
 
-from .constructor_nested import NestedSampleBuilder
+from .constructors import NestedSampleBuilder
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 from ..backends import (
@@ -47,6 +47,7 @@ class CompatibleArray(NamedTuple):
     compatible: bool
     reason: str
 
+
 class FlatSubsample(object):
 
     __slots__ = ('_asetn', '_stack', '_be_fs', '_mode',
@@ -58,7 +59,7 @@ class FlatSubsample(object):
                  be_handles: BACKEND_ACCESSOR_MAP,
                  specs: Dict[KeyType, DataHashSpecsType],
                  mode: str,
-                 aset_txn_ctx: Optional[AsetTxnType] = None,
+                 aset_ctx: Optional[AsetTxnType] = None,
                  *args, **kwargs):
 
         self._asetn = asetn
@@ -67,7 +68,7 @@ class FlatSubsample(object):
         self._subsamples = specs
         self._mode = mode
         self._stack: Optional[ExitStack] = None
-        self._txnctx = aset_txn_ctx
+        self._txnctx = aset_ctx
 
     @property
     def _debug_(self):  # pragma: no cover
@@ -674,7 +675,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
                  schema_spec: RawArraysetSchemaVal,
                  repo_path: Path,
                  mode: str,
-                 aset_txn_ctx: Optional[AsetTxnType] = None,
+                 aset_ctx: Optional[AsetTxnType] = None,
                  *args, **kwargs):
 
         self._mode = mode
@@ -683,7 +684,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         self._be_fs = backend_handles
         self._path = repo_path
         self._stack: Optional[ExitStack] = None
-        self._txnctx = aset_txn_ctx
+        self._txnctx = aset_ctx
 
         self._schema_spec = schema_spec
         self._schema_variable = schema_spec.schema_is_var
@@ -1136,7 +1137,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
             self._samples[key].update(value)
         else:
             self._samples[key] = FlatSubsample(
-                aset_txn_ctx=proxy(self._txnctx),
+                aset_ctx=proxy(self._txnctx),
                 asetn=self._asetn,
                 samplen=key,
                 be_handles=proxy(self._be_fs),

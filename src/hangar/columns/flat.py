@@ -5,14 +5,15 @@ containing a single level key/value mapping from names/ids to data.
 
 All backends are supported.
 """
-
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Type, Optional, Any
+from typing import (
+    Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Type, Optional, Any
+)
 
 import numpy as np
 
-from .constructor_flat import FlatSampleBuilder
+from .constructors import FlatSampleBuilder
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..backends import (
@@ -88,7 +89,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
                  schema_spec: RawArraysetSchemaVal,
                  repo_path: Path,
                  mode: str,
-                 aset_txn_ctx: Optional[AsetTxnType] = None,
+                 aset_ctx: Optional[AsetTxnType] = None,
                  *args, **kwargs):
 
         self._stack: Optional[ExitStack] = None
@@ -107,7 +108,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         self._dflt_backend_opts = schema_spec.schema_default_backend_opts
         self._contains_subsamples = schema_spec.schema_contains_subsamples
 
-        self._txnctx = aset_txn_ctx
+        self._txnctx = aset_ctx
         self._enter_count = 0
 
     @property

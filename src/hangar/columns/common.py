@@ -1,11 +1,8 @@
-from pathlib import Path
 from contextlib import contextmanager
-from typing import Optional, Tuple, NamedTuple, Collection
+from typing import Optional
 
 import lmdb
-import numpy as np
 
-from ..backends import BACKEND_ACCESSOR_MAP, AccessorMapType
 from ..txnctx import TxnRegister
 
 
@@ -99,53 +96,3 @@ class AsetTxn(object):
             self.close_write()
 
 
-def _open_file_handles(used_backends: Collection[str],
-                       path: Path,
-                       shape: Tuple[int],
-                       dtype: np.dtype,
-                       mode: str) -> AccessorMapType:
-    """Open backend accessor file handles for reading
-
-    Parameters
-    ----------
-    used_backends : Optional[Sequence[str]]
-        backend format codes which should be opened, if ``mode == 'a'``,
-        then this argument can be set to an empty list and all available
-        backends will be prepared for writing in the column.
-    path : Path
-        path to the hangar repository on disk
-    shape : Tuple[int]
-        maximum shape contained data can be sized to; as defined in the
-        arrayset schema
-    dtype : np.dtype
-        data type of the arrays stored in the backend
-    mode : str
-        one of ['r', 'a'] indicating read or write mode to open backends in.
-
-    Returns
-    -------
-    AccessorMapType
-        dict mapping backend format codes to initialized instances of each
-        read-only backend.
-    """
-    fhandles = {}
-    for be, accessor in BACKEND_ACCESSOR_MAP.items():
-        if (be in used_backends) or (mode == 'a'):
-            if accessor is None:
-                continue
-            fhandles[be] = accessor(repo_path=path, schema_shape=shape, schema_dtype=dtype)
-            fhandles[be].open(mode=mode)
-    return fhandles
-
-
-class UsedBackendInfo(NamedTuple):
-    """Describe backends used in a column.
-
-    backends: Collection[str]
-        unique backend (format codes) used to store data in column.
-
-    islocal: bool
-        indicate if all backend data exists on local machine.
-    """
-    backends: Collection[str]
-    islocal: bool

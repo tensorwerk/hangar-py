@@ -5,6 +5,7 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 import lmdb
 import numpy as np
 
+from .constructors import ArraysetConstructors
 from ..backends import parse_user_backend_opts
 from ..txnctx import TxnRegister
 from ..records.hashmachine import schema_hash_digest
@@ -15,111 +16,11 @@ from ..records.parsing import (
     arrayset_record_schema_raw_val_from_db_val,
     hash_schema_db_key_from_raw_key
 )
-from ..records.queries import RecordQuery
 from ..op_state import writer_checkout_only
 from ..utils import is_suitable_user_key, is_ascii
 from . import AsetTxn, ModifierTypes, FlatSample, NestedSample
 
 KeyType = Union[str, int]
-
-
-class ArraysetConstructors(type):
-    """Metaclass defining constructor methods for Arraysets object.
-
-    Rather than using @classmethod decorator, we use a metaclass so that the
-    instances of the Arrayset class do not have the constructors accessible as
-    a bound method. This is important because Arrayset class instances are user
-    facing; the ability to construct a new object modifying or accessing repo
-    state/data should never be available.
-    """
-
-    def _from_staging_area(cls, repo_pth: Path, hashenv: lmdb.Environment,
-                           stageenv: lmdb.Environment,
-                           stagehashenv: lmdb.Environment):
-        """Class method factory to checkout :class:`Arraysets` in write mode
-
-        Once you get here, we assume the write lock verification has
-        passed, and that write operations are safe to perform.
-
-        Parameters
-        ----------
-        repo_pth : Path
-            directory path to the hangar repository on disk
-        hashenv : lmdb.Environment
-            environment where tensor data hash records are open in write mode.
-        stageenv : lmdb.Environment
-            environment where staging records (dataenv) are opened in write mode.
-        stagehashenv: lmdb.Environment
-            environment where the staged hash records are stored in write mode
-
-        Returns
-        -------
-        :class:`.Arraysets`
-            Interface class with write-enabled attributes activate which contains
-            live arrayset data accessors in `write` mode.
-        """
-
-        arraysets = {}
-        txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
-        query = RecordQuery(stageenv)
-        stagedSchemaSpecs = query.schema_specs()
-        for asetName, schemaSpec in stagedSchemaSpecs.items():
-            if schemaSpec.schema_contains_subsamples:
-                column = NestedSample._generate_writer(txnctx=txnctx,
-                                                       aset_name=asetName,
-                                                       path=repo_pth,
-                                                       schema_specs=schemaSpec)
-            else:
-                column = FlatSample._generate_writer(txnctx=txnctx,
-                                                     aset_name=asetName,
-                                                     path=repo_pth,
-                                                     schema_specs=schemaSpec)
-            arraysets[asetName] = column
-
-        return cls('a', repo_pth, arraysets, hashenv, stageenv, stagehashenv, txnctx)
-
-    def _from_commit(cls, repo_pth: Path, hashenv: lmdb.Environment,
-                     cmtrefenv: lmdb.Environment):
-        """Class method factory to checkout :class:`.Arraysets` in read-only mode
-
-        For read mode, no locks need to be verified, but construction should
-        occur through this interface only.
-
-        Parameters
-        ----------
-        repo_pth : Path
-            directory path to the hangar repository on disk
-        hashenv : lmdb.Environment
-            environment where tensor data hash records are open in read-only mode.
-        cmtrefenv : lmdb.Environment
-            environment where staging checkout records are opened in read-only mode.
-
-        Returns
-        -------
-        :class:`.Arraysets`
-            Interface class with write-enabled attributes deactivated which
-            contains live arrayset data accessors in `read-only` mode.
-        """
-        arraysets = {}
-        txnctx = AsetTxn(cmtrefenv, hashenv, None)
-        query = RecordQuery(cmtrefenv)
-        cmtSchemaSpecs = query.schema_specs()
-
-        for asetName, schemaSpec in cmtSchemaSpecs.items():
-            if schemaSpec.schema_contains_subsamples:
-                column = NestedSample._generate_reader(txnctx=txnctx,
-                                                       aset_name=asetName,
-                                                       path=repo_pth,
-                                                       schema_specs=schemaSpec)
-            else:
-                column = FlatSample._generate_reader(txnctx=txnctx,
-                                                     aset_name=asetName,
-                                                     path=repo_pth,
-                                                     schema_specs=schemaSpec)
-            arraysets[asetName] = column
-
-        return cls('r', repo_pth, arraysets, None, None, None, None)
-
 
 """
 Constructor and Interaction Class for Arraysets
@@ -604,13 +505,13 @@ class Arraysets(metaclass=ArraysetConstructors):
                 txnctx=self._txnctx,
                 aset_name=name,
                 path=self._repo_pth,
-                schema_specs=schemaSpec)
+                schema_spec=schemaSpec)
         else:
             setup_args = FlatSample._generate_writer(
                 txnctx=self._txnctx,
                 aset_name=name,
                 path=self._repo_pth,
-                schema_specs=schemaSpec)
+                schema_spec=schemaSpec)
         self._arraysets[name] = setup_args
         return self.get(name)
 
