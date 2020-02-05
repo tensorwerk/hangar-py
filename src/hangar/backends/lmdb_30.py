@@ -14,7 +14,7 @@ import lmdb
 from . import LMDB_30_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..utils import random_string
-from ..op_state import reader_checkout_only
+from ..op_state import reader_checkout_only, writer_checkout_only
 
 
 LMDB_SETTINGS = {
@@ -32,7 +32,7 @@ def lmdb_30_encode(uid, row_idx, checksum):
     return res.encode()
 
 
-def generate():
+def lexicographic_keys():
     lexicographic_ids = ''.join([
         string.digits,
         string.ascii_uppercase,
@@ -51,7 +51,7 @@ def generate():
 
 class LMDB_30_FileHandles:
 
-    def __init__(self, repo_path: Path):
+    def __init__(self, repo_path: Path, *args, **kwargs):
 
         self.path: Path = repo_path
 
@@ -62,6 +62,7 @@ class LMDB_30_FileHandles:
         self.mode: Optional[str] = None
         self.w_uid: Optional[str] = None
         self.row_idx: Optional[str] = None
+        self._dflt_backend_opts: Optional[dict] = None
 
         self.STAGEDIR: Path = Path(self.path, DIR_DATA_STAGE, _FmtCode)
         self.REMOTEDIR: Path = Path(self.path, DIR_DATA_REMOTE, _FmtCode)
@@ -93,6 +94,33 @@ class LMDB_30_FileHandles:
         self.rFp = {}
         self.wFp = {}
         self.Fp = ChainMap(self.rFp, self.wFp)
+
+    @property
+    def backend_opts(self):
+        return self._dflt_backend_opts
+
+    @writer_checkout_only
+    def _backend_opts_set(self, val):
+        """Nonstandard descriptor method. See notes in ``backend_opts.setter``.
+        """
+        self._dflt_backend_opts = val
+        return
+
+    @backend_opts.setter
+    def backend_opts(self, value):
+        """
+        Using seperate setter method (with ``@writer_checkout_only`` decorator
+        applied) due to bug in python <3.8.
+
+        From: https://bugs.python.org/issue19072
+            > The classmethod decorator when applied to a function of a class,
+            > does not honour the descriptor binding protocol for whatever it
+            > wraps. This means it will fail when applied around a function which
+            > has a decorator already applied to it and where that decorator
+            > expects that the descriptor binding protocol is executed in order
+            > to properly bind the function to the class.
+        """
+        return self._backend_opts_set(value)
 
     def open(self, mode: str, *, remote_operation: bool = False):
         """Open an lmdb file handle.
@@ -185,7 +213,7 @@ class LMDB_30_FileHandles:
         self.wFp[uid] = lmdb.open(str(db_dir_path), **LMDB_SETTINGS)
 
         self.w_uid = uid
-        self.row_idx = generate()
+        self.row_idx = lexicographic_keys()
 
         process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
         Path(process_dir, f'{uid}.lmdbdir').touch()

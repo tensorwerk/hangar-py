@@ -1497,7 +1497,7 @@ class TestMultiprocessArraysetReads(object):
         with aset as ds:
             for idx, kv in enumerate(ds.items()):
                 if idx == 0:
-                    with pytest.raises(TypeError):
+                    with pytest.raises(PermissionError):
                         ds['1232'] = mysample
                 k, v = kv
                 assert not np.allclose(v, mysample)

@@ -5,7 +5,7 @@ from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Typ
 import numpy as np
 
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
-from ..op_state import reader_checkout_only
+from ..op_state import reader_checkout_only, writer_checkout_only
 from ..backends import (
     backend_decoder,
     parse_user_backend_opts,
@@ -40,7 +40,7 @@ class CompatibleArray(NamedTuple):
     reason: str
 
 
-class SampleReaderModifier(object):
+class FlatSample(object):
     """Class implementing get access to data in a arrayset.
 
     The methods implemented here are common to the :class:`.ArraysetDataWriter`
@@ -55,7 +55,8 @@ class SampleReaderModifier(object):
     __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path',
                  '_schema_spec', '_schema_variable', '_schema_dtype_num',
                  '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
-                 '_dflt_backend_opts', '_contains_subsamples', '_stack')
+                 '_dflt_backend_opts', '_contains_subsamples', '_stack',
+                 '_txnctx', '_enter_count')
     _attrs = __slots__
 
     def __init__(self,
@@ -64,10 +65,12 @@ class SampleReaderModifier(object):
                  backend_handles: AccessorMapType,
                  schema_spec: RawArraysetSchemaVal,
                  repo_path: Path,
+                 mode: str,
+                 aset_txn_ctx: Optional[AsetTxnType] = None,
                  *args, **kwargs):
 
         self._stack: Optional[ExitStack] = None
-        self._mode = 'r'
+        self._mode = mode
         self._asetn = aset_name
         self._samples = samples
         self._be_fs = backend_handles
@@ -81,6 +84,9 @@ class SampleReaderModifier(object):
         self._dflt_backend = schema_spec.schema_default_backend
         self._dflt_backend_opts = schema_spec.schema_default_backend_opts
         self._contains_subsamples = schema_spec.schema_contains_subsamples
+
+        self._txnctx = aset_txn_ctx
+        self._enter_count = 0
 
     @property
     def _debug_(self):  # pragma: no cover
@@ -98,6 +104,9 @@ class SampleReaderModifier(object):
             '_dflt_backend': self._dflt_backend,
             '_dflt_backend_opts': self._dflt_backend_opts,
             '_contains_subsamples': self._contains_subsamples,
+            '_txnctx': self._txnctx._debug_,
+            '_stack': self._stack._exit_callbacks if self._stack else self._stack,
+            '_enter_count': self._enter_count,
         }
 
     def __repr__(self):
@@ -112,7 +121,7 @@ class SampleReaderModifier(object):
         return res
 
     def _repr_pretty_(self, p, cycle):
-        res = f'Hangar Sample Arrayset \
+        res = f'Hangar {self.__class__.__qualname__} \
                 \n    Arrayset Name            : {self._asetn}\
                 \n    Schema Hash              : {self._dflt_schema_hash}\
                 \n    Variable Shape           : {bool(int(self._schema_variable))}\
@@ -155,10 +164,29 @@ class SampleReaderModifier(object):
             setattr(self, slot, value)
 
     def __enter__(self):
-        return self
+        if self._mode == 'r':
+            return self
+        else:
+            with ExitStack() as stack:
+                self._txnctx.open_write()
+                stack.callback(self._txnctx.close_write)
+                if self._enter_count == 0:
+                    for k in self._be_fs.keys():
+                        stack.enter_context(self._be_fs[k])
+                self._enter_count += 1
+                self._stack = stack.pop_all()
+            return self
 
     def __exit__(self, *exc):
-        return
+        if self._mode == 'r':
+            return
+        else:
+            self._stack.close()
+            self._enter_count -= 1
+
+    @property
+    def _is_conman(self) -> bool:
+        return bool(self._enter_count)
 
     def __iter__(self) -> Iterable[KeyType]:
         """Create iterator yielding an arrayset sample keys.
@@ -420,69 +448,7 @@ class SampleReaderModifier(object):
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-        self._close()
-        for attr in self._attrs:
-            delattr(self, attr)
-
-    def __getattr__(self, name):
-        """Raise permission error after checkout is closed.
-
-         Only runs after a call to :meth:`_destruct`, which is responsible for
-         deleting all attributes from the object instance.
-        """
-        try:
-            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
-        except AttributeError:
-            err = (f'Unable to operate on past checkout objects which have been '
-                   f'closed. No operation occurred. Please use a new checkout.')
-            raise PermissionError(err) from None
-        return self.__getattribute__(name)
-
-
-class SampleWriterModifier(SampleReaderModifier):
-
-    __slots__ = ('_txnctx', '_enter_count')
-    _attrs = __slots__ + SampleReaderModifier.__slots__
-
-    def __init__(self, aset_txn_ctx: AsetTxnType, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._mode = 'a'
-        self._txnctx = aset_txn_ctx
-        self._enter_count = 0
-
-    @property
-    def _debug_(self):
-        return {
-            '__class__': self.__class__,
-            '__bases__': self.__class__.__bases__,
-            '_txnctx': self._txnctx._debug_,
-            '_stack': self._stack._exit_callbacks if self._stack else self._stack,
-            '_enter_count': self._enter_count,
-            'base_debug': super()._debug_
-        }
-
-    def __enter__(self):
-        with ExitStack() as stack:
-            self._txnctx.open_write()
-            stack.callback(self._txnctx.close_write)
-            if self._enter_count == 0:
-                for k in self._be_fs.keys():
-                    stack.enter_context(self._be_fs[k])
-            self._enter_count += 1
-            self._stack = stack.pop_all()
-        return self
-
-    def __exit__(self, *exc):
-        self._stack.close()
-        self._enter_count -= 1
-
-    @property
-    def _is_conman(self) -> bool:
-        return bool(self._enter_count)
-
+    @writer_checkout_only
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
 
@@ -520,6 +486,7 @@ class SampleWriterModifier(SampleReaderModifier):
         compatible = True if reason == '' else False
         return CompatibleArray(compatible, reason)
 
+    @writer_checkout_only
     def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
         """Verify if key / value pair is valid to be written in this arrayset
 
@@ -542,6 +509,7 @@ class SampleWriterModifier(SampleReaderModifier):
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
+    @writer_checkout_only
     def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
         """Internal write method. Assumes all arguments validated and context is open
 
@@ -578,6 +546,7 @@ class SampleWriterModifier(SampleReaderModifier):
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._samples[key] = hash_spec
 
+    @writer_checkout_only
     def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
         """Store a piece of data in a arrayset.
 
@@ -626,6 +595,7 @@ class SampleWriterModifier(SampleReaderModifier):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
+    @writer_checkout_only
     def append(self, value: np.ndarray) -> KeyType:
         """Store some data in a sample with an automatically generated key.
 
@@ -657,6 +627,7 @@ class SampleWriterModifier(SampleReaderModifier):
             self._perform_set(key, value)
             return key
 
+    @writer_checkout_only
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
         """Store some data with the key/value pairs from other, overwriting existing keys.
 
@@ -719,6 +690,7 @@ class SampleWriterModifier(SampleReaderModifier):
             for key, val in other.items():
                 self._perform_set(key, val)
 
+    @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
         """Remove a sample from the arrayset. Convenience method to :meth:`delete`.
 
@@ -752,6 +724,7 @@ class SampleWriterModifier(SampleReaderModifier):
                     f'isRecordDeleted: <{isRecordDeleted}>', f'DEBUG STRING: {self._debug_}')
             del self._samples[key]
 
+    @writer_checkout_only
     def pop(self, key: KeyType) -> np.ndarray:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
@@ -774,6 +747,7 @@ class SampleWriterModifier(SampleReaderModifier):
         del self[key]
         return value
 
+    @writer_checkout_only
     def change_backend(self, backend_opts: Union[str, dict]):
         """Change the default backend and filters applied to future data writes.
 
@@ -847,3 +821,24 @@ class SampleWriterModifier(SampleReaderModifier):
         self._dflt_schema_hash = schema_hash
         self._schema_spec = rawAsetSchema
         return
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        self._close()
+        for attr in self._attrs:
+            delattr(self, attr)
+
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible for
+         deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)

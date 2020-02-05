@@ -1,28 +1,16 @@
 from typing import Union
 
-from .arrayset_nested import (
-    SubsampleReaderModifier,
-    SubsampleWriterModifier,
-    SubsampleReader,
-    SubsampleWriter
-)
-from .arrayset_flat import SampleReaderModifier, SampleWriterModifier
+from .flat import FlatSample
+from .nested import FlatSubsample, NestedSample
 from .constructors import Sample, Subsample, AsetTxn
 
-ModifierTypes = Union[
-    SubsampleReaderModifier,
-    SubsampleWriterModifier,
-    SampleReaderModifier,
-    SampleWriterModifier]
-WriterModifierTypes = Union[SubsampleWriterModifier, SampleWriterModifier]
+ModifierTypes = Union[NestedSample, FlatSubsample]
 
 from .arrayset import Arraysets
 from .metadata import MetadataReader, MetadataWriter
 
 
-__all__ = ('Arraysets', 'Sample', 'Subsample', 'AsetTxn',
-           'SubsampleReaderModifier', 'SubsampleWriterModifier',
-           'SubsampleReader', 'SubsampleWriter',
-           'SampleReaderModifier', 'SampleWriterModifier',
-           'ModifierTypes', 'WriterModifierTypes',
-           'MetadataReader', 'MetadataWriter')
+__all__ = ('Arraysets', 'Sample', 'Subsample', 'AsetTxn', 'NestedSample',
+           'FlatSubsample', 'FlatSample', 'ModifierTypes',
+           'MetadataReader',
+           'MetadataWriter')

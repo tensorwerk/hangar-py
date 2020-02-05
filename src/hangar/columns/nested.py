@@ -7,7 +7,7 @@ from weakref import proxy
 
 import numpy as np
 
-from ..op_state import reader_checkout_only
+from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 from ..backends import (
     backend_decoder,
@@ -48,20 +48,27 @@ class SubsampleName(NamedTuple):
     subsample: str
 
 
-class SubsampleReader(object):
+class FlatSubsample(object):
 
-    __slots__ = ('_asetn', '_samplen', '_be_fs', '_subsamples', '_mode', '_stack')
-    _attrs = __slots__
+    __slots__ = ('_asetn', '_stack', '_be_fs', '_mode',
+                 '_subsamples', '_txnctx', '_samplen')
 
-    def __init__(self, asetn: str, samplen: str, be_handles: BACKEND_ACCESSOR_MAP,
-                 specs: Dict[KeyType, DataHashSpecsType]):
+    def __init__(self,
+                 asetn: str,
+                 samplen: str,
+                 be_handles: BACKEND_ACCESSOR_MAP,
+                 specs: Dict[KeyType, DataHashSpecsType],
+                 mode: str,
+                 aset_txn_ctx: Optional[AsetTxnType] = None,
+                 *args, **kwargs):
 
         self._asetn = asetn
         self._samplen = samplen
         self._be_fs = be_handles
         self._subsamples = specs
-        self._mode = 'r'
+        self._mode = mode
         self._stack: Optional[ExitStack] = None
+        self._txnctx = aset_txn_ctx
 
     @property
     def _debug_(self):  # pragma: no cover
@@ -72,6 +79,8 @@ class SubsampleReader(object):
             '_be_fs': self._be_fs,
             '_subsamples': self._subsamples,
             '_mode': self._mode,
+            '_txnctx': self._txnctx._debug_,
+            '_stack': self._stack._exit_callbacks if self._stack else self._stack,
         }
 
     def __repr__(self):
@@ -103,12 +112,49 @@ class SubsampleReader(object):
         return list(self.keys())
 
     def __enter__(self):
-        self._enter_count += 1
+        if self._mode == 'r':
+            self._enter_count += 1
+        else:
+            with ExitStack() as stack:
+                self._txnctx.open_write()
+                stack.callback(self._txnctx.close_write)
+                if self._enter_count == 0:
+                    for k in self._be_fs.keys():
+                        if k in ('enter_count', 'schema_spec'):
+                            continue
+                        stack.enter_context(self._be_fs[k])
+                self._enter_count += 1
+                self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._enter_count -= 1
-        return
+        if self._mode == 'r':
+            self._enter_count -= 1
+        else:
+            self._stack.close()
+            self._enter_count -= 1
+            if self._enter_count == 0:
+                self._stack = None
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        for attr in self.__slots__:
+            delattr(self, attr)
+
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible for
+         deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
 
     @reader_checkout_only
     def __getstate__(self) -> dict:
@@ -352,87 +398,30 @@ class SubsampleReader(object):
         except KeyError:
             return default
 
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-        for attr in self._attrs:
-            delattr(self, attr)
-
-    def __getattr__(self, name):
-        """Raise permission error after checkout is closed.
-
-         Only runs after a call to :meth:`_destruct`, which is responsible for
-         deleting all attributes from the object instance.
+    @writer_checkout_only
+    def _schema_spec_get(self) -> RawArraysetSchemaVal:
+        """Nonstandard descriptor method. See notes in ``_schema_spec.getter``.
         """
-        try:
-            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
-        except AttributeError:
-            err = (f'Unable to operate on past checkout objects which have been '
-                   f'closed. No operation occurred. Please use a new checkout.')
-            raise PermissionError(err) from None
-        return self.__getattribute__(name)
-
-
-class SubsampleWriter(SubsampleReader):
-
-    __slots__ = ('_txnctx',)
-    _attrs = __slots__ + SubsampleReader.__slots__
-
-    def __init__(self, aset_txn_ctx, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._mode = 'a'
-        self._txnctx = aset_txn_ctx
-        self._stack: Optional[ExitStack] = None
-
-    @property
-    def _debug_(self):  # pragma: no cover
-        return {
-            '__class__': self.__class__,
-            '__bases__': self.__class__.__bases__,
-            '_txnctx': self._txnctx._debug_,
-            '_stack': self._stack._exit_callbacks if self._stack else self._stack,
-            'base_debug': super()._debug_
-        }
-
-    def __repr__(self):
-        res = f'{self.__class__}('\
-              f'aset_name={self._asetn}, '\
-              f'sample_name={self._samplen}, '\
-              f'default_backend={self._schema_spec.schema_default_backend})'
-        return res
-
-    def _repr_pretty_(self, p, cycle):
-        res = f'Hangar {self.__class__.__name__} \
-                \n    Arrayset Name            : {self._asetn}\
-                \n    Sample Name              : {self._samplen}\
-                \n    Mode (read/write)        : "{self._mode}"\
-                \n    Default Backend          : {self._schema_spec.schema_default_backend}\
-                \n    Number of Subsamples     : {self.__len__()}\n'
-        p.text(res)
-
-    def __enter__(self):
-        with ExitStack() as stack:
-            self._txnctx.open_write()
-            stack.callback(self._txnctx.close_write)
-            if self._enter_count == 0:
-                for k in self._be_fs.keys():
-                    if k in ('enter_count', 'schema_spec'):
-                        continue
-                    stack.enter_context(self._be_fs[k])
-            self._enter_count += 1
-            self._stack = stack.pop_all()
-        return self
-
-    def __exit__(self, *exc):
-        self._stack.close()
-        self._enter_count -= 1
-        if self._enter_count == 0:
-            self._stack = None
-
-    @property
-    def _schema_spec(self) -> RawArraysetSchemaVal:
         return self._be_fs['schema_spec']
 
+    @property
+    def _schema_spec(self):
+        """
+        Using seperate setter method (with ``@writer_checkout_only`` decorator
+        applied) due to bug in python <3.8.
+
+        From: https://bugs.python.org/issue19072
+            > The classmethod decorator when applied to a function of a class,
+            > does not honour the descriptor binding protocol for whatever it
+            > wraps. This means it will fail when applied around a function which
+            > has a decorator already applied to it and where that decorator
+            > expects that the descriptor binding protocol is executed in order
+            > to properly bind the function to the class.
+        """
+        return self._schema_spec_get()
+
+
+    @writer_checkout_only
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
 
@@ -471,6 +460,7 @@ class SubsampleWriter(SubsampleReader):
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
 
+    @writer_checkout_only
     def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> bool:
 
         if not is_suitable_user_key(key):
@@ -479,6 +469,7 @@ class SubsampleWriter(SubsampleReader):
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
+    @writer_checkout_only
     def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
         """Internal write method. Assumes all arguments validated and context is open
 
@@ -517,6 +508,7 @@ class SubsampleWriter(SubsampleReader):
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._subsamples[key] = hash_spec
 
+    @writer_checkout_only
     def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
         """Store a piece of data as a subsample. Convenience method to :meth:`add`.
 
@@ -541,6 +533,7 @@ class SubsampleWriter(SubsampleReader):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
+    @writer_checkout_only
     def append(self, value: np.ndarray) -> KeyType:
         """Store some data in a subsample with an automatically generated key.
 
@@ -574,6 +567,7 @@ class SubsampleWriter(SubsampleReader):
             self._perform_set(key, value)
             return key
 
+    @writer_checkout_only
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
         """Store data with the key/value pairs, overwriting existing keys.
 
@@ -614,6 +608,7 @@ class SubsampleWriter(SubsampleReader):
             for key, val in other.items():
                 self._perform_set(key, val)
 
+    @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
         """Remove a subsample from the arrayset. Convenience method to :meth:`delete`.
 
@@ -647,6 +642,7 @@ class SubsampleWriter(SubsampleReader):
                     f'isRecordDeleted: <{isRecordDeleted}>', f'DEBUG STRING: {self._debug_}')
             del self._subsamples[key]
 
+    @writer_checkout_only
     def pop(self, key: KeyType) -> np.ndarray:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
@@ -670,31 +666,30 @@ class SubsampleWriter(SubsampleReader):
         return value
 
 
-SubsampleTypes = Union[SubsampleReader, SubsampleWriter]
-
-
-class SubsampleReaderModifier(object):
+class NestedSample(object):
 
     __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path', '_stack',
                  '_schema_spec', '_schema_variable', '_schema_dtype_num',
                  '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
-                 '_dflt_backend_opts', '_contains_subsamples')
-    _attrs = __slots__
+                 '_dflt_backend_opts', '_contains_subsamples', '_txnctx')
 
     def __init__(self,
                  aset_name: str,
-                 samples: Dict[KeyType, SubsampleTypes],
+                 samples: Dict[KeyType, FlatSubsample],
                  backend_handles: Dict[str, Any],
                  schema_spec: RawArraysetSchemaVal,
                  repo_path: Path,
+                 mode: str,
+                 aset_txn_ctx: Optional[AsetTxnType] = None,
                  *args, **kwargs):
 
-        self._mode = 'r'
+        self._mode = mode
         self._asetn = aset_name
         self._samples = samples
         self._be_fs = backend_handles
         self._path = repo_path
         self._stack: Optional[ExitStack] = None
+        self._txnctx = aset_txn_ctx
 
         self._schema_spec = schema_spec
         self._schema_variable = schema_spec.schema_is_var
@@ -717,7 +712,7 @@ class SubsampleReaderModifier(object):
         return res
 
     def _repr_pretty_(self, p, cycle):
-        res = f'Hangar Subsample Arrayset \
+        res = f'Hangar {self.__class__.__qualname__} \
                 \n    Arrayset Name            : {self._asetn}\
                 \n    Schema Hash              : {self._dflt_schema_hash}\
                 \n    Variable Shape           : {bool(int(self._schema_variable))}\
@@ -745,12 +740,50 @@ class SubsampleReaderModifier(object):
         return list(self.keys())
 
     def __enter__(self):
-        self._enter_count += 1
+        if self._mode == 'r':
+            self._enter_count += 1
+        else:
+            with ExitStack() as stack:
+                self._txnctx.open_write()
+                stack.callback(self._txnctx.close_write)
+                if self._enter_count == 0:
+                    for k in tuple(self._be_fs.keys()):
+                        if k in ('enter_count', 'schema_spec'):
+                            continue
+                        stack.enter_context(self._be_fs[k])
+                self._enter_count += 1
+                self._stack = stack.pop_all()
         return self
 
     def __exit__(self, *exc):
-        self._enter_count -= 1
-        return
+        if self._mode == 'r':
+            self._enter_count -= 1
+        else:
+            self._stack.close()
+            self._enter_count -= 1
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        self._close()
+        for sample in self._samples.values():
+            sample._destruct()
+        for attr in self.__slots__:
+            delattr(self, attr)
+
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible
+         for deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
 
     @reader_checkout_only
     def __getstate__(self) -> dict:
@@ -768,7 +801,7 @@ class SubsampleReaderModifier(object):
         for slot, value in state.items():
             setattr(self, slot, value)
 
-    def __getitem__(self, key: KeyType) -> SubsampleTypes:
+    def __getitem__(self, key: KeyType) -> FlatSubsample:
         """Get the sample access class for some sample key.
 
         Parameters
@@ -778,7 +811,7 @@ class SubsampleReaderModifier(object):
 
         Returns
         -------
-        SubsampleTypes
+        FlatSubsample
             Sample accessor corresponding to the given key
         """
         return self._samples[key]
@@ -1024,7 +1057,7 @@ class SubsampleReaderModifier(object):
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    def get(self, key: GetKeysType, default: Any = None) -> SubsampleTypes:
+    def get(self, key: GetKeysType, default: Any = None) -> FlatSubsample:
         """Retrieve tensor data for some sample key(s) in the arrayset.
 
         Parameters
@@ -1051,59 +1084,7 @@ class SubsampleReaderModifier(object):
         except KeyError:
             return default
 
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-        self._close()
-        for sample in self._samples.values():
-            sample._destruct()
-        for attr in self._attrs:
-            delattr(self, attr)
-
-    def __getattr__(self, name):
-        """Raise permission error after checkout is closed.
-
-         Only runs after a call to :meth:`_destruct`, which is responsible
-         for deleting all attributes from the object instance.
-        """
-        try:
-            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
-        except AttributeError:
-            err = (f'Unable to operate on past checkout objects which have been '
-                   f'closed. No operation occurred. Please use a new checkout.')
-            raise PermissionError(err) from None
-        return self.__getattribute__(name)
-
-
-class SubsampleWriterModifier(SubsampleReaderModifier):
-
-    __slots__ = ('_txnctx',)
-    _attrs = __slots__ + SubsampleReaderModifier.__slots__
-
-    def __init__(self, aset_txn_ctx: AsetTxnType, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._mode = 'a'
-        self._txnctx = aset_txn_ctx
-        self._stack: ExitStack = ExitStack()
-
-    def __enter__(self):
-        with ExitStack() as stack:
-            self._txnctx.open_write()
-            stack.callback(self._txnctx.close_write)
-            if self._enter_count == 0:
-                for k in tuple(self._be_fs.keys()):
-                    if k in ('enter_count', 'schema_spec'):
-                        continue
-                    stack.enter_context(self._be_fs[k])
-            self._enter_count += 1
-            self._stack = stack.pop_all()
-        return self
-
-    def __exit__(self, *exc):
-        self._stack.close()
-        self._enter_count -= 1
-        return
-
+    @writer_checkout_only
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
 
@@ -1142,6 +1123,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
 
+    @writer_checkout_only
     def _set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
 
         if not is_suitable_user_key(sample_key):
@@ -1154,16 +1136,18 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             if not isCompat.compatible:
                 raise ValueError(isCompat.reason)
 
+    @writer_checkout_only
     def _perform_set(self, key: KeyType, value: MapKeyArrType) -> None:
         if key in self._samples:
             self._samples[key].update(value)
         else:
-            self._samples[key] = SubsampleWriter(
+            self._samples[key] = FlatSubsample(
                 aset_txn_ctx=proxy(self._txnctx),
                 asetn=self._asetn,
                 samplen=key,
                 be_handles=proxy(self._be_fs),
-                specs={})
+                specs={},
+                mode='a')
             try:
                 # TODO: class method to eliminate double validation check?
                 self._samples[key].update(value)
@@ -1171,6 +1155,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
                 del self._samples[key]
                 raise e
 
+    @writer_checkout_only
     def __setitem__(self, key: KeyType, value: MapKeyArrType) -> None:
         """Store some subsample key / subsample data map, overwriting existing keys.
 
@@ -1186,6 +1171,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
+    @writer_checkout_only
     def update(self,
                other: Union[None, Dict[KeyType, MapKeyArrType],
                             Sequence[Sequence[Union[KeyType, MapKeyArrType]]]] = None,
@@ -1234,6 +1220,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             for key, val in other.items():
                 self._perform_set(key, val)
 
+    @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
         """Remove a sample (including all contained subsamples) from the arrayset.
 
@@ -1254,6 +1241,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             self._samples[key]._destruct()
             del self._samples[key]
 
+    @writer_checkout_only
     def pop(self, key: KeyType) -> Dict[KeyType, KeyArrMap]:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
@@ -1278,6 +1266,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
         del self[key]
         return res
 
+    @writer_checkout_only
     def change_backend(self, backend_opts: Union[str, dict]):
         """Change the default backend and filters applied to future data writes.
 

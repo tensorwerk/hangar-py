@@ -9,11 +9,13 @@ import lmdb
 import numpy as np
 from wrapt import ObjectProxy
 
-from .arrayset_flat import SampleReaderModifier, SampleWriterModifier
-from .arrayset_nested import (
-    SubsampleReader, SubsampleWriter,
-    SubsampleReaderModifier, SubsampleWriterModifier,
-)
+# from .arrayset_flat import SampleReaderModifier, SampleWriterModifier
+from .flat import FlatSample
+# from .arrayset_nested import (
+#     SubsampleReader, SubsampleWriter,
+#     SubsampleReaderModifier, SubsampleWriterModifier,
+# )
+from .nested import FlatSubsample, NestedSample
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records.parsing import hash_data_db_key_from_raw_key, RawArraysetSchemaVal
 from ..records.queries import RecordQuery
@@ -258,17 +260,19 @@ class Subsample(Backend):
         file_handles['enter_count'] = 0
         sspecs = {}
         for sample_key, subsample_key_specs in _sspecs.items():
-            sspecs[sample_key] = SubsampleReader(
+            sspecs[sample_key] = FlatSubsample(
                 asetn=aset_name,
                 samplen=sample_key,
                 be_handles=file_handles,
-                specs=subsample_key_specs)
+                specs=subsample_key_specs,
+                mode='r')
 
-        modifier = SubsampleReaderModifier(aset_name=aset_name,
-                                           samples=sspecs,
-                                           backend_handles=file_handles,
-                                           schema_spec=schema_specs,
-                                           repo_path=path)
+        modifier = NestedSample(aset_name=aset_name,
+                                samples=sspecs,
+                                backend_handles=file_handles,
+                                schema_spec=schema_specs,
+                                repo_path=path,
+                                mode='r')
         return Construct(file_handles=file_handles, modifier=modifier)
 
     def generate_writer(self, txnctx: AsetTxn, aset_name: str,
@@ -308,20 +312,21 @@ class Subsample(Backend):
         file_handle_proxy = proxy(file_handles)
         sspecs = {}
         for sample_key, subsample_key_specs in _sspecs.items():
-            sspecs[sample_key] = SubsampleWriter(
+            sspecs[sample_key] = FlatSubsample(
                 aset_txn_ctx=proxy(txnctx),
                 asetn=aset_name,
                 samplen=sample_key,
                 be_handles=file_handle_proxy,
-                specs=subsample_key_specs)
+                specs=subsample_key_specs,
+                mode='a')
 
-        modifier = SubsampleWriterModifier(aset_txn_ctx=txnctx,
-                                           aset_name=aset_name,
-                                           samples=sspecs,
-                                           backend_handles=file_handles,
-                                           schema_spec=schema_specs,
-                                           repo_path=path)
-
+        modifier = NestedSample(aset_txn_ctx=txnctx,
+                                aset_name=aset_name,
+                                samples=sspecs,
+                                backend_handles=file_handles,
+                                schema_spec=schema_specs,
+                                repo_path=path,
+                                mode='a')
         return Construct(file_handles=file_handles, modifier=modifier)
 
 
@@ -384,11 +389,12 @@ class Sample(Backend):
 
         used_backends, has_remote_backend, sspecs = self._common_setup(txnctx, aset_name)
         file_handles = self.read_open_file_handles(used_backends, path, shape, dtype)
-        modifier = SampleReaderModifier(aset_name=aset_name,
-                                        samples=sspecs,
-                                        backend_handles=file_handles,
-                                        schema_spec=schema_specs,
-                                        repo_path=path)
+        modifier = FlatSample(aset_name=aset_name,
+                              samples=sspecs,
+                              backend_handles=file_handles,
+                              schema_spec=schema_specs,
+                              repo_path=path,
+                              mode='r')
         return Construct(file_handles=file_handles, modifier=modifier)
 
     def generate_writer(self, txnctx: AsetTxn, aset_name: str,
@@ -422,10 +428,11 @@ class Sample(Backend):
         file_handles = self.write_open_file_handles(path, shape, dtype)
         file_handles[default_backend].backend_opts = default_backend_opts
 
-        modifier = SampleWriterModifier(aset_txn_ctx=txnctx,
-                                        aset_name=aset_name,
-                                        samples=sspecs,
-                                        backend_handles=file_handles,
-                                        schema_spec=schema_specs,
-                                        repo_path=path)
+        modifier = FlatSample(aset_txn_ctx=txnctx,
+                              aset_name=aset_name,
+                              samples=sspecs,
+                              backend_handles=file_handles,
+                              schema_spec=schema_specs,
+                              repo_path=path,
+                              mode='a')
         return Construct(file_handles=file_handles, modifier=modifier)

@@ -18,7 +18,7 @@ from ..records.parsing import (
 from ..records.queries import RecordQuery
 from ..op_state import writer_checkout_only
 from ..utils import is_suitable_user_key, is_ascii
-from . import AsetTxn, Sample, Subsample, ModifierTypes, WriterModifierTypes
+from . import AsetTxn, Sample, Subsample, ModifierTypes
 
 KeyType = Union[str, int]
 
@@ -455,7 +455,7 @@ class Arraysets(metaclass=ArraysetConstructors):
                       variable_shape: bool = False,
                       contains_subsamples: bool = False,
                       *,
-                      backend_opts: Optional[Union[str, dict]] = None) -> WriterModifierTypes:
+                      backend_opts: Optional[Union[str, dict]] = None) -> ModifierTypes:
         """Initializes a arrayset in the repository.
 
         Arrayset columns are created in order to store some arbitrary
@@ -512,7 +512,7 @@ class Arraysets(metaclass=ArraysetConstructors):
 
         Returns
         -------
-        WriterModifierTypes
+        ModifierTypes
             instance object of the initialized arrayset.
 
         Raises

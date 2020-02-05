@@ -34,16 +34,20 @@ def writer_checkout_only(wrapped, instance, args, kwargs) -> types.MethodType:
         ability to call and raise error explaining why to user.
     """
     try:
-        mode = instance._mode  # user facing classes hide attribute
-    except AttributeError:
-        mode = instance.mode  # internal classes don't hide attribute
+        if instance._mode == 'a':  # user facing classes hide attribute
+            return wrapped(*args, **kwargs)
+        else:
+            err = (f'Method "{wrapped.__func__.__name__}" '
+                   f'cannot be called in a read-only checkout.')
+            raise PermissionError(err) from None
 
-    if mode != 'a':
-        err = (f'Method "{wrapped.__func__.__name__}" '
-               f'cannot be called in a read-only checkout.')
-        raise PermissionError(err) from None
-    else:
-        return wrapped(*args, **kwargs)
+    except AttributeError:
+        if instance.mode == 'a':  # internal classes don't hide attribute
+            return wrapped(*args, **kwargs)
+        else:
+            err = (f'Method "{wrapped.__func__.__name__}" '
+                   f'cannot be called in a read-only checkout.')
+            raise PermissionError(err) from None
 
 
 @wrapt.decorator
@@ -76,16 +80,20 @@ def reader_checkout_only(wrapped, instance, args, kwargs) -> types.MethodType:
         ability to call and raise error explaining why to user.
     """
     try:
-        mode = instance._mode  # user facing classes hide attribute
-    except AttributeError:
-        mode = instance.mode  # internal classes don't hide attribute
+        if instance._mode == 'r':  # user facing classes hide attribute
+            return wrapped(*args, **kwargs)
+        else:
+            err = (f'Method "{wrapped.__func__.__name__}" '
+                   f'cannot be called in a write-enabled checkout.')
+            raise PermissionError(err) from None
 
-    if mode != 'r':
-        err = (f'Method "{wrapped.__func__.__name__}" '
-               f'cannot be called in a write-enabled checkout.')
-        raise PermissionError(err) from None
-    else:
-        return wrapped(*args, **kwargs)
+    except AttributeError:
+        if instance.mode == 'r':  # internal classes don't hide attribute
+            return wrapped(*args, **kwargs)
+        else:
+            err = (f'Method "{wrapped.__func__.__name__}" '
+                   f'cannot be called in a write-enabled checkout.')
+            raise PermissionError(err) from None
 
 
 def tb_params_last_called(tb: types.TracebackType) -> dict:
