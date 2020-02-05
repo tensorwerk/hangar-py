@@ -1,9 +1,18 @@
+"""Accessor class for columns containing single-level key/value mappings
+
+The FlatSample container is used to store data (in any backend) in a column
+containing a single level key/value mapping from names/ids to data.
+
+All backends are supported.
+"""
+
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Type, Optional, Any
 
 import numpy as np
 
+from .constructor_flat import FlatSampleBuilder
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..backends import (
@@ -40,16 +49,29 @@ class CompatibleArray(NamedTuple):
     reason: str
 
 
-class FlatSample(object):
+class FlatSample(metaclass=FlatSampleBuilder):
     """Class implementing get access to data in a arrayset.
 
-    The methods implemented here are common to the :class:`.ArraysetDataWriter`
-    accessor class as well as to this ``"read-only"`` method. Though minimal,
-    the behavior of read and write checkouts is slightly unique, with the main
-    difference being that ``"read-only"`` checkouts implement both thread and
-    process safe access methods. This is not possible for ``"write-enabled"``
-    checkouts, and attempts at multiprocess/threaded writes will generally fail
-    with cryptic error messages.
+    This class exposes the standard API to access data stored in a single level
+    key / value mapping column. Usage is modeled after the python :py:`dict`
+    style syntax -- with a few additional utility and inspection methods
+    and properties added. Methods named after those of a python :py:`dict`
+    have syntactically identical arguments and behavior to that of the standard
+    library.
+
+    If not opened in a ``write-enabled`` checkout, then attempts to add or delete
+    data or container properties will raise an exception (in the form of a
+    :py:`PermissionError`). No changes will be propogated unless a ``write-enabled``
+    checkout is used.
+
+    This object can be serialized -- pickled -- for parallel processing / reading
+    if opened in a ``read-only`` checkout. Parallel operations are both
+    thread and process safe, though performance may significantly differ between
+    multithreaded vs multiprocessed code (depending on the backend data is stored
+    in). Attempts to serialize objects opened in ``write-enabled`` checkouts are not
+    supported and will raise a :py:`PermissionError` if attempted. This behavior
+    is enforced in order to ensure data and record integrity while writing to
+    the repository.
     """
 
     __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path',
@@ -183,6 +205,28 @@ class FlatSample(object):
         else:
             self._stack.close()
             self._enter_count -= 1
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        self._close()
+        for attr in self._attrs:
+            delattr(self, attr)
+
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible for
+         deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
+
 
     @property
     def _is_conman(self) -> bool:
@@ -362,12 +406,6 @@ class FlatSample(object):
     @property
     def contains_subsamples(self) -> bool:
         """Bool indicating if sub-samples are contained in this arrayset container.
-
-        Returns
-        -------
-        bool
-            True if subsamples are included, False otherwise. For this arrayset
-            class, no subsamples are stored; the result will always be False.
         """
         return False
 
@@ -448,7 +486,8 @@ class FlatSample(object):
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    @writer_checkout_only
+    # ---------------- writer methods only after this point -------------------
+
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
 
@@ -486,7 +525,6 @@ class FlatSample(object):
         compatible = True if reason == '' else False
         return CompatibleArray(compatible, reason)
 
-    @writer_checkout_only
     def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
         """Verify if key / value pair is valid to be written in this arrayset
 
@@ -546,7 +584,6 @@ class FlatSample(object):
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._samples[key] = hash_spec
 
-    @writer_checkout_only
     def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
         """Store a piece of data in a arrayset.
 
@@ -595,7 +632,6 @@ class FlatSample(object):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
-    @writer_checkout_only
     def append(self, value: np.ndarray) -> KeyType:
         """Store some data in a sample with an automatically generated key.
 
@@ -627,7 +663,6 @@ class FlatSample(object):
             self._perform_set(key, value)
             return key
 
-    @writer_checkout_only
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
         """Store some data with the key/value pairs from other, overwriting existing keys.
 
@@ -724,7 +759,6 @@ class FlatSample(object):
                     f'isRecordDeleted: <{isRecordDeleted}>', f'DEBUG STRING: {self._debug_}')
             del self._samples[key]
 
-    @writer_checkout_only
     def pop(self, key: KeyType) -> np.ndarray:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
@@ -821,24 +855,3 @@ class FlatSample(object):
         self._dflt_schema_hash = schema_hash
         self._schema_spec = rawAsetSchema
         return
-
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-        self._close()
-        for attr in self._attrs:
-            delattr(self, attr)
-
-    def __getattr__(self, name):
-        """Raise permission error after checkout is closed.
-
-         Only runs after a call to :meth:`_destruct`, which is responsible for
-         deleting all attributes from the object instance.
-        """
-        try:
-            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
-        except AttributeError:
-            err = (f'Unable to operate on past checkout objects which have been '
-                   f'closed. No operation occurred. Please use a new checkout.')
-            raise PermissionError(err) from None
-        return self.__getattribute__(name)

@@ -11,6 +11,7 @@ from .specparse import backend_decoder
 
 from .selection import (
     BACKEND_ACCESSOR_MAP,
+    BACKEND_IS_LOCAL_MAP,
     AccessorMapType,
     backend_from_heuristics,
     backend_opts_from_heuristics,
@@ -26,7 +27,7 @@ DataHashSpecsType = Union[
 ]
 
 __all__ = [
-    'BACKEND_ACCESSOR_MAP', 'AccessorMapType', 'backend_decoder',
-    'backend_from_heuristics', 'backend_opts_from_heuristics',
+    'BACKEND_ACCESSOR_MAP', 'BACKEND_IS_LOCAL_MAP', 'AccessorMapType',
+    'backend_decoder', 'backend_from_heuristics', 'backend_opts_from_heuristics',
     'parse_user_backend_opts', 'DataHashSpecsType'
 ]

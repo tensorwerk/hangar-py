@@ -18,7 +18,7 @@ from ..records.parsing import (
 from ..records.queries import RecordQuery
 from ..op_state import writer_checkout_only
 from ..utils import is_suitable_user_key, is_ascii
-from . import AsetTxn, Sample, Subsample, ModifierTypes
+from . import AsetTxn, ModifierTypes, FlatSample, NestedSample
 
 KeyType = Union[str, int]
 
@@ -65,18 +65,16 @@ class ArraysetConstructors(type):
         stagedSchemaSpecs = query.schema_specs()
         for asetName, schemaSpec in stagedSchemaSpecs.items():
             if schemaSpec.schema_contains_subsamples:
-                setup_args = Subsample().generate_writer(
-                    txnctx=txnctx,
-                    aset_name=asetName,
-                    path=repo_pth,
-                    schema_specs=schemaSpec)
+                column = NestedSample._generate_writer(txnctx=txnctx,
+                                                       aset_name=asetName,
+                                                       path=repo_pth,
+                                                       schema_specs=schemaSpec)
             else:
-                setup_args = Sample().generate_writer(
-                    txnctx=txnctx,
-                    aset_name=asetName,
-                    path=repo_pth,
-                    schema_specs=schemaSpec)
-            arraysets[asetName] = setup_args.modifier
+                column = FlatSample._generate_writer(txnctx=txnctx,
+                                                     aset_name=asetName,
+                                                     path=repo_pth,
+                                                     schema_specs=schemaSpec)
+            arraysets[asetName] = column
 
         return cls('a', repo_pth, arraysets, hashenv, stageenv, stagehashenv, txnctx)
 
@@ -109,19 +107,16 @@ class ArraysetConstructors(type):
 
         for asetName, schemaSpec in cmtSchemaSpecs.items():
             if schemaSpec.schema_contains_subsamples:
-                setup_args = Subsample().generate_reader(
-                    txnctx=txnctx,
-                    aset_name=asetName,
-                    path=repo_pth,
-                    schema_specs=schemaSpec)
+                column = NestedSample._generate_reader(txnctx=txnctx,
+                                                       aset_name=asetName,
+                                                       path=repo_pth,
+                                                       schema_specs=schemaSpec)
             else:
-                setup_args = Sample().generate_reader(
-                    txnctx=txnctx,
-                    aset_name=asetName,
-                    path=repo_pth,
-                    schema_specs=schemaSpec)
-
-            arraysets[asetName] = setup_args.modifier
+                column = FlatSample._generate_reader(txnctx=txnctx,
+                                                     aset_name=asetName,
+                                                     path=repo_pth,
+                                                     schema_specs=schemaSpec)
+            arraysets[asetName] = column
 
         return cls('r', repo_pth, arraysets, None, None, None, None)
 
@@ -605,19 +600,18 @@ class Arraysets(metaclass=ArraysetConstructors):
 
         schemaSpec = arrayset_record_schema_raw_val_from_db_val(asetSchemaVal)
         if contains_subsamples:
-            setup_args = Subsample().generate_writer(
+            setup_args = NestedSample._generate_writer(
                 txnctx=self._txnctx,
                 aset_name=name,
                 path=self._repo_pth,
                 schema_specs=schemaSpec)
         else:
-            setup_args = Sample().generate_writer(
+            setup_args = FlatSample._generate_writer(
                 txnctx=self._txnctx,
                 aset_name=name,
                 path=self._repo_pth,
                 schema_specs=schemaSpec)
-        self._arraysets[name] = setup_args.modifier
-
+        self._arraysets[name] = setup_args
         return self.get(name)
 
     @writer_checkout_only

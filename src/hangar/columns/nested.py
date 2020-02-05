@@ -1,12 +1,17 @@
+"""Accessor column containing nested mapping of data under top level keys.
+
+All backends are supported.
+"""
 from contextlib import ExitStack
 from pathlib import Path
+from weakref import proxy
 from typing import (
     Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
 )
-from weakref import proxy
 
 import numpy as np
 
+from .constructor_nested import NestedSampleBuilder
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 from ..backends import (
@@ -41,12 +46,6 @@ MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 class CompatibleArray(NamedTuple):
     compatible: bool
     reason: str
-
-
-class SubsampleName(NamedTuple):
-    sample: str
-    subsample: str
-
 
 class FlatSubsample(object):
 
@@ -420,8 +419,8 @@ class FlatSubsample(object):
         """
         return self._schema_spec_get()
 
+    # ---------------- writer methods only after this point -------------------
 
-    @writer_checkout_only
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
 
@@ -460,7 +459,6 @@ class FlatSubsample(object):
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
 
-    @writer_checkout_only
     def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> bool:
 
         if not is_suitable_user_key(key):
@@ -508,7 +506,6 @@ class FlatSubsample(object):
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._subsamples[key] = hash_spec
 
-    @writer_checkout_only
     def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
         """Store a piece of data as a subsample. Convenience method to :meth:`add`.
 
@@ -533,7 +530,6 @@ class FlatSubsample(object):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
-    @writer_checkout_only
     def append(self, value: np.ndarray) -> KeyType:
         """Store some data in a subsample with an automatically generated key.
 
@@ -567,7 +563,6 @@ class FlatSubsample(object):
             self._perform_set(key, value)
             return key
 
-    @writer_checkout_only
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
         """Store data with the key/value pairs, overwriting existing keys.
 
@@ -642,7 +637,6 @@ class FlatSubsample(object):
                     f'isRecordDeleted: <{isRecordDeleted}>', f'DEBUG STRING: {self._debug_}')
             del self._subsamples[key]
 
-    @writer_checkout_only
     def pop(self, key: KeyType) -> np.ndarray:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
@@ -666,7 +660,7 @@ class FlatSubsample(object):
         return value
 
 
-class NestedSample(object):
+class NestedSample(metaclass=NestedSampleBuilder):
 
     __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path', '_stack',
                  '_schema_spec', '_schema_variable', '_schema_dtype_num',
@@ -1084,7 +1078,8 @@ class NestedSample(object):
         except KeyError:
             return default
 
-    @writer_checkout_only
+    # ---------------- writer methods only after this point -------------------
+
     def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
         """Determine if an array is compatible with the arraysets schema
 
@@ -1123,7 +1118,6 @@ class NestedSample(object):
         res = CompatibleArray(compatible=compatible, reason=reason)
         return res
 
-    @writer_checkout_only
     def _set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
 
         if not is_suitable_user_key(sample_key):
@@ -1155,7 +1149,6 @@ class NestedSample(object):
                 del self._samples[key]
                 raise e
 
-    @writer_checkout_only
     def __setitem__(self, key: KeyType, value: MapKeyArrType) -> None:
         """Store some subsample key / subsample data map, overwriting existing keys.
 
@@ -1171,7 +1164,6 @@ class NestedSample(object):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
-    @writer_checkout_only
     def update(self,
                other: Union[None, Dict[KeyType, MapKeyArrType],
                             Sequence[Sequence[Union[KeyType, MapKeyArrType]]]] = None,
@@ -1241,7 +1233,6 @@ class NestedSample(object):
             self._samples[key]._destruct()
             del self._samples[key]
 
-    @writer_checkout_only
     def pop(self, key: KeyType) -> Dict[KeyType, KeyArrMap]:
         """Retrieve some value for some key(s) and delete it in the same operation.
 

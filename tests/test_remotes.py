@@ -129,7 +129,6 @@ def test_push_and_clone_master_linear_history_multiple_commits(
     newRepo._env._close_environments()
 
 
-
 @pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [5, 10]])
 @pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 3], [3, 5]])
 def test_server_push_second_branch_with_new_commit(server_instance, repo,
@@ -582,11 +581,12 @@ def server_instance_nbytes_limit(managed_tmpdir, worker_id):
     yield address
 
     hangserver.env._close_environments()
-    server.stop(0.1)
-    time.sleep(0.2)
+    server.stop(0.05)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.3)
+        time.sleep(0.1)
+
 
 @pytest.fixture()
 def server_instance_push_restricted(managed_tmpdir, worker_id):
@@ -605,11 +605,11 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
     yield address
 
     hangserver.env._close_environments()
-    server.stop(0.1)
-    time.sleep(0.2)
+    server.stop(0.05)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.3)
+        time.sleep(0.1)
 
 
 # -----------------------------------------------------------------------------

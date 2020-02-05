@@ -11,6 +11,7 @@ from hangar.cli import cli
 from hangar.external import PluginManager
 from conftest import fixed_shape_backend_params
 
+
 # -------------------------------- test data ----------------------------------
 
 
@@ -283,7 +284,6 @@ def test_push_fetch_records(server_instance, backend):
             assert res.exit_code == 0
         finally:
             repo._env._close_environments()
-
 
 
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)

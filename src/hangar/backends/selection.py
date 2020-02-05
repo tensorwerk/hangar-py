@@ -83,6 +83,7 @@ Before proposing a new backend or making changes to this file, please consider
 reaching out to the Hangar core development team so we can guide you through the
 process.
 """
+import string
 from typing import Dict, Union, NamedTuple, Optional
 
 import numpy as np
@@ -114,6 +115,10 @@ BACKEND_ACCESSOR_MAP: AccessorMapType = {
     '60': None,               # url_60 - Reserved
 }
 
+_local_prefixes = string.digits[0:5] + string.ascii_lowercase
+BACKEND_IS_LOCAL_MAP: Dict[str, bool] = {
+    k: bool(k[0] in _local_prefixes) for k in BACKEND_ACCESSOR_MAP.keys()
+}
 
 
 # --------------------------- Backend Heuristics ------------------------------
