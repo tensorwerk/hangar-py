@@ -46,11 +46,6 @@ MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 AsetTxnType = Type['AsetTxn']
 
 
-class CompatibleArray(NamedTuple):
-    compatible: bool
-    reason: str
-
-
 class FlatSample(metaclass=FlatSampleBuilder):
     """Class implementing get access to data in a arrayset.
 

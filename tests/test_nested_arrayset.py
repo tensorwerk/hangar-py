@@ -1003,7 +1003,7 @@ class TestGetDataMethods:
                 assert_equal(res, subsample_value)
 
     def test_getitem_sample_getitem_subsample(self, initialized_arrayset, subsample_data_map):
-        from hangar.columns.nested import FlatSubsample
+        from hangar.columns.layout_nested import FlatSubsample
 
         aset = initialized_arrayset
         for sample_name, subsample_data in subsample_data_map.items():

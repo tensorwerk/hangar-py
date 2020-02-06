@@ -1,7 +1,7 @@
 from typing import Union
 
-from .flat import FlatSample
-from .nested import FlatSubsample, NestedSample
+from .layout_flat import FlatSample
+from .layout_nested import FlatSubsample, NestedSample
 from .common import AsetTxn
 
 ModifierTypes = Union[NestedSample, FlatSubsample]

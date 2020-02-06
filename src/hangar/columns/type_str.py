@@ -1,6 +1,8 @@
 from ..backends import BACKEND_OPTIONS_MAP, BACKEND_CAPABILITIES_MAP
 
 
+
+
 class SchemaVariableShape:
     _allowed_backends = ['30', '50']
 

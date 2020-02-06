@@ -270,7 +270,7 @@ class NestedSampleBuilder(type):
             state. Initailized structures defining and initializing access to
             the subsample data on disk.
         """
-        from .nested import FlatSubsample
+        from .layout_nested import FlatSubsample
 
         specs, bes = _nested_load_sample_keys_and_specs(aset_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
@@ -312,7 +312,7 @@ class NestedSampleBuilder(type):
             state. Initailized structures defining and initializing access to
             the subsample data on disk.
         """
-        from .nested import FlatSubsample
+        from .layout_nested import FlatSubsample
 
         default_backend = schema_spec['backend']
         default_backend_opts = schema_spec['backend_options']

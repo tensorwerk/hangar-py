@@ -1,5 +1,5 @@
-from .columntype_array import ArrayType
-from .columntype_string import StringType
+from .type_ndarray import ArrayType
+from .type_str import StringType
 
 
 class ColumnType:
