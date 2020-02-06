@@ -369,11 +369,10 @@ class Columns(metaclass=ArraysetConstructors):
                 raise ValueError(f'contains_subsamples argument must be bool, '
                                  f'not type {type(contains_subsamples)}')
 
-            option_definition = BACKEND_OPTIONS_MAP['30']
-            option_definition
-
         except (ValueError, LookupError) as e:
             raise e from None
+
+
 
 
     @writer_checkout_only

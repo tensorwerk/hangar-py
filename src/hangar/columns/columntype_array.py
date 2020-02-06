@@ -1,12 +1,10 @@
-from ..backends import BACKEND_OPTIONS_MAP, BACKEND_CAPABILITIES_MAP
 import numpy as np
+
+from ..backends import BACKEND_OPTIONS_MAP, BACKEND_CAPABILITIES_MAP
 
 
 class SchemaVariableShape:
-
     _allowed_backends = ['00', '01', '10', '50']
-    _local_backends = ['00', '01', '10']
-    _remote_backends = ['50']
 
     def __init__(self):
         self.BackendCapabilities = {
@@ -18,22 +16,13 @@ class SchemaVariableShape:
     def allowed_backends(self):
         return self._allowed_backends
 
-    @property
-    def local_backends(self):
-        return self._local_backends
-
-    @property
-    def remote_backends(self):
-        return self._remote_backends
-
     def specifier(self, shape, dtype, *args, **kwargs):
-        if 'backend' not in kwargs:
-            if 'backend_options' in kwargs:
-                raise ValueError(f'options set without specifying backend.')
-            else:
-                backend = '00'
-        else:
+        if 'backend' in kwargs:
             backend = kwargs['backend']
+        elif 'backend_options' in kwargs:
+            raise ValueError(f'options set without specifying backend.')
+        else:
+            backend = '00'
 
         if not self.isvalid(backend, shape, dtype):
             raise ValueError(backend, shape, dtype)
@@ -67,10 +56,7 @@ class SchemaVariableShape:
 
 
 class SchemaFixedShape:
-
     _allowed_backends = ['00', '10', '50']
-    _local_backends = ['00', '10']
-    _remote_backends = ['50']
 
     def __init__(self):
         self.BackendCapabilities = {
@@ -81,14 +67,6 @@ class SchemaFixedShape:
     @property
     def allowed_backends(self):
         return self._allowed_backends
-
-    @property
-    def local_backends(self):
-        return self._local_backends
-
-    @property
-    def remote_backends(self):
-        return self._remote_backends
 
     def specifier(self, shape, dtype, *args, **kwargs):
         if 'backend' not in kwargs:
@@ -131,8 +109,6 @@ class SchemaFixedShape:
 
 
 class ArrayType:
-
-    _coltype = 'ndarray'
     _allowed_schema = ['variable_shape', 'fixed_shape']
 
     def __init__(self):
@@ -142,14 +118,10 @@ class ArrayType:
         }
 
     @property
-    def column_dtype(self):
-        return self._coltype
-
-    @property
     def allowed_schemas(self):
         return self._allowed_schema
 
-    def specifier(self, schema_type,  *args, **kwargs):
+    def specifier(self, schema_type, *args, **kwargs):
         if not self.isvalid(schema_type):
             raise ValueError(schema_type)
 

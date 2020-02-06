@@ -99,7 +99,6 @@ class REMOTE_50_Capabilities:
 
 
 class REMOTE_50_Options:
-
     _fields_and_required = {}
     _permitted_values = {}
 

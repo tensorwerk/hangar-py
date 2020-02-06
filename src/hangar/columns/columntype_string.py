@@ -1,85 +1,66 @@
 from ..backends import BACKEND_OPTIONS_MAP, BACKEND_CAPABILITIES_MAP
-from ..utils import valfilter
 
 
 class SchemaVariableShape:
-
     _allowed_backends = ['30', '50']
-    _local_backends = ['30']
-    _remote_backends = ['50']
 
     def __init__(self):
-        pass
+        self.BackendCapabilities = {
+            be: BACKEND_CAPABILITIES_MAP[be]() for be in self._allowed_backends}
+        self.BackendOptions = {
+            be: BACKEND_OPTIONS_MAP[be]() for be in self._allowed_backends}
 
     @property
     def allowed_backends(self):
         return self._allowed_backends
 
-    @property
-    def local_backends(self):
-        return self._local_backends
+    def specifier(self, dtype, *args, **kwargs):
+        if 'backend' in kwargs:
+            backend = kwargs['backend']
+        elif 'backend_options' in kwargs:
+            raise ValueError(f'options set without specifying backend.')
+        else:
+            backend = '30'
 
-    @property
-    def remote_backends(self):
-        return self._remote_backends
+        if not self.isvalid(backend, dtype):
+            raise ValueError(backend, dtype)
 
-    def isvalid(self, backend, options):
-        if backend not in self._allowed_backends:
-            return False
+        if 'backend_options' in kwargs:
+            backend_options = kwargs['backend_options']
+            if not self.BackendOptions[backend].isvalid(backend_options):
+                raise ValueError(backend_options)
+        else:
+            backend_options = self.BackendOptions[backend].default
 
-        if not isinstance(options, dict):
-            return False
+        return {'backend': backend,
+                'backend_options': backend_options,
+                'dtype': dtype}
 
-        for opt, val in options.items():
-            if opt not in self.fields:
-                return False
-            elif val not in self._permitted_values[opt]:
-                return False
-
-        for field in self.required_fields:
-            if field not in options:
-                return False
-
-        return True
-
-    def specifier(self, backend, options):
-        if not self.isvalid(backend, options):
-            raise ValueError(backend, options)
-        return {
-            'backend': backend,
-            **options
-        }
-
-
-SchemaNameClassMap = {
-    'variable_shape': SchemaVariableShape,
-}
+    def isvalid(self, backend, dtype):
+        return ((backend in self._allowed_backends) and (
+                    dtype in self.BackendCapabilities[backend].allowed_dtypes))
 
 
 class StringType:
-
-    _coltype = 'str'
-    _allowed_schema = ['variable_shape']
+    _allowed_schemas = ['variable_shape']
 
     def __init__(self):
-        pass
+        self.SchemaNameClassMap = {
+            'variable_shape': SchemaVariableShape()
+        }
 
     @property
-    def column_dtype(self):
-        return self._coltype
+    def allowed_schemas(self):
+        return self._allowed_schemas
 
-    @property
-    def allowed_schema(self):
-        return self._allowed_schema
+    def specifier(self, schema_type, *args, **kwargs):
+        if not self.isvalid(schema_type):
+            raise ValueError(schema_type)
 
-    @property
-    def default(self):
-        return {'schema': 'variable_shape'}
-
-    def specifier(self, schema):
-        if not self.isvalid(schema):
-            raise ValueError(schema)
-        return {'schema': schema}
+        res = {'schema_type': schema_type}
+        propogator = self.SchemaNameClassMap[schema_type]
+        res.update(propogator.specifier(*args, **kwargs))
+        return res
 
     def isvalid(self, schema):
-        return schema in self.allowed_schema
+        return schema in self.allowed_schemas

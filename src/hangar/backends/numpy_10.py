@@ -132,10 +132,10 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
 class NUMPY_10_Capabilities:
 
     _allowed_dtypes = [
-        np.uint8, np.uint16, np.uint32, np.uint64,
-        np.int8, np.int16, np.int32, np.int64,
-        np.float16, np.float32, np.float64, np.float128,
-        np.bool
+        np.dtype(item) for item in [
+            np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
+            np.int8, np.int16, np.int32, np.int64,
+            np.float16, np.float32, np.float64, np.float128]
     ]
     _allowed_order = ['C']
     _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
@@ -164,7 +164,6 @@ class NUMPY_10_Capabilities:
 
 
 class NUMPY_10_Options:
-
     _fields_and_required = {}
     _permitted_values = {}
 

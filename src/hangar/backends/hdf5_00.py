@@ -236,7 +236,6 @@ def hdf5_00_encode(uid: str, cksum: str, dset: int, dset_idx: int, shape: Tuple[
 
 
 class HDF5_00_Capabilities:
-
     _allowed_dtypes = [
         np.dtype(item) for item in [
             np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
@@ -259,10 +258,8 @@ class HDF5_00_Capabilities:
 
     @property
     def allowed(self):
-        return {
-            'dtypes': self.allowed_dtypes,
-            'order': self.allowed_order,
-        }
+        return {'dtypes': self.allowed_dtypes,
+                'order': self.allowed_order}
 
     @property
     def init_requires(self):

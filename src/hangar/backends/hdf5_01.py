@@ -278,12 +278,11 @@ HDF5_01_MapTypes = MutableMapping[str, Union[h5py.File, Callable[[], h5py.File]]
 
 
 class HDF5_01_Capabilities:
-
     _allowed_dtypes = [
-        np.uint8, np.uint16, np.uint32, np.uint64,
-        np.int8, np.int16, np.int32, np.int64,
-        np.float16, np.float32, np.float64, np.float128,
-        np.bool
+        np.dtype(item) for item in [
+            np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
+            np.int8, np.int16, np.int32, np.int64,
+            np.float16, np.float32, np.float64, np.float128]
     ]
     _allowed_order = ['C']
     _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
@@ -301,10 +300,8 @@ class HDF5_01_Capabilities:
 
     @property
     def allowed(self):
-        return {
-            'dtypes': self.allowed_dtypes,
-            'order': self.allowed_order,
-        }
+        return {'dtypes': self.allowed_dtypes,
+                'order': self.allowed_order}
 
     @property
     def init_requires(self):
@@ -312,7 +309,6 @@ class HDF5_01_Capabilities:
 
 
 class HDF5_01_Options:
-
     _fields_and_required = {
         'complib': False,
         'complevel': False,
@@ -428,7 +424,7 @@ class HDF5_01_FileHandles(object):
     """
 
     def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
-        self.path: os.PathLike = repo_path
+        self.path: Path = repo_path
         self.schema_shape: tuple = schema_shape
         self.schema_dtype: np.dtype = schema_dtype
         self._dflt_backend_opts: Optional[dict] = None
