@@ -13,6 +13,7 @@ from typing import (
 
 import numpy as np
 
+from .validation import DataValidator
 from .constructors import FlatSampleBuilder
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 from ..op_state import reader_checkout_only, writer_checkout_only
@@ -23,7 +24,7 @@ from ..backends import (
     AccessorMapType,
     DataHashSpecsType,
 )
-from ..records.hashmachine import array_hash_digest, schema_hash_digest
+from ..records.hashmachine import array_hash_digest, schema_hash_digest, metadata_hash_digest
 from ..records.parsing import (
     arrayset_record_schema_db_key_from_raw_key,
     arrayset_record_schema_db_val_from_raw_val,
@@ -79,7 +80,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
                  '_schema_spec', '_schema_variable', '_schema_dtype_num',
                  '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
                  '_dflt_backend_opts', '_contains_subsamples', '_stack',
-                 '_txnctx', '_enter_count')
+                 '_txnctx', '_enter_count', '_datavalidator')
     _attrs = __slots__
 
     def __init__(self,
@@ -100,16 +101,19 @@ class FlatSample(metaclass=FlatSampleBuilder):
         self._path = repo_path
 
         self._schema_spec = schema_spec
-        self._schema_variable = schema_spec.schema_is_var
-        self._schema_dtype_num = schema_spec.schema_dtype
-        self._schema_max_shape = tuple(schema_spec.schema_max_shape)
-        self._dflt_schema_hash = schema_spec.schema_hash
-        self._dflt_backend = schema_spec.schema_default_backend
-        self._dflt_backend_opts = schema_spec.schema_default_backend_opts
-        self._contains_subsamples = schema_spec.schema_contains_subsamples
+        # self._schema_variable = schema_spec.schema_is_var
+        # self._schema_dtype_num = schema_spec.schema_dtype
+        # self._schema_max_shape = tuple(schema_spec.schema_max_shape)
+        self._dflt_schema_hash = schema_spec['schema_hash']
+        self._dflt_backend = schema_spec['backend']
+        self._dflt_backend_opts = schema_spec['backend_options']
+        # self._contains_subsamples = schema_spec.schema_contains_subsamples
 
         self._txnctx = aset_ctx
         self._enter_count = 0
+
+        self._datavalidator = DataValidator()
+        self._datavalidator.schema = self._schema_spec
 
     @property
     def _debug_(self):  # pragma: no cover
@@ -130,6 +134,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
             '_txnctx': self._txnctx._debug_,
             '_stack': self._stack._exit_callbacks if self._stack else self._stack,
             '_enter_count': self._enter_count,
+            '_datavalidator': self._datavalidator.__dict__,
         }
 
     def __repr__(self):
@@ -147,14 +152,14 @@ class FlatSample(metaclass=FlatSampleBuilder):
         res = f'Hangar {self.__class__.__qualname__} \
                 \n    Arrayset Name            : {self._asetn}\
                 \n    Schema Hash              : {self._dflt_schema_hash}\
-                \n    Variable Shape           : {bool(int(self._schema_variable))}\
-                \n    (max) Shape              : {self._schema_max_shape}\
-                \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
                 \n    Access Mode              : {self._mode}\
                 \n    Number of Samples        : {self.__len__()}\
                 \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\
                 \n    Contains Subsamples      : False\n'
         p.text(res)
+                # \n    (max) Shape              : {self._schema_max_shape}\
+                # \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
+                # \n    Variable Shape           : {bool(int(self._schema_variable))}\
 
     def _ipython_key_completions_(self):  # pragma: no cover
         """Let ipython know that any key based access can use the arrayset keys
@@ -328,23 +333,23 @@ class FlatSample(metaclass=FlatSampleBuilder):
         """
         return self._asetn
 
-    @property
-    def dtype(self) -> np.dtype:
-        """Datatype of the arrayset schema.
-        """
-        return np.typeDict[self._schema_dtype_num]
-
-    @property
-    def shape(self) -> Tuple[int]:
-        """Shape (or `max_shape`) of the arrayset sample tensors.
-        """
-        return self._schema_max_shape
-
-    @property
-    def variable_shape(self) -> bool:
-        """Bool indicating if arrayset schema is variable sized.
-        """
-        return self._schema_variable
+    # @property
+    # def dtype(self) -> np.dtype:
+    #     """Datatype of the arrayset schema.
+    #     """
+    #     return np.typeDict[self._schema_dtype_num]
+    #
+    # @property
+    # def shape(self) -> Tuple[int]:
+    #     """Shape (or `max_shape`) of the arrayset sample tensors.
+    #     """
+    #     return self._schema_max_shape
+    #
+    # @property
+    # def variable_shape(self) -> bool:
+    #     """Bool indicating if arrayset schema is variable sized.
+    #     """
+    #     return self._schema_variable
 
     @property
     def iswriteable(self) -> bool:
@@ -489,43 +494,6 @@ class FlatSample(metaclass=FlatSampleBuilder):
 
     # ---------------- writer methods only after this point -------------------
 
-    def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
-        """Determine if an array is compatible with the arraysets schema
-
-        Parameters
-        ----------
-        data : :class:`numpy.ndarray`
-            array to check compatibility for
-
-        Returns
-        -------
-        CompatibleArray
-            compatible and reason field
-        """
-        SCHEMA_DTYPE = self._schema_spec.schema_dtype
-        MAX_SHAPE = self._schema_spec.schema_max_shape
-
-        reason = ''
-        if not isinstance(data, np.ndarray):
-            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
-        elif data.dtype.num != SCHEMA_DTYPE:
-            reason = f'dtype: {data.dtype} != aset: {np.typeDict[SCHEMA_DTYPE]}.'
-        elif not data.flags.c_contiguous:
-            reason = f'`data` must be "C" contiguous array.'
-
-        if reason == '':
-            if self._schema_spec.schema_is_var is True:
-                if data.ndim != len(MAX_SHAPE):
-                    reason = f'data rank {data.ndim} != aset rank {len(MAX_SHAPE)}'
-                for dDimSize, schDimSize in zip(data.shape, MAX_SHAPE):
-                    if dDimSize > schDimSize:
-                        reason = f'shape {data.shape} exceeds schema max {MAX_SHAPE}'
-            elif data.shape != MAX_SHAPE:
-                reason = f'data shape {data.shape} != fixed schema {MAX_SHAPE}'
-
-        compatible = True if reason == '' else False
-        return CompatibleArray(compatible, reason)
-
     def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
         """Verify if key / value pair is valid to be written in this arrayset
 
@@ -544,7 +512,8 @@ class FlatSample(metaclass=FlatSampleBuilder):
         """
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
-        isCompat = self._verify_array_compatible(value)
+
+        isCompat = self._datavalidator.verify_data_compatible(value)
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
@@ -559,7 +528,8 @@ class FlatSample(metaclass=FlatSampleBuilder):
         value : np.ndarray
             tensor data to store
         """
-        full_hash = array_hash_digest(value)
+        # full_hash = array_hash_digest(value)  # TODO TESTING
+        full_hash = metadata_hash_digest(value)
         hashKey = hash_data_db_key_from_raw_key(full_hash)
         # check if data record already exists with given key
         dataRecKey = data_record_db_key_from_raw_key(self._asetn, key)
@@ -855,4 +825,5 @@ class FlatSample(metaclass=FlatSampleBuilder):
         self._dflt_backend_opts = beopts.opts
         self._dflt_schema_hash = schema_hash
         self._schema_spec = rawAsetSchema
+        self._datavalidator.schema = self._schema_spec
         return

@@ -611,7 +611,7 @@ class WriterCheckout(GetMixin):
                 elif not (len(value) == nAsets):
                     raise ValueError(f'Num values: {len(value)} != num arraysets {nAsets}')
                 for aset, val in zip(asets, value):
-                    isCompat = aset._verify_array_compatible(val)
+                    isCompat = aset._datavalidator.verify_data_compatible(value)
                     if not isCompat.compatible:
                         raise ValueError(isCompat.reason)
                 for sampleName in sampleNames:
@@ -625,7 +625,7 @@ class WriterCheckout(GetMixin):
                     raise ValueError(f'Num values: {len(value)} != num samples {nSamples}')
                 for aset in asets:
                     for val in value:
-                        isCompat = aset._verify_array_compatible(val)
+                        isCompat = aset._datavalidator.verify_data_compatible(val)
                         if not isCompat.compatible:
                             raise ValueError(isCompat.reason)
                 for aset in asets:

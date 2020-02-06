@@ -16,11 +16,14 @@ import lmdb
 import numpy as np
 from wrapt import ObjectProxy
 
+from .columntype import spec_allowed_backends
+from .validation import DataValidator
 from .common import AsetTxn
 from ..records.parsing import hash_data_db_key_from_raw_key, RawArraysetSchemaVal
 from ..records.queries import RecordQuery
-from ..backends import (BACKEND_ACCESSOR_MAP, BACKEND_IS_LOCAL_MAP,
-                        backend_decoder, AccessorMapType, DataHashSpecsType)
+from ..backends import (
+    BACKEND_ACCESSOR_MAP, BACKEND_IS_LOCAL_MAP, BACKEND_CAPABILITIES_MAP,
+    backend_decoder, AccessorMapType, DataHashSpecsType)
 
 
 # --------------- methods common to all column layout types -------------------
@@ -31,24 +34,22 @@ FlatSampleMapType = Dict[KeyType, DataHashSpecsType]
 NestedSampleMapType = Dict[KeyType, FlatSampleMapType]
 
 
-def _open_file_handles(used_backends, path, shape, dtype, mode) -> AccessorMapType:
+def _open_file_handles(backends, path, mode, schema_spec) -> AccessorMapType:
     """Open backend accessor file handles for reading
 
     Parameters
     ----------
-    used_backends : Collection[str]
-        backend format codes which should be opened, if ``mode == 'a'``,
-        then this argument can be set to an empty list and all available
-        backends will be prepared for writing in the column.
+    backends : Collection[str]
+        if ``mode == 'r'`` then this should be the used backend format
+        codes in the column. if ``mode == 'a'``, then this should be a
+        list of the allowed backend format codes this schema can feasably
+        write to.
     path : Path
         path to the hangar repository on disk
-    shape : Tuple[int]
-        maximum shape contained data can be sized to; as defined in the
-        arrayset schema
-    dtype : np.dtype
-        data type of the arrays stored in the backend
     mode : str
         one of ['r', 'a'] indicating read or write mode to open backends in.
+    schema_spec : dict
+        schema spec so required values can be filled in to backend openers.
 
     Returns
     -------
@@ -58,11 +59,28 @@ def _open_file_handles(used_backends, path, shape, dtype, mode) -> AccessorMapTy
     """
     fhandles = {}
     for be, accessor in BACKEND_ACCESSOR_MAP.items():
-        if (be in used_backends) or (mode == 'a'):
+        if be in backends:
             if accessor is None:
                 continue
-            fhandles[be] = accessor(
-                repo_path=path, schema_shape=shape, schema_dtype=dtype)
+
+            init_requires = BACKEND_CAPABILITIES_MAP[be]().init_requires
+            # TODO rework names for this hack
+            kwargs = {}
+            for arg in init_requires:
+                if arg == 'repo_path':
+                    kwargs[arg] = path
+                elif arg == 'schema_shape':
+                    if 'shape' in schema_spec:
+                        kwargs[arg] = schema_spec['shape']
+                    else:
+                        kwargs[arg] = None
+                elif arg == 'schema_dtype':
+                    if 'dtype_num' in schema_spec:
+                        kwargs[arg] = np.typeDict[schema_spec['dtype_num']]
+                    else:
+                        kwargs[arg] = None
+
+            fhandles[be] = accessor(**kwargs)
             fhandles[be].open(mode=mode)
     return fhandles
 
@@ -125,7 +143,7 @@ class FlatSampleBuilder(type):
             generated for
         path : Path
             path to the repository on disk
-        schema_spec : RawArraysetSchemaVal
+        schema_spec : dict
             schema definition of the arrayset.
 
         Returns
@@ -135,14 +153,11 @@ class FlatSampleBuilder(type):
             state. initailized structures defining and initializing access to
             the sample data on disk.
         """
-        shape = schema_spec.schema_max_shape
-        dtype = np.typeDict[schema_spec.schema_dtype]
-
         sspecs, bes = _flat_load_sample_keys_and_specs(aset_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
             _warn_remote(aset_name)
         file_handles = _open_file_handles(
-            used_backends=bes, path=path, shape=shape, dtype=dtype, mode='r')
+            backends=bes, path=path, mode='r', schema_spec=schema_spec)
 
         return cls(aset_name=aset_name,
                    samples=sspecs,
@@ -163,7 +178,7 @@ class FlatSampleBuilder(type):
             generated for
         path : Path
             path to the repository on disk
-        schema_spec : RawArraysetSchemaVal
+        schema_spec : dict
             schema definition of the arrayset.
 
         Returns
@@ -173,16 +188,15 @@ class FlatSampleBuilder(type):
             state. initailized structures defining and initializing access to
             the sample data on disk.
         """
-        shape = schema_spec.schema_max_shape
-        dtype = np.typeDict[schema_spec.schema_dtype]
-        default_backend = schema_spec.schema_default_backend
-        default_backend_opts = schema_spec.schema_default_backend_opts
+        default_backend = schema_spec['backend']
+        default_backend_opts = schema_spec['backend_options']
 
         sspecs, bes = _flat_load_sample_keys_and_specs(aset_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
             _warn_remote(aset_name)
+        allowed_backends = spec_allowed_backends(schema_spec)
         file_handles = _open_file_handles(
-            used_backends=[], path=path, shape=shape, dtype=dtype, mode='a')
+            backends=allowed_backends, path=path, mode='a', schema_spec=schema_spec)
         file_handles[default_backend].backend_opts = default_backend_opts
 
         return cls(aset_ctx=txnctx,
@@ -246,7 +260,7 @@ class NestedSampleBuilder(type):
             generated for
         path : Path
             path to the repository on disk
-        schema_spec : RawArraysetSchemaVal
+        schema_spec : dict
             schema definition of the arrayset.
 
         Returns
@@ -258,14 +272,11 @@ class NestedSampleBuilder(type):
         """
         from .nested import FlatSubsample
 
-        shape = schema_spec.schema_max_shape
-        dtype = np.typeDict[schema_spec.schema_dtype]
-
         specs, bes = _nested_load_sample_keys_and_specs(aset_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
             _warn_remote(aset_name)
         fhand = _open_file_handles(
-            used_backends=bes, path=path, shape=shape, dtype=dtype, mode='r')
+            backends=bes, path=path, mode='r', schema_spec=schema_spec)
         fhand['enter_count'] = 0
         sample_specs = {}
         for samp, subspecs in specs.items():
@@ -291,7 +302,7 @@ class NestedSampleBuilder(type):
             generated for
         path : Path
             path to the repository on disk
-        schema_spec : RawArraysetSchemaVal
+        schema_spec : dict
             schema definition of the arrayset.
 
         Returns
@@ -303,16 +314,18 @@ class NestedSampleBuilder(type):
         """
         from .nested import FlatSubsample
 
-        shape = schema_spec.schema_max_shape
-        dtype = np.typeDict[schema_spec.schema_dtype]
-        default_backend = schema_spec.schema_default_backend
-        default_backend_opts = schema_spec.schema_default_backend_opts
+        default_backend = schema_spec['backend']
+        default_backend_opts = schema_spec['backend_options']
 
+        datavalidator = DataValidator()
+        datavalidator.schema = schema_spec
         specs, bes = _nested_load_sample_keys_and_specs(aset_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
             _warn_remote(aset_name)
+
+        allowed_backends = spec_allowed_backends(schema_spec)
         fhand = _open_file_handles(
-            used_backends=[], path=path, shape=shape, dtype=dtype, mode='a')
+            backends=allowed_backends, path=path, mode='a', schema_spec=schema_spec)
         fhand[default_backend].backend_opts = default_backend_opts
         fhand['enter_count'] = 0
         fhand['schema_spec'] = schema_spec
@@ -321,6 +334,7 @@ class NestedSampleBuilder(type):
         samples = {}
         for samp, subspecs in specs.items():
             samples[samp] = FlatSubsample(
+                datavalidator=proxy(DataValidator),
                 aset_ctx=proxy(txnctx),
                 asetn=aset_name,
                 samplen=samp,
@@ -328,7 +342,8 @@ class NestedSampleBuilder(type):
                 specs=subspecs,
                 mode='a')
 
-        return cls(aset_ctx=txnctx,
+        return cls(datavalidator=datavalidator,
+                   aset_ctx=txnctx,
                    aset_name=aset_name,
                    samples=samples,
                    backend_handles=fhand,
@@ -434,3 +449,50 @@ class ArraysetConstructors(type):
                    dataenv=None,
                    stagehashenv=None,
                    txnctx=None)
+
+
+    def _testing(cls, repo_pth, hashenv, stageenv, stagehashenv):
+        """Class method factory to checkout :class:`Arraysets` in write mode
+
+        Once you get here, we assume the write lock verification has
+        passed, and that write operations are safe to perform.
+
+        Parameters
+        ----------
+        repo_pth : Path
+            directory path to the hangar repository on disk
+        hashenv : lmdb.Environment
+            environment where tensor data hash records are open in write mode.
+        stageenv : lmdb.Environment
+            environment where staging records (dataenv) are opened in write mode.
+        stagehashenv: lmdb.Environment
+            environment where the staged hash records are stored in write mode
+
+        Returns
+        -------
+        :class:`~arrayset.Arraysets`
+            Interface class with write-enabled attributes activate which contains
+            live arrayset data accessors in `write` mode.
+        """
+        from . import NestedSample, FlatSample
+
+        arraysets = {}
+        txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
+        query = RecordQuery(stageenv)
+        stagedSchemaSpecs = query.schema_specs()
+        for asetn, schema in stagedSchemaSpecs.items():
+            if schema.schema_contains_subsamples:
+                column = NestedSample._generate_writer(
+                    txnctx=txnctx, aset_name=asetn, path=repo_pth, schema_spec=schema)
+            else:
+                column = FlatSample._generate_writer(
+                    txnctx=txnctx, aset_name=asetn, path=repo_pth, schema_spec=schema)
+            arraysets[asetn] = column
+
+        return cls(mode='a',
+                   repo_pth=repo_pth,
+                   arraysets=arraysets,
+                   hashenv=hashenv,
+                   dataenv=stageenv,
+                   stagehashenv=stagehashenv,
+                   txnctx=txnctx,)

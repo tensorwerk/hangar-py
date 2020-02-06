@@ -68,3 +68,16 @@ class ColumnSpec:
     def isvalid(self, column_layout, column_type):
         return all([column_layout in self.allowed_layouts,
                     column_type in self.allowed_types])
+
+
+def spec_allowed_backends(spec):
+    """Generate list of allowed backends for a schema specification dict
+    """
+    coltype = ColumnType()
+    rec_column_type = spec['column_type']
+    schematype = coltype.ColumnTypeClassMap[rec_column_type]
+
+    rec_schema_type = spec['schema_type']
+    schema = schematype.SchemaNameClassMap[rec_schema_type]
+    return schema.allowed_backends
+

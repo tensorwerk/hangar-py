@@ -430,6 +430,7 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
         'schema_default_backend_opts': schema_default_backend_opts,
         'schema_contains_subsamples': schema_contains_subsamples,
     }
+
     db_schema_val = json.dumps(schema_val, separators=(',', ':')).encode()
     return db_schema_val
 

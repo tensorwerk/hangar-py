@@ -71,7 +71,7 @@ def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
     contains_subsamples : bool
         does the schema contain subsamples?
     backend_code : str
-        backend format code which specified backend new samples writes to this
+        backend format code which specified bwackend new samples writes to this
         schema are stored in.
     backend_opts : dict
         backend options applied to new writes of samples to this schema.

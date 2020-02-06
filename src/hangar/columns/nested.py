@@ -11,6 +11,7 @@ from typing import (
 
 import numpy as np
 
+from .validation import DataValidator
 from .constructors import NestedSampleBuilder
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
@@ -43,15 +44,10 @@ KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
 MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 
 
-class CompatibleArray(NamedTuple):
-    compatible: bool
-    reason: str
-
-
 class FlatSubsample(object):
 
     __slots__ = ('_asetn', '_stack', '_be_fs', '_mode',
-                 '_subsamples', '_txnctx', '_samplen')
+                 '_subsamples', '_txnctx', '_samplen', '_datavalidator')
 
     def __init__(self,
                  asetn: str,
@@ -60,6 +56,7 @@ class FlatSubsample(object):
                  specs: Dict[KeyType, DataHashSpecsType],
                  mode: str,
                  aset_ctx: Optional[AsetTxnType] = None,
+                 datavalidator: Optional[DataValidator] = None,
                  *args, **kwargs):
 
         self._asetn = asetn
@@ -69,6 +66,7 @@ class FlatSubsample(object):
         self._mode = mode
         self._stack: Optional[ExitStack] = None
         self._txnctx = aset_ctx
+        self._datavalidator = datavalidator
 
     @property
     def _debug_(self):  # pragma: no cover
@@ -398,6 +396,8 @@ class FlatSubsample(object):
         except KeyError:
             return default
 
+    # ---------------- writer methods only after this point -------------------
+
     @writer_checkout_only
     def _schema_spec_get(self) -> RawArraysetSchemaVal:
         """Nonstandard descriptor method. See notes in ``_schema_spec.getter``.
@@ -420,51 +420,11 @@ class FlatSubsample(object):
         """
         return self._schema_spec_get()
 
-    # ---------------- writer methods only after this point -------------------
-
-    def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
-        """Determine if an array is compatible with the arraysets schema
-
-        Parameters
-        ----------
-        data : :class:`numpy.ndarray`
-            array to check compatibility for
-
-        Returns
-        -------
-        CompatibleArray
-            compatible and reason field
-        """
-        SCHEMA_DTYPE = self._schema_spec.schema_dtype
-        MAX_SHAPE = self._schema_spec.schema_max_shape
-
-        reason = ''
-        if not isinstance(data, np.ndarray):
-            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
-        elif data.dtype.num != SCHEMA_DTYPE:
-            reason = f'dtype: {data.dtype} != aset: {np.typeDict[SCHEMA_DTYPE]}.'
-        elif not data.flags.c_contiguous:
-            reason = f'`data` must be "C" contiguous array.'
-
-        if reason == '':
-            if self._schema_spec.schema_is_var is True:
-                if data.ndim != len(MAX_SHAPE):
-                    reason = f'data rank {data.ndim} != aset rank {len(MAX_SHAPE)}'
-                for dDimSize, schDimSize in zip(data.shape, MAX_SHAPE):
-                    if dDimSize > schDimSize:
-                        reason = f'shape {data.shape} exceeds schema max {MAX_SHAPE}'
-            elif data.shape != MAX_SHAPE:
-                reason = f'data shape {data.shape} != fixed schema {MAX_SHAPE}'
-
-        compatible = True if reason == '' else False
-        res = CompatibleArray(compatible=compatible, reason=reason)
-        return res
-
-    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> bool:
+    def _set_arg_validate(self, key: KeyType, value: np.ndarray):
 
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
-        isCompat = self._verify_array_compatible(value)
+        isCompat = self._datavalidator.verify_data_compatible(value)
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
@@ -666,7 +626,8 @@ class NestedSample(metaclass=NestedSampleBuilder):
     __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path', '_stack',
                  '_schema_spec', '_schema_variable', '_schema_dtype_num',
                  '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
-                 '_dflt_backend_opts', '_contains_subsamples', '_txnctx')
+                 '_dflt_backend_opts', '_contains_subsamples', '_txnctx',
+                 '_datavalidator')
 
     def __init__(self,
                  aset_name: str,
@@ -676,6 +637,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
                  repo_path: Path,
                  mode: str,
                  aset_ctx: Optional[AsetTxnType] = None,
+                 datavalidator: Optional[DataValidator] = None,
                  *args, **kwargs):
 
         self._mode = mode
@@ -694,6 +656,8 @@ class NestedSample(metaclass=NestedSampleBuilder):
         self._dflt_backend = schema_spec.schema_default_backend
         self._dflt_backend_opts = schema_spec.schema_default_backend_opts
         self._contains_subsamples = schema_spec.schema_contains_subsamples
+
+        self._datavalidator = datavalidator
 
     def __repr__(self):
         res = f'{self.__class__}('\
@@ -1081,44 +1045,6 @@ class NestedSample(metaclass=NestedSampleBuilder):
 
     # ---------------- writer methods only after this point -------------------
 
-    def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
-        """Determine if an array is compatible with the arraysets schema
-
-        Parameters
-        ----------
-        data : :class:`numpy.ndarray`
-            array to check compatibility for
-
-        Returns
-        -------
-        CompatibleArray
-            compatible and reason field
-        """
-        SCHEMA_DTYPE = self._schema_dtype_num
-        MAX_SHAPE = self._schema_max_shape
-
-        reason = ''
-        if not isinstance(data, np.ndarray):
-            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
-        elif data.dtype.num != SCHEMA_DTYPE:
-            reason = f'dtype: {data.dtype} != aset: {np.typeDict[SCHEMA_DTYPE]}.'
-        elif not data.flags.c_contiguous:
-            reason = f'`data` must be "C" contiguous array.'
-
-        if reason == '':
-            if self._schema_spec.schema_is_var is True:
-                if data.ndim != len(MAX_SHAPE):
-                    reason = f'data rank {data.ndim} != aset rank {len(MAX_SHAPE)}'
-                for dDimSize, schDimSize in zip(data.shape, MAX_SHAPE):
-                    if dDimSize > schDimSize:
-                        reason = f'shape {data.shape} exceeds schema max {MAX_SHAPE}'
-            elif data.shape != MAX_SHAPE:
-                reason = f'data shape {data.shape} != fixed schema {MAX_SHAPE}'
-
-        compatible = True if reason == '' else False
-        res = CompatibleArray(compatible=compatible, reason=reason)
-        return res
-
     def _set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
 
         if not is_suitable_user_key(sample_key):
@@ -1127,7 +1053,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         for subsample_key, subsample_val in subsample_map.items():
             if not is_suitable_user_key(subsample_key):
                 raise ValueError(f'Sample name `{sample_key}` is not suitable.')
-            isCompat = self._verify_array_compatible(subsample_val)
+            isCompat = self._datavalidator.verify_data_compatible(subsample_val)
             if not isCompat.compatible:
                 raise ValueError(isCompat.reason)
 
@@ -1137,6 +1063,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
             self._samples[key].update(value)
         else:
             self._samples[key] = FlatSubsample(
+                datavalidator=proxy(self._datavalidator),
                 aset_ctx=proxy(self._txnctx),
                 asetn=self._asetn,
                 samplen=key,
@@ -1332,4 +1259,5 @@ class NestedSample(metaclass=NestedSampleBuilder):
         self._dflt_backend_opts = beopts.opts
         self._dflt_schema_hash = schema_hash
         self._schema_spec = rawAsetSchema
+        self._datavalidator.schema = self._schema_spec
         return

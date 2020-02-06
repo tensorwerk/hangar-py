@@ -127,6 +127,7 @@ class LMDB_30_FileHandles:
         self.DATADIR.mkdir(exist_ok=True)
 
     def __enter__(self):
+
         return self
 
     def __exit__(self, *exc):

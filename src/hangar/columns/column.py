@@ -5,16 +5,28 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 import lmdb
 import numpy as np
 
+from .columntype import ColumnSpec
 from .constructors import ArraysetConstructors
-from ..backends import parse_user_backend_opts, BACKEND_OPTIONS_MAP, BACKEND_CAPABILITIES_MAP
+from ..backends import (
+    parse_user_backend_opts,
+    BACKEND_OPTIONS_MAP,
+    BACKEND_CAPABILITIES_MAP,
+    backend_from_heuristics,
+)
 from ..txnctx import TxnRegister
-from ..records.hashmachine import schema_hash_digest
+from .column_parsers import (
+    schema_hash_digest,
+    schema_db_key_from_column_name,
+    schema_db_val_from_spec,
+    schema_spec_from_db_val,
+    schema_hash_db_key_from_digest,
+)
 from ..records.parsing import (
     arrayset_record_count_range_key,
-    arrayset_record_schema_db_key_from_raw_key,
-    arrayset_record_schema_db_val_from_raw_val,
-    arrayset_record_schema_raw_val_from_db_val,
-    hash_schema_db_key_from_raw_key
+    # arrayset_record_schema_db_key_from_raw_key,
+    # arrayset_record_schema_db_val_from_raw_val,
+    # arrayset_record_schema_raw_val_from_db_val,
+    # hash_schema_db_key_from_raw_key
 )
 from ..op_state import writer_checkout_only
 from ..utils import is_suitable_user_key, is_ascii
@@ -372,19 +384,57 @@ class Columns(metaclass=ArraysetConstructors):
         except (ValueError, LookupError) as e:
             raise e from None
 
+        kwargs = {
+            'collayout': 'nested' if contains_subsamples else 'flat',
+            'coltype': 'str',
+            'dtype': 'str',
+            'schema_type': 'variable_shape'
+        }
+        if backend is not None:
+            kwargs['backend'] = backend
+        if backend_options is not None:
+            kwargs['backend_options'] = backend_options
 
+        schema = ColumnSpec().specifier(**kwargs)
+        schema_digest = schema_hash_digest(schema)
+        schema['schema_hash'] = schema_digest
+        columnSchemaKey = schema_db_key_from_column_name(name)
+        columnSchemaVal = schema_db_val_from_spec(schema)
+        hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
+        # -------- set vals in lmdb only after schema is sure to exist --------
+
+        txnctx = AsetTxn(self._dataenv, self._hashenv, self._stagehashenv)
+        with txnctx.write() as ctx:
+            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
+
+        if contains_subsamples:
+            setup_args = NestedSample._generate_writer(
+                txnctx=self._txnctx,
+                aset_name=name,
+                path=self._repo_pth,
+                schema_spec=schema)
+        else:
+            setup_args = FlatSample._generate_writer(
+                txnctx=self._txnctx,
+                aset_name=name,
+                path=self._repo_pth,
+                schema_spec=schema)
+        self._columns[name] = setup_args
+        return self.get(name)
 
     @writer_checkout_only
-    def init_column(self,
-                    name: str,
-                    shape: Union[int, Tuple[int]] = None,
-                    dtype: np.dtype = None,
-                    prototype: np.ndarray = None,
-                    variable_shape: bool = False,
-                    contains_subsamples: bool = False,
-                    *,
-                    backend_opts: Optional[Union[str, dict]] = None) -> ModifierTypes:
+    def init_ndarray_column(self,
+                            name: str,
+                            shape: Union[int, Tuple[int]] = None,
+                            dtype: np.dtype = None,
+                            prototype: np.ndarray = None,
+                            variable_shape: bool = False,
+                            contains_subsamples: bool = False,
+                            *,
+                            backend: Optional[str] = None,
+                            backend_options: Optional[dict] = None) -> ModifierTypes:
         """Initializes a column in the repository.
 
         Column columns are created in order to store some arbitrary
@@ -434,10 +484,14 @@ class Columns(metaclass=ArraysetConstructors):
             subsamples which map some (sub)key to some piece of data. If False,
             sample keys map directly to a single piece of data; essentially
             acting as a single level key/value store. By default, False.
-        backend_opts : Optional[Union[str, dict]], optional
-            ADVANCED USERS ONLY, backend format code and filter opts to apply
-            to column data. If None, automatically inferred and set based on
-            data shape and type. by default None
+        backend : Optional[str], optional
+            ADVANCED USERS ONLY, backend format code to use for column data. If
+            None, automatically inferred and set based on data shape and type.
+            by default None
+        backend_options : Optional[dict], optional
+            ADVANCED USERS ONLY, filter opts to apply to column data. If None,
+            automatically inferred and set based on data shape and type.
+            by default None
 
         Returns
         -------
@@ -497,56 +551,58 @@ class Columns(metaclass=ArraysetConstructors):
                     f'shape: {prototype.shape}. Array rank > 31 dimensions not '
                     f'allowed AND all dimension sizes must be > 0.')
 
-            beopts = parse_user_backend_opts(backend_opts=backend_opts,
-                                             prototype=prototype,
-                                             variable_shape=variable_shape)
+            # backend_from_heuristics(prototype=prototype,
+            #                         variable_shape=variable_shape)
+            # beopts = parse_user_backend_opts(backend_opts=backend_options,
+            #                                  prototype=prototype,
+            #                                  variable_shape=variable_shape)
         except (ValueError, LookupError) as e:
             raise e from None
 
-        # ----------- Determine schema format details -------------------------
+        kwargs = {
+            'collayout': 'nested' if contains_subsamples else 'flat',
+            'coltype': 'ndarray',
+            'shape': prototype.shape,
+            'dtype_num': prototype.dtype.num,
+            'schema_type': 'variable_shape' if variable_shape else 'fixed_shape',
+        }
+        if backend is not None:
+            kwargs['backend'] = backend
+        if backend_options is not None:
+            kwargs['backend_options'] = backend_options
 
-        schema_hash = schema_hash_digest(shape=prototype.shape,
-                                         size=prototype.size,
-                                         dtype_num=prototype.dtype.num,
-                                         variable_shape=variable_shape,
-                                         contains_subsamples=contains_subsamples,
-                                         backend_code=beopts.backend,
-                                         backend_opts=beopts.opts)
+        schema = ColumnSpec.specifier(**kwargs)
+        schema_digest = schema_hash_digest(schema)
 
-        asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(name)
-        asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
-            schema_hash=schema_hash,
-            schema_is_var=variable_shape,
-            schema_max_shape=prototype.shape,
-            schema_dtype=prototype.dtype.num,
-            schema_default_backend=beopts.backend,
-            schema_default_backend_opts=beopts.opts,
-            schema_contains_subsamples=contains_subsamples)
+        schema = ColumnSpec.specifier(**kwargs)
+        schema_digest = schema_hash_digest(schema)
+
+        columnSchemaKey = schema_db_key_from_column_name(name)
+        columnSchemaVal = schema_db_val_from_spec(schema)
+        hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
         txnctx = AsetTxn(self._dataenv, self._hashenv, self._stagehashenv)
         with txnctx.write() as ctx:
-            hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-            hashSchemaVal = asetSchemaVal
-            ctx.dataTxn.put(asetSchemaKey, asetSchemaVal)
-            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
+            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
 
-        schemaSpec = arrayset_record_schema_raw_val_from_db_val(asetSchemaVal)
         if contains_subsamples:
             setup_args = NestedSample._generate_writer(
                 txnctx=self._txnctx,
                 aset_name=name,
                 path=self._repo_pth,
-                schema_spec=schemaSpec)
+                schema_spec=schema)
         else:
             setup_args = FlatSample._generate_writer(
                 txnctx=self._txnctx,
                 aset_name=name,
                 path=self._repo_pth,
-                schema_spec=schemaSpec)
+                schema_spec=schema)
         self._columns[name] = setup_args
         return self.get(name)
+
 
     @writer_checkout_only
     def delete(self, column: str) -> str:
