@@ -1,68 +1,88 @@
-from ..backends import BACKEND_OPTIONS_MAP, BACKEND_CAPABILITIES_MAP
+from .column_parsers import CompatibleData
+from .typesystem import OptionalDict, OneOf, String, OptionalString, Descriptor
+from .type_column import ColumnBase
+from ..records.hashmachine import metadata_hash_digest
+from ..utils import is_ascii
 
 
+@OneOf(['<class \'str\'>'])
+class StringDType(Descriptor):
+    pass
 
 
-class SchemaVariableShape:
-    _allowed_backends = ['30', '50']
-
-    def __init__(self):
-        self.BackendCapabilities = {
-            be: BACKEND_CAPABILITIES_MAP[be]() for be in self._allowed_backends}
-        self.BackendOptions = {
-            be: BACKEND_OPTIONS_MAP[be]() for be in self._allowed_backends}
-
-    @property
-    def allowed_backends(self):
-        return self._allowed_backends
-
-    def specifier(self, dtype, *args, **kwargs):
-        if 'backend' in kwargs:
-            backend = kwargs['backend']
-        elif 'backend_options' in kwargs:
-            raise ValueError(f'options set without specifying backend.')
-        else:
-            backend = '30'
-
-        if not self.isvalid(backend, dtype):
-            raise ValueError(backend, dtype)
-
-        if 'backend_options' in kwargs:
-            backend_options = kwargs['backend_options']
-            if not self.BackendOptions[backend].isvalid(backend_options):
-                raise ValueError(backend_options)
-        else:
-            backend_options = self.BackendOptions[backend].default
-
-        return {'backend': backend,
-                'backend_options': backend_options,
-                'dtype': dtype}
-
-    def isvalid(self, backend, dtype):
-        return ((backend in self._allowed_backends) and (
-                    dtype in self.BackendCapabilities[backend].allowed_dtypes))
+SERIAL_DTYPE_TO_OBJ = {
+    '<class \'str\'>': str,
+}
 
 
-class StringType:
-    _allowed_schemas = ['variable_shape']
+@OneOf(['variable_shape'])
+class StringSchemaType(String):
+    pass
 
-    def __init__(self):
-        self.SchemaNameClassMap = {
-            'variable_shape': SchemaVariableShape()
-        }
+
+class StringSchemaBase(ColumnBase):
+    _schema_type = StringSchemaType()
+
+    def __init__(self, dtype, backend=None, backend_options=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not isinstance(dtype, str):
+            dtype = repr(dtype)
+        self._dtype = dtype
+        self._backend = backend
+        self._backend_options = backend_options
+        self._schema_attributes.extend(
+            ['_schema_type', '_dtype', '_backend', '_backend_options']
+        )
+
+    def _backend_from_heuristics(self):
+        self._backend = '30'
 
     @property
-    def allowed_schemas(self):
-        return self._allowed_schemas
+    def schema_type(self):
+        return self._schema_type
 
-    def specifier(self, schema_type, *args, **kwargs):
-        if not self.isvalid(schema_type):
-            raise ValueError(schema_type)
+    @property
+    def dtype(self):
+        return SERIAL_DTYPE_TO_OBJ[self._dtype]
 
-        res = {'schema_type': schema_type}
-        propogator = self.SchemaNameClassMap[schema_type]
-        res.update(propogator.specifier(*args, **kwargs))
+    @property
+    def backend(self):
+        return self._backend
+
+    @property
+    def backend_options(self):
+        return self._backend_options
+
+    def data_hash_digest(self, data, *, tcode='2') -> str:
+        return metadata_hash_digest(data, tcode=tcode)
+
+
+@OneOf(['30', '50', None])
+class StringVariableShapeBackends(OptionalString):
+    pass
+
+
+class StringVariableShape(StringSchemaBase):
+    _dtype = StringDType()
+    _backend = StringVariableShapeBackends()
+    _backend_options = OptionalDict()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._schema_type = 'variable_shape'
+        if self.backend is None:
+            self._backend_from_heuristics()
+        self._backend_options = self._beopts.backend_options
+
+    def verify_data_compatible(self, data):
+        compatible = True
+        reason = ''
+
+        if not isinstance(data, str) or not is_ascii(data):
+            compatible = False
+            reason = f'data {data} not valid. Must be ascii-only str'
+
+        res = CompatibleData(compatible, reason)
         return res
 
-    def isvalid(self, schema):
-        return schema in self.allowed_schemas
+

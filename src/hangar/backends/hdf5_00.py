@@ -234,145 +234,219 @@ def hdf5_00_encode(uid: str, cksum: str, dset: int, dset_idx: int, shape: Tuple[
 
 # ------------------------- Accessor Object -----------------------------------
 
+from ..columns.typesystem import DictItems, Descriptor, OneOf, checkedmeta
 
-class HDF5_00_Capabilities:
-    _allowed_dtypes = [
-        np.dtype(item) for item in [
-            np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
-            np.int8, np.int16, np.int32, np.int64,
-            np.float16, np.float32, np.float64, np.float128]
-    ]
-    _allowed_order = ['C']
-    _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
 
-    def __init__(self):
-        pass
+@DictItems(
+    expected_keys_required={'complib': True, 'complevel': True, 'shuffle': True},
+    expected_values={
+        'complib': ['blosc:blosclz', 'blosc:lz4','blosc:lz4hc', 'blosc:zlib', 'blosc:zstd'],
+        'complevel': [*(i for i in range(10))],
+        'shuffle': [None, 'none', 'byte', 'bit']})
+class BloscCompressionOptions(Descriptor):
+    pass
+
+
+@DictItems(
+    expected_keys_required={'complib': True, 'complevel': True, 'shuffle': True},
+    expected_values={
+        'complib': ['gzip'],
+        'complevel': [*(i for i in range(10))],
+        'shuffle': [True, False]})
+class GzipCompressionOptions(Descriptor):
+    pass
+
+
+@DictItems(
+    expected_keys_required={'complib': True, 'complevel': False, 'shuffle': True},
+    expected_values={
+        'complib': ['lzf'], 'complevel': ['none', None], 'shuffle': [True, False]})
+class LzfCompressionOptions(Descriptor):
+    pass
+
+
+@OneOf(list(map(lambda x: np.dtype(x).name, [
+        np.bool, np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16,
+        np.int32, np.int64, np.float16, np.float32, np.float64, np.float128])))
+class HDF5_00_Allowed_Dtypes(Descriptor):
+    pass
+
+
+class HDF5_00_Options(metaclass=checkedmeta):
+    _dtype = HDF5_00_Allowed_Dtypes()
+    _lzf = LzfCompressionOptions()
+    _gzip = GzipCompressionOptions()
+    _blosc = BloscCompressionOptions()
+    _avail_filters = ('_lzf', '_gzip', '_blosc')
+
+    def __init__(self, backend_options, dtype, *args, **kwargs):
+        self._dtype = dtype
+        if backend_options is None:
+            backend_options = self.default_options
+        self._selected_filter = None
+
+        for filter_attr in self._avail_filters:
+            with suppress((KeyError, ValueError)):
+                setattr(self, filter_attr, backend_options)
+                self._selected_filter = filter_attr
+                break
+        else:  # N.B. for-else loop (ie. "no-break")
+            raise ValueError(f'Invalid backend_options {backend_options}')
 
     @property
-    def allowed_dtypes(self):
-        return self._allowed_dtypes
+    def default_options(self):
+        if 'blosc' in hdf5plugin.FILTERS:
+            return {'complib': 'blosc:zstd', 'complevel': 3, 'shuffle': 'byte'}
+        else:
+            return {'complib': 'lzf', 'complevel': None, 'shuffle': True}
 
     @property
-    def allowed_order(self):
-        return self._allowed_order
-
-    @property
-    def allowed(self):
-        return {'dtypes': self.allowed_dtypes,
-                'order': self.allowed_order}
+    def backend_options(self):
+        return getattr(self, self._selected_filter)
 
     @property
     def init_requires(self):
-        return self._init_requires
+        return ('repo_path', 'shape', 'dtype')
 
 
-class HDF5_00_Options:
-
-    _fields_and_required = {
-        'complib': False,
-        'complevel': False,
-        'shuffle': False,
-    }
-    _permitted_values = {
-        'complib': [
-            'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib',
-            'blosc:zstd', 'gzip', 'lzf', 'none', None
-        ],
-        'complevel': [*(i for i in range(10)), 'none', None],
-        'shuffle': [True, False, None, 'none', 'byte', 'bit'],
-    }
-
-    _required_if_set = {
-        'complib': {
-            'blosc:blosclz': ('complevel', [*(i for i in range(10)), 'none', None]),
-            'blosc:lz4': ('complevel', [*(i for i in range(10)), 'none', None]),
-            'blosc:lz4hc': ('complevel', [*(i for i in range(10)), 'none', None]),
-            'blosc:zlib': ('complevel', [*(i for i in range(10)), 'none', None]),
-            'blosc:zstd': ('complevel', [*(i for i in range(10)), 'none', None]),
-            'gzip': ('complevel', [*(i for i in range(10)), 'none', None]),
-        },
-        'complevel': {
-            i: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                            'blosc:zlib', 'blosc:zstd', 'gzip']) for i in range(10)
-        },
-        'shuffle': {
-            'bit': ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                                'blosc:zlib', 'blosc:zstd']),
-            'byte': ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                                 'blosc:zlib', 'blosc:zstd']),
-            True: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                               'blosc:zlib', 'blosc:zstd', 'gzip', 'lzf']),
-            False: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-                                'blosc:zlib', 'blosc:zstd', 'gzip', 'lzf']),
-        },
-    }
-
-    _invalid_if_set = {
-        'complib': {
-            'none': [('shuffle', [True, False, 'bit', 'byte']),
-                     ('complevel', [i for i in range(10)])],
-            None: [('shuffle', [True, False, 'bit', 'byte']),
-                   ('complevel', [i for i in range(10)])],
-        },
-    }
-
-    def __init__(self):
-        pass
-
-    @property
-    def fields(self):
-        return list(self._fields_and_required.keys())
-
-    @property
-    def required_fields(self):
-        return list(valfilter(bool, self._fields_and_required).keys())
-
-    @property
-    def default(self):
-        if 'blosc' in hdf5plugin.FILTERS:
-            res = {
-                'complib': 'blosc:zstd',
-                'complevel': 3,
-                'shuffle': 'byte'
-            }
-        else:
-            res = {
-                'complib': 'lzf',
-                'complevel': None,
-                'shuffle': 'byte',
-            }
-        return res
-
-    def isvalid(self, options):
-        if not isinstance(options, dict):
-            return False
-
-        for field in self.required_fields:
-            if field not in options:
-                return False
-
-        for opt, val in options.items():
-            if opt not in self._fields_and_required:
-                return False
-            if val not in self._permitted_values[opt]:
-                return False
-
-            if opt in self._required_if_set:
-                required = self._required_if_set[opt]
-                if val in required:
-                    required_opt, required_vals = required[val]
-                    if required_opt not in options:
-                        return False
-                    elif options[required_opt] not in required_vals:
-                        return False
-
-            if opt in self._invalid_if_set:
-                if val in self._invalid_if_set[opt]:
-                    invalid_opts_vals = self._invalid_if_set[opt][val]
-                    for invalid_opt, invalid_vals in invalid_opts_vals:
-                        if options[invalid_opt] in invalid_vals:
-                            return False
-        return True
+# class HDF5_00_Capabilities:
+#     _allowed_dtypes = [
+#         np.dtype(item) for item in [
+#             np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
+#             np.int8, np.int16, np.int32, np.int64,
+#             np.float16, np.float32, np.float64, np.float128]
+#     ]
+#     _allowed_order = ['C']
+#     _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
+#
+#     def __init__(self):
+#         pass
+#
+#     @property
+#     def allowed_dtypes(self):
+#         return self._allowed_dtypes
+#
+#     @property
+#     def allowed_order(self):
+#         return self._allowed_order
+#
+#     @property
+#     def allowed(self):
+#         return {'dtypes': self.allowed_dtypes,
+#                 'order': self.allowed_order}
+#
+#     @property
+#     def init_requires(self):
+#         return self._init_requires
+#
+#
+# class HDF5_00_Options:
+#
+#     _fields_and_required = {
+#         'complib': False,
+#         'complevel': False,
+#         'shuffle': False,
+#     }
+#     _permitted_values = {
+#         'complib': [
+#             'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib',
+#             'blosc:zstd', 'gzip', 'lzf', 'none', None
+#         ],
+#         'complevel': [*(i for i in range(10)), 'none', None],
+#         'shuffle': [True, False, None, 'none', 'byte', 'bit'],
+#     }
+#
+#     _required_if_set = {
+#         'complib': {
+#             'blosc:blosclz': ('complevel', [*(i for i in range(10)), 'none', None]),
+#             'blosc:lz4': ('complevel', [*(i for i in range(10)), 'none', None]),
+#             'blosc:lz4hc': ('complevel', [*(i for i in range(10)), 'none', None]),
+#             'blosc:zlib': ('complevel', [*(i for i in range(10)), 'none', None]),
+#             'blosc:zstd': ('complevel', [*(i for i in range(10)), 'none', None]),
+#             'gzip': ('complevel', [*(i for i in range(10)), 'none', None]),
+#         },
+#         'complevel': {
+#             i: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+#                             'blosc:zlib', 'blosc:zstd', 'gzip']) for i in range(10)
+#         },
+#         'shuffle': {
+#             'bit': ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+#                                 'blosc:zlib', 'blosc:zstd']),
+#             'byte': ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+#                                  'blosc:zlib', 'blosc:zstd']),
+#             True: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+#                                'blosc:zlib', 'blosc:zstd', 'gzip', 'lzf']),
+#             False: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
+#                                 'blosc:zlib', 'blosc:zstd', 'gzip', 'lzf']),
+#         },
+#     }
+#
+#     _invalid_if_set = {
+#         'complib': {
+#             'none': [('shuffle', [True, False, 'bit', 'byte']),
+#                      ('complevel', [i for i in range(10)])],
+#             None: [('shuffle', [True, False, 'bit', 'byte']),
+#                    ('complevel', [i for i in range(10)])],
+#         },
+#     }
+#
+#     def __init__(self):
+#         pass
+#
+#     @property
+#     def fields(self):
+#         return list(self._fields_and_required.keys())
+#
+#     @property
+#     def required_fields(self):
+#         return list(valfilter(bool, self._fields_and_required).keys())
+#
+#     @property
+#     def default(self):
+#         if 'blosc' in hdf5plugin.FILTERS:
+#             res = {
+#                 'complib': 'blosc:zstd',
+#                 'complevel': 3,
+#                 'shuffle': 'byte'
+#             }
+#         else:
+#             res = {
+#                 'complib': 'lzf',
+#                 'complevel': None,
+#                 'shuffle': 'byte',
+#             }
+#         return res
+#
+#     def isvalid(self, options):
+#         if not isinstance(options, dict):
+#             return False
+#
+#         for field in self.required_fields:
+#             if field not in options:
+#                 return False
+#
+#         for opt, val in options.items():
+#             if opt not in self._fields_and_required:
+#                 return False
+#             if val not in self._permitted_values[opt]:
+#                 return False
+#
+#             if opt in self._required_if_set:
+#                 required = self._required_if_set[opt]
+#                 if val in required:
+#                     required_opt, required_vals = required[val]
+#                     if required_opt not in options:
+#                         return False
+#                     elif options[required_opt] not in required_vals:
+#                         return False
+#
+#             if opt in self._invalid_if_set:
+#                 if val in self._invalid_if_set[opt]:
+#                     invalid_opts_vals = self._invalid_if_set[opt][val]
+#                     for invalid_opt, invalid_vals in invalid_opts_vals:
+#                         if options[invalid_opt] in invalid_vals:
+#                             return False
+#         return True
 
 
 

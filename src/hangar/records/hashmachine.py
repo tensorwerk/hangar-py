@@ -51,33 +51,22 @@ def array_hash_digest(array: np.ndarray, *, tcode='0') -> str:
 # ------------------------------ Schema ---------------------------------------
 
 
-def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
-                       variable_shape: bool, contains_subsamples: bool,
-                       backend_code: str, backend_opts: dict,
-                       *, tcode: str = '1') -> str:
-    """Generate the schema hash for some schema specification
+def _make_hashable(o):
+    """Sort container object and deterministically output frozen representation"""
+    if isinstance(o, (tuple, list)):
+        return tuple((_make_hashable(e) for e in o))
 
-    Parameters
-    ----------
-    shape : Tuple[int]
-        shape of the array data
-    size : int
-        number of elements in the array data
-    dtype_num : int
-        datatype numeric code of array data
-    variable_shape : bool
-        can samples contain dimensions with lower length then the a dimension's
-        max size?
-    contains_subsamples : bool
-        does the schema contain subsamples?
-    backend_code : str
-        backend format code which specified bwackend new samples writes to this
-        schema are stored in.
-    backend_opts : dict
-        backend options applied to new writes of samples to this schema.
-    tcode : str, optional, kwarg-only
-        hash calculation type code. Included to allow future updates to change
-        hashing algorithm, kwarg-only, by default '1'
+    if isinstance(o, dict):
+        return tuple(sorted((k, _make_hashable(v)) for k, v in o.items()))
+
+    if isinstance(o, (set, frozenset)):
+        return tuple(sorted(_make_hashable(e) for e in o))
+
+    return o
+
+
+def schema_hash_digest(schema: dict, *, tcode='1') -> str:
+    """Generate the schema hash for some schema specification
 
     Returns
     -------
@@ -85,12 +74,10 @@ def schema_hash_digest(shape: Tuple[int], size: int, dtype_num: int,
         hex digest of this information with typecode prepended by '{tcode}='.
     """
     if tcode == '1':
-        optsHsh = json.dumps(backend_opts, separators=(',', ':')).encode()
-        schema_pack = struct.pack(f'<{len(shape)}QQB??2s{len(optsHsh)}s', *shape,
-                                  size, dtype_num, variable_shape, contains_subsamples,
-                                  backend_code.encode(), optsHsh)
-        schemaHsh = blake2b(schema_pack, digest_size=6)
-        res = f'1={schemaHsh.hexdigest()}'
+        frozenschema = _make_hashable(schema)
+        serialized = repr(frozenschema).encode()
+        digest = blake2b(serialized, digest_size=6).hexdigest()
+        res = f'1={digest}'
     else:
         raise ValueError(
             f'Invalid Schema Hash Type Code {tcode}. If encountered during '

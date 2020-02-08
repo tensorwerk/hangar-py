@@ -1,134 +1,147 @@
+from .column_parsers import CompatibleData
+from .typesystem import SizedIntegerTuple, OptionalDict, OneOf, String, OptionalString
+from .type_column import ColumnBase
+from ..records.hashmachine import array_hash_digest
+
 import numpy as np
 
-from ..backends import BACKEND_OPTIONS_MAP, BACKEND_CAPABILITIES_MAP
+
+@OneOf(['variable_shape', 'fixed_shape'])
+class NdarraySchemaType(String):
+    pass
 
 
-class SchemaVariableShape:
-    _allowed_backends = ['00', '01', '10', '50']
+class NdarraySchemaBase(ColumnBase):
+    _schema_type = NdarraySchemaType()
 
-    def __init__(self):
-        self.BackendCapabilities = {
-            be: BACKEND_CAPABILITIES_MAP[be]() for be in self._allowed_backends}
-        self.BackendOptions = {
-            be: BACKEND_OPTIONS_MAP[be]() for be in self._allowed_backends}
+    def __init__(self, shape, dtype, backend=None, backend_options=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._shape = shape
+        if not isinstance(dtype, str):
+            dtype = np.dtype(dtype).name
+        self._dtype = dtype
+        self._backend = backend
+        self._backend_options = backend_options
+        self._schema_attributes.extend(
+            ['_schema_type', '_shape', '_dtype', '_backend', '_backend_options'])
 
-    @property
-    def allowed_backends(self):
-        return self._allowed_backends
-
-    def specifier(self, shape, dtype, *args, **kwargs):
-        if 'backend' in kwargs:
-            backend = kwargs['backend']
-        elif 'backend_options' in kwargs:
-            raise ValueError(f'options set without specifying backend.')
+    def _backend_from_heuristics(self):
+        # uncompressed numpy memmap data is most appropriate for data whose shape is
+        # likely small tabular row data (CSV or such...)
+        if (len(self._shape) == 1) and (self._shape[0] < 400):
+            backend = '10'
+        # hdf5 is the default backend for larger array sizes.
+        elif (len(self._shape) == 1) and (self._shape[0] <= 10_000_000):
+            backend = '00'
+        # on fixed arrays sized arrays apply optimizations.
+        elif self._schema_type == 'fixed_shape':
+            backend = '01'
         else:
             backend = '00'
-
-        if not self.isvalid(backend, shape, dtype):
-            raise ValueError(backend, shape, dtype)
-
-        if 'backend_options' in kwargs:
-            backend_options = kwargs['backend_options']
-            if not self.BackendOptions[backend].isvalid(backend_options):
-                raise ValueError(backend_options)
-        else:
-            backend_options = self.BackendOptions[backend].default
-
-        return {'shape': tuple(shape),
-                'dtype_num': np.dtype(dtype).num,
-                'backend': backend,
-                'backend_options': backend_options}
-
-    def isvalid(self, backend, shape, dtype):
-        if backend not in self._allowed_backends:
-            return False
-
-        if dtype not in self.BackendCapabilities[backend].allowed_dtypes:
-            return False
-
-        if not isinstance(shape, (list, tuple)):
-            return False
-        if not all([isinstance(i, int) for i in shape]):
-            return False
-        if len(shape) > 31:
-            return False
-        return True
-
-
-class SchemaFixedShape:
-    _allowed_backends = ['00', '10', '50']
-
-    def __init__(self):
-        self.BackendCapabilities = {
-            be: BACKEND_CAPABILITIES_MAP[be]() for be in self._allowed_backends}
-        self.BackendOptions = {
-            be: BACKEND_OPTIONS_MAP[be]() for be in self._allowed_backends}
+        self._backend = backend
 
     @property
-    def allowed_backends(self):
-        return self._allowed_backends
-
-    def specifier(self, shape, dtype, *args, **kwargs):
-        if 'backend' not in kwargs:
-            if 'backend_options' in kwargs:
-                raise ValueError(f'options set without specifying backend.')
-            else:
-                backend = '00'
-        else:
-            backend = kwargs['backend']
-
-        if not self.isvalid(backend, shape, dtype):
-            raise ValueError(backend, shape, dtype)
-
-        if 'backend_options' in kwargs:
-            backend_options = kwargs['backend_options']
-            if not self.BackendOptions[backend].isvalid(backend_options):
-                raise ValueError(backend_options)
-        else:
-            backend_options = self.BackendOptions[backend].default
-
-        return {'shape': tuple(shape),
-                'dtype_num': np.dtype(dtype).num,
-                'backend': backend,
-                'backend_options': backend_options}
-
-    def isvalid(self, backend, shape, dtype):
-        if backend not in self._allowed_backends:
-            return False
-
-        if dtype not in self.BackendCapabilities[backend].allowed_dtypes:
-            return False
-
-        if not isinstance(shape, (list, tuple)):
-            return False
-        if not all([isinstance(i, int) for i in shape]):
-            return False
-        if len(shape) > 31:
-            return False
-        return True
-
-
-class ArrayType:
-    _allowed_schema = ['variable_shape', 'fixed_shape']
-
-    def __init__(self):
-        self.SchemaNameClassMap = {
-            'variable_shape': SchemaVariableShape(),
-            'fixed_shape': SchemaFixedShape(),
-        }
+    def schema_type(self):
+        return self._schema_type
 
     @property
-    def allowed_schemas(self):
-        return self._allowed_schema
+    def shape(self):
+        return self._shape
 
-    def specifier(self, schema_type, *args, **kwargs):
-        if not self.isvalid(schema_type):
-            raise ValueError(schema_type)
+    @property
+    def dtype(self):
+        return np.dtype(self._dtype)
 
-        res = {'schema_type': schema_type}
-        propogator = self.SchemaNameClassMap[schema_type]
-        res.update(propogator.specifier(*args, **kwargs))
+    @property
+    def backend(self):
+        return self._backend
+
+    @property
+    def backend_options(self):
+        return self._backend_options
+
+    def data_hash_digest(self, data: np.ndarray, *, tcode='0') -> str:
+        return array_hash_digest(data, tcode=tcode)
+
+
+@OneOf(['00', '01', '10', '50', None])
+class NdarrayFixedShapeBackends(OptionalString):
+    pass
+
+
+class NdarraySchemaFixedShape(NdarraySchemaBase):
+    _shape = SizedIntegerTuple(size=31)
+    _dtype = String()
+    _backend = NdarrayFixedShapeBackends()
+    _backend_options = OptionalDict()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._schema_type = 'fixed_shape'
+        if self.backend is None:
+            self._backend_from_heuristics()
+        self._backend_options = self._beopts.backend_options
+
+    def verify_data_compatible(self, data):
+        compatible = True
+        reason = ''
+
+        if not isinstance(data, np.ndarray):
+            compatible = False
+            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
+        elif data.dtype != self._dtype:
+            compatible = False
+            reason = f'dtype: {data.dtype.name} != aset: {self._dtype}.'
+        elif not data.flags.c_contiguous:
+            compatible = False
+            reason = f'`data` must be "C" contiguous array.'
+        elif data.shape != self._shape:
+            compatible = False
+            reason = f'data shape {data.shape} != fixed schema {self._shape}'
+
+        res = CompatibleData(compatible, reason)
         return res
 
-    def isvalid(self, schema_type):
-        return schema_type in self._allowed_schema
+
+@OneOf(['00', '10', '50', None])
+class NdarrayVariableShapeBackends(OptionalString):
+    pass
+
+
+class NdarraySchemaVariableShape(NdarraySchemaBase):
+    _shape = SizedIntegerTuple(size=31)
+    _dtype = String()
+    _backend = NdarrayVariableShapeBackends()
+    _backend_options = OptionalDict()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._schema_type = 'variable_shape'
+        if self.backend is None:
+            self._backend_from_heuristics()
+        self._backend_options = self._beopts.backend_options
+
+    def verify_data_compatible(self, data):
+        compatible = True
+        reason = ''
+
+        if not isinstance(data, np.ndarray):
+            compatible = False
+            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
+        elif data.dtype != self._dtype:
+            compatible = False
+            reason = f'dtype: {data.dtype.name} != aset: {self._dtype}.'
+        elif not data.flags.c_contiguous:
+            compatible = False
+            reason = f'`data` must be "C" contiguous array.'
+        elif data.ndim != len(self._shape):
+            compatible = False
+            reason = f'data rank {data.ndim} != aset rank {len(self._shape)}'
+        elif not all([(dim > maxdim) for dim, maxdim in zip(data.shape, self._shape)]):
+            compatible = False
+            reason = f'shape {data.shape} exceeds schema max {self._shape}'
+
+        res = CompatibleData(compatible, reason)
+        return res
+
+

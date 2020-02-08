@@ -88,11 +88,11 @@ from typing import Union, NamedTuple, Optional, Dict
 
 import numpy as np
 
-from .hdf5_00 import HDF5_00_FileHandles, HDF5_00_Options, HDF5_00_Capabilities
-from .hdf5_01 import HDF5_01_FileHandles, HDF5_01_Options, HDF5_01_Capabilities
-from .numpy_10 import NUMPY_10_FileHandles, NUMPY_10_Options, NUMPY_10_Capabilities
-from .remote_50 import REMOTE_50_Handler, REMOTE_50_Options, REMOTE_50_Capabilities
-from .lmdb_30 import LMDB_30_FileHandles, LMDB_30_Options, LMDB_30_Capabilities
+from .hdf5_00 import HDF5_00_FileHandles, HDF5_00_Options  #, HDF5_00_Capabilities
+from .hdf5_01 import HDF5_01_FileHandles, HDF5_01_Options  #, HDF5_01_Capabilities
+from .numpy_10 import NUMPY_10_FileHandles, NUMPY_10_Options  #, NUMPY_10_Capabilities
+from .remote_50 import REMOTE_50_Handler, REMOTE_50_Options  #, REMOTE_50_Capabilities
+from .lmdb_30 import LMDB_30_FileHandles, LMDB_30_Options  #, LMDB_30_Capabilities
 
 
 # ------------------------ Accessor Types and Mapping -------------------------
@@ -122,13 +122,13 @@ BACKEND_OPTIONS_MAP = {
     '50': REMOTE_50_Options,
 }
 
-BACKEND_CAPABILITIES_MAP = {
-    '00': HDF5_00_Capabilities,
-    '01': HDF5_01_Capabilities,
-    '10': NUMPY_10_Capabilities,
-    '30': LMDB_30_Capabilities,
-    '50': REMOTE_50_Capabilities,
-}
+# BACKEND_CAPABILITIES_MAP = {
+#     '00': HDF5_00_Capabilities,
+#     '01': HDF5_01_Capabilities,
+#     '10': NUMPY_10_Capabilities,
+#     '30': LMDB_30_Capabilities,
+#     '50': REMOTE_50_Capabilities,
+# }
 
 _local_prefixes = string.digits[0:5] + string.ascii_lowercase
 BACKEND_IS_LOCAL_MAP: Dict[str, bool] = {

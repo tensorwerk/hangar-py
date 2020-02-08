@@ -129,74 +129,108 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
 # ------------------------- Accessor Object -----------------------------------
 
 
-class NUMPY_10_Capabilities:
+from ..columns.typesystem import OneOf, Descriptor, EmptyDict, checkedmeta
 
-    _allowed_dtypes = [
-        np.dtype(item) for item in [
-            np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
-            np.int8, np.int16, np.int32, np.int64,
-            np.float16, np.float32, np.float64, np.float128]
-    ]
-    _allowed_order = ['C']
-    _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
 
-    def __init__(self):
-        pass
+@OneOf(list(map(lambda x: np.dtype(x).name, [
+        np.bool, np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16,
+        np.int32, np.int64, np.float16, np.float32, np.float64, np.float128])))
+class NUMPY_10_Allowed_Dtypes(Descriptor):
+    pass
+
+
+class NUMPY_10_Options(metaclass=checkedmeta):
+    _dtype = NUMPY_10_Allowed_Dtypes()
+    _backend_options = EmptyDict()
+
+    def __init__(self, backend_options, dtype, *args, **kwargs):
+        if backend_options is None:
+            backend_options = self.default_options
+
+        self._backend_options = backend_options
+        self._dtype = dtype
 
     @property
-    def allowed_dtypes(self):
-        return self._allowed_dtypes
+    def default_options(self):
+        return {}
 
     @property
-    def allowed_order(self):
-        return self._allowed_order
-
-    @property
-    def allowed(self):
-        return {
-            'dtypes': self.allowed_dtypes,
-            'order': self.allowed_order,
-        }
+    def backend_options(self):
+        return self._backend_options
 
     @property
     def init_requires(self):
-        return self._init_requires
+        return ('repo_path', 'shape', 'dtype')
 
-
-class NUMPY_10_Options:
-    _fields_and_required = {}
-    _permitted_values = {}
-
-    def __init__(self):
-        pass
-
-    @property
-    def fields(self):
-        return list(self._fields_and_required.keys())
-
-    @property
-    def required_fields(self):
-        return list(valfilter(bool, self._fields_and_required).keys())
-
-    @property
-    def default(self):
-        return {}
-
-    def isvalid(self, options):
-        if not isinstance(options, dict):
-            return False
-
-        for field in self.required_fields:
-            if field not in options:
-                return False
-
-        for opt, val in options.items():
-            if opt not in self._fields_and_required:
-                return False
-            if val not in self._permitted_values[opt]:
-                return False
-
-        return True
+#
+# class NUMPY_10_Capabilities:
+#
+#     _allowed_dtypes = [
+#         np.dtype(item) for item in [
+#             np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
+#             np.int8, np.int16, np.int32, np.int64,
+#             np.float16, np.float32, np.float64, np.float128]
+#     ]
+#     _allowed_order = ['C']
+#     _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
+#
+#     def __init__(self):
+#         pass
+#
+#     @property
+#     def allowed_dtypes(self):
+#         return self._allowed_dtypes
+#
+#     @property
+#     def allowed_order(self):
+#         return self._allowed_order
+#
+#     @property
+#     def allowed(self):
+#         return {
+#             'dtypes': self.allowed_dtypes,
+#             'order': self.allowed_order,
+#         }
+#
+#     @property
+#     def init_requires(self):
+#         return self._init_requires
+#
+#
+# class NUMPY_10_Options:
+#     _fields_and_required = {}
+#     _permitted_values = {}
+#
+#     def __init__(self):
+#         pass
+#
+#     @property
+#     def fields(self):
+#         return list(self._fields_and_required.keys())
+#
+#     @property
+#     def required_fields(self):
+#         return list(valfilter(bool, self._fields_and_required).keys())
+#
+#     @property
+#     def default(self):
+#         return {}
+#
+#     def isvalid(self, options):
+#         if not isinstance(options, dict):
+#             return False
+#
+#         for field in self.required_fields:
+#             if field not in options:
+#                 return False
+#
+#         for opt, val in options.items():
+#             if opt not in self._fields_and_required:
+#                 return False
+#             if val not in self._permitted_values[opt]:
+#                 return False
+#
+#         return True
 
 
 class NUMPY_10_FileHandles(object):

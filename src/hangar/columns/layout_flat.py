@@ -228,7 +228,6 @@ class FlatSample(metaclass=FlatSampleBuilder):
             raise PermissionError(err) from None
         return self.__getattribute__(name)
 
-
     @property
     def _is_conman(self) -> bool:
         return bool(self._enter_count)
@@ -525,6 +524,8 @@ class FlatSample(metaclass=FlatSampleBuilder):
         """
         # full_hash = array_hash_digest(value)  # TODO TESTING
         full_hash = metadata_hash_digest(value)
+
+
         hashKey = hash_data_db_key_from_raw_key(full_hash)
         # check if data record already exists with given key
         dataRecKey = data_record_db_key_from_raw_key(self._asetn, key)

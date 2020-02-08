@@ -16,7 +16,7 @@ import lmdb
 import numpy as np
 from wrapt import ObjectProxy
 
-from .columntype import spec_allowed_backends
+from .type_column import spec_allowed_backends
 from .validation import DataValidator
 from .common import AsetTxn
 from ..records.parsing import hash_data_db_key_from_raw_key, RawArraysetSchemaVal

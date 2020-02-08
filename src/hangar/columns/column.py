@@ -5,7 +5,7 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 import lmdb
 import numpy as np
 
-from .columntype import ColumnSpec
+from .type_column import ColumnSpec
 from .constructors import ArraysetConstructors
 from ..backends import (
     parse_user_backend_opts,

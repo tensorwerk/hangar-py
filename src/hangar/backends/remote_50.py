@@ -82,56 +82,81 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
 # ------------------------- Accessor Object -----------------------------------
 
 
-class REMOTE_50_Capabilities:
+from ..columns.typesystem import checkedmeta, EmptyDict
 
-    _init_requires = ['repo_path']
 
-    def __init__(self):
-        pass
+class REMOTE_50_Options(metaclass=checkedmeta):
+    _backend_options = EmptyDict()
+
+    def __init__(self, backend_options, *args, **kwargs):
+        if backend_options is None:
+            backend_options = self.default_options
+        self._backend_options = backend_options
 
     @property
-    def allowed(self):
+    def default_options(self):
         return {}
+
+    @property
+    def backend_options(self):
+        return self._backend_options
 
     @property
     def init_requires(self):
-        return self._init_requires
+        return ('repo_path')
 
-
-class REMOTE_50_Options:
-    _fields_and_required = {}
-    _permitted_values = {}
-
-    def __init__(self):
-        pass
-
-    @property
-    def fields(self):
-        return list(self._fields_and_required.keys())
-
-    @property
-    def required_fields(self):
-        return list(valfilter(bool, self._fields_and_required).keys())
-
-    @property
-    def default(self):
-        return {}
-
-    def isvalid(self, options):
-        if not isinstance(options, dict):
-            return False
-
-        for field in self.required_fields:
-            if field not in options:
-                return False
-
-        for opt, val in options.items():
-            if opt not in self._fields_and_required:
-                return False
-            if val not in self._permitted_values[opt]:
-                return False
-
-        return True
+#
+#
+# class REMOTE_50_Capabilities:
+#
+#     _init_requires = ['repo_path']
+#
+#     def __init__(self):
+#         pass
+#
+#     @property
+#     def allowed(self):
+#         return {}
+#
+#     @property
+#     def init_requires(self):
+#         return self._init_requires
+#
+#
+# class REMOTE_50_Options:
+#     _fields_and_required = {}
+#     _permitted_values = {}
+#
+#     def __init__(self):
+#         pass
+#
+#     @property
+#     def fields(self):
+#         return list(self._fields_and_required.keys())
+#
+#     @property
+#     def required_fields(self):
+#         return list(valfilter(bool, self._fields_and_required).keys())
+#
+#     @property
+#     def default(self):
+#         return {}
+#
+#     def isvalid(self, options):
+#         if not isinstance(options, dict):
+#             return False
+#
+#         for field in self.required_fields:
+#             if field not in options:
+#                 return False
+#
+#         for opt, val in options.items():
+#             if opt not in self._fields_and_required:
+#                 return False
+#             if val not in self._permitted_values[opt]:
+#                 return False
+#
+#         return True
 
 
 class REMOTE_50_Handler(object):
