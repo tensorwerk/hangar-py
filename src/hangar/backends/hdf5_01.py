@@ -198,16 +198,17 @@ Technical Notes
    are accepted by this method.
 """
 import logging
-import os
 import math
-from contextlib import suppress
+import os
 from collections import ChainMap
+from contextlib import suppress
 from functools import partial
 from pathlib import Path
 from typing import MutableMapping, Tuple, Optional, Union, Callable
 
 import h5py
 import numpy as np
+
 try:
     # hdf5plugin warns if a filter is already loaded.
     _logger = logging.getLogger('hdf5plugin')
@@ -226,7 +227,7 @@ from .chunk import calc_chunkshape
 from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import writer_checkout_only, reader_checkout_only
-from ..utils import find_next_prime, random_string, set_blosc_nthreads, valfilter
+from ..utils import find_next_prime, random_string, set_blosc_nthreads
 
 set_blosc_nthreads()
 
@@ -273,7 +274,7 @@ def hdf5_01_encode(uid: str, cksum: str, dset: int, dset_idx: int,
 
 # ------------------------- Accessor Object -----------------------------------
 
-from ..columns.typesystem import DictItems, Descriptor, OneOf, checkedmeta
+from ..typesystem.typesystem import Descriptor, OneOf, DictItems, checkedmeta
 
 
 @DictItems(
@@ -345,147 +346,18 @@ class HDF5_01_Options(metaclass=checkedmeta):
 
     @property
     def init_requires(self):
-        return ('repo_path', 'shape', 'dtype')
+        return ('repo_path', 'schema_shape', 'schema_dtype')
 
 
 HDF5_01_MapTypes = MutableMapping[str, Union[h5py.File, Callable[[], h5py.File]]]
-
-#
-# class HDF5_01_Capabilities:
-#     _allowed_dtypes = [
-#         np.dtype(item) for item in [
-#             np.bool, np.uint8, np.uint16, np.uint32, np.uint64,
-#             np.int8, np.int16, np.int32, np.int64,
-#             np.float16, np.float32, np.float64, np.float128]
-#     ]
-#     _allowed_order = ['C']
-#     _init_requires = ['repo_path', 'schema_shape', 'schema_dtype']
-#
-#     def __init__(self):
-#         pass
-#
-#     @property
-#     def allowed_dtypes(self):
-#         return self._allowed_dtypes
-#
-#     @property
-#     def allowed_order(self):
-#         return self._allowed_order
-#
-#     @property
-#     def allowed(self):
-#         return {'dtypes': self.allowed_dtypes,
-#                 'order': self.allowed_order}
-#
-#     @property
-#     def init_requires(self):
-#         return self._init_requires
-#
-#
-# class HDF5_01_Options:
-#     _fields_and_required = {
-#         'complib': False,
-#         'complevel': False,
-#         'shuffle': False,
-#     }
-#     _permitted_values = {
-#         'complib': [
-#             'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib',
-#             'blosc:zstd', 'gzip', 'lzf', 'none', None
-#         ],
-#         'complevel': [*(i for i in range(10)), 'none', None],
-#         'shuffle': [True, False, None, 'none', 'byte', 'bit'],
-#     }
-#
-#     def __init__(self):
-#
-#         self._required_if_set = {
-#             'complib': {
-#                 **{clib: ('complevel', [*(i for i in range(10)), 'none', None]
-#                           ) for clib in ['blosc:blosclz', 'blosc:lz4',
-#                                          'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd']},
-#                 'gzip': ('complevel', [*(i for i in range(10)), 'none', None]),
-#             },
-#             'complevel': {
-#                 i: ('complib', ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc',
-#                                 'blosc:zlib', 'blosc:zstd', 'gzip']) for i in range(10)
-#             },
-#             'shuffle': {
-#                 **{shuffle: ('complib', [
-#                     'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd'])
-#                    for shuffle in ['bit', 'byte']},
-#                 **{shuffle: ('complib', ['gzip', 'lzf']) for shuffle in [True, False]},
-#             },
-#         }
-#
-#         self._invalid_if_set = {
-#             'complib': {
-#                 **{clib: [('shuffle', [True, False, 'bit', 'byte']),
-#                           ('complevel', [i for i in range(10)])] for clib in ['none', None]},
-#         }
-#
-#     @property
-#     def fields(self):
-#         return list(self._fields_and_required.keys())
-#
-#     @property
-#     def required_fields(self):
-#         return list(valfilter(bool, self._fields_and_required).keys())
-#
-#     @property
-#     def default(self):
-#         if 'blosc' in hdf5plugin.FILTERS:
-#             res = {
-#                 'complib': 'blosc:lz4hc',
-#                 'complevel': 5,
-#                 'shuffle': 'byte'
-#             }
-#         else:
-#             res = {
-#                 'complib': 'lzf',
-#                 'complevel': None,
-#                 'shuffle': 'byte',
-#             }
-#         return res
-#
-#     def isvalid(self, options):
-#         if not isinstance(options, dict):
-#             return False
-#
-#         for field in self.required_fields:
-#             if field not in options:
-#                 return False
-#
-#         for opt, val in options.items():
-#             if opt not in self._fields_and_required:
-#                 return False
-#             if val not in self._permitted_values[opt]:
-#                 return False
-#
-#             if opt in self._required_if_set:
-#                 required = self._required_if_set[opt]
-#                 if val in required:
-#                     required_opt, required_vals = required[val]
-#                     if required_opt not in options:
-#                         return False
-#                     elif options[required_opt] not in required_vals:
-#                         return False
-#
-#             if opt in self._invalid_if_set:
-#                 if val in self._invalid_if_set[opt]:
-#                     invalid_opts_vals = self._invalid_if_set[opt][val]
-#                     for invalid_opt, invalid_vals in invalid_opts_vals:
-#                         if options[invalid_opt] in invalid_vals:
-#                             return False
-#         return True
 
 
 class HDF5_01_FileHandles(object):
     """Manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
-    "writeable" state. This is an issue where multiple arraysets may need to
-    write to the same arrayset schema.
+    "writeable" state. This is an issue where multiple columns may need to
+    write to the same column schema.
     """
 
     def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
@@ -736,7 +608,7 @@ class HDF5_01_FileHandles(object):
         return args
 
     def _create_schema(self, *, remote_operation: bool = False):
-        """stores the shape and dtype as the schema of a arrayset.
+        """stores the shape and dtype as the schema of a column.
 
         Parameters
         ----------

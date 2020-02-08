@@ -9,7 +9,7 @@ from typing import Optional
 import lmdb
 
 from .mixins import GetMixin
-from .columns import Arraysets, MetadataReader, MetadataWriter
+from .columns import Columns, MetadataReader, MetadataWriter
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
 from .records import commiting, hashs, heads
@@ -98,7 +98,7 @@ class ReaderCheckout(GetMixin):
             repo_pth=self._repo_path,
             dataenv=self._dataenv,
             labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_commit(
+        self._columns = Columns._from_commit(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             cmtrefenv=self._dataenv)
@@ -115,7 +115,7 @@ class ReaderCheckout(GetMixin):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : False\
                 \n    Commit Hash  : {self._commit_hash}\
-                \n    Num Arraysets : {len(self._arraysets)}\
+                \n    Num Columns : {len(self._columns)}\
                 \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
@@ -133,7 +133,7 @@ class ReaderCheckout(GetMixin):
         self._verify_alive()
         with ExitStack() as stack:
             if self._enter_count == 0:
-                stack.enter_context(self._arraysets)
+                stack.enter_context(self._columns)
                 stack.enter_context(self._metadata)
             self._enter_count += 1
             self._stack = stack.pop_all()
@@ -152,7 +152,7 @@ class ReaderCheckout(GetMixin):
             if the checkout was previously close
         """
         p_hasattr = partial(hasattr, self)
-        if not all(map(p_hasattr, ['_metadata', '_arraysets', '_differ'])):
+        if not all(map(p_hasattr, ['_metadata', '_columns', '_differ'])):
             e = PermissionError(
                 f'Unable to operate on past checkout objects which have been '
                 f'closed. No operation occurred. Please use a new checkout.')
@@ -164,21 +164,21 @@ class ReaderCheckout(GetMixin):
         return bool(self._enter_count)
 
     @property
-    def arraysets(self) -> Arraysets:
-        """Provides access to arrayset interaction object.
+    def columns(self) -> Columns:
+        """Provides access to column interaction object.
 
-        Can be used to either return the arraysets accessor for all elements or
-        a single arrayset instance by using dictionary style indexing.
+        Can be used to either return the columns accessor for all elements or
+        a single column instance by using dictionary style indexing.
 
             >>> co = repo.checkout(write=False)
-            >>> len(co.arraysets)
+            >>> len(co.columns)
             1
-            >>> print(co.arraysets.keys())
+            >>> print(co.columns.keys())
             ['foo']
-            >>> fooAset = co.arraysets['foo']
+            >>> fooAset = co.columns['foo']
             >>> fooAset.dtype
             np.fooDtype
-            >>> asets = co.arraysets
+            >>> asets = co.columns
             >>> fooAset = asets['foo']
             >>> fooAset.dtype
             np.fooDtype
@@ -188,18 +188,18 @@ class ReaderCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`~.columns.arrayset.Arraysets` contains all methods
+            The class :class:`~.columns.column.Columns` contains all methods
             accessible by this property accessor
 
         Returns
         -------
-        :class:`~.columns.arrayset.Arraysets`
-            the arraysets object which behaves exactly like a
-            arraysets accessor class but which can be invalidated when the writer
+        :class:`~.columns.column.Columns`
+            the columns object which behaves exactly like a
+            columns accessor class but which can be invalidated when the writer
             lock is released.
         """
         self._verify_alive()
-        return self._arraysets
+        return self._columns
 
     @property
     def metadata(self) -> MetadataReader:
@@ -268,7 +268,7 @@ class ReaderCheckout(GetMixin):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        self._arraysets._destruct()
+        self._columns._destruct()
         self._metadata._destruct()
         for attr in list(self.__dict__.keys()):
             delattr(self, attr)
@@ -364,7 +364,7 @@ class WriterCheckout(GetMixin):
         self._branchenv = branchenv
         self._stagehashenv = stagehashenv
 
-        self._arraysets: Optional[Arraysets] = None
+        self._columns: Optional[Columns] = None
         self._differ: Optional[WriterUserDiff] = None
         self._metadata: Optional[MetadataWriter] = None
         self._setup()
@@ -377,7 +377,7 @@ class WriterCheckout(GetMixin):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : True\
                 \n    Base Branch  : {self._branch_name}\
-                \n    Num Arraysets : {len(self._arraysets)}\
+                \n    Num Columns : {len(self._columns)}\
                 \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
@@ -397,7 +397,7 @@ class WriterCheckout(GetMixin):
         self._verify_alive()
         with ExitStack() as stack:
             if self._enter_count == 0:
-                stack.enter_context(self._arraysets)
+                stack.enter_context(self._columns)
                 stack.enter_context(self._metadata)
             self._enter_count += 1
             self._stack = stack.pop_all()
@@ -425,8 +425,8 @@ class WriterCheckout(GetMixin):
             self._writer_lock
         except AttributeError:
             with suppress(AttributeError):
-                self._arraysets._destruct()
-                del self._arraysets
+                self._columns._destruct()
+                del self._columns
             with suppress(AttributeError):
                 self._metadata._destruct()
                 del self._metadata
@@ -440,8 +440,8 @@ class WriterCheckout(GetMixin):
             heads.acquire_writer_lock(self._branchenv, self._writer_lock)
         except PermissionError as e:
             with suppress(AttributeError):
-                self._arraysets._destruct()
-                del self._arraysets
+                self._columns._destruct()
+                del self._columns
             with suppress(AttributeError):
                 self._metadata._destruct()
                 del self._metadata
@@ -499,7 +499,7 @@ class WriterCheckout(GetMixin):
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_staging_area(
+        self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -514,21 +514,21 @@ class WriterCheckout(GetMixin):
         """Syntax for setting items.
 
         Checkout object can be thought of as a "dataset" ("dset") mapping a view
-        of samples across arraysets:
+        of samples across columns:
 
             >>> dset = repo.checkout(branch='master', write=True)
 
-            # Add single sample to single arrayset
+            # Add single sample to single column
             >>> dset['foo', 1] = np.array([1])
             >>> dset['foo', 1]
             array([1])
 
-            # Add multiple samples to single arrayset
+            # Add multiple samples to single column
             >>> dset['foo', [1, 2, 3]] = [np.array([1]), np.array([2]), np.array([3])]
             >>> dset['foo', [1, 2, 3]]
             [array([1]), array([2]), array([3])]
 
-            # Add single sample to multiple arraysets
+            # Add single sample to multiple columns
             >>> dset[['foo', 'bar'], 1] = [np.array([1]), np.array([11])]
             >>> dset[:, 1]
             ArraysetData(foo=array([1]), bar=array([11]))
@@ -538,21 +538,21 @@ class WriterCheckout(GetMixin):
         index: Union[Iterable[str], Iterable[str, int]]
             Please see detailed explanation above for full options.The first
             element (or collection) specified must be ``str`` type and correspond
-            to an arrayset name(s). The second element (or collection) are keys
+            to an column name(s). The second element (or collection) are keys
             corresponding to sample names which the data should be written to.
 
-            Unlike the :meth:`__getitem__` method, only ONE of the ``arrayset``
+            Unlike the :meth:`__getitem__` method, only ONE of the ``column``
             name(s) or ``sample`` key(s) can specify multiple elements at the same
-            time. Ie. If multiple ``arraysets`` are specified, only one sample key
+            time. Ie. If multiple ``columns`` are specified, only one sample key
             can be set, likewise if multiple ``samples`` are specified, only one
-            ``arrayset`` can be specified. When specifying multiple ``arraysets``
+            ``column`` can be specified. When specifying multiple ``columns``
             or ``samples``, each data piece to be stored must reside as individual
             elements (``np.ndarray``) in a List or Tuple. The number of keys and
             the number of values must match exactly.
 
         value: Union[:class:`numpy.ndarray`, Iterable[:class:`numpy.ndarray`]]
-            Data to store in the specified arraysets/sample keys. When
-            specifying multiple ``arraysets`` or ``samples``, each data piece
+            Data to store in the specified columns/sample keys. When
+            specifying multiple ``columns`` or ``samples``, each data piece
             to be stored must reside as individual elements (``np.ndarray``) in
             a List or Tuple. The number of keys and the number of values must
             match exactly.
@@ -560,11 +560,11 @@ class WriterCheckout(GetMixin):
         Notes
         -----
 
-        *  No slicing syntax is supported for either arraysets or samples. This
+        *  No slicing syntax is supported for either columns or samples. This
            is in order to ensure explicit setting of values in the desired
            fields/keys
 
-        *  Add multiple samples to multiple arraysets not yet supported.
+        *  Add multiple samples to multiple columns not yet supported.
 
         """
         self._verify_alive()
@@ -573,16 +573,16 @@ class WriterCheckout(GetMixin):
                 stack.enter_context(self)
 
             if not isinstance(index, (tuple, list)):
-                raise ValueError(f'Idx: {index} does not specify arrayset(s) AND sample(s)')
+                raise ValueError(f'Idx: {index} does not specify column(s) AND sample(s)')
             elif len(index) > 2:
                 raise ValueError(f'Index of len > 2 invalid. To multi-set, pass in lists')
             asetsIdx, sampleNames = index
 
-            # Parse Arraysets
+            # Parse Columns
             if isinstance(asetsIdx, str):
-                asets = [self._arraysets._arraysets[asetsIdx]]
+                asets = [self._columns._columns[asetsIdx]]
             elif isinstance(asetsIdx, (tuple, list)):
-                asets = [self._arraysets._arraysets[aidx] for aidx in asetsIdx]
+                asets = [self._columns._columns[aidx] for aidx in asetsIdx]
             else:
                 raise TypeError(f'Arrayset idx: {asetsIdx} of type: {type(asetsIdx)}')
             nAsets = len(asets)
@@ -598,7 +598,7 @@ class WriterCheckout(GetMixin):
             if (nAsets > 1) and (nSamples > 1):
                 raise SyntaxError(
                     'Not allowed to specify BOTH multiple samples AND multiple'
-                    'arraysets in `set` operation in current Hangar implementation')
+                    'columns in `set` operation in current Hangar implementation')
 
             elif (nAsets == 1) and (nSamples == 1):
                 aset = asets[0]
@@ -609,7 +609,7 @@ class WriterCheckout(GetMixin):
                 if not isinstance(value, (list, tuple)):
                     raise TypeError(f'Value: {value} not list/tuple of np.ndarray')
                 elif not (len(value) == nAsets):
-                    raise ValueError(f'Num values: {len(value)} != num arraysets {nAsets}')
+                    raise ValueError(f'Num values: {len(value)} != num columns {nAsets}')
                 for aset, val in zip(asets, value):
                     isCompat = aset._datavalidator.verify_data_compatible(value)
                     if not isCompat.compatible:
@@ -634,22 +634,22 @@ class WriterCheckout(GetMixin):
                 return None
 
     @property
-    def arraysets(self) -> Arraysets:
-        """Provides access to arrayset interaction object.
+    def columns(self) -> Columns:
+        """Provides access to column interaction object.
 
-        Can be used to either return the arraysets accessor for all elements or
-        a single arrayset instance by using dictionary style indexing.
+        Can be used to either return the columns accessor for all elements or
+        a single column instance by using dictionary style indexing.
 
             >>> co = repo.checkout(write=True)
-            >>> asets = co.arraysets
+            >>> asets = co.columns
             >>> len(asets)
             0
             >>> fooAset = asets.init_arrayset('foo', shape=(10, 10), dtype=np.uint8)
-            >>> len(co.arraysets)
+            >>> len(co.columns)
             1
-            >>> print(co.arraysets.keys())
+            >>> print(co.columns.keys())
             ['foo']
-            >>> fooAset = co.arraysets['foo']
+            >>> fooAset = co.columns['foo']
             >>> fooAset.dtype
             np.fooDtype
             >>> fooAset = asets.get('foo')
@@ -658,18 +658,18 @@ class WriterCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`~.columns.arrayset.Arraysets` contains all methods accessible
+            The class :class:`~.columns.column.Columns` contains all methods accessible
             by this property accessor
 
         Returns
         -------
-        :class:`~.columns.arrayset.Arraysets`
-            the arraysets object which behaves exactly like a
-            arraysets accessor class but which can be invalidated when the writer
+        :class:`~.columns.column.Columns`
+            the columns object which behaves exactly like a
+            columns accessor class but which can be invalidated when the writer
             lock is released.
         """
         self._verify_alive()
-        return self._arraysets
+        return self._columns
 
     @property
     def metadata(self) -> MetadataWriter:
@@ -767,7 +767,7 @@ class WriterCheckout(GetMixin):
             repo_path=self._repo_path,
             writer_uuid=self._writer_lock)
 
-        for asetHandle in self._arraysets.values():
+        for asetHandle in self._columns.values():
             with suppress(KeyError):
                 asetHandle._close()
 
@@ -776,7 +776,7 @@ class WriterCheckout(GetMixin):
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_staging_area(
+        self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -812,7 +812,7 @@ class WriterCheckout(GetMixin):
         self._verify_alive()
 
         open_asets = []
-        for arrayset in self._arraysets.values():
+        for arrayset in self._columns.values():
             if arrayset._is_conman:
                 open_asets.append(arrayset.arrayset)
         open_meta = self._metadata._is_conman
@@ -821,13 +821,13 @@ class WriterCheckout(GetMixin):
             if open_meta:
                 self._metadata.__exit__()
             for asetn in open_asets:
-                self._arraysets[asetn].__exit__()
+                self._columns[asetn].__exit__()
 
             if self._differ.status() == 'CLEAN':
                 e = RuntimeError('No changes made in staging area. Cannot commit.')
                 raise e from None
 
-            self._arraysets._close()
+            self._columns._close()
             commit_hash = commiting.commit_records(message=commit_message,
                                                    branchenv=self._branchenv,
                                                    stageenv=self._stageenv,
@@ -836,11 +836,11 @@ class WriterCheckout(GetMixin):
             # purge recs then reopen file handles so that we don't have to invalidate
             # previous weakproxy references like if we just called :meth:``_setup```
             hashs.clear_stage_hash_records(self._stagehashenv)
-            self._arraysets._open()
+            self._columns._open()
 
         finally:
             for asetn in open_asets:
-                self._arraysets[asetn].__enter__()
+                self._columns[asetn].__enter__()
             if open_meta:
                 self._metadata.__enter__()
 
@@ -850,7 +850,7 @@ class WriterCheckout(GetMixin):
         """Perform a hard reset of the staging area to the last commit head.
 
         After this operation completes, the writer checkout will automatically
-        close in the typical fashion (any held references to :attr:``arrayset``
+        close in the typical fashion (any held references to :attr:``column``
         or :attr:``metadata`` objects will finalize and destruct as normal), In
         order to perform any further operation, a new checkout needs to be
         opened.
@@ -879,8 +879,8 @@ class WriterCheckout(GetMixin):
 
         if isinstance(self._stack, ExitStack):
             self._stack.close()
-        if hasattr(self._arraysets, '_destruct'):
-            self._arraysets._destruct()
+        if hasattr(self._columns, '_destruct'):
+            self._columns._destruct()
         if hasattr(self._metadata, '_destruct'):
             self._metadata._destruct()
 
@@ -899,7 +899,7 @@ class WriterCheckout(GetMixin):
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_staging_area(
+        self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -922,8 +922,8 @@ class WriterCheckout(GetMixin):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        if hasattr(self._arraysets, '_destruct'):
-            self._arraysets._destruct()
+        if hasattr(self._columns, '_destruct'):
+            self._columns._destruct()
         if hasattr(self._metadata, '_destruct'):
             self._metadata._destruct()
         heads.release_writer_lock(self._branchenv, self._writer_lock)

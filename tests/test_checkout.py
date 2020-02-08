@@ -27,15 +27,15 @@ class TestCheckout(object):
     def test_two_read_checkouts(self, repo, array5by7):
         w_checkout = repo.checkout(write=True)
         arrayset_name = 'aset'
-        r_ds = w_checkout.arraysets.init_arrayset(name=arrayset_name, prototype=array5by7)
+        r_ds = w_checkout.columns.init_arrayset(name=arrayset_name, prototype=array5by7)
         r_ds['1'] = array5by7
         w_checkout.metadata.update({'init': 'array5by7 added'})
         w_checkout.commit('init')
         r1_checkout = repo.checkout()
         r2_checkout = repo.checkout()
-        assert np.allclose(r1_checkout.arraysets['aset']['1'], array5by7)
+        assert np.allclose(r1_checkout.columns['aset']['1'], array5by7)
         assert np.allclose(
-            r1_checkout.arraysets['aset']['1'], r2_checkout.arraysets['aset']['1'])
+            r1_checkout.columns['aset']['1'], r2_checkout.columns['aset']['1'])
         assert r1_checkout.metadata.get('init') == 'array5by7 added'
         assert r2_checkout.metadata.get('init') == 'array5by7 added'
         r1_checkout.close()
@@ -45,7 +45,7 @@ class TestCheckout(object):
     def test_write_with_read_checkout(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout()
         with pytest.raises(PermissionError):
-            co.arraysets.init_arrayset(name='aset', shape=(5, 7), dtype=np.float64)
+            co.columns.init_arrayset(name='aset', shape=(5, 7), dtype=np.float64)
         with pytest.raises(AttributeError):
             co.metadata.update({'a': 'b'})
         co.close()
@@ -53,8 +53,8 @@ class TestCheckout(object):
     def test_writer_aset_obj_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
-        asets = co.arraysets
-        aset = co.arraysets['writtenaset']
+        asets = co.columns
+        aset = co.columns['writtenaset']
         co.close()
 
         with pytest.raises(PermissionError):
@@ -68,7 +68,7 @@ class TestCheckout(object):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
         oldObjs = []
-        for oldObj in co.arraysets.values():
+        for oldObj in co.columns.values():
             oldObjs.append(oldObj)
         co.close()
 
@@ -80,7 +80,7 @@ class TestCheckout(object):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
         oldObjs = {}
-        for oldName, oldObj in co.arraysets.items():
+        for oldName, oldObj in co.columns.items():
             oldObjs[oldName] = oldObj
         co.close()
 
@@ -93,8 +93,8 @@ class TestCheckout(object):
                                                                    aset_samples_initialized_repo, array5by7):
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
-        asets = co.arraysets
-        aset = co.arraysets['writtenaset']
+        asets = co.columns
+        aset = co.columns['writtenaset']
         aset['1'] = array5by7
         co.commit('hey there')
         co.close()
@@ -111,8 +111,8 @@ class TestCheckout(object):
     def test_reader_aset_obj_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
-        asets = co.arraysets
-        aset = co.arraysets['writtenaset']
+        asets = co.columns
+        aset = co.columns['writtenaset']
         co.close()
 
         with pytest.raises(PermissionError):
@@ -127,7 +127,7 @@ class TestCheckout(object):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
         oldObjs = []
-        for oldObj in co.arraysets.values():
+        for oldObj in co.columns.values():
             oldObjs.append(oldObj)
         co.close()
 
@@ -139,7 +139,7 @@ class TestCheckout(object):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
         oldObjs = {}
-        for oldName, oldObj in co.arraysets.items():
+        for oldName, oldObj in co.columns.items():
             oldObjs[oldName] = oldObj
         co.close()
 
@@ -151,7 +151,7 @@ class TestCheckout(object):
     def test_reader_arrayset_context_manager_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         klist = []
         with aset as ds:
             for k in ds.keys():
@@ -169,7 +169,7 @@ class TestCheckout(object):
     def test_writer_arrayset_context_manager_not_accessible_after_close(self, two_commit_filled_samples_repo):
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with aset as ds:
             # for k in ds.keys():
             #     klist.append(k)
@@ -224,11 +224,11 @@ class TestCheckout(object):
         r_co.close()
 
         with pytest.raises(PermissionError):
-            shouldFail = r_co.arraysets
+            shouldFail = r_co.columns
 
-        aset = w_co.arraysets['writtenaset']
+        aset = w_co.columns['writtenaset']
         aset['1'] = array5by7
-        assert np.allclose(w_co.arraysets['writtenaset']['1'], array5by7)
+        assert np.allclose(w_co.columns['writtenaset']['1'], array5by7)
         w_co.commit('hello commit')
         w_co.close()
 
@@ -240,25 +240,25 @@ class TestCheckout(object):
         r_co = repo.checkout(write=False)
         w_co = repo.checkout(write=True)
 
-        aset = w_co.arraysets['writtenaset']
+        aset = w_co.columns['writtenaset']
         aset['1'] = array5by7
-        assert np.allclose(w_co.arraysets['writtenaset']['1'], array5by7)
+        assert np.allclose(w_co.columns['writtenaset']['1'], array5by7)
         w_co.commit('hello commit')
         w_co.close()
 
         with pytest.raises(PermissionError):
             aset.arrayset
 
-        assert 'writtenaset' in r_co.arraysets
+        assert 'writtenaset' in r_co.columns
         assert len(r_co.metadata) == 0
 
         r_co.close()
         with pytest.raises(PermissionError):
-            r_co.arraysets
+            r_co.columns
 
     def test_operate_on_arrayset_after_closing_old_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=array5by7)
+        aset = co.columns.init_arrayset('aset', prototype=array5by7)
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout(write=True)
@@ -271,18 +271,18 @@ class TestCheckout(object):
 
     def test_operate_on_closed_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset('aset', prototype=array5by7)
+        co.columns.init_arrayset('aset', prototype=array5by7)
         co.commit('this is a commit message')
         co.close()
         with pytest.raises(PermissionError):
-            co.arraysets['aset']['1'] = array5by7
+            co.columns['aset']['1'] = array5by7
         with pytest.raises(PermissionError):
             co.metadata.update({'a': 'b'})
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_operate_on_arrayset_samples_after_commiting_but_not_closing_checkout(self, aset_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset_backend)
+        aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=aset_backend)
         aset['1'] = array5by7
         co.commit('hi')
 
@@ -315,19 +315,19 @@ class TestCheckout(object):
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     def test_operate_on_arraysets_after_commiting_but_not_closing_checkout(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        asets = co.arraysets
-        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
+        asets = co.columns
+        aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
         aset['1'] = array5by7
         co.commit('hi')
 
-        aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
+        aset2 = co.columns.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
         aset2['0'] = np.arange(50)
         co.commit('hello 2')
         assert np.allclose(aset2['0'], np.arange(50))
         co.close()
 
         with pytest.raises(PermissionError):
-            co.arraysets
+            co.columns
         with pytest.raises(PermissionError):
             asets.iswriteable
         with pytest.raises(PermissionError):
@@ -351,48 +351,48 @@ class TestCheckout(object):
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     def test_reset_staging_area_no_changes_made_does_not_work(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
-        aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
+        aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
+        aset2 = co.columns.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
         aset['1'] = array5by7
         aset2['0'] = np.arange(50)
         co.commit('hi')
 
         # verifications before reset
         assert np.allclose(aset2['0'], np.arange(50))
-        assert len(co.arraysets) == 2
-        assert co.arraysets['arange'].iswriteable
+        assert len(co.columns) == 2
+        assert co.columns['arange'].iswriteable
 
         with pytest.raises(RuntimeError, match='No changes made'):
             co.reset_staging_area()
 
         # verifications after reset
         assert np.allclose(aset2['0'], np.arange(50))
-        assert len(co.arraysets) == 2
-        assert co.arraysets['arange'].iswriteable
+        assert len(co.columns) == 2
+        assert co.columns['arange'].iswriteable
         co.close()
 
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     def test_reset_staging_area_clears_arraysets(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
+        aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
         aset['1'] = array5by7
         co.commit('hi')
 
-        aset2 = co.arraysets.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
+        aset2 = co.columns.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
         aset2['0'] = np.arange(50)
         # verifications before reset
         assert np.allclose(aset2['0'], np.arange(50))
-        assert len(co.arraysets) == 2
-        assert co.arraysets['arange'].iswriteable
+        assert len(co.columns) == 2
+        assert co.columns['arange'].iswriteable
 
         co.reset_staging_area()
         # behavior expected after reset
-        assert len(co.arraysets) == 1
+        assert len(co.columns) == 1
         with pytest.raises(PermissionError):
             aset2['0']
         with pytest.raises(KeyError):
-            co.arraysets['arange']
+            co.columns['arange']
         co.close()
 
     def test_reset_staging_area_clears_metadata(self, repo):
@@ -432,20 +432,20 @@ class TestBranchingMergingInCheckout(object):
         assert isinstance(branch.digest, str)
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch.name)
         assert co._branch_name == branch.name
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.metadata.update({'a': 'b'})
         co.commit('this is a commit message')
         co.close()
         aset_samples_initialized_repo.merge('test merge', 'master', branch.name)
         co = aset_samples_initialized_repo.checkout()
-        assert (co.arraysets['writtenaset']['1'] == array5by7).all()
+        assert (co.columns['writtenaset']['1'] == array5by7).all()
         assert co.metadata.get('a') == 'b'
         co.close()
 
     def test_merge_without_closing_previous_checkout(self, aset_samples_initialized_repo, array5by7):
         branch = aset_samples_initialized_repo.create_branch('testbranch')
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch.name)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         with pytest.raises(PermissionError):
             aset_samples_initialized_repo.merge('test merge', 'master', branch.name)
@@ -455,14 +455,14 @@ class TestBranchingMergingInCheckout(object):
     def test_merge_multiple_checkouts_same_aset(self, aset_samples_initialized_repo, array5by7):
         branch1 = aset_samples_initialized_repo.create_branch('testbranch1')
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.metadata.update({'a1': 'b1'})
         co.commit('this is a commit message')
         co.close()
 
         branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
-        co.arraysets['writtenaset']['2'] = array5by7
+        co.columns['writtenaset']['2'] = array5by7
         co.metadata.update({'a2': 'b2'})
         co.commit('this is a commit message')
         co.close()
@@ -471,21 +471,21 @@ class TestBranchingMergingInCheckout(object):
         aset_samples_initialized_repo.merge('test merge 2', 'master', branch2.name)
 
         co = aset_samples_initialized_repo.checkout(branch='master')
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 2
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 2
         assert list(co.metadata.keys()) == ['a1', 'a2']
         co.close()
 
     def test_merge_multiple_checkouts_multiple_aset(self, aset_samples_initialized_repo, array5by7):
         branch1 = aset_samples_initialized_repo.create_branch('testbranch1')
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
 
         branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
-        second_aset = co.arraysets.init_arrayset(name='second_aset', prototype=array5by7)
+        second_aset = co.columns.init_arrayset(name='second_aset', prototype=array5by7)
         second_aset['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
@@ -494,9 +494,9 @@ class TestBranchingMergingInCheckout(object):
         aset_samples_initialized_repo.merge('test merge 2', 'master', branch2.name)
 
         co = aset_samples_initialized_repo.checkout(branch='master')
-        assert len(co.arraysets) == 2
-        assert len(co.arraysets['writtenaset']) == 1
-        assert len(co.arraysets['second_aset']) == 1
+        assert len(co.columns) == 2
+        assert len(co.columns['writtenaset']) == 1
+        assert len(co.columns['second_aset']) == 1
         co.close()
 
     def test_merge_diverged_conflict(self, aset_samples_initialized_repo, array5by7):
@@ -504,14 +504,14 @@ class TestBranchingMergingInCheckout(object):
         branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
 
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.metadata.update({'a': 'b'})
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
         newarray = np.zeros_like(array5by7)
-        co.arraysets['writtenaset']['1'] = newarray
+        co.columns['writtenaset']['1'] = newarray
         co.metadata.update({'a': 'c'})
         co.commit('this is a commit message')
         co.close()
@@ -529,8 +529,8 @@ class TestBranchingMergingInCheckout(object):
         co1.close()
 
         co2 = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
-        co2.arraysets.init_arrayset('aset2', prototype=array5by7)
-        co2.arraysets['aset2']['2'] = array5by7
+        co2.columns.init_arrayset('aset2', prototype=array5by7)
+        co2.columns['aset2']['2'] = array5by7
         co2.commit('this is a merge message')
         co2.close()
         h2 = aset_samples_initialized_repo.log(branch=branch2.name, return_contents=True)
@@ -549,8 +549,8 @@ class TestBranchingMergingInCheckout(object):
         branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
         co1 = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         initial_cmt = co1.commit_hash
-        co1.arraysets.init_arrayset('aset2', prototype=array5by7)
-        co1.arraysets['aset2']['2'] = array5by7
+        co1.columns.init_arrayset('aset2', prototype=array5by7)
+        co1.columns['aset2']['2'] = array5by7
         co1.close()
 
         with pytest.raises(ValueError):
@@ -590,7 +590,7 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(two_commit
     with co.metadata as m:
         m['aa'] = 'bb'
         cmt1 = co.commit('here is the first commit')
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             d['2422'] = d['0'] + 213
             cmt2 = co.commit('here is the second commit')
 
@@ -599,7 +599,7 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(two_commit
     with pytest.raises(PermissionError):
         d.arrayset
     with pytest.raises(PermissionError):
-        co.arraysets
+        co.columns
     assert co.__dict__ == {}
 
     co = repo.checkout(commit=cmt1)
@@ -610,9 +610,9 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(two_commit
     co = repo.checkout(commit=cmt2)
     assert 'aa' in co.metadata
     assert co.metadata['aa'] == 'bb'
-    assert '2422' in co.arraysets['writtenaset']
-    assert np.allclose(co.arraysets['writtenaset']['2422'],
-                       co.arraysets['writtenaset']['0'] + 213)
+    assert '2422' in co.columns['writtenaset']
+    assert np.allclose(co.columns['writtenaset']['2422'],
+                       co.columns['writtenaset']['0'] + 213)
     co.close()
 
 
@@ -622,7 +622,7 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(two_commit
     co = repo.checkout(write=False)
     with co.metadata as m:
         k = list(m.keys())
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             ds = d['2']
 
     assert m.iswriteable is False
@@ -630,7 +630,7 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(two_commit
     assert k == list(m.keys())
     assert k == list(co.metadata.keys())
     assert np.allclose(ds, d.get('2'))
-    assert np.allclose(ds, co.arraysets['writtenaset'].get('2'))
+    assert np.allclose(ds, co.columns['writtenaset'].get('2'))
 
     assert co.close() is None
 
@@ -638,15 +638,15 @@ def test_reader_context_manager_objects_are_gc_removed_after_co_close(two_commit
     with pytest.raises(PermissionError):
         d.arrayset
     with pytest.raises(AttributeError):
-        co._arraysets
+        co._columns
     with pytest.raises(AttributeError):
         co._metadata
     with pytest.raises(PermissionError):
-        str(co.arraysets.get('writtenaset'))
+        str(co.columns.get('writtenaset'))
     with pytest.raises(PermissionError):
         repr(co.metadata)
     with pytest.raises(PermissionError):
-        co.arraysets
+        co.columns
     with pytest.raises(PermissionError):
         repr(co)
     assert co.__dict__ == {}

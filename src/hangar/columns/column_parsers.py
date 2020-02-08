@@ -19,7 +19,8 @@ def column_name_from_schema_db_key(raw: bytes) -> str:
 
 
 def schema_db_val_from_spec(schema: dict) -> bytes:
-    raw = repr(schema).encode()
+    serialized = repr(schema).replace(' ', '')
+    raw = serialized.encode()
     return raw
 
 

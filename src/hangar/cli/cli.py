@@ -125,8 +125,8 @@ def commit(repo: Repository, message):
 
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
-def arrayset(ctx):  # pragma: no cover
-    """Operations for working with arraysets in the writer checkout.
+def column(ctx):  # pragma: no cover
+    """Operations for working with columns in the writer checkout.
     """
     pass
 
@@ -144,9 +144,9 @@ def arrayset(ctx):  # pragma: no cover
 @click.argument('shape', nargs=-1, type=click.INT, required=True)
 @pass_repo
 def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_):
-    """Create an arrayset with NAME and DTYPE of SHAPE.
+    """Create an column with NAME and DTYPE of SHAPE.
 
-    The arrayset will be created in the staging area / branch last used by a
+    The column will be created in the staging area / branch last used by a
     writer-checkout. Valid NAMEs contain only ascii letters and [``'.'``,
     ``'_'``, ``'-'``] (no whitespace). The DTYPE must be one of [``'UINT8'``,
     ``'INT8'``, ``'UINT16'``, ``'INT16'``, ``'UINT32'``, ``'INT32'``,
@@ -156,42 +156,42 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_
 
     Examples:
 
-    To specify, an arrayset for some training images of dtype uint8 and shape
+    To specify, an column for some training images of dtype uint8 and shape
     (256, 256, 3) we should say:
 
        .. code-block:: console
 
-          $ hangar arrayset create train_images UINT8 256 256 3
+          $ hangar column create train_images UINT8 256 256 3
 
     To specify that the samples can be variably shaped (have any dimension size
     up to the maximum SHAPE specified) we would say:
 
        .. code-block:: console
 
-          $ hangar arrayset create train_images UINT8 256 256 3 --variable-shape
+          $ hangar column create train_images UINT8 256 256 3 --variable-shape
 
     or equivalently:
 
        .. code-block:: console
 
-          $ hangar arrayset create --variable-shape train_images UINT8 256 256 3
+          $ hangar column create --variable-shape train_images UINT8 256 256 3
 
     To specify that the column contains a nested set of subsample data under a
     common sample key, the ``--contains-subsamples`` flag can be used.
 
        .. code-block:: console
 
-          $ hangar arrayset create --contains-subsamples train_images UINT8 256 256 3
+          $ hangar column create --contains-subsamples train_images UINT8 256 256 3
 
     """
     try:
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset(name=name,
-                                          shape=shape,
-                                          dtype=np.typeDict[dtype.lower()],
-                                          variable_shape=variable_,
-                                          contains_subsamples=subsamples_)
-        click.echo(f'Initialized Arrayset: {aset.arrayset}')
+        aset = co.columns.init_arrayset(name=name,
+                                        shape=shape,
+                                        dtype=np.typeDict[dtype.lower()],
+                                        variable_shape=variable_,
+                                        contains_subsamples=subsamples_)
+        click.echo(f'Initialized Arrayset: {aset.column}')
     except (ValueError, LookupError, PermissionError) as e:
         raise click.ClickException(e)
     finally:
@@ -205,15 +205,15 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_
 @click.argument('name', nargs=1, type=click.STRING, required=True)
 @pass_repo
 def remove_arrayset(repo: Repository, name):
-    """Delete the arrayset NAME (and all samples) from staging area.
+    """Delete the column NAME (and all samples) from staging area.
 
-    The arrayset will be removed from the staging area / branch last used by a
+    The column will be removed from the staging area / branch last used by a
     writer-checkout.
     """
     try:
         co = repo.checkout(write=True)
-        removed = co.arraysets.delete(name)
-        click.echo(f'Successfully removed arrayset: {removed}')
+        removed = co.columns.delete(name)
+        click.echo(f'Successfully removed column: {removed}')
     except (ValueError, KeyError, PermissionError) as e:
         raise click.ClickException(e)
     finally:
@@ -547,7 +547,7 @@ def server(overwrite, ip, port, timeout):
 
 @main.command(name='import',
               context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
-@click.argument('arrayset', required=True)
+@click.argument('column', required=True)
 @click.argument('path',
                 required=True,
                 type=click.Path(exists=True, dir_okay=True, file_okay=True, readable=True,
@@ -558,7 +558,7 @@ def server(overwrite, ip, port, timeout):
               help='overwrite data samples with the same name as the imported data file ')
 @pass_repo
 @click.pass_context
-def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite):
+def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
     """Import file or directory of files at PATH to ARRAYSET in the staging area.
 
     If passing in a directory, all files in the directory will be imported, if
@@ -579,7 +579,7 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 
     co = repo.checkout(write=True, branch=branch)
     try:
-        active_aset = co.arraysets.get(arrayset)
+        active_aset = co.columns.get(arrayset)
         p = Path(path)
         files = [f.resolve() for f in p.iterdir()] if p.is_dir() else [p.resolve()]
         with active_aset as aset, click.progressbar(files) as filesBar:
@@ -603,7 +603,7 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 
 @main.command(name='export',
               context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
-@click.argument('arrayset', nargs=1, required=True)
+@click.argument('column', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
 @click.option('-o', '--out', 'outdir',
               nargs=1,
@@ -617,7 +617,7 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
               default=None,
               type=StrOrIntType(),
               help=('Sample name to export. Default implementation is to interpret all input '
-                    'names as string type. As an arrayset can contain samples with both ``str`` '
+                    'names as string type. As an column can contain samples with both ``str`` '
                     'and ``int`` types, we allow you to specify ``name type`` of the sample. To '
                     'identify a potentially ambiguous name, we allow you to prepend the type of '
                     'sample name followed by a colon and then the sample name (ex. ``str:54`` '
@@ -629,11 +629,11 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 @click.option('--plugin', required=False, help='override auto-inferred plugin')
 @pass_repo
 @click.pass_context
-def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, format_, plugin):
+def export_data(ctx, repo: Repository, column, outdir, startpoint, sample, format_, plugin):
     """Export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
 
     Specifying which sample to be exported is possible by using the switch
-    ``--sample`` (without this, all the samples in the given arrayset will be
+    ``--sample`` (without this, all the samples in the given column will be
     exported). Since hangar supports both int and str datatype for the sample
     name, specifying that while mentioning the sample name might be necessary
     at times. It is possible to do that by separating the name and type by a
@@ -662,7 +662,7 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
 
     co = repo.checkout(commit=base_commit)
     try:
-        aset = co.arraysets.get(arrayset)
+        aset = co.columns.get(arrayset)
         sampleNames = [sample] if sample is not None else list(aset.keys())
         extension = format_.lstrip('.') if format_ else None
         with aset, click.progressbar(sampleNames) as sNamesBar:
@@ -681,14 +681,14 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
 
 @main.command(name='view',
               context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
-@click.argument('arrayset', nargs=1, type=str, required=True)
+@click.argument('column', nargs=1, type=str, required=True)
 @click.argument('sample', nargs=1, type=StrOrIntType(), required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
 @click.option('-f', '--format', 'format_', required=False, help='File format of output file')
 @click.option('--plugin', default=None, help='Plugin name to use instead of auto-inferred plugin')
 @pass_repo
 @click.pass_context
-def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plugin):
+def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin):
     """Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
     """
     from hangar.records.commiting import expand_short_commit_digest
@@ -706,7 +706,7 @@ def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plug
 
     co = repo.checkout(commit=base_commit)
     try:
-        aset = co.arraysets.get(arrayset)
+        aset = co.columns.get(arrayset)
         extension = format_.lstrip('.') if format_ else None
         data = aset[sample]
         try:

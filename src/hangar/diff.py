@@ -653,7 +653,7 @@ class WriterUserDiff(BaseUserDiff):
         """Determine if changes have been made in the staging area
 
         If the contents of the staging area and it's parent commit are the
-        same, the status is said to be "CLEAN". If even one arrayset or
+        same, the status is said to be "CLEAN". If even one column or
         metadata record has changed however, the status is "DIRTY".
 
         Returns

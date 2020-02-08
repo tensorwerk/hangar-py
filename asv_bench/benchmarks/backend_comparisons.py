@@ -49,11 +49,11 @@ class _WriterSuite:
         self.arr = np.prod(component_arrays).astype(np.float32)
 
         try:
-            self.aset = self.co.arraysets.init_arrayset(
+            self.aset = self.co.columns.init_arrayset(
                 'aset', prototype=self.arr, backend_opts=self.backend_code[backend])
         except TypeError:
             try:
-                self.aset = self.co.arraysets.init_arrayset(
+                self.aset = self.co.columns.init_arrayset(
                     'aset', prototype=self.arr, backend=self.backend_code[backend])
             except ValueError:
                 raise NotImplementedError
@@ -124,18 +124,18 @@ class _ReaderSuite:
 
         for backend, code in backend_code.items():
             try:
-                co.arraysets.init_arrayset(
+                co.columns.init_arrayset(
                     backend, prototype=arr, backend_opts=code)
             except TypeError:
                 try:
-                    co.arraysets.init_arrayset(
+                    co.columns.init_arrayset(
                         backend, prototype=arr, backend=code)
                 except ValueError:
                     pass
             except ValueError:
                 pass
 
-        with co.arraysets as asets_cm:
+        with co.columns as asets_cm:
             for aset in asets_cm.values():
                 changer = 0
                 for i in range(num_samples):
@@ -150,7 +150,7 @@ class _ReaderSuite:
         self.repo = Repository(path=os.getcwd(), exists=True)
         self.co = self.repo.checkout(write=False)
         try:
-            self.aset = self.co.arraysets[backend]
+            self.aset = self.co.columns[backend]
         except KeyError:
             raise NotImplementedError
 

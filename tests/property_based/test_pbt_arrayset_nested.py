@@ -28,12 +28,12 @@ def fixed_shape_repo_co_float32_aset_nested(managed_tmpdir, request) -> Reposito
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset',
-                               shape=(10, 10, 10),
-                               dtype=np.float32,
-                               variable_shape=False,
-                               backend_opts=request.param,
-                               contains_subsamples=True)
+    co.columns.init_arrayset(name='writtenaset',
+                             shape=(10, 10, 10),
+                             dtype=np.float32,
+                             variable_shape=False,
+                             backend_opts=request.param,
+                             contains_subsamples=True)
     yield co
     co.close()
     repo_obj._env._close_environments()
@@ -48,12 +48,12 @@ def variable_shape_repo_co_float32_aset_nested(managed_tmpdir, request) -> Repos
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset',
-                               shape=(10, 10, 10),
-                               dtype=np.float32,
-                               variable_shape=True,
-                               backend_opts=request.param,
-                               contains_subsamples=True)
+    co.columns.init_arrayset(name='writtenaset',
+                             shape=(10, 10, 10),
+                             dtype=np.float32,
+                             variable_shape=True,
+                             backend_opts=request.param,
+                             contains_subsamples=True)
     yield co
     co.close()
     repo_obj._env._close_environments()
@@ -68,12 +68,12 @@ def variable_shape_repo_co_uint8_aset_nested(managed_tmpdir, request) -> Reposit
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset',
-                               shape=(10, 10, 10),
-                               dtype=np.uint8,
-                               variable_shape=True,
-                               backend_opts=request.param,
-                               contains_subsamples=True)
+    co.columns.init_arrayset(name='writtenaset',
+                             shape=(10, 10, 10),
+                             dtype=np.uint8,
+                             variable_shape=True,
+                             backend_opts=request.param,
+                             contains_subsamples=True)
     yield co
     co.close()
     repo_obj._env._close_environments()

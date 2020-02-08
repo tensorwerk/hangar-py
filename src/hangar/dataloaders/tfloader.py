@@ -26,9 +26,9 @@ def make_tf_dataset(arraysets,
                     index_range: slice = None,
                     shuffle: bool = True):
     """
-    Uses the hangar arraysets to make a tensorflow dataset. It uses
+    Uses the hangar columns to make a tensorflow dataset. It uses
     `from_generator` function from `tensorflow.data.Dataset` with a generator
-    function that wraps all the hangar arraysets. In such instances tensorflow
+    function that wraps all the hangar columns. In such instances tensorflow
     Dataset does shuffle by loading the subset of data which can fit into the
     memory and shuffle that subset. Since it is not really a global shuffle
     `make_tf_dataset` accepts a `shuffle` argument which will be used by the
@@ -49,20 +49,20 @@ def make_tf_dataset(arraysets,
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.columns.arrayset.Arraysets` or Sequence
-        A arrayset object, a tuple of arrayset object or a list of arrayset
+    arraysets : :class:`~hangar.columns.column.Columns` or Sequence
+        A column object, a tuple of column object or a list of column
         objects`
     keys : Sequence[str]
         An iterable of sample names. If given only those samples will fetched from
-        the arrayset
+        the column
     index_range : slice
-        A python slice object which will be used to find the subset of arrayset.
+        A python slice object which will be used to find the subset of column.
         Argument `keys` takes priority over `index_range` i.e. if both are given,
         keys will be used and `index_range` will be ignored
     shuffle : bool
         generator uses this to decide a global shuffle accross all the samples is
         required or not. But user doesn't have any restriction on
-        doing`arrayset.shuffle()` on the returned arrayset
+        doing`column.shuffle()` on the returned column
 
     Examples
     --------
@@ -72,8 +72,8 @@ def make_tf_dataset(arraysets,
     >>> tf.compat.v1.enable_eager_execution()
     >>> repo = Repository('.')
     >>> co = repo.checkout()
-    >>> data = co.arraysets['mnist_data']
-    >>> target = co.arraysets['mnist_target']
+    >>> data = co.columns['mnist_data']
+    >>> target = co.columns['mnist_target']
     >>> tf_dset = make_tf_dataset([data, target])
     >>> tf_dset = tf_dset.batch(512)
     >>> for bdata, btarget in tf_dset:

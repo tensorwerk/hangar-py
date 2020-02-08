@@ -22,7 +22,7 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  --help     Show this message and exit.\n'\
            '\n'\
            'Commands:\n'\
-           '  arrayset    Operations for working with arraysets in the writer checkout.\n'\
+           '  column    Operations for working with columns in the writer checkout.\n'\
            '  branch      operate on and list branch pointers.\n'\
            '  checkout    Checkout writer head branch at BRANCHNAME.\n'\
            '  clone       Initialize a repository at the current path and fetch updated...\n'\
@@ -257,11 +257,11 @@ def test_push_fetch_records(server_instance, backend):
             repo.init('foo', 'bar')
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
-            co1.arraysets.init_arrayset(
+            co1.columns.init_arrayset(
                 name='dummy', prototype=dummyData, backend_opts=backend)
             for idx in range(10):
                 dummyData[:] = idx
-                co1.arraysets['dummy'][str(idx)] = dummyData
+                co1.columns['dummy'][str(idx)] = dummyData
             co1.metadata['hello'] = 'world'
             co1.metadata['somemetadatakey'] = 'somemetadatavalue'
             cmt1 = co1.commit('first commit adding dummy data and hello meta')
@@ -271,7 +271,7 @@ def test_push_fetch_records(server_instance, backend):
             co2 = repo.checkout(write=True, branch='testbranch')
             for idx in range(10, 20):
                 dummyData[:] = idx
-                co2.arraysets['dummy'][str(idx)] = dummyData
+                co2.columns['dummy'][str(idx)] = dummyData
             co2.metadata['foo'] = 'bar'
             cmt2 = co2.commit('first commit on test branch adding non-conflict data and meta')
             co2.close()
@@ -307,11 +307,11 @@ def test_fetch_records_and_data(server_instance, backend, options):
             repo.init('foo', 'bar')
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
-            co1.arraysets.init_arrayset(
+            co1.columns.init_arrayset(
                 name='dummy', prototype=dummyData, backend_opts=backend)
             for idx in range(10):
                 dummyData[:] = idx
-                co1.arraysets['dummy'][str(idx)] = dummyData
+                co1.columns['dummy'][str(idx)] = dummyData
             co1.metadata['hello'] = 'world'
             co1.metadata['somemetadatakey'] = 'somemetadatavalue'
             cmt1 = co1.commit('first commit adding dummy data and hello meta')
@@ -321,7 +321,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
             co2 = repo.checkout(write=True, branch='testbranch')
             for idx in range(10, 20):
                 dummyData[:] = idx
-                co2.arraysets['dummy'][str(idx)] = dummyData
+                co2.columns['dummy'][str(idx)] = dummyData
             co2.metadata['foo'] = 'bar'
             cmt2 = co2.commit('first commit on test branch adding non-conflict data and meta')
             co2.close()
@@ -488,8 +488,8 @@ def test_status(repo_20_filled_samples_meta):
     co2 = repo_20_filled_samples_meta.checkout(write=True)
     for idx in range(10, 20):
         dummyData[:] = idx
-        co2.arraysets['dummy'][str(idx)] = dummyData
-        co2.arraysets['dummy'][idx] = dummyData
+        co2.columns['dummy'][str(idx)] = dummyData
+        co2.columns['dummy'][idx] = dummyData
     co2.metadata['foo'] = 'bar'
     df = co2.diff.staged()
     co2.close()
@@ -510,11 +510,11 @@ def test_arrayset_create_uint8(repo_20_filled_samples_meta):
     assert res.stdout == 'Initialized Arrayset: train_images\n'
     co = repo_20_filled_samples_meta.checkout(write=True)
     try:
-        assert 'train_images' in co.arraysets
-        assert co.arraysets['train_images'].shape == (256, 256, 3)
-        assert co.arraysets['train_images'].dtype == np.uint8
-        assert co.arraysets['train_images'].variable_shape is False
-        assert len(co.arraysets['train_images']) == 0
+        assert 'train_images' in co.columns
+        assert co.columns['train_images'].shape == (256, 256, 3)
+        assert co.columns['train_images'].dtype == np.uint8
+        assert co.columns['train_images'].variable_shape is False
+        assert len(co.columns['train_images']) == 0
     finally:
         co.close()
 
@@ -528,11 +528,11 @@ def test_arrayset_create_float32(repo_20_filled_samples_meta):
     assert res.stdout == 'Initialized Arrayset: train_images\n'
     co = repo_20_filled_samples_meta.checkout(write=True)
     try:
-        assert 'train_images' in co.arraysets
-        assert co.arraysets['train_images'].shape == (256,)
-        assert co.arraysets['train_images'].dtype == np.float32
-        assert co.arraysets['train_images'].variable_shape is False
-        assert len(co.arraysets['train_images']) == 0
+        assert 'train_images' in co.columns
+        assert co.columns['train_images'].shape == (256,)
+        assert co.columns['train_images'].dtype == np.float32
+        assert co.columns['train_images'].variable_shape is False
+        assert len(co.columns['train_images']) == 0
     finally:
         co.close()
 
@@ -550,7 +550,7 @@ def test_arrayset_create_invalid_dtype_fails(repo_20_filled_samples_meta):
     assert res.stdout.endswith(expected) is True
     co = repo_20_filled_samples_meta.checkout(write=True)
     try:
-        assert 'train_images' not in co.arraysets
+        assert 'train_images' not in co.columns
     finally:
         co.close()
 
@@ -563,9 +563,9 @@ def test_arrayset_create_invalid_name_fails(repo_20_filled_samples_meta):
     assert msg.startswith('Error: Arrayset name provided: `tra#in` is invalid.') is True
     co = repo_20_filled_samples_meta.checkout(write=True)
     try:
-        assert 'tra#in' not in co.arraysets
-        assert 'dummy' in co.arraysets
-        assert len(co.arraysets) == 1
+        assert 'tra#in' not in co.columns
+        assert 'dummy' in co.columns
+        assert len(co.columns) == 1
     finally:
         co.close()
 
@@ -579,12 +579,12 @@ def test_arrayset_create_variable_shape(repo_20_filled_samples_meta):
     assert res.stdout == 'Initialized Arrayset: train_images\n'
     co = repo_20_filled_samples_meta.checkout(write=True)
     try:
-        assert 'train_images' in co.arraysets
-        assert co.arraysets['train_images'].shape == (256,)
-        assert co.arraysets['train_images'].dtype == np.float32
-        assert co.arraysets['train_images'].variable_shape is True
-        assert co.arraysets['train_images'].contains_subsamples is False
-        assert len(co.arraysets['train_images']) == 0
+        assert 'train_images' in co.columns
+        assert co.columns['train_images'].shape == (256,)
+        assert co.columns['train_images'].dtype == np.float32
+        assert co.columns['train_images'].variable_shape is True
+        assert co.columns['train_images'].contains_subsamples is False
+        assert len(co.columns['train_images']) == 0
     finally:
         co.close()
 
@@ -598,12 +598,12 @@ def test_arrayset_create_contains_subsamples(repo_20_filled_samples_meta):
     assert res.stdout == 'Initialized Arrayset: train_images\n'
     co = repo_20_filled_samples_meta.checkout(write=True)
     try:
-        assert 'train_images' in co.arraysets
-        assert co.arraysets['train_images'].shape == (256,)
-        assert co.arraysets['train_images'].dtype == np.float32
-        assert co.arraysets['train_images'].variable_shape is False
-        assert co.arraysets['train_images'].contains_subsamples is True
-        assert len(co.arraysets['train_images']) == 0
+        assert 'train_images' in co.columns
+        assert co.columns['train_images'].shape == (256,)
+        assert co.columns['train_images'].dtype == np.float32
+        assert co.columns['train_images'].variable_shape is False
+        assert co.columns['train_images'].contains_subsamples is True
+        assert len(co.columns['train_images']) == 0
     finally:
         co.close()
 
@@ -612,11 +612,11 @@ def test_remove_arrayset(repo_20_filled_samples_meta):
     runner = CliRunner()
     res = runner.invoke(cli.remove_arrayset, ['dummy'], obj=repo_20_filled_samples_meta)
     assert res.exit_code == 0
-    assert res.stdout == 'Successfully removed arrayset: dummy\n'
+    assert res.stdout == 'Successfully removed column: dummy\n'
     co = repo_20_filled_samples_meta.checkout(write=True)
     try:
-        assert 'repo_20_filled_samples_meta' not in co.arraysets
-        assert len(co.arraysets) == 0
+        assert 'repo_20_filled_samples_meta' not in co.columns
+        assert len(co.columns) == 0
         assert len(co.metadata) == 2
     finally:
         co.close()
@@ -629,10 +629,10 @@ def test_remove_non_existing_arrayset(repo_20_filled_samples_meta):
     assert res.stdout == "Error: 'Cannot remove: doesnotexist. Key does not exist.'\n"
     co = repo_20_filled_samples_meta.checkout(write=True)
     try:
-        assert 'doesnotexist' not in co.arraysets
-        assert 'dummy' in co.arraysets
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['dummy']) == 10
+        assert 'doesnotexist' not in co.columns
+        assert 'dummy' in co.columns
+        assert len(co.columns) == 1
+        assert len(co.columns['dummy']) == 10
         assert len(co.metadata) == 2
     finally:
         co.close()
@@ -755,7 +755,7 @@ def written_repo_with_1_sample(aset_samples_initialized_repo):
     aset_name = 'writtenaset'
     shape = (5, 7)
     co = aset_samples_initialized_repo.checkout(write=True)
-    aset = co.arraysets[aset_name]
+    aset = co.columns[aset_name]
     aset['data'] = np.random.random(shape)
     aset['123'] = np.random.random(shape)
     aset[123] = np.random.random(shape)
@@ -790,14 +790,14 @@ class TestImport(object):
             assert res.exit_code == 0
             co = repo.checkout(write=True)
             co.commit('added data')
-            d1 = co.arraysets[aset_name][fpath]
+            d1 = co.columns[aset_name][fpath]
             co.close()
 
             # without overwrite
             res = runner.invoke(cli.import_data, [aset_name, fpath], obj=repo)
             assert res.exit_code == 0
             co = repo.checkout()
-            d2 = co.arraysets[aset_name][fpath]
+            d2 = co.columns[aset_name][fpath]
             co.close()
             assert np.allclose(d1, d2)
 
@@ -806,7 +806,7 @@ class TestImport(object):
             assert res.exit_code == 0
             co = repo.checkout(write=True)
             co.commit('added data')
-            d3 = co.arraysets[aset_name][fpath]
+            d3 = co.columns[aset_name][fpath]
             co.close()
             assert not np.allclose(d1, d3)
         assert d1.shape == d2.shape == d3.shape == shape
@@ -868,7 +868,7 @@ class TestImport(object):
             assert res.exit_code == 0
             co = repo.checkout(write=True)
             co.commit('added data')
-            aset = co.arraysets[aset_name]
+            aset = co.columns[aset_name]
             for i in range(10):
                 assert f"{i}_{fpath}" in aset.keys()
             co.close()
@@ -911,7 +911,7 @@ class TestExport(object):
             assert res.exit_code == 0
             assert os.path.join(tmp_path, 'str:123.ext') in res.output
 
-            # whole arrayset
+            # whole column
             res = runner.invoke(
                 cli.export_data, [aset_name, '-o', str(tmp_path), '--format', 'ext'], obj=repo)
             assert res.exit_code == 0

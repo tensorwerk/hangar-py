@@ -297,7 +297,7 @@ community over the past few decades.
 
 In a sense, the backend of Hangar serves two functions:
 
-1) Bookkeeping: recording information about about arraysets, samples, commits,
+1) Bookkeeping: recording information about about columns, samples, commits,
    etc.
 2) Data Storage: highly optimized interfaces which store and retrieve data from
    from disk through its backend utility.
@@ -371,7 +371,7 @@ reasonable that they should be the ones to benefit from all that work.
     data collaboration in todays world?
 
 The impetus for developing a tool like Hangar is the belief that if it is
-simple for anyone with domain knowledge to collaboratively curate arraysets
+simple for anyone with domain knowledge to collaboratively curate columns
 containing information they care about, then they will.* Open source software
 development benefits everyone, we believe open source arrayset curation can do
 the same.
@@ -380,10 +380,10 @@ How To Overcome The "Size" Problem
 ----------------------------------
 
 Even if the greatest tool imaginable existed to version, branch, and merge
-arraysets, it would face one massive problem which if it didn't solve would
+columns, it would face one massive problem which if it didn't solve would
 kill the project: *The size of data can very easily exceeds what can fit on
 (most) contributors laptops or personal workstations*. This section explains
-how Hangar can handle working with arraysets which are prohibitively large to
+how Hangar can handle working with columns which are prohibitively large to
 download or store on a single machine.
 
 As mentioned in `High Performance From Simplicity`_, under the hood Hangar
@@ -392,7 +392,7 @@ covered what exactly we mean by Data in `How Hangar Thinks About Data`_, so
 we'll briefly cover the second major component of Hangar here. In short
 "Bookkeeping" describes everything about the repository. By everything, we do
 mean that the Bookkeeping records describe everything: all commits, parents,
-branches, arraysets, samples, data descriptors, schemas, commit message, etc.
+branches, columns, samples, data descriptors, schemas, commit message, etc.
 Though complete, these records are fairly small (tens of MB in size for
 decently sized repositories with decent history), and are highly compressed for
 fast transfer between a Hangar client/server.
@@ -559,16 +559,16 @@ Any merge conflicts can be identified and addressed ahead of running a
 Hangar will provide a list of conflicts which it identifies. In general these
 fall into 4 categories:
 
-1) **Additions** in both branches which created new keys (samples / arraysets /
+1) **Additions** in both branches which created new keys (samples / columns /
    metadata) with non-compatible values. For samples & metadata, the hash of
-   the data is compared, for arraysets, the schema specification is checked for
+   the data is compared, for columns, the schema specification is checked for
    compatibility in a method custom to the internal workings of Hangar.
 2) **Removal** in ``Master Commit / Branch`` **& Mutation** in ``Dev Commit /
-   Branch``. Applies for samples, arraysets, and metadata identically.
+   Branch``. Applies for samples, columns, and metadata identically.
 3) **Mutation** in ``Dev Commit / Branch`` **& Removal** in ``Master Commit /
-   Branch``. Applies for samples, arraysets, and metadata identically.
+   Branch``. Applies for samples, columns, and metadata identically.
 4) **Mutations** on keys both branches to non-compatible values. For samples &
-   metadata, the hash of the data is compared, for arraysets, the schema
+   metadata, the hash of the data is compared, for columns, the schema
    specification is checked for compatibility in a method custom to the
    internal workings of Hangar.
 

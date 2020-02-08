@@ -17,7 +17,7 @@ class TestArrayset(object):
     def test_invalid_asetname(self, repo, randomsizedarray, name):
         co = repo.checkout(write=True)
         with pytest.raises(ValueError):
-            co.arraysets.init_arrayset(name=name, prototype=randomsizedarray)
+            co.columns.init_arrayset(name=name, prototype=randomsizedarray)
         co.close()
 
     def test_read_only_mode(self, aset_samples_initialized_repo):
@@ -25,21 +25,21 @@ class TestArrayset(object):
         co = aset_samples_initialized_repo.checkout()
         assert isinstance(co, hangar.checkout.ReaderCheckout)
         with pytest.raises(PermissionError):
-            assert co.arraysets.init_arrayset('foo')
+            assert co.columns.init_arrayset('foo')
         with pytest.raises(PermissionError):
-            co.arraysets.delete('foo')
+            co.columns.delete('foo')
         with pytest.raises(PermissionError):
-            del co.arraysets['foo']
-        assert len(co.arraysets['writtenaset']) == 0
+            del co.columns['foo']
+        assert len(co.columns['writtenaset']) == 0
         co.close()
 
     def test_get_arrayset(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
 
-        # getting the arrayset with `get`
-        asetOld = co.arraysets.get('writtenaset')
+        # getting the column with `get`
+        asetOld = co.columns.get('writtenaset')
         asetOldPath = asetOld._path
-        asetOldAsetn = asetOld._asetn
+        asetOldAsetn = asetOld._column_name
         asetOldDefaultSchemaHash = asetOld._dflt_schema_hash
 
         asetOld['1'] = array5by7
@@ -47,46 +47,46 @@ class TestArrayset(object):
         co.close()
         co = aset_samples_initialized_repo.checkout()
 
-        # getting arrayset with dictionary like style method
-        asetNew = co.arraysets['writtenaset']
+        # getting column with dictionary like style method
+        asetNew = co.columns['writtenaset']
         assert_equal(asetNew['1'], array5by7)
         assert asetOldPath == asetNew._path
-        assert asetOldAsetn == asetNew._asetn
+        assert asetOldAsetn == asetNew._column_name
         assert asetOldDefaultSchemaHash == asetNew._dflt_schema_hash
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_remove_arrayset(self, aset_backend, aset_samples_initialized_repo):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets.delete('writtenaset')
+        co.columns.delete('writtenaset')
         with pytest.raises(KeyError):
-            co.arraysets.delete('writtenaset')
+            co.columns.delete('writtenaset')
 
-        co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64, backend_opts=aset_backend)
-        assert len(co.arraysets) == 1
-        co.arraysets.delete('writtenaset')
+        co.columns.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64, backend_opts=aset_backend)
+        assert len(co.columns) == 1
+        co.columns.delete('writtenaset')
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 0
+        assert len(co.columns) == 0
 
-        co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64, backend_opts=aset_backend)
+        co.columns.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64, backend_opts=aset_backend)
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 1
-        del co.arraysets['writtenaset']
-        assert len(co.arraysets) == 0
+        assert len(co.columns) == 1
+        del co.columns['writtenaset']
+        assert len(co.columns) == 0
         co.commit('this is a commit message')
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_init_again(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
+        co.columns.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
         with pytest.raises(LookupError):
-            co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
+            co.columns.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
@@ -94,30 +94,30 @@ class TestArrayset(object):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
         with pytest.raises(ValueError):
-            co.arraysets.init_arrayset('aset', shape=shape, dtype=np.int, backend_opts=aset_backend)
+            co.columns.init_arrayset('aset', shape=shape, dtype=np.int, backend_opts=aset_backend)
         shape = [1] * 31
-        aset = co.arraysets.init_arrayset('aset1', shape=shape, dtype=np.int, backend_opts=aset_backend)
+        aset = co.columns.init_arrayset('aset1', shape=shape, dtype=np.int, backend_opts=aset_backend)
         assert len(aset._schema_max_shape) == 31
         shape = [1] * 32
         with pytest.raises(ValueError):
             # maximum tensor rank must be <= 31
-            co.arraysets.init_arrayset('aset2', shape=shape, dtype=np.int, backend_opts=aset_backend)
+            co.columns.init_arrayset('aset2', shape=shape, dtype=np.int, backend_opts=aset_backend)
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_arrayset_with_empty_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.array(1, dtype=np.int64)
-        aset = co.arraysets.init_arrayset('aset1', shape=(), dtype=np.int64, backend_opts=aset_backend)
+        aset = co.columns.init_arrayset('aset1', shape=(), dtype=np.int64, backend_opts=aset_backend)
         aset['1'] = arr
         co.commit('this is a commit message')
-        aset = co.arraysets.init_arrayset('aset2', prototype=arr)
+        aset = co.columns.init_arrayset('aset2', prototype=arr)
         aset['1'] = arr
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
-        aset1 = co.arraysets['aset1']
-        aset2 = co.arraysets['aset2']
+        aset1 = co.columns['aset1']
+        aset2 = co.columns['aset2']
         assert_equal(aset1['1'], arr)
         assert_equal(aset2['1'], arr)
         co.close()
@@ -126,17 +126,17 @@ class TestArrayset(object):
     def test_arrayset_with_int_specifier_as_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.arange(10, dtype=np.int64)
-        aset = co.arraysets.init_arrayset('aset1', shape=10, dtype=np.int64, backend_opts=aset_backend)
+        aset = co.columns.init_arrayset('aset1', shape=10, dtype=np.int64, backend_opts=aset_backend)
         aset['1'] = arr
         co.commit('this is a commit message')
         arr2 = np.array(53, dtype=np.int64)
-        aset = co.arraysets.init_arrayset('aset2', prototype=arr2)
+        aset = co.columns.init_arrayset('aset2', prototype=arr2)
         aset['1'] = arr2
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
-        aset1 = co.arraysets['aset1']
-        aset2 = co.arraysets['aset2']
+        aset1 = co.columns['aset1']
+        aset2 = co.columns['aset2']
         assert_equal(aset1['1'], arr)
         assert_equal(aset2['1'], arr2)
         co.close()
@@ -146,12 +146,12 @@ class TestArrayset(object):
     def test_getattr_does_not_raise_permission_error_if_alive(self, aset_backend, write, repo):
         co = repo.checkout(write=True)
         arr = np.arange(10, dtype=np.int64)
-        aset = co.arraysets.init_arrayset('aset1', shape=10, dtype=np.int64, backend_opts=aset_backend)
+        aset = co.columns.init_arrayset('aset1', shape=10, dtype=np.int64, backend_opts=aset_backend)
         aset['1'] = arr
         co.commit('hello')
         co.close()
         co = repo.checkout(write=write)
-        aset = co.arraysets['aset1']
+        aset = co.columns['aset1']
 
         assert hasattr(aset, 'doesnotexist') is False  # does not raise error
         assert hasattr(aset, '_mode') is True
@@ -175,17 +175,17 @@ class TestDataWithFixedSizedArrayset(object):
             self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
     ):
         co = repo.checkout(write=True)
-        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
-        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
-        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
+        aset1 = co.columns.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
+        aset2 = co.columns.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
+        aset3 = co.columns.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
 
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1[1] = randomsizedarray
             d2[1] = np.ones((2, 2), dtype=np.int)
             d3[1] = np.ones((3, 4), dtype=np.float32)
 
-        assert co.arraysets.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
-        assert co.arraysets.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
+        assert co.columns.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
+        assert co.columns.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
         co.close()
 
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
@@ -195,17 +195,17 @@ class TestDataWithFixedSizedArrayset(object):
             self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
     ):
         co = repo.checkout(write=True)
-        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
-        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
-        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
+        aset1 = co.columns.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
+        aset2 = co.columns.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
+        aset3 = co.columns.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
 
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1[1] = randomsizedarray
             d2[1] = np.ones((2, 2), dtype=np.int)
             d3[1] = np.ones((3, 4), dtype=np.float32)
 
-        assert co.arraysets.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
-        assert co.arraysets.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
+        assert co.columns.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
+        assert co.columns.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
         co.commit('hello')
         co.close()
         co = repo.checkout()
@@ -213,11 +213,11 @@ class TestDataWithFixedSizedArrayset(object):
         # perform the mock
         from hangar.backends import backend_decoder
         template = backend_decoder(b'50:daeaaeeaebv')
-        co._arraysets._arraysets['aset1']._samples[12] = template
-        co._arraysets._arraysets['aset2']._samples[22] = template
+        co._columns._columns['aset1']._samples[12] = template
+        co._columns._columns['aset2']._samples[22] = template
 
-        assert co.arraysets.contains_remote_references == {'aset1': True, 'aset2': True, 'aset3': False}
-        assert co.arraysets.remote_sample_keys == {'aset1': (12,), 'aset2': (22,), 'aset3': ()}
+        assert co.columns.contains_remote_references == {'aset1': True, 'aset2': True, 'aset3': False}
+        assert co.columns.remote_sample_keys == {'aset1': (12,), 'aset2': (22,), 'aset3': ()}
         co.close()
 
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
@@ -226,9 +226,9 @@ class TestDataWithFixedSizedArrayset(object):
     def test_iterating_over(self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
-        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
-        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
-        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
+        aset1 = co.columns.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
+        aset2 = co.columns.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
+        aset3 = co.columns.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
 
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1['1'] = randomsizedarray
@@ -252,20 +252,20 @@ class TestDataWithFixedSizedArrayset(object):
         co = repo.checkout()
         # iterating over .items()
         tensors_in_the_order = iter(all_tensors)
-        for dname, aset in co.arraysets.items():
-            assert aset._asetn == dname
+        for dname, aset in co.columns.items():
+            assert aset._column_name == dname
             for sname, sample in aset.items():
                 assert_equal(sample, next(tensors_in_the_order))
 
         # iterating over .keys()
         tensors_in_the_order = iter(all_tensors)
-        for dname in co.arraysets.keys():
-            for sname in co.arraysets[dname].keys():
-                assert_equal(co.arraysets[dname][sname], next(tensors_in_the_order))
+        for dname in co.columns.keys():
+            for sname in co.columns[dname].keys():
+                assert_equal(co.columns[dname][sname], next(tensors_in_the_order))
 
         # iterating over .values()
         tensors_in_the_order = iter(all_tensors)
-        for aset in co.arraysets.values():
+        for aset in co.columns.values():
             for sample in aset.values():
                 assert_equal(sample, next(tensors_in_the_order))
         co.close()
@@ -276,9 +276,9 @@ class TestDataWithFixedSizedArrayset(object):
     def test_iterating_over_local_only(self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
-        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
-        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
-        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
+        aset1 = co.columns.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
+        aset2 = co.columns.init_arrayset('aset2', shape=(2, 2), dtype=np.int, backend_opts=aset2_backend)
+        aset3 = co.columns.init_arrayset('aset3', shape=(3, 4), dtype=np.float32, backend_opts=aset3_backend)
 
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1['1'] = randomsizedarray
@@ -304,13 +304,13 @@ class TestDataWithFixedSizedArrayset(object):
         # perform the mock
         from hangar.backends import backend_decoder
         template = backend_decoder(b'50:daeaaeeaebv')
-        co._arraysets._arraysets['aset1']._samples['4'] = template
-        co._arraysets._arraysets['aset2']._samples['4'] = template
+        co._columns._columns['aset1']._samples['4'] = template
+        co._columns._columns['aset2']._samples['4'] = template
 
         # iterating over .items()
         tensors_in_the_order = iter(all_tensors)
         for dname in ['aset1', 'aset2', 'aset3']:
-            aset = co.arraysets[dname]
+            aset = co.columns[dname]
             count = 0
             for sname, sample in aset.items(local=True):
                 count += 1
@@ -321,7 +321,7 @@ class TestDataWithFixedSizedArrayset(object):
         # iterating over .keys()
         tensors_in_the_order = iter(all_tensors)
         for dname in ['aset1', 'aset2', 'aset3']:
-            aset = co.arraysets[dname]
+            aset = co.columns[dname]
             count = 0
             for sname in aset.keys(local=True):
                 count += 1
@@ -332,7 +332,7 @@ class TestDataWithFixedSizedArrayset(object):
         # iterating over .values()
         tensors_in_the_order = iter(all_tensors)
         for dname in ['aset1', 'aset2', 'aset3']:
-            aset = co.arraysets[dname]
+            aset = co.columns[dname]
             count = 0
             for sample in aset.values(local=True):
                 count += 1
@@ -358,69 +358,69 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_get_data(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
-        assert np.allclose(co.arraysets['writtenaset']['1'], co.arraysets.get('writtenaset').get('1'), array5by7)
+        assert np.allclose(co.columns['writtenaset']['1'], co.columns.get('writtenaset').get('1'), array5by7)
         co.close()
 
     def test_get_sample_with_default_works(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        res = co.arraysets['writtenaset'].get('doesnotexist', default=500)
+        res = co.columns['writtenaset'].get('doesnotexist', default=500)
         assert res is 500
-        res = co.arraysets['writtenaset'].get('doesnotexist', 500)
+        res = co.columns['writtenaset'].get('doesnotexist', 500)
         assert res is 500
         co.close()
 
     def test_get_multiple_samples_fails(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
-        co.arraysets['writtenaset']['2'] = array5by7+1
-        co.arraysets['writtenaset']['3'] = array5by7+2
+        co.columns['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['2'] = array5by7 + 1
+        co.columns['writtenaset']['3'] = array5by7 + 2
         co.commit('this is a commit message')
         co.close()
 
         nco = aset_samples_initialized_repo.checkout()
         with pytest.raises(TypeError):
-            res = nco.arraysets['writtenaset'].get(['1', '2'])
-        res = nco.arraysets['writtenaset'].get(('1', '2'))
+            res = nco.columns['writtenaset'].get(['1', '2'])
+        res = nco.columns['writtenaset'].get(('1', '2'))
         assert res is None
 
-        aset = nco.arraysets['writtenaset']
+        aset = nco.columns['writtenaset']
         with pytest.raises(TypeError):
             res = aset.get(*('1', '2', '3'))
         nco.close()
 
     def test_getitem_multiple_samples_missing_key(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
 
         nco = aset_samples_initialized_repo.checkout()
         with pytest.raises(KeyError):
-            nco.arraysets['writtenaset'][('1', '2')]
+            nco.columns['writtenaset'][('1', '2')]
         with pytest.raises(KeyError):
-            aset = nco.arraysets['writtenaset']
+            aset = nco.columns['writtenaset']
             aset[('1', '2')]
         nco.close()
 
     def test_get_multiple_samples_missing_key(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
 
         nco = aset_samples_initialized_repo.checkout()
-        aset = nco.arraysets['writtenaset']
+        aset = nco.columns['writtenaset']
         res = aset.get(('1', '2'))
         assert res == None
         nco.close()
 
     def test_add_data_str_keys(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(KeyError):
             aset['somerandomkey']
 
@@ -429,13 +429,13 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
-        assert_equal(co.arraysets['writtenaset']['1'], array5by7)
-        assert_equal(co.arraysets['writtenaset']['2'], array5by7)
+        assert_equal(co.columns['writtenaset']['1'], array5by7)
+        assert_equal(co.columns['writtenaset']['2'], array5by7)
         co.close()
 
     def test_add_data_int_keys(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
 
         aset[1] = array5by7
         secondArray = array5by7 + 1
@@ -443,31 +443,31 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
-        assert_equal(co.arraysets['writtenaset'][1], array5by7)
-        assert_equal(co.arraysets['writtenaset'][2], secondArray)
+        assert_equal(co.columns['writtenaset'][1], array5by7)
+        assert_equal(co.columns['writtenaset'][2], secondArray)
         co.close()
 
     def test_cannot_add_data_negative_int_key(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(ValueError):
             aset[-1] = array5by7
-        assert len(co.arraysets['writtenaset']) == 0
+        assert len(co.columns['writtenaset']) == 0
         co.close()
 
     def test_cannot_add_data_float_key(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(ValueError):
             aset[2.1] = array5by7
         with pytest.raises(ValueError):
             aset[0.0] = array5by7
-        assert len(co.arraysets['writtenaset']) == 0
+        assert len(co.columns['writtenaset']) == 0
         co.close()
 
     def test_add_data_mixed_int_str_keys(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
 
         aset[1] = array5by7
         newFirstArray = array5by7 + 1
@@ -479,18 +479,18 @@ class TestDataWithFixedSizedArrayset(object):
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
-        assert_equal(co.arraysets['writtenaset'][1], array5by7)
-        assert_equal(co.arraysets['writtenaset']['1'], newFirstArray)
-        assert_equal(co.arraysets['writtenaset'][2], secondArray)
-        assert_equal(co.arraysets['writtenaset']['2'], thirdArray)
+        assert_equal(co.columns['writtenaset'][1], array5by7)
+        assert_equal(co.columns['writtenaset']['1'], newFirstArray)
+        assert_equal(co.columns['writtenaset'][2], secondArray)
+        assert_equal(co.columns['writtenaset']['2'], thirdArray)
         co.close()
 
     def test_cannot_add_data_sample_name_longer_than_64_characters(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(ValueError):
             aset['VeryLongNameIsInvalidOver64CharactersNotAllowedVeryLongNameIsInva'] = array5by7
-        assert len(co.arraysets['writtenaset']) == 0
+        assert len(co.columns['writtenaset']) == 0
         co.close()
 
     def test_add_with_wrong_argument_order(self, aset_samples_initialized_w_checkout, array5by7):
@@ -626,14 +626,14 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_add_multiple_data_single_commit(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         new_array = np.zeros_like(array5by7)
-        co.arraysets['writtenaset']['2'] = new_array
+        co.columns['writtenaset']['2'] = new_array
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         assert len(aset) == 2
         assert list(aset.keys()) == ['1', '2']
         assert_equal(aset['1'], array5by7)
@@ -641,7 +641,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_add_same_data_same_key_does_not_duplicate_hash(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         aset['1'] = array5by7
         old_spec = aset._samples['1']
         aset['1'] = array5by7
@@ -653,20 +653,20 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_multiple_data_multiple_commit(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.commit('this is a commit message')
         new_array = np.zeros_like(array5by7)
-        co.arraysets['writtenaset']['2'] = new_array
+        co.columns['writtenaset']['2'] = new_array
         co.close()
 
         new_new_array = new_array + 5
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['3'] = new_new_array
+        co.columns['writtenaset']['3'] = new_new_array
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         assert_equal(aset['1'], array5by7)
         assert_equal(aset['2'], new_array)
         assert_equal(aset['3'], new_new_array)
@@ -674,202 +674,202 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_added_but_not_commited(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         co.close()
 
         with pytest.raises(PermissionError):
             co.commit('this is a commit message')
 
         co = aset_samples_initialized_repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(KeyError):
             aset['1']
         co.close()
 
     def test_remove_data(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
-        co.arraysets['writtenaset']['2'] = array5by7 + 1
-        co.arraysets['writtenaset']['3'] = array5by7 + 2
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 3
+        co.columns['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['2'] = array5by7 + 1
+        co.columns['writtenaset']['3'] = array5by7 + 2
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 3
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 3
-        del co.arraysets['writtenaset']['1']
-        del co.arraysets['writtenaset']['3']
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 3
+        del co.columns['writtenaset']['1']
+        del co.columns['writtenaset']['3']
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout()
         with pytest.raises(KeyError):
-            co.arraysets['writtenaset']['1']
+            co.columns['writtenaset']['1']
         with pytest.raises(KeyError):
-            co.arraysets['writtenaset']['3']
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
-        assert_equal(co.arraysets['writtenaset']['2'], array5by7 + 1)
+            co.columns['writtenaset']['3']
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
+        assert_equal(co.columns['writtenaset']['2'], array5by7 + 1)
         co.close()
 
     def test_remove_data_multiple_items(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
-        co.arraysets['writtenaset']['2'] = array5by7 + 1
-        co.arraysets['writtenaset']['3'] = array5by7 + 2
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 3
+        co.columns['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['2'] = array5by7 + 1
+        co.columns['writtenaset']['3'] = array5by7 + 2
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 3
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 3
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 3
         with pytest.raises(KeyError):
-            del co.arraysets['writtenaset'][('1', '3')]
-        assert '1' in co.arraysets['writtenaset']
-        assert '3' in co.arraysets['writtenaset']
-        del co.arraysets['writtenaset']['1']
-        del co.arraysets['writtenaset']['3']
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
+            del co.columns['writtenaset'][('1', '3')]
+        assert '1' in co.columns['writtenaset']
+        assert '3' in co.columns['writtenaset']
+        del co.columns['writtenaset']['1']
+        del co.columns['writtenaset']['3']
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout()
         with pytest.raises(KeyError):
-            co.arraysets['writtenaset']['1']
+            co.columns['writtenaset']['1']
         with pytest.raises(KeyError):
-            co.arraysets['writtenaset']['3']
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
-        assert_equal(co.arraysets['writtenaset']['2'], array5by7 + 1)
+            co.columns['writtenaset']['3']
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
+        assert_equal(co.columns['writtenaset']['2'], array5by7 + 1)
         co.close()
 
     def test_pop_data(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
-        co.arraysets['writtenaset']['2'] = array5by7 + 1
-        co.arraysets['writtenaset']['3'] = array5by7 + 2
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 3
+        co.columns['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['2'] = array5by7 + 1
+        co.columns['writtenaset']['3'] = array5by7 + 2
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 3
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 3
-        res = co.arraysets['writtenaset'].pop('1')
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 3
+        res = co.columns['writtenaset'].pop('1')
         assert_equal(res, array5by7)
 
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         res = aset.pop('3')
         assert_equal(res, array5by7 + 2)
 
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout()
         with pytest.raises(KeyError):
-            co.arraysets['writtenaset']['1']
+            co.columns['writtenaset']['1']
         with pytest.raises(KeyError):
-            co.arraysets['writtenaset']['3']
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
-        assert_equal(co.arraysets['writtenaset']['2'], array5by7 + 1)
+            co.columns['writtenaset']['3']
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
+        assert_equal(co.columns['writtenaset']['2'], array5by7 + 1)
         co.close()
 
     def test_pop_data_multiple_items(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
-        co.arraysets['writtenaset']['2'] = array5by7 + 1
-        co.arraysets['writtenaset']['3'] = array5by7 + 2
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 3
+        co.columns['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['2'] = array5by7 + 1
+        co.columns['writtenaset']['3'] = array5by7 + 2
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 3
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 3
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 3
         with pytest.raises(TypeError):
-            co.arraysets['writtenaset'].pop('1', '3')
-        res = co.arraysets['writtenaset'].pop('1')
+            co.columns['writtenaset'].pop('1', '3')
+        res = co.columns['writtenaset'].pop('1')
         assert_equal(res, array5by7)
-        res = co.arraysets['writtenaset'].pop('3')
+        res = co.columns['writtenaset'].pop('3')
         assert_equal(res, array5by7 + 2)
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout()
         with pytest.raises(KeyError):
-            co.arraysets['writtenaset']['1']
+            co.columns['writtenaset']['1']
         with pytest.raises(KeyError):
-            co.arraysets['writtenaset']['3']
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
-        assert_equal(co.arraysets['writtenaset']['2'], array5by7 + 1)
+            co.columns['writtenaset']['3']
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
+        assert_equal(co.columns['writtenaset']['2'], array5by7 + 1)
         co.close()
 
     def test_remove_all_data(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         new_array = np.zeros_like(array5by7)
-        co.arraysets['writtenaset']['2'] = new_array
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 2
+        co.columns['writtenaset']['2'] = new_array
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 2
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 2
-        del co.arraysets['writtenaset']['1']
-        del co.arraysets['writtenaset']['2']
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 0
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 2
+        del co.columns['writtenaset']['1']
+        del co.columns['writtenaset']['2']
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 0
 
-        wset = co.arraysets['writtenaset']
-        del co.arraysets['writtenaset']
+        wset = co.columns['writtenaset']
+        del co.columns['writtenaset']
 
-        assert len(co.arraysets) == 0
+        assert len(co.columns) == 0
         with pytest.raises(KeyError):
-            len(co.arraysets['writtenaset'])
+            len(co.columns['writtenaset'])
         co.commit('this is a commit message')
         co.close()
 
         # recreating same and verifying
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 0
-        co.arraysets.init_arrayset('writtenaset', prototype=array5by7)
-        co.arraysets['writtenaset']['1'] = array5by7
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
+        assert len(co.columns) == 0
+        co.columns.init_arrayset('writtenaset', prototype=array5by7)
+        co.columns['writtenaset']['1'] = array5by7
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
         co.commit('this is a commit message')
         co.close()
 
         co = aset_samples_initialized_repo.checkout()
-        assert_equal(co.arraysets['writtenaset']['1'], array5by7)
-        assert len(co.arraysets) == 1
-        assert len(co.arraysets['writtenaset']) == 1
+        assert_equal(co.columns['writtenaset']['1'], array5by7)
+        assert len(co.columns) == 1
+        assert len(co.columns['writtenaset']) == 1
         co.close()
 
     def test_remove_data_nonexistant_sample_key_raises(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset']['1'] = array5by7
+        co.columns['writtenaset']['1'] = array5by7
         new_array = np.zeros_like(array5by7)
-        co.arraysets['writtenaset']['2'] = new_array
-        co.arraysets['writtenaset']['3'] = new_array + 5
+        co.columns['writtenaset']['2'] = new_array
+        co.columns['writtenaset']['3'] = new_array + 5
         with pytest.raises(KeyError):
-            del co.arraysets['writtenaset']['doesnotexist']
+            del co.columns['writtenaset']['doesnotexist']
         co.commit('this is a commit message')
         co.close()
 
@@ -878,24 +878,24 @@ class TestDataWithFixedSizedArrayset(object):
     def test_multiple_arraysets_single_commit(self, aset1_backend, aset2_backend,
                                               aset_samples_initialized_repo, randomsizedarray):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
-        aset2 = co.arraysets.init_arrayset('aset2', prototype=randomsizedarray, backend_opts=aset2_backend)
+        aset1 = co.columns.init_arrayset('aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
+        aset2 = co.columns.init_arrayset('aset2', prototype=randomsizedarray, backend_opts=aset2_backend)
         aset1['arr'] = randomsizedarray
         aset2['arr'] = randomsizedarray
         co.commit('this is a commit message')
         co.close()
         co = aset_samples_initialized_repo.checkout()
-        assert_equal(co.arraysets['aset1']['arr'], randomsizedarray)
-        assert_equal(co.arraysets['aset2']['arr'], randomsizedarray)
+        assert_equal(co.columns['aset1']['arr'], randomsizedarray)
+        assert_equal(co.columns['aset2']['arr'], randomsizedarray)
         co.close()
 
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     def test_prototype_and_shape(self, aset1_backend, aset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset1 = co.arraysets.init_arrayset(
+        aset1 = co.columns.init_arrayset(
             'aset1', prototype=randomsizedarray, backend_opts=aset1_backend)
-        aset2 = co.arraysets.init_arrayset(
+        aset2 = co.columns.init_arrayset(
             'aset2', shape=randomsizedarray.shape, dtype=randomsizedarray.dtype, backend_opts=aset2_backend)
 
         newarray = np.random.random(randomsizedarray.shape).astype(randomsizedarray.dtype)
@@ -905,17 +905,17 @@ class TestDataWithFixedSizedArrayset(object):
         co.close()
 
         co = repo.checkout()
-        assert_equal(co.arraysets['aset1']['arr1'], newarray)
-        assert_equal(co.arraysets['aset2']['arr'], newarray)
+        assert_equal(co.columns['aset1']['arr1'], newarray)
+        assert_equal(co.columns['aset2']['arr'], newarray)
         co.close()
 
     def test_samples_without_name(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray)
+        aset = co.columns.init_arrayset('aset', prototype=randomsizedarray)
         with pytest.raises(TypeError):
             aset[randomsizedarray]
 
-        aset_no_name = co.arraysets.init_arrayset('aset_no_name', prototype=randomsizedarray)
+        aset_no_name = co.columns.init_arrayset('aset_no_name', prototype=randomsizedarray)
         added = aset_no_name.append(randomsizedarray)
         assert_equal(next(aset_no_name.values()), randomsizedarray)
         assert_equal(aset_no_name[added], randomsizedarray)
@@ -923,11 +923,11 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_append_samples(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray)
+        aset = co.columns.init_arrayset('aset', prototype=randomsizedarray)
         with pytest.raises((ValueError, TypeError)):
             aset[randomsizedarray]
 
-        aset_no_name = co.arraysets.init_arrayset('aset_no_name', prototype=randomsizedarray)
+        aset_no_name = co.columns.init_arrayset('aset_no_name', prototype=randomsizedarray)
         generated_key = aset_no_name.append(randomsizedarray)
         assert generated_key in aset_no_name
         assert len(aset_no_name) == 1
@@ -941,7 +941,7 @@ class TestDataWithFixedSizedArrayset(object):
         another_dtype = np.float64
         another_shape = (3, 4)
         arr = np.random.random(shape).astype(dtype)
-        aset = co.arraysets.init_arrayset('aset', shape=shape, dtype=dtype)
+        aset = co.columns.init_arrayset('aset', shape=shape, dtype=dtype)
         aset['1'] = arr
 
         newarr = np.random.random(shape).astype(another_dtype)
@@ -956,18 +956,18 @@ class TestDataWithFixedSizedArrayset(object):
     def test_add_sample_with_non_numpy_array_data_fails(self, aset_samples_initialized_repo):
         co = aset_samples_initialized_repo.checkout(write=True)
         with pytest.raises(ValueError, match='`data` argument type'):
-            co.arraysets['writtenaset'][1] = [[1, 2, 3, 4, 5, 6, 7] for i in range(5)]
+            co.columns['writtenaset'][1] = [[1, 2, 3, 4, 5, 6, 7] for i in range(5)]
         co.close()
 
     def test_add_sample_with_fortran_order_data_fails(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
         with pytest.raises(ValueError, match='`data` must be "C" contiguous array.'):
-            co.arraysets['writtenaset'][1] = np.asfortranarray(array5by7)
+            co.columns['writtenaset'][1] = np.asfortranarray(array5by7)
         co.close()
 
     def test_add_sample_with_dimension_rank_fails(self, repo):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
+        aset = co.columns.init_arrayset('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
         arr = np.random.randn(2, 3, 2).astype(np.float32)
         with pytest.raises(ValueError, match='data rank 3 != aset rank 2'):
             aset[1] = arr
@@ -975,7 +975,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_add_sample_with_dimension_exceeding_max_fails(self, repo):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
+        aset = co.columns.init_arrayset('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
         arr = np.random.randn(2, 4).astype(np.float32)
         with pytest.raises(ValueError, match='exceeds schema max'):
             aset[1] = arr
@@ -984,13 +984,13 @@ class TestDataWithFixedSizedArrayset(object):
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_writer_context_manager_arrayset_add_sample(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
-        with co.arraysets['aset'] as aset:
+        aset = co.columns.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
+        with co.columns['aset'] as aset:
             aset['1'] = randomsizedarray
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout()
-        assert_equal(co.arraysets['aset']['1'], randomsizedarray)
+        assert_equal(co.columns['aset']['1'], randomsizedarray)
         co.close()
 
     def test_writer_context_manager_metadata_update_iterable(self, repo):
@@ -1038,8 +1038,8 @@ class TestDataWithFixedSizedArrayset(object):
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_arrayset_context_manager_aset_sample_and_metadata_add(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
-        with co.arraysets['aset'] as aset:
+        aset = co.columns.init_arrayset('aset', prototype=randomsizedarray, backend_opts=aset_backend)
+        with co.columns['aset'] as aset:
             aset['1'] = randomsizedarray
             co.metadata['hello'] = 'world'
         with co.metadata as metadata:
@@ -1050,16 +1050,16 @@ class TestDataWithFixedSizedArrayset(object):
         co.close()
 
         co = repo.checkout()
-        assert_equal(co.arraysets['aset']['1'], randomsizedarray)
-        assert np.allclose(co.arraysets['aset'].get('2'), newarr)
+        assert_equal(co.columns['aset']['1'], randomsizedarray)
+        assert np.allclose(co.columns['aset'].get('2'), newarr)
         assert co.metadata['key'] == 'val'
         assert co.metadata.get('hello') == 'world'
         co.close()
 
     def test_writer_arrayset_properties_are_correct(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        assert co.arraysets.iswriteable is True
-        d = co.arraysets['writtenaset']
+        assert co.columns.iswriteable is True
+        d = co.columns['writtenaset']
         assert d.arrayset =='writtenaset'
         assert d.dtype == array5by7.dtype
         assert np.allclose(d.shape, array5by7.shape) is True
@@ -1075,8 +1075,8 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_reader_arrayset_properties_are_correct(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=False)
-        assert co.arraysets.iswriteable is False
-        d = co.arraysets['writtenaset']
+        assert co.columns.iswriteable is False
+        d = co.columns['writtenaset']
         assert d.arrayset =='writtenaset'
         assert d.dtype == array5by7.dtype
         assert np.allclose(d.shape, array5by7.shape) is True
@@ -1091,26 +1091,26 @@ class TestDataWithFixedSizedArrayset(object):
 
     def test_iter_arrayset_samples_yields_keys(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
-        co.arraysets['writtenaset'][0] = array5by7
+        co.columns['writtenaset'][0] = array5by7
         new_array = np.zeros_like(array5by7)
-        co.arraysets['writtenaset'][1] = new_array
-        co.arraysets['writtenaset'][2] = new_array + 5
+        co.columns['writtenaset'][1] = new_array
+        co.columns['writtenaset'][2] = new_array + 5
 
-        for idx, sname in enumerate(iter(co.arraysets['writtenaset'])):
+        for idx, sname in enumerate(iter(co.columns['writtenaset'])):
             assert sname == idx
         assert idx == 2
         co.close()
 
     def test_iter_arraysets_yields_aset_names(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout(write=True)
-        for k in iter(co.arraysets):
+        for k in iter(co.columns):
             assert k in ['second_aset', 'writtenaset']
         co.close()
 
     def test_set_item_arrayset_fails(self, aset_samples_initialized_repo):
         co = aset_samples_initialized_repo.checkout(write=True)
         with pytest.raises(AttributeError):
-            co.arraysets['newaset'] = co.arraysets['writtenaset']
+            co.columns['newaset'] = co.columns['writtenaset']
         co.close()
 
 
@@ -1130,8 +1130,8 @@ class TestVariableSizedArrayset(object):
     ):
         repo = aset_samples_initialized_repo
         wco = repo.checkout(write=True)
-        aset1 = wco.arraysets.init_arrayset('aset1', shape=max_shape, dtype=dtype1, variable_shape=True, backend_opts=backend1)
-        aset2 = wco.arraysets.init_arrayset('aset2', shape=max_shape, dtype=dtype2, variable_shape=True, backend_opts=backend2)
+        aset1 = wco.columns.init_arrayset('aset1', shape=max_shape, dtype=dtype1, variable_shape=True, backend_opts=backend1)
+        aset2 = wco.columns.init_arrayset('aset2', shape=max_shape, dtype=dtype2, variable_shape=True, backend_opts=backend2)
 
         arrdict1, arrdict2 = {}, {}
         for idx, shape in enumerate(test_shapes):
@@ -1172,8 +1172,8 @@ class TestVariableSizedArrayset(object):
 
         wco.close()
         rco = repo.checkout()
-        naset1 = rco.arraysets['aset1']
-        naset2 = rco.arraysets['aset2']
+        naset1 = rco.columns['aset1']
+        naset2 = rco.columns['aset2']
 
         for k, v in arrdict1.items():
             # make sure they are good before committed
@@ -1201,8 +1201,8 @@ class TestVariableSizedArrayset(object):
     ):
         repo = aset_samples_initialized_repo
         wco = repo.checkout(write=True)
-        wco.arraysets.init_arrayset('varaset', shape=shape, dtype=dtype, variable_shape=True, backend_opts=backend)
-        d = wco.arraysets['varaset']
+        wco.columns.init_arrayset('varaset', shape=shape, dtype=dtype, variable_shape=True, backend_opts=backend)
+        d = wco.columns['varaset']
 
         arrdict = {}
         for idx, shape in enumerate(test_shapes):
@@ -1233,8 +1233,8 @@ class TestVariableSizedArrayset(object):
     ):
         repo = aset_samples_initialized_repo
         wco = repo.checkout(write=True)
-        wco.arraysets.init_arrayset('varaset', shape=shape, dtype=dtype, variable_shape=True, backend_opts=backend)
-        wd = wco.arraysets['varaset']
+        wco.columns.init_arrayset('varaset', shape=shape, dtype=dtype, variable_shape=True, backend_opts=backend)
+        wd = wco.columns['varaset']
 
         arrdict = {}
         for idx, shape in enumerate(test_shapes):
@@ -1248,7 +1248,7 @@ class TestVariableSizedArrayset(object):
 
         wco.commit('first')
         rco = repo.checkout()
-        rd = rco.arraysets['varaset']
+        rd = rco.columns['varaset']
 
         for k, v in arrdict.items():
             # make sure they can work after commit
@@ -1272,18 +1272,18 @@ class TestVariableSizedArrayset(object):
         arrdict = {}
         for backend, aset_spec in zip(backends, aset_specs):
             aset_name, test_shapes, max_shape = aset_spec
-            wco.arraysets.init_arrayset(aset_name, shape=max_shape, dtype=dtype, variable_shape=True, backend_opts=backend)
+            wco.columns.init_arrayset(aset_name, shape=max_shape, dtype=dtype, variable_shape=True, backend_opts=backend)
 
             arrdict[aset_name] = {}
             for idx, shape in enumerate(test_shapes):
                 arr = (np.random.random_sample(shape) * 10).astype(dtype)
                 arrdict[aset_name][str(idx)] = arr
-                wco.arraysets[aset_name][str(idx)] = arr
+                wco.columns[aset_name][str(idx)] = arr
 
         for aset_k in arrdict.keys():
             for samp_k, v in arrdict[aset_k].items():
                 # make sure they are good before committed
-                assert_equal(wco.arraysets[aset_k][samp_k], v)
+                assert_equal(wco.columns[aset_k][samp_k], v)
 
         wco.commit('first')
         rco = repo.checkout()
@@ -1291,14 +1291,14 @@ class TestVariableSizedArrayset(object):
         for aset_k in arrdict.keys():
             for samp_k, v in arrdict[aset_k].items():
                 # make sure they are good before committed
-                assert_equal(wco.arraysets[aset_k][samp_k], v)
-                assert_equal(rco.arraysets[aset_k][samp_k], v)
+                assert_equal(wco.columns[aset_k][samp_k], v)
+                assert_equal(rco.columns[aset_k][samp_k], v)
         wco.close()
         rco.close()
 
     def test_writer_arrayset_properties_are_correct(self, aset_samples_var_shape_initialized_repo):
         co = aset_samples_var_shape_initialized_repo.checkout(write=True)
-        d = co.arraysets['writtenaset']
+        d = co.columns['writtenaset']
         assert d.arrayset =='writtenaset'
         assert d.dtype == np.float64
         assert np.allclose(d.shape, (10, 10))
@@ -1313,7 +1313,7 @@ class TestVariableSizedArrayset(object):
 
     def test_reader_arrayset_properties_are_correct(self, aset_samples_var_shape_initialized_repo):
         co = aset_samples_var_shape_initialized_repo.checkout(write=False)
-        d = co.arraysets['writtenaset']
+        d = co.columns['writtenaset']
         assert d.arrayset =='writtenaset'
         assert d.dtype == np.float64
         assert np.allclose(d.shape, (10, 10))
@@ -1335,12 +1335,12 @@ class TestMultiprocessArraysetReads(object):
 
         masterCmtList = []
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend_opts=backend)
+        co.columns.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend_opts=backend)
         masterSampList = []
         for cIdx in range(2):
             if cIdx != 0:
                 co = repo.checkout(write=True)
-            with co.arraysets['writtenaset'] as d:
+            with co.columns['writtenaset'] as d:
                 kstart = 20 * cIdx
                 for sIdx in range(20):
                     arr = np.random.randn(20, 20).astype(np.float32) * 100
@@ -1355,7 +1355,7 @@ class TestMultiprocessArraysetReads(object):
         cmtIdx = 0
         for cmt, sampList in masterCmtList:
             nco = repo.checkout(write=False, commit=cmt)
-            ds = nco.arraysets['writtenaset']
+            ds = nco.columns['writtenaset']
             keys = [str(i) for i in range(20 + (20*cmtIdx))]
             with get_context('spawn').Pool(2) as P:
                 cmtData = P.map(ds.get, keys)
@@ -1369,8 +1369,8 @@ class TestMultiprocessArraysetReads(object):
         from multiprocessing import get_context
 
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend_opts=backend)
-        with co.arraysets['writtenaset'] as d:
+        co.columns.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend_opts=backend)
+        with co.columns['writtenaset'] as d:
             for sIdx in range(20):
                 d[sIdx] = np.random.randn(20, 20).astype(np.float32) * 100
         assert d.backend == backend
@@ -1378,7 +1378,7 @@ class TestMultiprocessArraysetReads(object):
         co.close()
 
         nco = repo.checkout(write=True)
-        ds = nco.arraysets['writtenaset']
+        ds = nco.columns['writtenaset']
         keys = [i for i in range(20)]
         with pytest.raises(PermissionError):
             with get_context('spawn').Pool(2) as P:
@@ -1391,9 +1391,9 @@ class TestMultiprocessArraysetReads(object):
         from multiprocessing import get_context
 
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend_opts=backend)
+        co.columns.init_arrayset(name='writtenaset', shape=(20, 20), dtype=np.float32, backend_opts=backend)
         masterSampList = []
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             for sIdx in range(20):
                 arr = np.random.randn(20, 20).astype(np.float32) * 100
                 d[sIdx] = arr
@@ -1403,7 +1403,7 @@ class TestMultiprocessArraysetReads(object):
         co.close()
 
         nco = repo.checkout(write=False, commit=cmt)
-        ds = nco.arraysets['writtenaset']
+        ds = nco.columns['writtenaset']
 
         # superset of keys fails
         keys = [i for i in range(24)]
@@ -1428,7 +1428,7 @@ class TestMultiprocessArraysetReads(object):
 
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with aset as ds:
             for idx, k in enumerate(ds.keys()):
                 if idx == 0:
@@ -1448,7 +1448,7 @@ class TestMultiprocessArraysetReads(object):
 
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         mysample = np.random.randn(5, 7).astype(np.float32)
         with aset as ds:
             for idx, v in enumerate(ds.values()):
@@ -1469,7 +1469,7 @@ class TestMultiprocessArraysetReads(object):
 
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         mysample = np.random.randn(5, 7).astype(np.float32)
         with aset as ds:
             for idx, kv in enumerate(ds.items()):
@@ -1492,7 +1492,7 @@ class TestMultiprocessArraysetReads(object):
 
         repo = two_commit_filled_samples_repo
         co = repo.checkout(write=False)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         mysample = np.random.randn(5, 7).astype(np.float32)
         with aset as ds:
             for idx, kv in enumerate(ds.items()):

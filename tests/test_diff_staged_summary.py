@@ -39,8 +39,8 @@ def test_add_metadata_and_samples_to_existing_aset(repo_20_filled_samples_meta):
     co2 = repo_20_filled_samples_meta.checkout(write=True)
     for idx in range(10, 20):
         dummyData[:] = idx
-        co2.arraysets['dummy'][str(idx)] = dummyData
-        co2.arraysets['dummy'][idx] = dummyData
+        co2.columns['dummy'][str(idx)] = dummyData
+        co2.columns['dummy'][idx] = dummyData
     co2.metadata['foo'] = 'bar'
     df = co2.diff.staged()
     co2.close()
@@ -84,7 +84,7 @@ def test_mutate_metadata_and_sample_values(repo_20_filled_samples_meta):
     co2 = repo_20_filled_samples_meta.checkout(write=True)
     for idx in range(5, 10):
         dummyData[:] = idx + 10
-        co2.arraysets['dummy'][idx] = dummyData
+        co2.columns['dummy'][idx] = dummyData
     co2.metadata['hello'] = 'bar'
     df = co2.diff.staged()
     co2.close()
@@ -126,7 +126,7 @@ def test_delete_metadata_and_samples(repo_20_filled_samples_meta):
                ' \n'
     co2 = repo_20_filled_samples_meta.checkout(write=True)
     for idx in range(5, 10):
-        del co2.arraysets['dummy'][idx]
+        del co2.columns['dummy'][idx]
     del co2.metadata['hello']
     df = co2.diff.staged()
     co2.close()
@@ -173,10 +173,10 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
                '| Metadata: 0 \n'\
                ' \n'
     co2 = repo_20_filled_samples_meta.checkout(write=True)
-    co2.arraysets.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
+    co2.columns.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
-        co2.arraysets['new_aset'][idx] = dummyData
+        co2.columns['new_aset'][idx] = dummyData
     df = co2.diff.staged()
     co2.close()
     assert status('master', df.diff).getvalue() == expected
@@ -229,11 +229,11 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
                '| Metadata: 0 \n'\
                ' \n'
     co2 = repo_20_filled_samples_meta.checkout(write=True)
-    new = co2.arraysets.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
+    new = co2.columns.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
-        co2.arraysets['new_aset'][idx] = dummyData
-    del co2.arraysets['dummy']
+        co2.columns['new_aset'][idx] = dummyData
+    del co2.columns['dummy']
     df = co2.diff.staged()
     co2.close()
     assert status('master', df.diff).getvalue() == expected
@@ -286,12 +286,12 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
                '| Metadata: 0 \n'\
                ' \n'
     co2 = repo_20_filled_samples_meta.checkout(write=True)
-    co2.arraysets['dummy'].change_backend('00')
-    co2.arraysets.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
+    co2.columns['dummy'].change_backend('00')
+    co2.columns.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
-        co2.arraysets['new_aset'][idx] = dummyData
-        co2.arraysets['dummy'][idx] = np.arange(50).astype(np.int64) + idx
+        co2.columns['new_aset'][idx] = dummyData
+        co2.columns['dummy'][idx] = np.arange(50).astype(np.int64) + idx
     df = co2.diff.staged()
     co2.close()
     assert status('master', df.diff).getvalue() == expected

@@ -1,2 +1,2 @@
-.. automethod:: hangar.columns.arrayset.Arraysets.init_arrayset
+.. automethod:: hangar.columns.column.Arraysets.init_arrayset
    :noindex:

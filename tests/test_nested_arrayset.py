@@ -1,4 +1,4 @@
-"""Tests for the class methods contained in the nested subsample arrayset accessor.
+"""Tests for the class methods contained in the nested subsample column accessor.
 
 TODO
 ====
@@ -6,7 +6,7 @@ TODO
 - Operations with context managers
 - Picle and unpickle operations
 - Reader and writer checkout operations
-    - construction from commits with arrayset already existing.
+    - construction from commits with column already existing.
 - Integration through the rest of the repos operations (no problems expected)
     - diff / merge
     - remote push / pull
@@ -36,7 +36,7 @@ class TestArraysetSetup:
     def test_does_not_allow_invalid_arrayset_names(self, repo, randomsizedarray, name):
         co = repo.checkout(write=True)
         with pytest.raises(ValueError):
-            co.arraysets.init_arrayset(name=name, prototype=randomsizedarray, contains_subsamples=True)
+            co.columns.init_arrayset(name=name, prototype=randomsizedarray, contains_subsamples=True)
         co.close()
 
     def test_read_only_mode_arrayset_methods_limited(self, aset_subsamples_initialized_repo):
@@ -44,78 +44,78 @@ class TestArraysetSetup:
         co = aset_subsamples_initialized_repo.checkout()
         assert isinstance(co, hangar.checkout.ReaderCheckout)
         with pytest.raises(PermissionError):
-            assert co.arraysets.init_arrayset('foo')
+            assert co.columns.init_arrayset('foo')
         with pytest.raises(PermissionError):
-            assert co.arraysets.delete('foo')
-        assert len(co.arraysets['writtenaset']) == 0
+            assert co.columns.delete('foo')
+        assert len(co.columns['writtenaset']) == 0
         co.close()
 
     def test_get_arrayset_in_read_and_write_checkouts(self, aset_subsamples_initialized_repo, array5by7):
         co = aset_subsamples_initialized_repo.checkout(write=True)
-        # getting the arrayset with `get`
-        asetOld = co.arraysets.get('writtenaset')
+        # getting the column with `get`
+        asetOld = co.columns.get('writtenaset')
         asetOldPath = asetOld._path
-        asetOldAsetn = asetOld._asetn
+        asetOldAsetn = asetOld._column_name
         asetOldDefaultSchemaHash = asetOld._dflt_schema_hash
         co.metadata['foo'] = 'bar'
         co.commit('this is a commit message')
         co.close()
 
         co = aset_subsamples_initialized_repo.checkout()
-        # getting arrayset with dictionary like style method
-        asetNew = co.arraysets['writtenaset']
+        # getting column with dictionary like style method
+        asetNew = co.columns['writtenaset']
         assert asetOldPath == asetNew._path
-        assert asetOldAsetn == asetNew._asetn
+        assert asetOldAsetn == asetNew._column_name
         assert asetOldDefaultSchemaHash == asetNew._dflt_schema_hash
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_delete_arrayset(self, aset_backend, aset_subsamples_initialized_repo):
         co = aset_subsamples_initialized_repo.checkout(write=True)
-        co.arraysets.delete('writtenaset')
-        assert 'writtenaset' not in co.arraysets
+        co.columns.delete('writtenaset')
+        assert 'writtenaset' not in co.columns
         with pytest.raises(KeyError):
             # cannot delete twice
-            co.arraysets.delete('writtenaset')
+            co.columns.delete('writtenaset')
 
         # init and immediate delete leaves no trace
-        co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64,
-                                   backend_opts=aset_backend, contains_subsamples=True)
-        assert len(co.arraysets) == 1
-        co.arraysets.delete('writtenaset')
-        assert len(co.arraysets) == 0
+        co.columns.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64,
+                                 backend_opts=aset_backend, contains_subsamples=True)
+        assert len(co.columns) == 1
+        co.columns.delete('writtenaset')
+        assert len(co.columns) == 0
         co.commit('this is a commit message')
         co.close()
 
-        # init arrayset in checkout persists aset records/accessor even if no samples contained
+        # init column in checkout persists aset records/accessor even if no samples contained
         co = aset_subsamples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 0
-        co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64,
-                                   backend_opts=aset_backend, contains_subsamples=True)
+        assert len(co.columns) == 0
+        co.columns.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64,
+                                 backend_opts=aset_backend, contains_subsamples=True)
         co.commit('this is a commit message')
         co.close()
         co = aset_subsamples_initialized_repo.checkout(write=True)
-        assert len(co.arraysets) == 1
+        assert len(co.columns) == 1
 
-        # arrayset can be deleted with via __delitem__ dict style command.
-        del co.arraysets['writtenaset']
-        assert len(co.arraysets) == 0
+        # column can be deleted with via __delitem__ dict style command.
+        del co.columns['writtenaset']
+        assert len(co.columns) == 0
         co.commit('this is a commit message')
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_init_same_arrayset_twice_fails_again(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        co.arraysets.init_arrayset('aset', prototype=randomsizedarray,
-                                   backend_opts=aset_backend, contains_subsamples=True)
+        co.columns.init_arrayset('aset', prototype=randomsizedarray,
+                                 backend_opts=aset_backend, contains_subsamples=True)
         with pytest.raises(LookupError):
             # test if everything is the same as initalized one.
-            co.arraysets.init_arrayset('aset', prototype=randomsizedarray,
-                                       backend_opts=aset_backend, contains_subsamples=True)
+            co.columns.init_arrayset('aset', prototype=randomsizedarray,
+                                     backend_opts=aset_backend, contains_subsamples=True)
         with pytest.raises(LookupError):
-            # test if arrayset container type is different than existing name (no subsamples0
-            co.arraysets.init_arrayset('aset', prototype=randomsizedarray,
-                                       backend_opts=aset_backend, contains_subsamples=False)
+            # test if column container type is different than existing name (no subsamples0
+            co.columns.init_arrayset('aset', prototype=randomsizedarray,
+                                     backend_opts=aset_backend, contains_subsamples=False)
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
@@ -125,19 +125,19 @@ class TestArraysetSetup:
         shape = (0, 1, 2)
         with pytest.raises(ValueError):
             # cannot have zero valued size for any dimension
-            co.arraysets.init_arrayset('aset', shape=shape, dtype=np.int,
-                                       backend_opts=aset_backend, contains_subsamples=True)
+            co.columns.init_arrayset('aset', shape=shape, dtype=np.int,
+                                     backend_opts=aset_backend, contains_subsamples=True)
 
         shape = [1] * 31
-        aset = co.arraysets.init_arrayset('aset1', shape=shape, dtype=np.int,
-                                          backend_opts=aset_backend, contains_subsamples=True)
+        aset = co.columns.init_arrayset('aset1', shape=shape, dtype=np.int,
+                                        backend_opts=aset_backend, contains_subsamples=True)
         assert len(aset.shape) == 31
 
         shape = [1] * 32
         with pytest.raises(ValueError):
             # maximum tensor rank must be <= 31
-            co.arraysets.init_arrayset('aset2', shape=shape, dtype=np.int,
-                                       backend_opts=aset_backend, contains_subsamples=True)
+            co.columns.init_arrayset('aset2', shape=shape, dtype=np.int,
+                                     backend_opts=aset_backend, contains_subsamples=True)
         co.close()
 
 
@@ -234,9 +234,9 @@ def subsample_writer_written_aset(backend_params, repo, monkeypatch):
     monkeypatch.setattr(numpy_10, 'COLLECTION_SIZE', 10)
 
     co = repo.checkout(write=True)
-    aset = co.arraysets.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
-                                      variable_shape=False,
-                                      backend_opts=backend_params, contains_subsamples=True)
+    aset = co.columns.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
+                                    variable_shape=False,
+                                    backend_opts=backend_params, contains_subsamples=True)
     yield aset
     co.close()
 
@@ -431,8 +431,8 @@ class TestAddData:
     def test_update_subsamples_context_manager(self, backend, multi_item_generator,
                                                iterable_subsamples, repo):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
-                                          backend_opts=backend, contains_subsamples=True)
+        aset = co.columns.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
+                                        backend_opts=backend, contains_subsamples=True)
 
         for sample_idx in range(multi_item_generator):
             aset[f'sample{sample_idx}'] = {'foo': np.arange(4, dtype=np.uint8).reshape(2, 2) + 10}
@@ -541,8 +541,8 @@ class TestAddData:
     ])
     def test_update_noniterable_subsample_iter_fails(self, backend, other, repo):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
-                                          backend_opts=backend, contains_subsamples=True)
+        aset = co.columns.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
+                                        backend_opts=backend, contains_subsamples=True)
         aset[f'foo'] = {'foo': np.arange(4, dtype=np.uint8).reshape(2, 2) + 10}
         with pytest.raises(ValueError, match='dictionary update sequence'):
             aset['foo'].update(other)
@@ -555,8 +555,8 @@ class TestAddData:
     @pytest.mark.parametrize('backend', fixed_shape_backend_params)
     def test_update_subsamples_with_too_many_arguments_fails(self, backend, repo):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
-                                          backend_opts=backend, contains_subsamples=True)
+        aset = co.columns.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
+                                        backend_opts=backend, contains_subsamples=True)
         arr = np.arange(4, dtype=np.uint8).reshape(2, 2)
         aset[f'foo'] = {'foo': arr + 10}
         with pytest.raises(TypeError, match='takes from 1 to 2 positional arguments'):
@@ -569,8 +569,8 @@ class TestAddData:
     @pytest.mark.parametrize('backend', fixed_shape_backend_params)
     def test_update_subsamples_with_too_few_arguments_fails(self, backend, repo):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
-                                          backend_opts=backend, contains_subsamples=True)
+        aset = co.columns.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
+                                        backend_opts=backend, contains_subsamples=True)
         arr = np.arange(4, dtype=np.uint8).reshape(2, 2)
         aset[f'foo'] = {'foo': arr + 10}
         with pytest.raises(ValueError, match='dictionary update sequence element #0 has length 1; 2 is required'):
@@ -661,9 +661,9 @@ class TestAddData:
     ])
     def test_update_sample_invalid_array_fails_fixed_shape(self, backend, variable_shape, other, repo):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
-                                          variable_shape=variable_shape,
-                                          backend_opts=backend, contains_subsamples=True)
+        aset = co.columns.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
+                                        variable_shape=variable_shape,
+                                        backend_opts=backend, contains_subsamples=True)
         with pytest.raises(ValueError):
             aset.update(other)
         assert len(aset._samples) == 0
@@ -699,9 +699,9 @@ class TestAddData:
     ])
     def test_update_subsample_invalid_array_fails_fixed_shape(self, backend, variable_shape, other, repo):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
-                                          variable_shape=variable_shape,
-                                          backend_opts=backend, contains_subsamples=True)
+        aset = co.columns.init_arrayset('foo', shape=(2, 2), dtype=np.uint8,
+                                        variable_shape=variable_shape,
+                                        backend_opts=backend, contains_subsamples=True)
         aset['sample'] = {0: np.zeros((2, 2), dtype=np.uint8)}
         with pytest.raises(ValueError):
             aset['sample'].update(other)
@@ -744,28 +744,28 @@ def write_enabled(request):
 @pytest.fixture(scope='class')
 def initialized_arrayset(write_enabled, backend_param, classrepo, subsample_data_map):
     co = classrepo.checkout(write=True)
-    aset = co.arraysets.init_arrayset(
+    aset = co.columns.init_arrayset(
         f'foo{backend_param}{int(write_enabled)}', shape=(5, 7), dtype=np.uint16, backend_opts=backend_param, contains_subsamples=True)
     aset.update(subsample_data_map)
     co.commit(f'done {backend_param}{write_enabled}')
     co.close()
     if write_enabled:
         nco = classrepo.checkout(write=True)
-        yield nco.arraysets[f'foo{backend_param}{int(write_enabled)}']
+        yield nco.columns[f'foo{backend_param}{int(write_enabled)}']
         nco.close()
     else:
         nco = classrepo.checkout()
-        yield nco.arraysets[f'foo{backend_param}{int(write_enabled)}']
+        yield nco.columns[f'foo{backend_param}{int(write_enabled)}']
         nco.close()
 
 
 @pytest.fixture()
 def initialized_arrayset_write_only(backend_param, repo, subsample_data_map):
     co = repo.checkout(write=True)
-    aset = co.arraysets.init_arrayset(
+    aset = co.columns.init_arrayset(
         'foo', shape=(5, 7), dtype=np.uint16, backend_opts=backend_param, contains_subsamples=True)
     aset.update(subsample_data_map)
-    yield co.arraysets['foo']
+    yield co.columns['foo']
     co.close()
 
 
@@ -1459,19 +1459,19 @@ class TestGetDataMethods:
             self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
     ):
         co = repo.checkout(write=True)
-        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray,
-                                           backend_opts=aset1_backend, contains_subsamples=True)
-        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int,
-                                           backend_opts=aset2_backend, contains_subsamples=True)
-        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32,
-                                           backend_opts=aset3_backend, contains_subsamples=True)
+        aset1 = co.columns.init_arrayset('aset1', prototype=randomsizedarray,
+                                         backend_opts=aset1_backend, contains_subsamples=True)
+        aset2 = co.columns.init_arrayset('aset2', shape=(2, 2), dtype=np.int,
+                                         backend_opts=aset2_backend, contains_subsamples=True)
+        aset3 = co.columns.init_arrayset('aset3', shape=(3, 4), dtype=np.float32,
+                                         backend_opts=aset3_backend, contains_subsamples=True)
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1[1] = {11: randomsizedarray}
             d2[1] = {21: np.ones((2, 2), dtype=np.int)}
             d3[1] = {31: np.ones((3, 4), dtype=np.float32)}
 
-        assert co.arraysets.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
-        assert co.arraysets.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
+        assert co.columns.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
+        assert co.columns.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
         co.close()
 
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
@@ -1481,19 +1481,19 @@ class TestGetDataMethods:
             self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
     ):
         co = repo.checkout(write=True)
-        aset1 = co.arraysets.init_arrayset('aset1', prototype=randomsizedarray,
-                                           backend_opts=aset1_backend, contains_subsamples=True)
-        aset2 = co.arraysets.init_arrayset('aset2', shape=(2, 2), dtype=np.int,
-                                           backend_opts=aset2_backend, contains_subsamples=True)
-        aset3 = co.arraysets.init_arrayset('aset3', shape=(3, 4), dtype=np.float32,
-                                           backend_opts=aset3_backend, contains_subsamples=True)
+        aset1 = co.columns.init_arrayset('aset1', prototype=randomsizedarray,
+                                         backend_opts=aset1_backend, contains_subsamples=True)
+        aset2 = co.columns.init_arrayset('aset2', shape=(2, 2), dtype=np.int,
+                                         backend_opts=aset2_backend, contains_subsamples=True)
+        aset3 = co.columns.init_arrayset('aset3', shape=(3, 4), dtype=np.float32,
+                                         backend_opts=aset3_backend, contains_subsamples=True)
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1[1] = {11: randomsizedarray}
             d2[1] = {21: np.ones((2, 2), dtype=np.int)}
             d3[1] = {31: np.ones((3, 4), dtype=np.float32)}
 
-        assert co.arraysets.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
-        assert co.arraysets.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
+        assert co.columns.contains_remote_references == {'aset1': False, 'aset2': False, 'aset3': False}
+        assert co.columns.remote_sample_keys == {'aset1': (), 'aset2': (), 'aset3': ()}
         co.commit('hello')
         co.close()
         co = repo.checkout()
@@ -1501,11 +1501,11 @@ class TestGetDataMethods:
         # perform the mock
         from hangar.backends import backend_decoder
         template = backend_decoder(b'50:daeaaeeaebv')
-        co._arraysets._arraysets['aset1']._samples[1]._subsamples[12] = template
-        co._arraysets._arraysets['aset2']._samples[1]._subsamples[22] = template
+        co._columns._columns['aset1']._samples[1]._subsamples[12] = template
+        co._columns._columns['aset2']._samples[1]._subsamples[22] = template
 
-        assert co.arraysets.contains_remote_references == {'aset1': True, 'aset2': True, 'aset3': False}
-        assert co.arraysets.remote_sample_keys == {'aset1': (1,), 'aset2': (1,), 'aset3': ()}
+        assert co.columns.contains_remote_references == {'aset1': True, 'aset2': True, 'aset3': False}
+        assert co.columns.remote_sample_keys == {'aset1': (1,), 'aset2': (1,), 'aset3': ()}
         co.close()
 
 
@@ -1514,8 +1514,8 @@ class TestWriteThenReadCheckout:
     @pytest.mark.parametrize('backend', fixed_shape_backend_params)
     def test_add_data_commit_checkout_read_only_contains_same(self, backend, repo, subsample_data_map):
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset('foo', shape=(5, 7), dtype=np.uint16,
-                                          backend_opts=backend, contains_subsamples=True)
+        aset = co.columns.init_arrayset('foo', shape=(5, 7), dtype=np.uint16,
+                                        backend_opts=backend, contains_subsamples=True)
         added = aset.update(subsample_data_map)
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
@@ -1525,7 +1525,7 @@ class TestWriteThenReadCheckout:
         co.close()
 
         rco = repo.checkout()
-        naset = rco.arraysets['foo']
+        naset = rco.columns['foo']
         for sample_name, subsample_data in subsample_data_map.items():
             sample = naset.get(sample_name)
             for subsample_name, subsample_val in subsample_data.items():

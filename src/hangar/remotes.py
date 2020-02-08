@@ -302,9 +302,9 @@ class Remotes(object):
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
         arrayset_names : Optional[Sequence[str]]
-            Names of the arraysets which should be retrieved for the particular
-            commits, any arraysets not named will not have their data fetched
-            from the server. Default behavior is to retrieve all arraysets
+            Names of the columns which should be retrieved for the particular
+            commits, any columns not named will not have their data fetched
+            from the server. Default behavior is to retrieve all columns
         max_num_bytes : Optional[int]
             If you wish to limit the amount of data sent to the local machine,
             set a `max_num_bytes` parameter. This will retrieve only this

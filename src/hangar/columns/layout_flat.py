@@ -8,36 +8,31 @@ All backends are supported.
 from contextlib import ExitStack
 from pathlib import Path
 from typing import (
-    Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Type, Optional, Any
+    Tuple, List, Union, Sequence, Dict, Iterable, Type, Optional, Any
 )
 
 import numpy as np
 
-from .validation import DataValidator
-from .constructors import FlatSampleBuilder
-from ..utils import is_suitable_user_key, valfilter, valfilterfalse
-from ..op_state import reader_checkout_only, writer_checkout_only
+from .column_parsers import (
+    schema_db_key_from_column_name,
+    schema_hash_db_key_from_digest,
+    schema_db_val_from_spec
+)
+from .constructors import FlatSampleBuilder, _open_file_handles
 from ..backends import (
     backend_decoder,
-    parse_user_backend_opts,
-    BACKEND_ACCESSOR_MAP,
     AccessorMapType,
     DataHashSpecsType,
 )
-from ..records.hashmachine import array_hash_digest, schema_hash_digest, metadata_hash_digest
+from ..op_state import reader_checkout_only, writer_checkout_only
 from ..records.parsing import (
-    arrayset_record_schema_db_key_from_raw_key,
-    arrayset_record_schema_db_val_from_raw_val,
-    arrayset_record_schema_raw_val_from_db_val,
     data_record_db_key_from_raw_key,
     data_record_db_val_from_raw_val,
     data_record_raw_val_from_db_val,
     hash_data_db_key_from_raw_key,
-    hash_schema_db_key_from_raw_key,
-    RawArraysetSchemaVal,
     generate_sample_name,
 )
-
+from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
 KeyType = Union[str, int]
 KeyArrMap = Dict[KeyType, np.ndarray]
@@ -47,7 +42,7 @@ AsetTxnType = Type['AsetTxn']
 
 
 class FlatSample(metaclass=FlatSampleBuilder):
-    """Class implementing get access to data in a arrayset.
+    """Class implementing get access to data in a column.
 
     This class exposes the standard API to access data stored in a single level
     key / value mapping column. Usage is modeled after the python :py:`dict`
@@ -71,18 +66,15 @@ class FlatSample(metaclass=FlatSampleBuilder):
     the repository.
     """
 
-    __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path',
-                 '_schema_spec', '_schema_variable', '_schema_dtype_num',
-                 '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
-                 '_dflt_backend_opts', '_contains_subsamples', '_stack',
-                 '_txnctx', '_enter_count', '_datavalidator')
+    __slots__ = ('_mode', '_column_name', '_samples', '_be_fs', '_path',
+                 '_stack', '_txnctx', '_enter_count', '_schema')
     _attrs = __slots__
 
     def __init__(self,
-                 aset_name: str,
+                 columnname: str,
                  samples: Dict[KeyType, DataHashSpecsType],
                  backend_handles: AccessorMapType,
-                 schema_spec: RawArraysetSchemaVal,
+                 schema,
                  repo_path: Path,
                  mode: str,
                  aset_ctx: Optional[AsetTxnType] = None,
@@ -90,41 +82,29 @@ class FlatSample(metaclass=FlatSampleBuilder):
 
         self._stack: Optional[ExitStack] = None
         self._mode = mode
-        self._asetn = aset_name
+        self._column_name = columnname
         self._samples = samples
         self._be_fs = backend_handles
         self._path = repo_path
-
-        self._schema_spec = schema_spec
-        # self._schema_variable = schema_spec.schema_is_var
-        # self._schema_dtype_num = schema_spec.schema_dtype
-        # self._schema_max_shape = tuple(schema_spec.schema_max_shape)
-        self._dflt_schema_hash = schema_spec['schema_hash']
-        self._dflt_backend = schema_spec['backend']
-        self._dflt_backend_opts = schema_spec['backend_options']
-        # self._contains_subsamples = schema_spec.schema_contains_subsamples
-
+        self._schema = schema
         self._txnctx = aset_ctx
         self._enter_count = 0
-
-        self._datavalidator = DataValidator()
-        self._datavalidator.schema = self._schema_spec
 
     @property
     def _debug_(self):  # pragma: no cover
         return {
             '__class__': self.__class__,
             '_mode': self._mode,
-            '_asetn': self._asetn,
+            '_column_name': self._column_name,
             '_be_fs': self._be_fs,
             '_path': self._path,
-            '_schema_spec': self._schema_spec,
-            '_schema_variable': self._schema_variable,
-            '_schema_dtype_num': self._schema_dtype_num,
-            '_schema_max_shape': self._schema_max_shape,
-            '_dflt_schema_hash': self._dflt_schema_hash,
-            '_dflt_backend': self._dflt_backend,
-            '_dflt_backend_opts': self._dflt_backend_opts,
+            # '_schema_spec': self._schema_spec,
+            # '_schema_variable': self._schema_variable,
+            # '_schema_dtype_num': self._schema_dtype_num,
+            # '_schema_max_shape': self._schema_max_shape,
+            # '_dflt_schema_hash': self._dflt_schema_hash,
+            # '_dflt_backend': self._dflt_backend,
+            # '_dflt_backend_opts': self._dflt_backend_opts,
             '_contains_subsamples': self._contains_subsamples,
             '_txnctx': self._txnctx._debug_,
             '_stack': self._stack._exit_callbacks if self._stack else self._stack,
@@ -135,7 +115,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
     def __repr__(self):
         res = f'{self.__class__}('\
               f'repo_pth={self._path}, '\
-              f'aset_name={self._asetn}, '\
+              f'aset_name={self._column_name}, '\
               f'default_schema_hash={self._dflt_schema_hash}, '\
               f'isVar={self._schema_variable}, '\
               f'varMaxShape={self._schema_max_shape}, '\
@@ -145,19 +125,19 @@ class FlatSample(metaclass=FlatSampleBuilder):
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__qualname__} \
-                \n    Arrayset Name            : {self._asetn}\
-                \n    Schema Hash              : {self._dflt_schema_hash}\
+                \n    Arrayset Name            : {self._column_name}\
                 \n    Access Mode              : {self._mode}\
                 \n    Number of Samples        : {self.__len__()}\
                 \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\
                 \n    Contains Subsamples      : False\n'
         p.text(res)
+                # \n    Schema Hash              : {self._dflt_schema_hash}\
                 # \n    (max) Shape              : {self._schema_max_shape}\
                 # \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
                 # \n    Variable Shape           : {bool(int(self._schema_variable))}\
 
     def _ipython_key_completions_(self):  # pragma: no cover
-        """Let ipython know that any key based access can use the arrayset keys
+        """Let ipython know that any key based access can use the column keys
 
         Since we don't want to inherit from dict, nor mess with `__dir__` for
         the sanity of developers, this is the best way to ensure users can
@@ -166,7 +146,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Returns
         -------
         list
-            list of strings, each being one of the arrayset keys for access.
+            list of strings, each being one of the column keys for access.
         """
         return list(self.keys())
 
@@ -233,32 +213,32 @@ class FlatSample(metaclass=FlatSampleBuilder):
         return bool(self._enter_count)
 
     def __iter__(self) -> Iterable[KeyType]:
-        """Create iterator yielding an arrayset sample keys.
+        """Create iterator yielding an column sample keys.
 
         Yields
         -------
         Iterable[KeyType]
-            Sample key contained in the arrayset.
+            Sample key contained in the column.
         """
         yield from self.keys()
 
     def __len__(self) -> int:
-        """Check how many samples are present in a given arrayset.
+        """Check how many samples are present in a given column.
 
         Returns
         -------
         int
-            number of samples the arrayset contains.
+            number of samples the column contains.
         """
         return len(self._samples)
 
     def __contains__(self, key: KeyType) -> bool:
-        """Determine if a key is a valid sample name in the arrayset.
+        """Determine if a key is a valid sample name in the column.
 
         Parameters
         ----------
         key : KeyType
-            name to check if it is a sample in the arrayset
+            name to check if it is a sample in the column
 
         Returns
         -------
@@ -283,7 +263,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Parameters
         ----------
         key : KeyType
-            Sample key to retrieve from the arrayset.
+            Sample key to retrieve from the column.
 
         Returns
         -------
@@ -322,38 +302,57 @@ class FlatSample(metaclass=FlatSampleBuilder):
             return default
 
     @property
-    def arrayset(self) -> str:
-        """Name of the arrayset.
+    def column(self) -> str:
+        """Name of the column.
         """
-        return self._asetn
+        return self._column_name
 
-    # @property
-    # def dtype(self) -> np.dtype:
-    #     """Datatype of the arrayset schema.
-    #     """
-    #     return np.typeDict[self._schema_dtype_num]
-    #
-    # @property
-    # def shape(self) -> Tuple[int]:
-    #     """Shape (or `max_shape`) of the arrayset sample tensors.
-    #     """
-    #     return self._schema_max_shape
-    #
-    # @property
-    # def variable_shape(self) -> bool:
-    #     """Bool indicating if arrayset schema is variable sized.
-    #     """
-    #     return self._schema_variable
+    @property
+    def column_type(self):
+        return self._schema.column_type
+
+    @property
+    def column_layout(self):
+        return self._schema.column_layout
+
+    @property
+    def schema_type(self):
+        return self._schema.schema_type
+
+    @property
+    def dtype(self):
+        return self._schema.dtype
+
+    @property
+    def shape(self):
+        try:
+            return self._schema.shape
+        except AttributeError:
+            return None
+
+    @property
+    def backend(self) -> str:
+        return self._schema.backend
+
+    @property
+    def backend_options(self):
+        return self._schema.backend_options
+
+    @property
+    def contains_subsamples(self) -> bool:
+        """Bool indicating if sub-samples are contained in this column container.
+        """
+        return False
 
     @property
     def iswriteable(self) -> bool:
-        """Bool indicating if this arrayset object is write-enabled.
+        """Bool indicating if this column object is write-enabled.
         """
         return False if self._mode == 'r' else True
 
     @property
     def contains_remote_references(self) -> bool:
-        """Bool indicating if all samples in arrayset exist on local disk.
+        """Bool indicating if all samples in column exist on local disk.
 
         The data associated with samples referencing some remote server will
         need to be downloaded (``fetched`` in the hangar vocabulary) before
@@ -362,7 +361,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Returns
         -------
         bool
-            False if at least one sample in the arrayset references data stored
+            False if at least one sample in the column references data stored
             on some remote server. True if all sample data is available on the
             machine's local disk.
         """
@@ -375,39 +374,10 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Returns
         -------
         Tuple[KeyType]
-            list of sample keys in the arrayset whose data references indicate
+            list of sample keys in the column whose data references indicate
             they are stored on a remote server.
         """
         return tuple(valfilterfalse(lambda x: x.islocal, self._samples).keys())
-
-    @property
-    def backend(self) -> str:
-        """Default backend new data is written to in this arrayset.
-
-        Returns
-        -------
-        str
-            numeric format code of the default backend.
-        """
-        return self._dflt_backend
-
-    @property
-    def backend_opts(self):
-        """Storage backend options used when writing new data in this arrayset.
-
-        Returns
-        -------
-        dict
-            Config settings used to set up filters / other behaviors in the
-            default storage backend.
-        """
-        return self._dflt_backend_opts
-
-    @property
-    def contains_subsamples(self) -> bool:
-        """Bool indicating if sub-samples are contained in this arrayset container.
-        """
-        return False
 
     def _mode_local_aware_key_looper(self, local: bool) -> Iterable[KeyType]:
         """Generate keys for iteration with dict update safety ensured.
@@ -489,25 +459,25 @@ class FlatSample(metaclass=FlatSampleBuilder):
     # ---------------- writer methods only after this point -------------------
 
     def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
-        """Verify if key / value pair is valid to be written in this arrayset
+        """Verify if key / value pair is valid to be written in this column
 
         Parameters
         ----------
         key : KeyType
             name to associate with this data piece
         value : :class:`np.ndarray`
-            piece of data to store in the arrayset
+            piece of data to store in the column
 
         Raises
         ------
         ValueError
             If key is not valid type/contents or if value is not correct object
-            type / if it does not conform to arrayset schema
+            type / if it does not conform to column schema
         """
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
 
-        isCompat = self._datavalidator.verify_data_compatible(value)
+        isCompat = self._schema.verify_data_compatible(value)
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
@@ -522,13 +492,11 @@ class FlatSample(metaclass=FlatSampleBuilder):
         value : np.ndarray
             tensor data to store
         """
-        # full_hash = array_hash_digest(value)  # TODO TESTING
-        full_hash = metadata_hash_digest(value)
-
+        full_hash = self._schema.data_hash_digest(value)
 
         hashKey = hash_data_db_key_from_raw_key(full_hash)
         # check if data record already exists with given key
-        dataRecKey = data_record_db_key_from_raw_key(self._asetn, key)
+        dataRecKey = data_record_db_key_from_raw_key(self._column_name, key)
         existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
         if existingDataRecVal:
             # check if data record already with same key & hash value
@@ -539,7 +507,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         # write new data if data hash does not exist
         existingHashVal = self._txnctx.hashTxn.get(hashKey, default=False)
         if existingHashVal is False:
-            hashVal = self._be_fs[self._dflt_backend].write_data(value)
+            hashVal = self._be_fs[self._schema.backend].write_data(value)
             self._txnctx.hashTxn.put(hashKey, hashVal)
             self._txnctx.stageHashTxn.put(hashKey, hashVal)
             hash_spec = backend_decoder(hashVal)
@@ -552,7 +520,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         self._samples[key] = hash_spec
 
     def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
-        """Store a piece of data in a arrayset.
+        """Store a piece of data in a column.
 
         .. seealso::
 
@@ -566,32 +534,32 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Parameters
         ----------
         key : KeyType, optional
-            name to assign to the sample (assuming the arrayset accepts named
+            name to assign to the sample (assuming the column accepts named
             samples), If str, can only contain alpha-numeric ascii characters
             (in addition to '-', '.', '_'). Integer key must be >= 0. by
             default, None
         value : :class:`numpy.ndarray`
-            data to store as a sample in the arrayset.
+            data to store as a sample in the column.
 
         Raises
         ------
         ValueError
-            If no `name` arg was provided for arrayset requiring named samples.
+            If no `name` arg was provided for column requiring named samples.
         ValueError
-            If input data tensor rank exceeds specified rank of arrayset samples.
+            If input data tensor rank exceeds specified rank of column samples.
         ValueError
-            For variable shape arraysets, if a dimension size of the input data
-            tensor exceeds specified max dimension size of the arrayset samples.
+            For variable shape columns, if a dimension size of the input data
+            tensor exceeds specified max dimension size of the column samples.
         ValueError
-            For fixed shape arraysets, if input data dimensions do not exactly match
-            specified arrayset dimensions.
+            For fixed shape columns, if input data dimensions do not exactly match
+            specified column dimensions.
         ValueError
             If type of `data` argument is not an instance of np.ndarray.
         ValueError
             If `data` is not "C" contiguous array layout.
         ValueError
             If the datatype of the input data does not match the specified data type of
-            the arrayset
+            the column
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -615,7 +583,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Parameters
         ----------
         value: :class:`numpy.ndarray`
-            Piece of data to store in the arrayset.
+            Piece of data to store in the column.
 
         Returns
         -------
@@ -654,22 +622,22 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Raises
         ------
         ValueError
-            If no `name` arg was provided for arrayset requiring named samples.
+            If no `name` arg was provided for column requiring named samples.
         ValueError
-            If input data tensor rank exceeds specified rank of arrayset samples.
+            If input data tensor rank exceeds specified rank of column samples.
         ValueError
-            For variable shape arraysets, if a dimension size of the input data
-            tensor exceeds specified max dimension size of the arrayset samples.
+            For variable shape columns, if a dimension size of the input data
+            tensor exceeds specified max dimension size of the column samples.
         ValueError
-            For fixed shape arraysets, if input data dimensions do not exactly
-            match specified arrayset dimensions.
+            For fixed shape columns, if input data dimensions do not exactly
+            match specified column dimensions.
         ValueError
             If type of `data` argument is not an instance of np.ndarray.
         ValueError
             If `data` is not "C" contiguous array layout.
         ValueError
             If the datatype of the input data does not match the specified data
-            type of the arrayset
+            type of the column
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -694,7 +662,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
 
     @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
-        """Remove a sample from the arrayset. Convenience method to :meth:`delete`.
+        """Remove a sample from the column. Convenience method to :meth:`delete`.
 
         .. seealso::
 
@@ -706,7 +674,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Parameters
         ----------
         key : KeyType
-            Name of the sample to remove from the arrayset.
+            Name of the sample to remove from the column.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -715,7 +683,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
             if key not in self._samples:
                 raise KeyError(key)
 
-            dataKey = data_record_db_key_from_raw_key(self._asetn, key)
+            dataKey = data_record_db_key_from_raw_key(self._column_name, key)
             isRecordDeleted = self._txnctx.dataTxn.delete(dataKey)
             if isRecordDeleted is False:
                 raise RuntimeError(
@@ -742,14 +710,14 @@ class FlatSample(metaclass=FlatSampleBuilder):
         Raises
         ------
         KeyError
-            If there is no sample with some key in the arrayset.
+            If there is no sample with some key in the column.
         """
         value = self[key]
         del self[key]
         return value
 
     @writer_checkout_only
-    def change_backend(self, backend_opts: Union[str, dict]):
+    def change_backend(self, backend: str, backend_options: Optional[dict] = None):
         """Change the default backend and filters applied to future data writes.
 
         .. warning::
@@ -760,66 +728,45 @@ class FlatSample(metaclass=FlatSampleBuilder):
 
         Parameters
         ----------
-        backend_opts : Optional[Union[str, dict]]
-            If str, backend format code to specify, opts are automatically
-            inferred. If dict, key ``backend`` must have a valid backend format
-            code value, and the rest of the items are assumed to be valid specs
-            for that particular backend. If none, both backend and opts are
-            inferred from the array prototype
+        backend : str
+            Backend format code to swtich to.
+        backend_options
+            Backend option specification to use (if specified). If left to default
+            value of None, then default options for backend are automatically used.
 
         Raises
         ------
         RuntimeError
-            If this method was called while this arrayset is invoked in a
+            If this method was called while this column is invoked in a
             context manager
         ValueError
             If the backend format code is not valid.
         """
         if self._is_conman:
-            raise RuntimeError('Cannot call method inside arrayset context manager.')
+            raise RuntimeError('Cannot call method inside column context manager.')
 
-        proto = np.zeros(self.shape, dtype=self.dtype)
-        beopts = parse_user_backend_opts(backend_opts=backend_opts,
-                                         prototype=proto,
-                                         variable_shape=self.variable_shape)
+        self._schema.change_backend(backend, backend_options=backend_options)
 
-        # ----------- Determine schema format details -------------------------
+        schema_digest = self._schema.schema_hash_digest()
+        columnSchemaKey = schema_db_key_from_column_name(self._column_name)
+        columnSchemaVal = schema_db_val_from_spec(self._schema.schema)
+        hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
-        schema_hash = schema_hash_digest(shape=proto.shape,
-                                         size=proto.size,
-                                         dtype_num=proto.dtype.num,
-                                         variable_shape=self.variable_shape,
-                                         contains_subsamples=self.contains_subsamples,
-                                         backend_code=beopts.backend,
-                                         backend_opts=beopts.opts)
-        asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.arrayset)
-        asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
-            schema_hash=schema_hash,
-            schema_is_var=self.variable_shape,
-            schema_max_shape=proto.shape,
-            schema_dtype=proto.dtype.num,
-            schema_default_backend=beopts.backend,
-            schema_default_backend_opts=beopts.opts,
-            schema_contains_subsamples=self._contains_subsamples)
+        # -------- set vals in lmdb only after schema is sure to exist --------
 
-        hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         with self._txnctx.write() as ctx:
-            ctx.dataTxn.put(asetSchemaKey, asetSchemaVal)
-            ctx.hashTxn.put(hashSchemaKey, asetSchemaVal, overwrite=False)
-        rawAsetSchema = arrayset_record_schema_raw_val_from_db_val(asetSchemaVal)
+            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
 
-        if beopts.backend not in self._be_fs:
-            self._be_fs[beopts.backend] = BACKEND_ACCESSOR_MAP[beopts.backend](
-                repo_path=self._path,
-                schema_shape=self._schema_max_shape,
-                schema_dtype=np.typeDict[self._schema_dtype_num])
+        if self._schema.backend not in self._be_fs:
+            fhands = _open_file_handles(
+                backends=[self._schema.backend],
+                path=self._path,
+                mode='a',
+                schema=self._schema)
+            self._be_fs[self._schema.backend] = fhands[self._schema.backend]
         else:
-            self._be_fs[beopts.backend].close()
-        self._be_fs[beopts.backend].open(mode=self._mode)
-        self._be_fs[beopts.backend].backend_opts = beopts.opts
-        self._dflt_backend = beopts.backend
-        self._dflt_backend_opts = beopts.opts
-        self._dflt_schema_hash = schema_hash
-        self._schema_spec = rawAsetSchema
-        self._datavalidator.schema = self._schema_spec
+            self._be_fs[self._schema.backend].close()
+        self._be_fs[self._schema.backend].open(mode='a')
+        self._be_fs[self._schema.backend].backend_opts = self._schema.backend_options
         return

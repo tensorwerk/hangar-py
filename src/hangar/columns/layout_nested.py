@@ -4,36 +4,34 @@ All backends are supported.
 """
 from contextlib import ExitStack
 from pathlib import Path
-from weakref import proxy
 from typing import (
-    Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
+    Tuple, List, Union, Sequence, Dict, Iterable, Any, Type, Optional
 )
+from weakref import proxy
 
 import numpy as np
 
-from .validation import DataValidator
-from .constructors import NestedSampleBuilder
-from ..op_state import reader_checkout_only, writer_checkout_only
-from ..utils import is_suitable_user_key, valfilter, valfilterfalse
+from .column_parsers import (
+    schema_db_key_from_column_name,
+    schema_hash_db_key_from_digest,
+    schema_db_val_from_spec
+)
+from .constructors import NestedSampleBuilder, _open_file_handles
 from ..backends import (
     backend_decoder,
-    parse_user_backend_opts,
     BACKEND_ACCESSOR_MAP,
     DataHashSpecsType,
 )
-from ..records.hashmachine import array_hash_digest, schema_hash_digest
+from ..op_state import reader_checkout_only, writer_checkout_only
 from ..records.parsing import (
-    arrayset_record_schema_db_key_from_raw_key,
-    arrayset_record_schema_db_val_from_raw_val,
-    arrayset_record_schema_raw_val_from_db_val,
     data_record_db_key_from_raw_key,
     data_record_db_val_from_raw_val,
     data_record_raw_val_from_db_val,
     hash_data_db_key_from_raw_key,
-    hash_schema_db_key_from_raw_key,
     RawArraysetSchemaVal,
     generate_sample_name,
 )
+from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
 AsetTxnType = Type['AsetTxn']
 KeyType = Union[str, int]
@@ -46,33 +44,33 @@ MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 
 class FlatSubsample(object):
 
-    __slots__ = ('_asetn', '_stack', '_be_fs', '_mode',
-                 '_subsamples', '_txnctx', '_samplen', '_datavalidator')
+    __slots__ = ('_column_name', '_stack', '_be_fs', '_mode',
+                 '_subsamples', '_txnctx', '_samplen', '_schema')
 
     def __init__(self,
-                 asetn: str,
+                 columnname: str,
                  samplen: str,
                  be_handles: BACKEND_ACCESSOR_MAP,
                  specs: Dict[KeyType, DataHashSpecsType],
                  mode: str,
                  aset_ctx: Optional[AsetTxnType] = None,
-                 datavalidator: Optional[DataValidator] = None,
+                 schema = None,
                  *args, **kwargs):
 
-        self._asetn = asetn
+        self._column_name = columnname
         self._samplen = samplen
         self._be_fs = be_handles
         self._subsamples = specs
         self._mode = mode
         self._stack: Optional[ExitStack] = None
         self._txnctx = aset_ctx
-        self._datavalidator = datavalidator
+        self._schema = schema
 
     @property
     def _debug_(self):  # pragma: no cover
         return {
             '__class__': self.__class__,
-            '_asetn': self._asetn,
+            '_column_name': self._column_name,
             '_samplen': self._samplen,
             '_be_fs': self._be_fs,
             '_subsamples': self._subsamples,
@@ -83,20 +81,20 @@ class FlatSubsample(object):
 
     def __repr__(self):
         res = f'{self.__class__}('\
-              f'aset_name={self._asetn}, '\
+              f'aset_name={self._column_name}, '\
               f'sample_name={self._samplen})'
         return res
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__} \
-                \n    Arrayset Name            : {self._asetn}\
+                \n    Arrayset Name            : {self._column_name}\
                 \n    Sample Name              : {self._samplen}\
                 \n    Mode (read/write)        : "{self._mode}"\
                 \n    Number of Subsamples     : {self.__len__()}\n'
         p.text(res)
 
     def _ipython_key_completions_(self):
-        """Let ipython know that any key based access can use the arrayset keys
+        """Let ipython know that any key based access can use the column keys
 
         Since we don't want to inherit from dict, nor mess with `__dir__` for
         the sanity of developers, this is the best way to ensure users can
@@ -105,7 +103,7 @@ class FlatSubsample(object):
         Returns
         -------
         list
-            list of strings, each being one of the arrayset keys for access.
+            list of strings, each being one of the column keys for access.
         """
         return list(self.keys())
 
@@ -187,7 +185,7 @@ class FlatSubsample(object):
         Parameters
         ----------
         key : GetKeysType
-            Sample key to retrieve from the arrayset. Alternatively, ``slice``
+            Sample key to retrieve from the column. Alternatively, ``slice``
             syntax can be used to retrieve a selection of subsample
             keys/values. An empty slice (``: == slice(None)``) or ``Ellipsis``
             (``...``) will return all subsample keys/values. Passing a
@@ -250,10 +248,10 @@ class FlatSubsample(object):
         return self._samplen
 
     @property
-    def arrayset(self) -> str:
-        """Return name (key) of arrayset this sample is contained in.
+    def column(self) -> str:
+        """Return name (key) of column this sample is contained in.
         """
-        return self._asetn
+        return self._column_name
 
     @property
     def data(self) -> KeyArrMap:
@@ -294,7 +292,7 @@ class FlatSubsample(object):
 
     @property
     def contains_remote_references(self) -> bool:
-        """Bool indicating all subsamples in sample arrayset exist on local disk.
+        """Bool indicating all subsamples in sample column exist on local disk.
 
         The data associated with subsamples referencing some remote server will
         need to be downloaded (``fetched`` in the hangar vocabulary) before
@@ -303,7 +301,7 @@ class FlatSubsample(object):
         Returns
         -------
         bool
-            False if at least one subsample in the arrayset references data
+            False if at least one subsample in the column references data
             stored on some remote server. True if all sample data is available
             on the machine's local disk.
         """
@@ -316,7 +314,7 @@ class FlatSubsample(object):
         Returns
         -------
         Tuple[KeyType]
-            list of subsample keys in the arrayset whose data references indicate
+            list of subsample keys in the column whose data references indicate
             they are stored on a remote server.
         """
         return tuple(valfilterfalse(lambda x: x.islocal, self._subsamples).keys())
@@ -424,7 +422,7 @@ class FlatSubsample(object):
 
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
-        isCompat = self._datavalidator.verify_data_compatible(value)
+        isCompat = self._schema.verify_data_compatible(value)
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
@@ -439,11 +437,12 @@ class FlatSubsample(object):
         value : np.ndarray
             tensor data to store
         """
-        full_hash = array_hash_digest(value)
+        # full_hash = array_hash_digest(value)
+        full_hash = self._schema.data_hash_digest(value)
         hashKey = hash_data_db_key_from_raw_key(full_hash)
 
         # check if data record already exists with given key
-        dataRecKey = data_record_db_key_from_raw_key(self._asetn, self._samplen, subsample=key)
+        dataRecKey = data_record_db_key_from_raw_key(self._column_name, self._samplen, subsample=key)
         existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
         if existingDataRecVal:
             # check if data record already with same key & hash value
@@ -454,7 +453,7 @@ class FlatSubsample(object):
         # write new data if data hash does not exist
         existingHashVal = self._txnctx.hashTxn.get(hashKey, default=False)
         if existingHashVal is False:
-            backendCode = self._schema_spec.schema_default_backend
+            backendCode = self._schema.backend
             hashVal = self._be_fs[backendCode].write_data(value)
             self._txnctx.hashTxn.put(hashKey, hashVal)
             self._txnctx.stageHashTxn.put(hashKey, hashVal)
@@ -481,7 +480,7 @@ class FlatSubsample(object):
         Parameters
         ----------
         key : KeyType
-            Key (name) of the subsample to add to the arrayset.
+            Key (name) of the subsample to add to the column.
         value : :class:`numpy.ndarray`
             Tensor data to add as the sample.
         """
@@ -509,7 +508,7 @@ class FlatSubsample(object):
         Parameters
         ----------
         value: :class:`numpy.ndarray`
-            Piece of data to store in the arrayset.
+            Piece of data to store in the column.
 
         Returns
         -------
@@ -566,7 +565,7 @@ class FlatSubsample(object):
 
     @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
-        """Remove a subsample from the arrayset. Convenience method to :meth:`delete`.
+        """Remove a subsample from the column. Convenience method to :meth:`delete`.
 
         .. seealso::
 
@@ -578,7 +577,7 @@ class FlatSubsample(object):
         Parameters
         ----------
         key : KeyType
-            Name of the sample to remove from the arrayset.
+            Name of the sample to remove from the column.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -587,7 +586,7 @@ class FlatSubsample(object):
             if key not in self._subsamples:
                 raise KeyError(key)
 
-            dbKey = data_record_db_key_from_raw_key(self._asetn, self._samplen, subsample=key)
+            dbKey = data_record_db_key_from_raw_key(self._column_name, self._samplen, subsample=key)
             isRecordDeleted = self._txnctx.dataTxn.delete(dbKey)
             if isRecordDeleted is False:
                 raise RuntimeError(
@@ -614,7 +613,7 @@ class FlatSubsample(object):
         Raises
         ------
         KeyError
-            If there is no sample with some key in the arrayset.
+            If there is no sample with some key in the column.
         """
         value = self[key]
         del self[key]
@@ -624,20 +623,20 @@ class FlatSubsample(object):
 class NestedSample(metaclass=NestedSampleBuilder):
 
     __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path', '_stack',
-                 '_schema_spec', '_schema_variable', '_schema_dtype_num',
-                 '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
-                 '_dflt_backend_opts', '_contains_subsamples', '_txnctx',
-                 '_datavalidator')
+                 # '_schema_spec', '_schema_variable', '_schema_dtype_num',
+                 # '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
+                 # '_dflt_backend_opts', '_datavalidator'
+                 '_txnctx', '_contains_subsamples', '_schema')
 
     def __init__(self,
                  aset_name: str,
                  samples: Dict[KeyType, FlatSubsample],
                  backend_handles: Dict[str, Any],
-                 schema_spec: RawArraysetSchemaVal,
+                 # schema_spec: RawArraysetSchemaVal,
                  repo_path: Path,
                  mode: str,
                  aset_ctx: Optional[AsetTxnType] = None,
-                 datavalidator: Optional[DataValidator] = None,
+                 schema = None,
                  *args, **kwargs):
 
         self._mode = mode
@@ -648,16 +647,16 @@ class NestedSample(metaclass=NestedSampleBuilder):
         self._stack: Optional[ExitStack] = None
         self._txnctx = aset_ctx
 
-        self._schema_spec = schema_spec
-        self._schema_variable = schema_spec.schema_is_var
-        self._schema_dtype_num = schema_spec.schema_dtype
-        self._schema_max_shape = tuple(schema_spec.schema_max_shape)
-        self._dflt_schema_hash = schema_spec.schema_hash
-        self._dflt_backend = schema_spec.schema_default_backend
-        self._dflt_backend_opts = schema_spec.schema_default_backend_opts
-        self._contains_subsamples = schema_spec.schema_contains_subsamples
+        # self._schema_spec = schema_spec
+        # self._schema_variable = schema_spec.schema_is_var
+        # self._schema_dtype_num = schema_spec.schema_dtype
+        # self._schema_max_shape = tuple(schema_spec.schema_max_shape)
+        # self._dflt_schema_hash = schema_spec.schema_hash
+        # self._dflt_backend = schema_spec.schema_default_backend
+        # self._dflt_backend_opts = schema_spec.schema_default_backend_opts
+        self._contains_subsamples = True
 
-        self._datavalidator = datavalidator
+        self._schema = schema
 
     def __repr__(self):
         res = f'{self.__class__}('\
@@ -673,19 +672,19 @@ class NestedSample(metaclass=NestedSampleBuilder):
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__qualname__} \
                 \n    Arrayset Name            : {self._asetn}\
-                \n    Schema Hash              : {self._dflt_schema_hash}\
-                \n    Variable Shape           : {bool(int(self._schema_variable))}\
-                \n    (max) Shape              : {self._schema_max_shape}\
-                \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
                 \n    Access Mode              : {self._mode}\
                 \n    Number of Samples        : {self.__len__()}\
                 \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\
                 \n    Contains Subsamples      : True\
                 \n    Number of Subsamples     : {self.num_subsamples}\n'
         p.text(res)
+                # \n    Schema Hash              : {self._dflt_schema_hash}\
+                # \n    Variable Shape           : {bool(int(self._schema_variable))}\
+                # \n    (max) Shape              : {self._schema_max_shape}\
+                # \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
 
     def _ipython_key_completions_(self):
-        """Let ipython know that any key based access can use the arrayset keys
+        """Let ipython know that any key based access can use the column keys
 
         Since we don't want to inherit from dict, nor mess with `__dir__` for
         the sanity of developers, this is the best way to ensure users can
@@ -694,7 +693,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         Returns
         -------
         list
-            list of strings, each being one of the arrayset keys for access.
+            list of strings, each being one of the column keys for access.
         """
         return list(self.keys())
 
@@ -776,27 +775,27 @@ class NestedSample(metaclass=NestedSampleBuilder):
         return self._samples[key]
 
     def __iter__(self) -> Iterable[KeyType]:
-        """Create iterator yielding an arrayset sample keys.
+        """Create iterator yielding an column sample keys.
 
         Yields
         -------
         Iterable[KeyType]
-            Sample key contained in the arrayset.
+            Sample key contained in the column.
         """
         yield from self.keys()
 
     def __len__(self) -> int:
-        """Find number of samples in the arrayset
+        """Find number of samples in the column
         """
         return len(self._samples)
 
     def __contains__(self, key: KeyType) -> bool:
-        """Determine if some sample key exists in the arrayset.
+        """Determine if some sample key exists in the column.
 
         Parameters
         ----------
         key : KeyType
-            Key to check for existence as sample in arrayset.
+            Key to check for existence as sample in column.
 
         Returns
         -------
@@ -838,32 +837,37 @@ class NestedSample(metaclass=NestedSampleBuilder):
         return bool(self._enter_count)
 
     @property
-    def arrayset(self) -> str:
-        """Name of the arrayset.
+    def column(self) -> str:
+        """Name of the column.
         """
         return self._asetn
 
     @property
-    def dtype(self) -> np.dtype:
-        """Datatype of the arrayset schema.
-        """
-        return np.typeDict[self._schema_dtype_num]
+    def column_type(self):
+        return self._schema.column_type
 
     @property
-    def shape(self) -> Tuple[int]:
-        """Shape (or `max_shape`) of the arrayset sample tensors.
-        """
-        return self._schema_max_shape
+    def column_layout(self):
+        return self._schema.column_layout
 
     @property
-    def variable_shape(self) -> bool:
-        """Bool indicating if arrayset schema is variable sized.
-        """
-        return self._schema_variable
+    def schema_type(self):
+        return self._schema.schema_type
+
+    @property
+    def dtype(self):
+        return self._schema.dtype
+
+    @property
+    def shape(self):
+        try:
+            return self._schema.shape
+        except AttributeError:
+            return None
 
     @property
     def iswriteable(self) -> bool:
-        """Bool indicating if this arrayset object is write-enabled.
+        """Bool indicating if this column object is write-enabled.
         """
         return False if self._mode == 'r' else True
 
@@ -894,7 +898,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
 
     @property
     def contains_remote_references(self) -> bool:
-        """Bool indicating all subsamples in sample arrayset exist on local disk.
+        """Bool indicating all subsamples in sample column exist on local disk.
 
         The data associated with subsamples referencing some remote server will
         need to be downloaded (``fetched`` in the hangar vocabulary) before
@@ -903,7 +907,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         Returns
         -------
         bool
-            False if at least one subsample in the arrayset references data
+            False if at least one subsample in the column references data
             stored on some remote server. True if all sample data is available
             on the machine's local disk.
         """
@@ -916,24 +920,24 @@ class NestedSample(metaclass=NestedSampleBuilder):
         Returns
         -------
         Tuple[KeyType]
-            list of subsample keys in the arrayset whose data references indicate
+            list of subsample keys in the column whose data references indicate
             they are stored on a remote server.
         """
         return tuple(valfilter(lambda x: x.contains_remote_references, self._samples).keys())
 
     @property
     def backend(self) -> str:
-        """The default backend for the arrayset.
+        """The default backend for the column.
 
         Returns
         -------
         str
             numeric format code of the default backend.
         """
-        return self._dflt_backend
+        return self._schema.backend
 
     @property
-    def backend_opts(self):
+    def backend_options(self):
         """The opts applied to the default backend.
 
         Returns
@@ -941,23 +945,23 @@ class NestedSample(metaclass=NestedSampleBuilder):
         dict
             config settings used to set up filters
         """
-        return self._dflt_backend_opts
+        return self._schema.backend_options
 
     @property
     def contains_subsamples(self) -> bool:
-        """Bool indicating if sub-samples are contained in this arrayset container.
+        """Bool indicating if sub-samples are contained in this column container.
 
         Returns
         -------
         bool
-            True if subsamples are included, False otherwise. For this arrayset
+            True if subsamples are included, False otherwise. For this column
             class, subsamples are stored; the result will always be True
         """
         return True
 
     @property
     def num_subsamples(self) -> int:
-        """Calculate total number of subsamples existing in all samples in arrayset
+        """Calculate total number of subsamples existing in all samples in column
         """
         total = 0
         for sample in self._samples.values():
@@ -1017,7 +1021,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
             yield (key, self[key])
 
     def get(self, key: GetKeysType, default: Any = None) -> FlatSubsample:
-        """Retrieve tensor data for some sample key(s) in the arrayset.
+        """Retrieve tensor data for some sample key(s) in the column.
 
         Parameters
         ----------
@@ -1036,7 +1040,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         Raises
         ------
         KeyError
-            if the arrayset does not contain a sample with the provided key.
+            if the column does not contain a sample with the provided key.
         """
         try:
             return self[key]
@@ -1053,7 +1057,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         for subsample_key, subsample_val in subsample_map.items():
             if not is_suitable_user_key(subsample_key):
                 raise ValueError(f'Sample name `{sample_key}` is not suitable.')
-            isCompat = self._datavalidator.verify_data_compatible(subsample_val)
+            isCompat = self._schema.verify_data_compatible(subsample_val)
             if not isCompat.compatible:
                 raise ValueError(isCompat.reason)
 
@@ -1063,11 +1067,11 @@ class NestedSample(metaclass=NestedSampleBuilder):
             self._samples[key].update(value)
         else:
             self._samples[key] = FlatSubsample(
-                datavalidator=proxy(self._datavalidator),
                 aset_ctx=proxy(self._txnctx),
-                asetn=self._asetn,
+                columnname=self._asetn,
                 samplen=key,
                 be_handles=proxy(self._be_fs),
+                schema=proxy(self._schema),
                 specs={},
                 mode='a')
             try:
@@ -1142,7 +1146,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
 
     @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
-        """Remove a sample (including all contained subsamples) from the arrayset.
+        """Remove a sample (including all contained subsamples) from the column.
 
         .. seealso::
 
@@ -1179,14 +1183,14 @@ class NestedSample(metaclass=NestedSampleBuilder):
         Raises
         ------
         KeyError
-            If there is no sample with some key in the arrayset.
+            If there is no sample with some key in the column.
         """
         res = self._samples[key].data
         del self[key]
         return res
 
     @writer_checkout_only
-    def change_backend(self, backend_opts: Union[str, dict]):
+    def change_backend(self, backend: str, backend_options: Optional[dict] = None):
         """Change the default backend and filters applied to future data writes.
 
         .. warning::
@@ -1197,67 +1201,45 @@ class NestedSample(metaclass=NestedSampleBuilder):
 
         Parameters
         ----------
-        backend_opts : Union[str, dict]
-            If str, backend format code to specify, opts are automatically
-            inferred. If dict, key ``backend`` must have a valid backend format
-            code value, and the rest of the items are assumed to be valid specs
-            for that particular backend. If none, both backend and opts are
-            inferred from the array prototype
+        backend : str
+            Backend format code to swtich to.
+        backend_options
+            Backend option specification to use (if specified). If left to default
+            value of None, then default options for backend are automatically used.
 
         Raises
         ------
         RuntimeError
-            If this method was called while this arrayset is invoked in a
+            If this method was called while this column is invoked in a
             context manager
         ValueError
             If the backend format code is not valid.
         """
         if self._is_conman:
-            raise RuntimeError('Cannot call method inside arrayset context manager.')
+            raise RuntimeError('Cannot call method inside column context manager.')
 
-        proto = np.zeros(self.shape, dtype=self.dtype)
-        beopts = parse_user_backend_opts(backend_opts=backend_opts,
-                                         prototype=proto,
-                                         variable_shape=self.variable_shape)
+        self._schema.change_backend(backend, backend_options=backend_options)
 
-        # ----------- Determine schema format details -------------------------
+        schema_digest = self._schema.schema_hash_digest()
+        columnSchemaKey = schema_db_key_from_column_name(self._asetn)
+        columnSchemaVal = schema_db_val_from_spec(self._schema.schema)
+        hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
-        schema_hash = schema_hash_digest(shape=proto.shape,
-                                         size=proto.size,
-                                         dtype_num=proto.dtype.num,
-                                         variable_shape=self.variable_shape,
-                                         contains_subsamples=self.contains_subsamples,
-                                         backend_code=beopts.backend,
-                                         backend_opts=beopts.opts)
-        asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.arrayset)
-        asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
-            schema_hash=schema_hash,
-            schema_is_var=self.variable_shape,
-            schema_max_shape=proto.shape,
-            schema_dtype=proto.dtype.num,
-            schema_default_backend=beopts.backend,
-            schema_default_backend_opts=beopts.opts,
-            schema_contains_subsamples=self._contains_subsamples)
+        # -------- set vals in lmdb only after schema is sure to exist --------
 
-        hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         with self._txnctx.write() as ctx:
-            ctx.dataTxn.put(asetSchemaKey, asetSchemaVal)
-            ctx.hashTxn.put(hashSchemaKey, asetSchemaVal, overwrite=False)
-        rawAsetSchema = arrayset_record_schema_raw_val_from_db_val(asetSchemaVal)
+            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
 
-        if beopts.backend not in self._be_fs:
-            self._be_fs[beopts.backend] = BACKEND_ACCESSOR_MAP[beopts.backend](
-                repo_path=self._path,
-                schema_shape=self._schema_max_shape,
-                schema_dtype=np.typeDict[self._schema_dtype_num])
+        if self._schema.backend not in self._be_fs:
+            fhands = _open_file_handles(
+                backends=[self._schema.backend],
+                path=self._path,
+                mode='a',
+                schema=self._schema)
+            self._be_fs[self._schema.backend] = fhands[self._schema.backend]
         else:
-            self._be_fs[beopts.backend].close()
-        self._be_fs[beopts.backend].open(mode=self._mode)
-        self._be_fs[beopts.backend].backend_opts = beopts.opts
-        self._be_fs['schema_spec'] = rawAsetSchema
-        self._dflt_backend = beopts.backend
-        self._dflt_backend_opts = beopts.opts
-        self._dflt_schema_hash = schema_hash
-        self._schema_spec = rawAsetSchema
-        self._datavalidator.schema = self._schema_spec
+            self._be_fs[self._schema.backend].close()
+        self._be_fs[self._schema.backend].open(mode='a')
+        self._be_fs[self._schema.backend].backend_opts = self._schema.backend_options
         return

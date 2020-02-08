@@ -20,10 +20,10 @@ class MakeCommit(object):
         self.co = self.repo.checkout(write=True)
         arr = np.array([0,], dtype=np.uint8)
         try:
-            aset = self.co.arraysets.init_arrayset(
+            aset = self.co.columns.init_arrayset(
                 'aset', prototype=arr, backend_opts='10')
         except TypeError:
-            aset = self.co.arraysets.init_arrayset(
+            aset = self.co.columns.init_arrayset(
                 'aset', prototype=arr, backend='10')
 
         with aset as cm_aset:
@@ -59,10 +59,10 @@ class CheckoutCommit(object):
         self.co = self.repo.checkout(write=True)
         arr = np.array([0,], dtype=np.uint8)
         try:
-            aset = self.co.arraysets.init_arrayset(
+            aset = self.co.columns.init_arrayset(
                 'aset', prototype=arr, backend_opts='10')
         except TypeError:
-            aset = self.co.arraysets.init_arrayset(
+            aset = self.co.columns.init_arrayset(
                 'aset', prototype=arr, backend='10')
 
         with aset as cm_aset:

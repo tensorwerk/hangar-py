@@ -59,9 +59,9 @@ def initialized_arrayset(
     write_enabled, backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map
 ):
     co = classrepo.checkout(write=True)
-    aset = co.arraysets.init_arrayset(f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}',
-                                      shape=(5, 7), dtype=np.uint16,
-                                      backend_opts=backend_param, contains_subsamples=contains_subsamples)
+    aset = co.columns.init_arrayset(f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}',
+                                    shape=(5, 7), dtype=np.uint16,
+                                    backend_opts=backend_param, contains_subsamples=contains_subsamples)
     if contains_subsamples:
         aset.update(subsample_data_map)
     else:
@@ -70,20 +70,20 @@ def initialized_arrayset(
     co.close()
     if write_enabled:
         nco = classrepo.checkout(write=True)
-        yield nco.arraysets[f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}']
+        yield nco.columns[f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}']
         nco.close()
     else:
         nco = classrepo.checkout()
-        yield nco.arraysets[f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}']
+        yield nco.columns[f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}']
         nco.close()
 
 
 @pytest.fixture(scope='class')
 def initialized_arrayset_read_only(backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map):
     co = classrepo.checkout(write=True)
-    aset = co.arraysets.init_arrayset(f'foo{backend_param}{int(contains_subsamples)}',
-                                      shape=(5, 7), dtype=np.uint16,
-                                      backend_opts=backend_param, contains_subsamples=contains_subsamples)
+    aset = co.columns.init_arrayset(f'foo{backend_param}{int(contains_subsamples)}',
+                                    shape=(5, 7), dtype=np.uint16,
+                                    backend_opts=backend_param, contains_subsamples=contains_subsamples)
     if contains_subsamples:
         aset.update(subsample_data_map)
     else:
@@ -92,7 +92,7 @@ def initialized_arrayset_read_only(backend_param, contains_subsamples, classrepo
     digest = co.commit(f'done {backend_param}{contains_subsamples}')
     co.close()
     nco = classrepo.checkout(write=False, commit=digest)
-    yield nco.arraysets[f'foo{backend_param}{int(contains_subsamples)}']
+    yield nco.columns[f'foo{backend_param}{int(contains_subsamples)}']
     nco.close()
 
 

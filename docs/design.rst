@@ -48,7 +48,7 @@ disk.
 
   The atomicity of interactions is completely hidden from a normal user; they
   shouldn't have to care about this or even know this exists. However, this
-  is also why using the context-manager style arrayset interaction scheme can
+  is also why using the context-manager style column interaction scheme can
   result in ~2x times speedup on writes/reads. We can just pass on most of the
   work to the Python ``contextlib`` package instead of having to begin and
   commit/abort (depending on interaction mode) transactions with every call to
@@ -85,11 +85,11 @@ stores a key/value pair of (`hash`, `backend_specification`).
 
 On the other hand, if a data sample is added to a repository which already has
 a record of some hash, we don't even involve the storage backend. All we need
-to do is just record that a new sample in a arrayset was added with that hash.
+to do is just record that a new sample in a column was added with that hash.
 It makes no sense to write the same data twice.
 
 This method can actually result in massive space savings for some common use
-cases. For the MNIST arrayset, the training label data is typically a 1D-array
+cases. For the MNIST column, the training label data is typically a 1D-array
 of size 50,000. Because there are only 10 labels, we only need to store 10 ints
 on disk, and just keep references to the rest.
 

@@ -10,7 +10,7 @@ class AsetTxn(object):
     """Provides context manager ready methods to handle lmdb transactions.
 
     In order to prevent passing around lmdb.Environment objects, we instantiate
-    this class once for each arrayset arrayset and pass weakref proxy handels
+    this class once for each column column and pass weakref proxy handels
     around to reference this object. Calling open / close methods (or using the
     ``with`` style methods) initializes transactions for the appropraite
     environments which are stored in instance attributes for access by the

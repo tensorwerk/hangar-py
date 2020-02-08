@@ -57,11 +57,8 @@ Technical Notes
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
-
 from . import REMOTE_50_DataHashSpec
 from ..op_state import writer_checkout_only, reader_checkout_only
-from ..utils import valfilter
 
 # -------------------------------- Parser Implementation ----------------------
 
@@ -82,7 +79,7 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
 # ------------------------- Accessor Object -----------------------------------
 
 
-from ..columns.typesystem import checkedmeta, EmptyDict
+from ..typesystem.typesystem import EmptyDict, checkedmeta
 
 
 class REMOTE_50_Options(metaclass=checkedmeta):
@@ -103,60 +100,7 @@ class REMOTE_50_Options(metaclass=checkedmeta):
 
     @property
     def init_requires(self):
-        return ('repo_path')
-
-#
-#
-# class REMOTE_50_Capabilities:
-#
-#     _init_requires = ['repo_path']
-#
-#     def __init__(self):
-#         pass
-#
-#     @property
-#     def allowed(self):
-#         return {}
-#
-#     @property
-#     def init_requires(self):
-#         return self._init_requires
-#
-#
-# class REMOTE_50_Options:
-#     _fields_and_required = {}
-#     _permitted_values = {}
-#
-#     def __init__(self):
-#         pass
-#
-#     @property
-#     def fields(self):
-#         return list(self._fields_and_required.keys())
-#
-#     @property
-#     def required_fields(self):
-#         return list(valfilter(bool, self._fields_and_required).keys())
-#
-#     @property
-#     def default(self):
-#         return {}
-#
-#     def isvalid(self, options):
-#         if not isinstance(options, dict):
-#             return False
-#
-#         for field in self.required_fields:
-#             if field not in options:
-#                 return False
-#
-#         for opt, val in options.items():
-#             if opt not in self._fields_and_required:
-#                 return False
-#             if val not in self._permitted_values[opt]:
-#                 return False
-#
-#         return True
+        return ('repo_path',)
 
 
 class REMOTE_50_Handler(object):

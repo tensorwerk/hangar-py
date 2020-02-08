@@ -1,9 +1,9 @@
-from .column_parsers import CompatibleData
-from .typesystem import SizedIntegerTuple, OptionalDict, OneOf, String, OptionalString
-from .type_column import ColumnBase
-from ..records.hashmachine import array_hash_digest
-
 import numpy as np
+
+from ..columns.column_parsers import CompatibleData
+from ..records.hashmachine import array_hash_digest
+from .type_column import ColumnBase
+from .typesystem import OneOf, String, OptionalString, SizedIntegerTuple, OptionalDict
 
 
 @OneOf(['variable_shape', 'fixed_shape'])
@@ -25,7 +25,7 @@ class NdarraySchemaBase(ColumnBase):
         self._schema_attributes.extend(
             ['_schema_type', '_shape', '_dtype', '_backend', '_backend_options'])
 
-    def _backend_from_heuristics(self):
+    def backend_from_heuristics(self):
         # uncompressed numpy memmap data is most appropriate for data whose shape is
         # likely small tabular row data (CSV or such...)
         if (len(self._shape) == 1) and (self._shape[0] < 400):
@@ -63,23 +63,47 @@ class NdarraySchemaBase(ColumnBase):
     def data_hash_digest(self, data: np.ndarray, *, tcode='0') -> str:
         return array_hash_digest(data, tcode=tcode)
 
+    def change_backend(self, backend, backend_options=None):
+        old_backend = self._backend
+        old_backend_options = self._backend_options
+        try:
+            self._backend = backend
+            self._backend_options = backend_options
+            # del and reset beopts object to reverify input correctness.
+            del self._beopts
+            self._backend_options = self._beopts.backend_options
+        except (TypeError, ValueError) as e:
+            del self._beopts
+            self._backend = old_backend
+            self._backend_options = old_backend_options
+            self._backend_options = self._beopts.backend_options
+            raise e from None
+
 
 @OneOf(['00', '01', '10', '50', None])
 class NdarrayFixedShapeBackends(OptionalString):
     pass
 
 
-class NdarraySchemaFixedShape(NdarraySchemaBase):
+class NdarrayFixedShape(NdarraySchemaBase):
     _shape = SizedIntegerTuple(size=31)
     _dtype = String()
     _backend = NdarrayFixedShapeBackends()
     _backend_options = OptionalDict()
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._schema_type = 'fixed_shape'
+        if 'column_type' in kwargs:
+            super().__init__(*args, **kwargs)
+        else:
+            super().__init__(column_type='ndarray', *args, **kwargs)
+
+        if 'schema_type' in kwargs:
+            self._schema_type = kwargs['schema_type']
+        else:
+            self._schema_type = 'fixed_shape'
+
         if self.backend is None:
-            self._backend_from_heuristics()
+            self.backend_from_heuristics()
         self._backend_options = self._beopts.backend_options
 
     def verify_data_compatible(self, data):
@@ -108,17 +132,25 @@ class NdarrayVariableShapeBackends(OptionalString):
     pass
 
 
-class NdarraySchemaVariableShape(NdarraySchemaBase):
+class NdarrayVariableShape(NdarraySchemaBase):
     _shape = SizedIntegerTuple(size=31)
     _dtype = String()
     _backend = NdarrayVariableShapeBackends()
     _backend_options = OptionalDict()
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._schema_type = 'variable_shape'
+        if 'column_type' in kwargs:
+            super().__init__(*args, **kwargs)
+        else:
+            super().__init__(column_type='ndarray', *args, **kwargs)
+
+        if 'schema_type' in kwargs:
+            self._schema_type = kwargs['schema_type']
+        else:
+            self._schema_type = 'variable_shape'
+
         if self.backend is None:
-            self._backend_from_heuristics()
+            self.backend_from_heuristics()
         self._backend_options = self._beopts.backend_options
 
     def verify_data_compatible(self, data):
@@ -143,5 +175,3 @@ class NdarraySchemaVariableShape(NdarraySchemaBase):
 
         res = CompatibleData(compatible, reason)
         return res
-
-

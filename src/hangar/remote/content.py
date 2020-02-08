@@ -2,10 +2,10 @@ from typing import NamedTuple, Union, Sequence, Tuple, List, Optional
 
 import numpy as np
 
+from ..backends import BACKEND_ACCESSOR_MAP, BACKEND_OPTIONS_MAP
 from ..context import Environments
-from ..txnctx import TxnRegister
-from ..backends import BACKEND_ACCESSOR_MAP, backend_opts_from_heuristics
 from ..records import parsing
+from ..txnctx import TxnRegister
 
 
 class ContentWriter(object):
@@ -63,7 +63,7 @@ class ContentWriter(object):
         return ret
 
     def schema(self, schema_hash: str, schemaVal: bytes) -> Union[str, bool]:
-        """Write a arrayset schema hash specification record to the db
+        """Write a column schema hash specification record to the db
 
         Parameters
         ----------
@@ -131,13 +131,9 @@ class ContentWriter(object):
                 if backend == schema_val.schema_default_backend:
                     backend_opts = schema_val.schema_default_backend_opts
                 else:
-                    proto = np.zeros(
-                        schema_val.schema_max_shape,
-                        dtype=np.typeDict[schema_val.schema_dtype])
-                    backend_opts = backend_opts_from_heuristics(
-                        backend=backend,
-                        array=proto,
-                        variable_shape=schema_val.schema_is_var)
+                    backend_opts = BACKEND_OPTIONS_MAP[backend](
+                        backend_options=None,
+                        dtype=schema_val.schema_dtype).backend_options
         else:
             backend = schema_val.schema_default_backend
             backend_opts = schema_val.schema_default_backend_opts

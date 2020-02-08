@@ -74,7 +74,7 @@ def repo(managed_tmpdir) -> Repository:
 @pytest.fixture()
 def aset_samples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
+    co.columns.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -83,7 +83,7 @@ def aset_samples_initialized_repo(repo) -> Repository:
 @pytest.fixture()
 def aset_subsamples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
+    co.columns.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -92,8 +92,8 @@ def aset_subsamples_initialized_repo(repo) -> Repository:
 @pytest.fixture(params=fixed_shape_backend_params)
 def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
     co = aset_samples_initialized_repo.checkout(write=True)
-    second_aset = co.arraysets.init_arrayset('second_aset', prototype=array5by7, backend_opts=request.param)
-    first_aset = co.arraysets['writtenaset']
+    second_aset = co.columns.init_arrayset('second_aset', prototype=array5by7, backend_opts=request.param)
+    first_aset = co.columns['writtenaset']
     for i in range(0, 20):
         array5by7[:] = i
         first_aset[str(i)] = array5by7
@@ -107,7 +107,7 @@ def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) ->
 @pytest.fixture(params=fixed_shape_backend_params)
 def repo_300_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
     co = aset_samples_initialized_repo.checkout(write=True)
-    aset = co.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
+    aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
     with aset:
         for i in range(300):
             array5by7[:] = i
@@ -122,10 +122,10 @@ def repo_20_filled_samples_meta(repo) -> Repository:
     # for diff testing
     dummyData = np.arange(50).astype(np.int64)
     co1 = repo.checkout(write=True, branch='master')
-    co1.arraysets.init_arrayset(name='dummy', prototype=dummyData)
+    co1.columns.init_arrayset(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
-        co1.arraysets['dummy'][idx] = dummyData
+        co1.columns['dummy'][idx] = dummyData
     co1.metadata['hello'] = 'world'
     co1.metadata['somemetadatakey'] = 'somemetadatavalue'
     co1.commit('first commit adding dummy data and hello meta')
@@ -136,7 +136,7 @@ def repo_20_filled_samples_meta(repo) -> Repository:
 @pytest.fixture(params=variable_shape_backend_params)
 def aset_samples_var_shape_initialized_repo(request, repo) -> Repository:
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(
+    co.columns.init_arrayset(
         name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend_opts=request.param)
     co.commit('this is a commit message')
     co.close()
@@ -165,13 +165,13 @@ def randomsizedarray():
 @pytest.fixture(params=fixed_shape_backend_params)
 def two_commit_filled_samples_repo(request, repo, array5by7) -> Repository:
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(
+    co.columns.init_arrayset(
         name='writtenaset', shape=(5, 7), dtype=np.float32, backend_opts=request.param)
     for cIdx in range(2):
         if cIdx != 0:
             co = repo.checkout(write=True)
 
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range((cIdx + 1) * 5):
@@ -187,10 +187,10 @@ def repo_1_br_no_conf(repo) -> Repository:
 
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch='master')
-    co1.arraysets.init_arrayset(name='dummy', prototype=dummyData)
+    co1.columns.init_arrayset(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
-        co1.arraysets['dummy'][str(idx)] = dummyData
+        co1.columns['dummy'][str(idx)] = dummyData
     co1.metadata['hello'] = 'world'
     co1.metadata['somemetadatakey'] = 'somemetadatavalue'
     co1.commit('first commit adding dummy data and hello meta')
@@ -200,8 +200,8 @@ def repo_1_br_no_conf(repo) -> Repository:
     co2 = repo.checkout(write=True, branch='testbranch')
     for idx in range(10, 20):
         dummyData[:] = idx
-        co2.arraysets['dummy'][str(idx)] = dummyData
-        co2.arraysets['dummy'][idx] = dummyData
+        co2.columns['dummy'][str(idx)] = dummyData
+        co2.columns['dummy'][idx] = dummyData
     co2.metadata['foo'] = 'bar'
     co2.commit('first commit on test branch adding non-conflict data and meta')
     co2.close()
@@ -216,8 +216,8 @@ def repo_2_br_no_conf(repo_1_br_no_conf) -> Repository:
     co1 = repo.checkout(write=True, branch='master')
     for idx in range(20, 30):
         dummyData[:] = idx
-        co1.arraysets['dummy'][str(idx)] = dummyData
-        co1.arraysets['dummy'][idx] = dummyData
+        co1.columns['dummy'][str(idx)] = dummyData
+        co1.columns['dummy'][idx] = dummyData
     co1.commit('second commit on master adding non-conflict data')
     co1.close()
     return repo

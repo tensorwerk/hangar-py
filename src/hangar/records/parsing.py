@@ -225,8 +225,8 @@ being the checkout objects ability to perform write operations.
 
 The following records can be parsed:
     * data records
-    * arrayset count records
-    * arrayset schema records
+    * column count records
+    * column schema records
     * metadata records
     * metadata count records
 """
@@ -276,7 +276,7 @@ def data_record_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_STGARR)) -> Ra
     Returns
     -------
     RawDataRecordKey
-        Tuple containing the record aset_name, data_name
+        Tuple containing the record column_name, data_name
     """
     key = db_key.decode()
     key_items = key[_SPLT:].split(SEP_KEY)
@@ -321,7 +321,7 @@ def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int], 
     Parameters
     ----------
     aset_name : string
-        name of the arrayset for the record
+        name of the column for the record
     data_name : Union[str, int]
         name of the data sample for the record
     subsample : Union[str, int], optional
@@ -362,7 +362,7 @@ def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
 
 
 """
-Functions to convert arrayset schema records to/from python objects.
+Functions to convert column schema records to/from python objects.
 --------------------------------------------------------------------
 """
 
@@ -370,12 +370,12 @@ Functions to convert arrayset schema records to/from python objects.
 
 
 def arrayset_record_schema_db_key_from_raw_key(aset_name):
-    """Get the db schema key for a named arrayset
+    """Get the db schema key for a named column
 
     Parameters
     ----------
     aset_name : string
-        the name of the arrayset whose schema is found.
+        the name of the column whose schema is found.
 
     Returns
     -------
@@ -392,22 +392,22 @@ def arrayset_record_schema_db_val_from_raw_val(schema_hash,
                                                schema_default_backend,
                                                schema_default_backend_opts,
                                                schema_contains_subsamples):
-    """Format the db_value which includes all details of the arrayset schema.
+    """Format the db_value which includes all details of the column schema.
 
     Parameters
     ----------
     schema_hash : string
         The hash of the schema calculated at initialization.
     schema_is_var : bool
-        Are samples in the arrayset variable shape or not?
+        Are samples in the column variable shape or not?
     schema_max_shape : tuple of ints (size along each dimension)
-        The maximum shape of the data pieces. For fixed shape arraysets, all
+        The maximum shape of the data pieces. For fixed shape columns, all
         input tensors must have the same dimension size and rank as this
-        specification. For variable-shape arraysets, tensor rank must match, but
+        specification. For variable-shape columns, tensor rank must match, but
         the size of each dimension may be less than or equal to the
         corresponding dimension here.
     schema_dtype : int
-        The datatype numeric code (`np.dtype.num`) of the arrayset. All input
+        The datatype numeric code (`np.dtype.num`) of the column. All input
         tensors must exactly match this datatype.
     schema_default_backend : str
         backend specification for the schema default backend.
@@ -442,9 +442,11 @@ def arrayset_record_schema_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_SCH
 
 
 def arrayset_record_schema_raw_val_from_db_val(db_val: bytes) -> RawArraysetSchemaVal:
-    schema_spec = json.loads(db_val)
-    schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
-    return RawArraysetSchemaVal(**schema_spec)
+    from ..columns.column_parsers import schema_spec_from_db_val
+    return schema_spec_from_db_val(db_val)
+    # schema_spec = json.loads(db_val)
+    # schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
+    # return RawArraysetSchemaVal(**schema_spec)
 
 
 """
@@ -882,7 +884,7 @@ def _commit_ref_joined_kv_digest(joined_db_kvs: Iterable[bytes]) -> str:
     """reproducibly calculate digest from iterable of joined record k/v pairs.
 
     First calculate the digest of each element in the input iterable. As these
-    elements contain the record type (meta key, arrayset name, sample key) as
+    elements contain the record type (meta key, column name, sample key) as
     well as the data hash digest, any modification of any reference record will
     result in a different digest for that element. Then join all elements into
     single serialized bytestring.

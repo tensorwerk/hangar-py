@@ -28,7 +28,7 @@ MapKeyValType = Union[KeyValMap, Sequence[KeyValType]]
 class MetadataReader(object):
     """Class implementing get access to the metadata in a repository.
 
-    Unlike the :class:`~.columns.arrayset.Arraysets` and the equivalent
+    Unlike the :class:`~.columns.column.Columns` and the equivalent
     Metadata classes do not need a factory function or class to coordinate
     access through the checkout. This is primarily because the metadata is
     only stored at a single level, and because the long term storage is
@@ -66,7 +66,7 @@ class MetadataReader(object):
             path to the repository on disk.
         dataenv : lmdb.Environment
             the lmdb environment in which the data records are stored. this is
-            the same as the arrayset data record environments.
+            the same as the column data record environments.
         labelenv : lmdb.Environment
             the lmdb environment in which the label hash key / values are stored
             permanently. When opened in by this reader instance, no write access
@@ -285,7 +285,7 @@ class MetadataReader(object):
 class MetadataWriter(MetadataReader):
     """Class implementing write access to repository metadata.
 
-    Similar to the :class:`~.columns.arrayset.ArraysetDataWriter`, this class
+    Similar to the :class:`~.columns.column.ArraysetDataWriter`, this class
     inherits the functionality of the :class:`~.columns.metadata.MetadataReader` for reading. The
     only difference is that the reader will be initialized with data records
     pointing to the staging area, and not a commit which is checked out.
@@ -442,7 +442,7 @@ class MetadataWriter(MetadataReader):
         Parameters
         ----------
         value: str
-            Piece of data to store in the arrayset.
+            Piece of data to store in the column.
 
         Returns
         -------
@@ -503,7 +503,7 @@ class MetadataWriter(MetadataReader):
         Raises
         ------
         KeyError
-            If there is no sample with some key in the arrayset.
+            If there is no sample with some key in the column.
         """
         value = self[key]
         del self[key]

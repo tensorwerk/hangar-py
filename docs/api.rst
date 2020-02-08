@@ -28,7 +28,7 @@ Write Enabled Checkout
 Arraysets
 ---------
 
-.. autoclass:: hangar.columns.arrayset.Arraysets()
+.. autoclass:: hangar.columns.column.Arraysets()
    :members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
@@ -89,7 +89,7 @@ Read Only Checkout
 Arraysets
 ----------
 
-.. autoclass:: hangar.columns.arrayset.Arraysets()
+.. autoclass:: hangar.columns.column.Arraysets()
    :members: keys, values, items, get, iswriteable
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__

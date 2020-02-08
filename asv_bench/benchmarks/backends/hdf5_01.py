@@ -36,10 +36,10 @@ class _WriterSuite_HDF5_01:
         arr = np.prod(component_arrays).astype(np.float32)
 
         try:
-            self.aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend_opts='01')
+            self.aset = self.co.columns.init_arrayset('aset', prototype=arr, backend_opts='01')
         except TypeError:
             try:
-                self.aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='01')
+                self.aset = self.co.columns.init_arrayset('aset', prototype=arr, backend='01')
             except ValueError:
                 raise NotImplementedError
         except ValueError:
@@ -54,7 +54,7 @@ class _WriterSuite_HDF5_01:
             self.co.commit('first commit')
             self.co.close()
             self.co = self.repo.checkout(write=False)
-            self.aset = self.co.arraysets['aset']
+            self.aset = self.co.columns['aset']
         else:
             self.arr = arr
 

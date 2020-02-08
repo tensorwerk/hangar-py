@@ -35,19 +35,9 @@ descriptors. When found, they simply fill in the descriptor name based on the ke
 As a final twist, a class decorator approach can also be used as a replacement for mixin classes,
 multiple inheritance, and tricky use of the super() function
 """
-from collections.abc import Sequence
-
-import numpy as np
 
 
-class checkedmeta(type):
-    # A metaclass that applies checking
-    def __new__(cls, clsname, bases, methods):
-        # Attach attribute names to the descriptors
-        for key, value in methods.items():
-            if isinstance(value, Descriptor):
-                value.name = key
-        return type.__new__(cls, clsname, bases, methods)
+from typing import Sequence
 
 
 class Descriptor:
@@ -144,6 +134,9 @@ def DictItems(expected_keys_required, expected_values, cls=None):
             except KeyError as e:
                 if required:
                     raise e
+        for recieved_key in value.keys():
+            if recieved_key not in expected_keys_required:
+                raise TypeError(f'Not supposed to have key {recieved_key}')
         super_set(self, instance, value)
     cls.__set__ = __set__
     return cls
@@ -179,3 +172,13 @@ class Tuple(Descriptor):
 @TypedSequence(int)
 class SizedIntegerTuple(Tuple):
     pass
+
+
+class checkedmeta(type):
+    # A metaclass that applies checking
+    def __new__(cls, clsname, bases, methods):
+        # Attach attribute names to the descriptors
+        for key, value in methods.items():
+            if isinstance(value, Descriptor):
+                value.name = key
+        return type.__new__(cls, clsname, bases, methods)

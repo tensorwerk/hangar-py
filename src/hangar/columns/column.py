@@ -5,32 +5,20 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 import lmdb
 import numpy as np
 
-from .type_column import ColumnSpec
-from .constructors import ArraysetConstructors
-from ..backends import (
-    parse_user_backend_opts,
-    BACKEND_OPTIONS_MAP,
-    BACKEND_CAPABILITIES_MAP,
-    backend_from_heuristics,
-)
-from ..txnctx import TxnRegister
+from . import ModifierTypes, FlatSample, NestedSample
+from .common import AsetTxn
 from .column_parsers import (
-    schema_hash_digest,
     schema_db_key_from_column_name,
     schema_db_val_from_spec,
-    schema_spec_from_db_val,
     schema_hash_db_key_from_digest,
 )
-from ..records.parsing import (
-    arrayset_record_count_range_key,
-    # arrayset_record_schema_db_key_from_raw_key,
-    # arrayset_record_schema_db_val_from_raw_val,
-    # arrayset_record_schema_raw_val_from_db_val,
-    # hash_schema_db_key_from_raw_key
-)
+from .constructors import ArraysetConstructors
 from ..op_state import writer_checkout_only
+from ..records.parsing import arrayset_record_count_range_key
+from ..txnctx import TxnRegister
+from ..typesystem.type_ndarray import NdarrayFixedShape, NdarrayVariableShape
+from ..typesystem.type_str import StringVariableShape
 from ..utils import is_suitable_user_key, is_ascii
-from . import AsetTxn, ModifierTypes, FlatSample, NestedSample
 
 KeyType = Union[str, int]
 
@@ -53,7 +41,7 @@ class Columns(metaclass=ArraysetConstructors):
     def __init__(self,
                  mode: str,
                  repo_pth: Path,
-                 arraysets: Dict[str, ModifierTypes],  # TODO: Rename to 'columns'
+                 columns: Dict[str, ModifierTypes],  # TODO: Rename to 'columns'
                  hashenv: Optional[lmdb.Environment] = None,
                  dataenv: Optional[lmdb.Environment] = None,
                  stagehashenv: Optional[lmdb.Environment] = None,
@@ -73,7 +61,7 @@ class Columns(metaclass=ArraysetConstructors):
             one of 'r' or 'a' to indicate read or write mode
         repo_pth : Path
             path to the repository on disk
-        arraysets : Mapping[str, Union[ArraysetDataReader, ArraysetDataWriter]]
+        columns : Mapping[str, Union[ArraysetDataReader, ArraysetDataWriter]]
             TODO: rename to columns
             dictionary of ArraysetData objects
         hashenv : Optional[lmdb.Environment]
@@ -91,7 +79,7 @@ class Columns(metaclass=ArraysetConstructors):
         self._is_conman_counter = 0
         self._mode = mode
         self._repo_pth = repo_pth
-        self._columns = arraysets
+        self._columns = columns
 
         self._hashenv = hashenv
         self._dataenv = dataenv
@@ -384,22 +372,15 @@ class Columns(metaclass=ArraysetConstructors):
         except (ValueError, LookupError) as e:
             raise e from None
 
-        kwargs = {
-            'collayout': 'nested' if contains_subsamples else 'flat',
-            'coltype': 'str',
-            'dtype': 'str',
-            'schema_type': 'variable_shape'
-        }
-        if backend is not None:
-            kwargs['backend'] = backend
-        if backend_options is not None:
-            kwargs['backend_options'] = backend_options
+        column_layout = 'nested' if contains_subsamples else 'flat'
+        schema = StringVariableShape(column_layout=column_layout,
+                                     dtype=repr(str),
+                                     backend=backend,
+                                     backend_options=backend_options)
 
-        schema = ColumnSpec().specifier(**kwargs)
-        schema_digest = schema_hash_digest(schema)
-        schema['schema_hash'] = schema_digest
+        schema_digest = schema.schema_hash_digest()
         columnSchemaKey = schema_db_key_from_column_name(name)
-        columnSchemaVal = schema_db_val_from_spec(schema)
+        columnSchemaVal = schema_db_val_from_spec(schema.schema)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
@@ -412,15 +393,15 @@ class Columns(metaclass=ArraysetConstructors):
         if contains_subsamples:
             setup_args = NestedSample._generate_writer(
                 txnctx=self._txnctx,
-                aset_name=name,
+                column_name=name,
                 path=self._repo_pth,
-                schema_spec=schema)
+                schema=schema)
         else:
             setup_args = FlatSample._generate_writer(
                 txnctx=self._txnctx,
-                aset_name=name,
+                column_name=name,
                 path=self._repo_pth,
-                schema_spec=schema)
+                schema=schema)
         self._columns[name] = setup_args
         return self.get(name)
 
@@ -551,34 +532,25 @@ class Columns(metaclass=ArraysetConstructors):
                     f'shape: {prototype.shape}. Array rank > 31 dimensions not '
                     f'allowed AND all dimension sizes must be > 0.')
 
-            # backend_from_heuristics(prototype=prototype,
-            #                         variable_shape=variable_shape)
-            # beopts = parse_user_backend_opts(backend_opts=backend_options,
-            #                                  prototype=prototype,
-            #                                  variable_shape=variable_shape)
         except (ValueError, LookupError) as e:
             raise e from None
 
-        kwargs = {
-            'collayout': 'nested' if contains_subsamples else 'flat',
-            'coltype': 'ndarray',
-            'shape': prototype.shape,
-            'dtype_num': prototype.dtype.num,
-            'schema_type': 'variable_shape' if variable_shape else 'fixed_shape',
-        }
-        if backend is not None:
-            kwargs['backend'] = backend
-        if backend_options is not None:
-            kwargs['backend_options'] = backend_options
-
-        schema = ColumnSpec.specifier(**kwargs)
-        schema_digest = schema_hash_digest(schema)
-
-        schema = ColumnSpec.specifier(**kwargs)
-        schema_digest = schema_hash_digest(schema)
-
+        column_layout = 'nested' if contains_subsamples else 'flat'
+        if variable_shape:
+            schema = NdarrayVariableShape(dtype=prototype.dtype,
+                                          shape=prototype.shape,
+                                          column_layout=column_layout,
+                                          backend=backend,
+                                          backend_options=backend_options)
+        else:
+            schema = NdarrayFixedShape(dtype=prototype.dtype,
+                                       shape=prototype.shape,
+                                       column_layout=column_layout,
+                                       backend=backend,
+                                       backend_options=backend_options)
+        schema_digest = schema.schema_hash_digest()
         columnSchemaKey = schema_db_key_from_column_name(name)
-        columnSchemaVal = schema_db_val_from_spec(schema)
+        columnSchemaVal = schema_db_val_from_spec(schema.schema)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
@@ -591,15 +563,15 @@ class Columns(metaclass=ArraysetConstructors):
         if contains_subsamples:
             setup_args = NestedSample._generate_writer(
                 txnctx=self._txnctx,
-                aset_name=name,
+                column_name=name,
                 path=self._repo_pth,
-                schema_spec=schema)
+                schema=schema)
         else:
             setup_args = FlatSample._generate_writer(
                 txnctx=self._txnctx,
-                aset_name=name,
+                column_name=name,
                 path=self._repo_pth,
-                schema_spec=schema)
+                schema=schema)
         self._columns[name] = setup_args
         return self.get(name)
 
@@ -650,7 +622,7 @@ class Columns(metaclass=ArraysetConstructors):
                     else:
                         recordsExist = False
 
-            asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(column)
+            asetSchemaKey = schema_db_key_from_column_name(column)
             datatxn.delete(asetSchemaKey)
 
         return column

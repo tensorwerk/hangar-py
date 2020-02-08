@@ -79,7 +79,7 @@ def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, 
         'complevel': clevel,
     }
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    aset = wco.columns.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
     assert aset.backend == be_code
     with aset as a:
         for i in range(10):
@@ -107,7 +107,7 @@ def test_arrayset_init_with_various_lzf_opts(repo, array5by7, cshuffle, cshuffle
         'complevel': None,
     }
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    aset = wco.columns.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
     assert aset.backend == be_code
     with aset as a:
         for i in range(10):
@@ -133,7 +133,7 @@ def test_arrayset_init_with_various_gzip_opts(repo, array5by7, clevel, cshuffle,
         'complevel': clevel,
     }
     wco = repo.checkout(write=True)
-    aset = wco.arraysets.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    aset = wco.columns.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
     assert aset.backend == be_code
     with aset as a:
         for i in range(10):
@@ -164,7 +164,7 @@ def test_arrayset_overflows_collection_size_collection_count(be_code, repo, monk
 
     wco = repo.checkout(write=True)
     proto = np.arange(50).astype(np.uint16)
-    aset = wco.arraysets.init_arrayset('aset', prototype=proto, backend_opts=be_code)
+    aset = wco.columns.init_arrayset('aset', prototype=proto, backend_opts=be_code)
     with aset as cm_aset:
         for i in range(500):
             proto[:] = i
@@ -180,7 +180,7 @@ def test_arrayset_overflows_collection_size_collection_count(be_code, repo, monk
     wco.close()
 
     rco = repo.checkout()
-    naset = rco.arraysets['aset']
+    naset = rco.columns['aset']
     with naset as ncm_aset:
         for i in range(500):
             proto[:] = i

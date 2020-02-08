@@ -1,21 +1,20 @@
 import os
-from contextlib import suppress
+import shutil
+import string
 from collections import ChainMap
-from itertools import permutations
+from contextlib import suppress
 from functools import partial
+from itertools import permutations
 from pathlib import Path
 from typing import Optional
-import string
-import shutil
 
-from xxhash import xxh64_hexdigest
 import lmdb
+from xxhash import xxh64_hexdigest
 
 from . import LMDB_30_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
-from ..utils import random_string, valfilter
 from ..op_state import reader_checkout_only, writer_checkout_only
-
+from ..utils import random_string
 
 LMDB_SETTINGS = {
     'map_size': 300_000_000,
@@ -49,10 +48,10 @@ def lmdb_30_encode(uid, row_idx, checksum):
     return res.encode()
 
 
-from ..columns.typesystem import Descriptor, OneOf, EmptyDict, checkedmeta
+from ..typesystem.typesystem import Descriptor, OneOf, EmptyDict, checkedmeta
 
 
-@OneOf(['<class \'str\'>'])
+@OneOf(['<class\'str\'>', str])
 class LMDB_30_Allowed_Dtypes(Descriptor):
     pass
 
@@ -78,63 +77,6 @@ class LMDB_30_Options(metaclass=checkedmeta):
     @property
     def init_requires(self):
         return ('repo_path',)
-
-
-#
-# class LMDB_30_Capabilities:
-#     _allowed_dtypes = ['str']
-#     _init_requires = ['repo_path']
-#
-#     def __init__(self):
-#         pass
-#
-#     @property
-#     def allowed_dtypes(self):
-#         return self._allowed_dtypes
-#
-#     @property
-#     def allowed(self):
-#         return {'dtype': self.allowed_dtypes}
-#
-#     @property
-#     def init_requires(self):
-#         return self._init_requires
-#
-#
-# class LMDB_30_Options:
-#     _fields_and_required = {}
-#     _permitted_values = {}
-#
-#     def __init__(self):
-#         pass
-#
-#     @property
-#     def fields(self):
-#         return list(self._fields_and_required.keys())
-#
-#     @property
-#     def required_fields(self):
-#         return list(valfilter(bool, self._fields_and_required).keys())
-#
-#     @property
-#     def default(self):
-#         return {}
-#
-#     def isvalid(self, options):
-#         if not isinstance(options, dict):
-#             return False
-#
-#         for field in self.required_fields:
-#             if field not in options:
-#                 return False
-#
-#         for opt, val in options.items():
-#             if opt not in self._fields_and_required:
-#                 return False
-#             if val not in self._permitted_values[opt]:
-#                 return False
-#
-#         return True
 
 
 class LMDB_30_FileHandles:

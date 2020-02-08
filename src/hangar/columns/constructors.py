@@ -6,27 +6,43 @@ a bound method. This is important because these class instances are user
 facing; the ability to construct a new object modifying or accessing repo
 state/data should never be outside the hangar core.
 """
+import warnings
 from _weakref import proxy
 from collections import defaultdict
 from pathlib import Path
-import warnings
 from typing import Collection, Tuple, Dict, Union
 
 import lmdb
-import numpy as np
 from wrapt import ObjectProxy
 
-from .type_column import spec_allowed_backends
-from .validation import DataValidator
 from .common import AsetTxn
-from ..records.parsing import hash_data_db_key_from_raw_key, RawArraysetSchemaVal
-from ..records.queries import RecordQuery
+from ..typesystem.type_ndarray import NdarrayFixedShape, NdarrayVariableShape
+from ..typesystem.type_str import StringVariableShape
 from ..backends import (
-    BACKEND_ACCESSOR_MAP, BACKEND_IS_LOCAL_MAP, BACKEND_CAPABILITIES_MAP,
-    backend_decoder, AccessorMapType, DataHashSpecsType)
-
+    BACKEND_ACCESSOR_MAP,
+    BACKEND_IS_LOCAL_MAP,
+    backend_decoder,
+    AccessorMapType,
+    DataHashSpecsType
+)
+from ..records.parsing import hash_data_db_key_from_raw_key
+from ..records.queries import RecordQuery
 
 # --------------- methods common to all column layout types -------------------
+
+ColumnDefinitionTypes = Union[NdarrayFixedShape, NdarrayVariableShape, StringVariableShape]
+_column_definitions = (NdarrayVariableShape, NdarrayFixedShape, StringVariableShape)
+
+
+def column_type_object_from_schema(schema: dict):
+    for c in _column_definitions:
+        try:
+            instance = c(**schema)
+            return instance
+        except (TypeError, ValueError):
+            pass
+    else:  # N.B. for-else loop (ie. "no-break")
+        raise ValueError(f'Could not instantiate column schema object for {schema}')
 
 
 KeyType = Union[str, int]
@@ -34,7 +50,7 @@ FlatSampleMapType = Dict[KeyType, DataHashSpecsType]
 NestedSampleMapType = Dict[KeyType, FlatSampleMapType]
 
 
-def _open_file_handles(backends, path, mode, schema_spec) -> AccessorMapType:
+def _open_file_handles(backends, path, mode, schema) -> AccessorMapType:
     """Open backend accessor file handles for reading
 
     Parameters
@@ -48,7 +64,7 @@ def _open_file_handles(backends, path, mode, schema_spec) -> AccessorMapType:
         path to the hangar repository on disk
     mode : str
         one of ['r', 'a'] indicating read or write mode to open backends in.
-    schema_spec : dict
+    schema_spec : ColumnDefinitionTypes
         schema spec so required values can be filled in to backend openers.
 
     Returns
@@ -63,22 +79,16 @@ def _open_file_handles(backends, path, mode, schema_spec) -> AccessorMapType:
             if accessor is None:
                 continue
 
-            init_requires = BACKEND_CAPABILITIES_MAP[be]().init_requires
+            init_requires = schema._beopts.init_requires
             # TODO rework names for this hack
             kwargs = {}
             for arg in init_requires:
                 if arg == 'repo_path':
                     kwargs[arg] = path
                 elif arg == 'schema_shape':
-                    if 'shape' in schema_spec:
-                        kwargs[arg] = schema_spec['shape']
-                    else:
-                        kwargs[arg] = None
+                    kwargs[arg] = schema.shape
                 elif arg == 'schema_dtype':
-                    if 'dtype_num' in schema_spec:
-                        kwargs[arg] = np.typeDict[schema_spec['dtype_num']]
-                    else:
-                        kwargs[arg] = None
+                    kwargs[arg] = schema.dtype
 
             fhandles[be] = accessor(**kwargs)
             fhandles[be].open(mode=mode)
@@ -96,13 +106,13 @@ def _warn_remote(aset_name):
 
 
 def _flat_load_sample_keys_and_specs(
-        aset_name, txnctx) -> Tuple[FlatSampleMapType, Collection[str]]:
+        column_name, txnctx) -> Tuple[FlatSampleMapType, Collection[str]]:
     """Load flat sample key / backend location mapping info memory.
 
     Parameters
     ----------
-    aset_name: str
-        name of the arrayset to load.
+    column_name: str
+        name of the column to load.
     txnctx: AsetTxn
         transaction context object used to access commit ref info on disk
 
@@ -117,7 +127,7 @@ def _flat_load_sample_keys_and_specs(
     sspecs = {}
     with txnctx.read() as ctx:
         hashTxn = ctx.hashTxn
-        asetNamesSpec = RecordQuery(ctx.dataenv).arrayset_data_records(aset_name)
+        asetNamesSpec = RecordQuery(ctx.dataenv).arrayset_data_records(column_name)
         for asetNames, dataSpec in asetNamesSpec:
             hashKey = hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = hashTxn.get(hashKey)
@@ -131,20 +141,20 @@ class FlatSampleBuilder(type):
     """Metaclass defining constructor methods for FlatSample objects.
     """
 
-    def _generate_reader(cls, txnctx, aset_name, path, schema_spec):
+    def _generate_reader(cls, txnctx, column_name, path, schema):
         """Generate instance ready structures for read-only checkouts
 
         Parameters
         ----------
         txnctx : AsetTxn
             transaction context object used to access commit ref info on disk
-        aset_name : str
-            name of the arrayset that the reader constructors are being
+        column_name : str
+            name of the column that the reader constructors are being
             generated for
         path : Path
             path to the repository on disk
-        schema_spec : dict
-            schema definition of the arrayset.
+        schema : ColumnDefinitionTypes
+            schema definition of the column.
 
         Returns
         -------
@@ -153,33 +163,33 @@ class FlatSampleBuilder(type):
             state. initailized structures defining and initializing access to
             the sample data on disk.
         """
-        sspecs, bes = _flat_load_sample_keys_and_specs(aset_name, txnctx)
+        sspecs, bes = _flat_load_sample_keys_and_specs(column_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
-            _warn_remote(aset_name)
+            _warn_remote(column_name)
         file_handles = _open_file_handles(
-            backends=bes, path=path, mode='r', schema_spec=schema_spec)
+            backends=bes, path=path, mode='r', schema=schema)
 
-        return cls(aset_name=aset_name,
+        return cls(columnname=column_name,
                    samples=sspecs,
                    backend_handles=file_handles,
-                   schema_spec=schema_spec,
+                   schema=schema,
                    repo_path=path,
                    mode='r')
 
-    def _generate_writer(cls, txnctx, aset_name, path, schema_spec):
+    def _generate_writer(cls, txnctx, column_name, path, schema):
         """Generate instance ready structures for write-enabled checkouts.
 
         Parameters
         ----------
         txnctx : AsetTxn
             transaction context object used to access commit ref info on disk
-        aset_name : str
-            name of the arrayset that the reader constructors are being
+        column_name : str
+            name of the column that the reader constructors are being
             generated for
         path : Path
             path to the repository on disk
-        schema_spec : dict
-            schema definition of the arrayset.
+        schema : ColumnDefinitionTypes
+            schema definition of the column.
 
         Returns
         -------
@@ -188,22 +198,19 @@ class FlatSampleBuilder(type):
             state. initailized structures defining and initializing access to
             the sample data on disk.
         """
-        default_backend = schema_spec['backend']
-        default_backend_opts = schema_spec['backend_options']
-
-        sspecs, bes = _flat_load_sample_keys_and_specs(aset_name, txnctx)
+        sspecs, bes = _flat_load_sample_keys_and_specs(column_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
-            _warn_remote(aset_name)
-        allowed_backends = spec_allowed_backends(schema_spec)
+            _warn_remote(column_name)
+
+        bes.add(schema.backend)
         file_handles = _open_file_handles(
-            backends=allowed_backends, path=path, mode='a', schema_spec=schema_spec)
-        file_handles[default_backend].backend_opts = default_backend_opts
+            backends=bes, path=path, mode='a', schema=schema)
 
         return cls(aset_ctx=txnctx,
-                   aset_name=aset_name,
+                   columnname=column_name,
                    samples=sspecs,
                    backend_handles=file_handles,
-                   schema_spec=schema_spec,
+                   schema=schema,
                    repo_path=path,
                    mode='a')
 
@@ -212,13 +219,13 @@ class FlatSampleBuilder(type):
 
 
 def _nested_load_sample_keys_and_specs(
-        aset_name, txnctx) -> Tuple[NestedSampleMapType, Collection[str]]:
+        column_name, txnctx) -> Tuple[NestedSampleMapType, Collection[str]]:
     """Load nested sample/subsample keys and backend location into memory from disk.
 
     Parameters
     ----------
-    aset_name : str
-        name of the arrayset to load.
+    column_name : str
+        name of the column to load.
     txnctx : AsetTxn
         transaction context object used to access commit ref info on disk
 
@@ -234,7 +241,7 @@ def _nested_load_sample_keys_and_specs(
     sspecs = defaultdict(dict)
     with txnctx.read() as ctx:
         hashTxn = ctx.hashTxn
-        asetNamesSpec = RecordQuery(ctx.dataenv).arrayset_data_records(aset_name)
+        asetNamesSpec = RecordQuery(ctx.dataenv).arrayset_data_records(column_name)
         for asetNames, dataSpec in asetNamesSpec:
             hashKey = hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = hashTxn.get(hashKey)
@@ -248,20 +255,20 @@ class NestedSampleBuilder(type):
     """Metaclass defining constructor methods for NestedSample objects.
     """
 
-    def _generate_reader(cls, txnctx, aset_name, path, schema_spec):
+    def _generate_reader(cls, txnctx, column_name, path, schema):
         """Generate instance ready structures for read-only checkouts
 
         Parameters
         ----------
         txnctx : AsetTxn
             transaction context object used to access commit ref info on disk
-        aset_name : str
-            name of the arrayset that the reader constructors are being
+        column_name : str
+            name of the column that the reader constructors are being
             generated for
         path : Path
             path to the repository on disk
-        schema_spec : dict
-            schema definition of the arrayset.
+        schema : ColumnDefinitionTypes
+            schema definition of the column.
 
         Returns
         -------
@@ -272,38 +279,44 @@ class NestedSampleBuilder(type):
         """
         from .layout_nested import FlatSubsample
 
-        specs, bes = _nested_load_sample_keys_and_specs(aset_name, txnctx)
+        specs, bes = _nested_load_sample_keys_and_specs(column_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
-            _warn_remote(aset_name)
+            _warn_remote(column_name)
         fhand = _open_file_handles(
-            backends=bes, path=path, mode='r', schema_spec=schema_spec)
+            backends=bes, path=path, mode='r', schema=schema)
+        schema_proxy = proxy(schema)
         fhand['enter_count'] = 0
         sample_specs = {}
         for samp, subspecs in specs.items():
             sample_specs[samp] = FlatSubsample(
-                asetn=aset_name, samplen=samp, be_handles=fhand, specs=subspecs, mode='r')
+                columnname=column_name,
+                samplen=samp,
+                be_handles=fhand,
+                specs=subspecs,
+                schema=schema_proxy,
+                mode='r')
 
-        return cls(aset_name=aset_name,
+        return cls(aset_name=column_name,
                    samples=sample_specs,
                    backend_handles=fhand,
-                   schema_spec=schema_spec,
+                   schema=schema,
                    repo_path=path,
                    mode='r')
 
-    def _generate_writer(cls, txnctx, aset_name, path, schema_spec):
+    def _generate_writer(cls, txnctx, column_name, path, schema):
         """Generate instance ready structures for write-enabled checkouts
 
         Parameters
         ----------
         txnctx : AsetTxn
             transaction context object used to access commit ref info on disk
-        aset_name : str
-            name of the arrayset that the reader constructors are being
+        column_name : str
+            name of the column that the reader constructors are being
             generated for
         path : Path
             path to the repository on disk
-        schema_spec : dict
-            schema definition of the arrayset.
+        schema : ColumnDefinitionTypes
+            schema definition of the column.
 
         Returns
         -------
@@ -314,53 +327,44 @@ class NestedSampleBuilder(type):
         """
         from .layout_nested import FlatSubsample
 
-        default_backend = schema_spec['backend']
-        default_backend_opts = schema_spec['backend_options']
-
-        datavalidator = DataValidator()
-        datavalidator.schema = schema_spec
-        specs, bes = _nested_load_sample_keys_and_specs(aset_name, txnctx)
+        specs, bes = _nested_load_sample_keys_and_specs(column_name, txnctx)
         if not all([BACKEND_IS_LOCAL_MAP[be] for be in bes]):
-            _warn_remote(aset_name)
-
-        allowed_backends = spec_allowed_backends(schema_spec)
-        fhand = _open_file_handles(
-            backends=allowed_backends, path=path, mode='a', schema_spec=schema_spec)
-        fhand[default_backend].backend_opts = default_backend_opts
+            _warn_remote(column_name)
+        bes.add(schema.backend)
+        fhand = _open_file_handles(backends=bes, path=path, mode='a', schema=schema)
         fhand['enter_count'] = 0
-        fhand['schema_spec'] = schema_spec
+        schema_proxy = proxy(schema)
         fhand = ObjectProxy(fhand)
         fhand_proxy = proxy(fhand)
         samples = {}
         for samp, subspecs in specs.items():
             samples[samp] = FlatSubsample(
-                datavalidator=proxy(DataValidator),
                 aset_ctx=proxy(txnctx),
-                asetn=aset_name,
+                columnname=column_name,
                 samplen=samp,
                 be_handles=fhand_proxy,
+                schema=schema_proxy,
                 specs=subspecs,
                 mode='a')
 
-        return cls(datavalidator=datavalidator,
-                   aset_ctx=txnctx,
-                   aset_name=aset_name,
+        return cls(aset_ctx=txnctx,
+                   aset_name=column_name,
                    samples=samples,
                    backend_handles=fhand,
-                   schema_spec=schema_spec,
+                   schema=schema,
                    repo_path=path,
                    mode='a')
 
 
-# --------------------- arrayset constructor metaclass ------------------------
+# --------------------- column constructor metaclass ------------------------
 
 
 class ArraysetConstructors(type):
-    """Metaclass defining constructor methods for Arraysets object.
+    """Metaclass defining constructor methods for Columns object.
     """
 
     def _from_staging_area(cls, repo_pth, hashenv, stageenv, stagehashenv):
-        """Class method factory to checkout :class:`Arraysets` in write mode
+        """Class method factory to checkout :class:`Columns` in write mode
 
         Once you get here, we assume the write lock verification has
         passed, and that write operations are safe to perform.
@@ -378,35 +382,36 @@ class ArraysetConstructors(type):
 
         Returns
         -------
-        :class:`~arrayset.Arraysets`
+        :class:`~column.Columns`
             Interface class with write-enabled attributes activate which contains
-            live arrayset data accessors in `write` mode.
+            live column data accessors in `write` mode.
         """
         from . import NestedSample, FlatSample
 
-        arraysets = {}
+        columns = {}
         txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
         query = RecordQuery(stageenv)
         stagedSchemaSpecs = query.schema_specs()
-        for asetn, schema in stagedSchemaSpecs.items():
-            if schema.schema_contains_subsamples:
+        for column_name, schema in stagedSchemaSpecs.items():
+            sch = column_type_object_from_schema(schema)
+            if sch.column_layout == 'nested':
                 column = NestedSample._generate_writer(
-                    txnctx=txnctx, aset_name=asetn, path=repo_pth, schema_spec=schema)
+                    txnctx=txnctx, column_name=column_name, path=repo_pth, schema=sch)
             else:
                 column = FlatSample._generate_writer(
-                    txnctx=txnctx, aset_name=asetn, path=repo_pth, schema_spec=schema)
-            arraysets[asetn] = column
+                    txnctx=txnctx, column_name=column_name, path=repo_pth, schema=sch)
+            columns[column_name] = column
 
         return cls(mode='a',
                    repo_pth=repo_pth,
-                   arraysets=arraysets,
+                   columns=columns,
                    hashenv=hashenv,
                    dataenv=stageenv,
                    stagehashenv=stagehashenv,
                    txnctx=txnctx)
 
     def _from_commit(cls, repo_pth, hashenv, cmtrefenv):
-        """Class method factory to checkout :class:`.Arraysets` in read-only mode
+        """Class method factory to checkout :class:`.Columns` in read-only mode
 
         For read mode, no locks need to be verified, but construction should
         occur through this interface only.
@@ -422,77 +427,31 @@ class ArraysetConstructors(type):
 
         Returns
         -------
-        :class:`~arrayset.Arraysets`
+        :class:`~column.Columns`
             Interface class with write-enabled attributes deactivated which
-            contains live arrayset data accessors in `read-only` mode.
+            contains live column data accessors in `read-only` mode.
         """
         from . import NestedSample, FlatSample
 
-        arraysets = {}
+        columns = {}
         txnctx = AsetTxn(cmtrefenv, hashenv, None)
         query = RecordQuery(cmtrefenv)
         cmtSchemaSpecs = query.schema_specs()
 
-        for asetn, schema in cmtSchemaSpecs.items():
-            if schema.schema_contains_subsamples:
+        for column_name, schema in cmtSchemaSpecs.items():
+            sch = column_type_object_from_schema(schema)
+            if sch.column_layout == 'nested':
                 column = NestedSample._generate_reader(
-                    txnctx=txnctx, aset_name=asetn, path=repo_pth, schema_spec=schema)
+                    txnctx=txnctx, column_name=column_name, path=repo_pth, schema=sch)
             else:
                 column = FlatSample._generate_reader(
-                    txnctx=txnctx, aset_name=asetn, path=repo_pth, schema_spec=schema)
-            arraysets[asetn] = column
+                    txnctx=txnctx, column_name=column_name, path=repo_pth, schema=sch)
+            columns[column_name] = column
 
         return cls(mode='r',
                    repo_pth=repo_pth,
-                   arraysets=arraysets,
+                   columns=columns,
                    hashenv=None,
                    dataenv=None,
                    stagehashenv=None,
                    txnctx=None)
-
-
-    def _testing(cls, repo_pth, hashenv, stageenv, stagehashenv):
-        """Class method factory to checkout :class:`Arraysets` in write mode
-
-        Once you get here, we assume the write lock verification has
-        passed, and that write operations are safe to perform.
-
-        Parameters
-        ----------
-        repo_pth : Path
-            directory path to the hangar repository on disk
-        hashenv : lmdb.Environment
-            environment where tensor data hash records are open in write mode.
-        stageenv : lmdb.Environment
-            environment where staging records (dataenv) are opened in write mode.
-        stagehashenv: lmdb.Environment
-            environment where the staged hash records are stored in write mode
-
-        Returns
-        -------
-        :class:`~arrayset.Arraysets`
-            Interface class with write-enabled attributes activate which contains
-            live arrayset data accessors in `write` mode.
-        """
-        from . import NestedSample, FlatSample
-
-        arraysets = {}
-        txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
-        query = RecordQuery(stageenv)
-        stagedSchemaSpecs = query.schema_specs()
-        for asetn, schema in stagedSchemaSpecs.items():
-            if schema.schema_contains_subsamples:
-                column = NestedSample._generate_writer(
-                    txnctx=txnctx, aset_name=asetn, path=repo_pth, schema_spec=schema)
-            else:
-                column = FlatSample._generate_writer(
-                    txnctx=txnctx, aset_name=asetn, path=repo_pth, schema_spec=schema)
-            arraysets[asetn] = column
-
-        return cls(mode='a',
-                   repo_pth=repo_pth,
-                   arraysets=arraysets,
-                   hashenv=hashenv,
-                   dataenv=stageenv,
-                   stagehashenv=stagehashenv,
-                   txnctx=txnctx,)

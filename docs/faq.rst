@@ -204,11 +204,11 @@ Is there a performance/space penalty for having lots of small data groups?
 
 As far as a performance / space penalty, this is where it gets good :)
 
-- Using fewer arraysets means that there are fewer records (the internal
+- Using fewer columns means that there are fewer records (the internal
   locating info, kind-of like a git tree) to store, since each record points to
   a sample containing more information.
 
-- Using more arraysets means that the likelihood of samples having the same
+- Using more columns means that the likelihood of samples having the same
   value increases, meaning fewer pieces of data are actually stored on disk
   (remember it’s a content addressable file store)
 

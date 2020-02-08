@@ -6,12 +6,12 @@ import numpy as np
 @pytest.fixture()
 def diverse_repo(repo):
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset('test', prototype=np.arange(10))
-    co.arraysets['test'][0] = np.arange(10)
-    co.arraysets['test'][1] = np.arange(10) + 1
-    co.arraysets['test'][2] = np.arange(10) + 2
-    co.arraysets['test'][3] = np.arange(10) + 3
-    co.arraysets['test'][4] = np.arange(10) + 4
+    co.columns.init_arrayset('test', prototype=np.arange(10))
+    co.columns['test'][0] = np.arange(10)
+    co.columns['test'][1] = np.arange(10) + 1
+    co.columns['test'][2] = np.arange(10) + 2
+    co.columns['test'][3] = np.arange(10) + 3
+    co.columns['test'][4] = np.arange(10) + 4
     co.metadata['hi'] = 'foo'
     co.metadata['aea'] = 'eeae'
     co.commit('hello world')
@@ -24,8 +24,8 @@ def diverse_repo(repo):
     co.close()
     repo.create_branch('dev')
     co = repo.checkout(write=True, branch='dev')
-    dset_trlabels = co.arraysets.init_arrayset(name='train_labels', prototype=sample_trlabel)
-    dset_trimgs = co.arraysets.init_arrayset('train_images', prototype=sample_trimg, backend_opts='01')
+    dset_trlabels = co.columns.init_arrayset(name='train_labels', prototype=sample_trlabel)
+    dset_trimgs = co.columns.init_arrayset('train_images', prototype=sample_trimg, backend_opts='01')
     dset_trlabels[0] = sample_trlabel
     dset_trlabels[1] = sample_trlabel + 1
     dset_trlabels[2] = sample_trlabel + 2
@@ -36,8 +36,8 @@ def diverse_repo(repo):
     co.close()
 
     co = repo.checkout(write=True, branch='master')
-    dset_vimgs = co.arraysets.init_arrayset('valid_images', prototype=sample_vimg)
-    dset_vlabels = co.arraysets.init_arrayset('valid_labels', prototype=sample_vlabel)
+    dset_vimgs = co.columns.init_arrayset('valid_images', prototype=sample_vimg)
+    dset_vlabels = co.columns.init_arrayset('valid_labels', prototype=sample_vlabel)
     dset_vlabels[0] = sample_vlabel
     dset_vlabels[1] = sample_vlabel + 1
     dset_vlabels[2] = sample_vlabel + 2
@@ -56,8 +56,8 @@ def diverse_repo(repo):
     co.close()
 
     co = repo.checkout(write=True, branch='newbranch')
-    ds_trimgs = co.arraysets['train_images']
-    ds_trlabels = co.arraysets['train_labels']
+    ds_trimgs = co.columns['train_images']
+    ds_trlabels = co.columns['train_labels']
     ds_trlabels[3] = sample_trlabel + 3
     ds_trlabels[4] = sample_trlabel + 4
     ds_trlabels[5] = sample_trlabel + 5
