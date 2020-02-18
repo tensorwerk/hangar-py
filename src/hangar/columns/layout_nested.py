@@ -11,25 +11,18 @@ from weakref import proxy
 
 import numpy as np
 
+from .common import open_file_handles
+from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP, DataHashSpecsType
+from ..op_state import reader_checkout_only
 from ..records.column_parsers import (
+    data_record_db_val_from_digest,
+    data_record_digest_val_from_db_val,
+    nested_data_db_key_from_names,
     schema_db_key_from_column,
     schema_hash_db_key_from_digest,
     schema_db_val_from_spec,
-    nested_data_db_key_from_names,
 )
-from .constructors import NestedSampleBuilder, _open_file_handles
-from ..backends import (
-    backend_decoder,
-    BACKEND_ACCESSOR_MAP,
-    DataHashSpecsType,
-)
-from ..op_state import reader_checkout_only, writer_checkout_only
-from ..records.parsing import (
-    data_record_db_val_from_raw_val,
-    data_record_raw_val_from_db_val,
-    hash_data_db_key_from_raw_key,
-    generate_sample_name,
-)
+from ..records.parsing import hash_data_db_key_from_raw_key, generate_sample_name
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
 AsetTxnType = Type['AsetTxn']
@@ -41,10 +34,10 @@ KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
 MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 
 
-class FlatSubsample(object):
+class FlatSubsampleReader(object):
 
-    __slots__ = ('_column_name', '_stack', '_be_fs', '_mode',
-                 '_subsamples', '_txnctx', '_samplen', '_schema')
+    __slots__ = ('_column_name', '_stack', '_be_fs', '_mode', '_subsamples', '_samplen')
+    _attrs = __slots__
 
     def __init__(self,
                  columnname: str,
@@ -52,8 +45,6 @@ class FlatSubsample(object):
                  be_handles: BACKEND_ACCESSOR_MAP,
                  specs: Dict[KeyType, DataHashSpecsType],
                  mode: str,
-                 aset_ctx: Optional[AsetTxnType] = None,
-                 schema = None,
                  *args, **kwargs):
 
         self._column_name = columnname
@@ -62,8 +53,6 @@ class FlatSubsample(object):
         self._subsamples = specs
         self._mode = mode
         self._stack: Optional[ExitStack] = None
-        self._txnctx = aset_ctx
-        self._schema = schema
 
     @property
     def _debug_(self):  # pragma: no cover
@@ -74,7 +63,6 @@ class FlatSubsample(object):
             '_be_fs': self._be_fs,
             '_subsamples': self._subsamples,
             '_mode': self._mode,
-            '_txnctx': self._txnctx._debug_,
             '_stack': self._stack._exit_callbacks if self._stack else self._stack,
         }
 
@@ -107,34 +95,16 @@ class FlatSubsample(object):
         return list(self.keys())
 
     def __enter__(self):
-        if self._mode == 'r':
-            self._enter_count += 1
-        else:
-            with ExitStack() as stack:
-                self._txnctx.open_write()
-                stack.callback(self._txnctx.close_write)
-                if self._enter_count == 0:
-                    for k in self._be_fs.keys():
-                        if k in ('enter_count', 'schema_spec'):
-                            continue
-                        stack.enter_context(self._be_fs[k])
-                self._enter_count += 1
-                self._stack = stack.pop_all()
+        self._enter_count += 1
         return self
 
     def __exit__(self, *exc):
-        if self._mode == 'r':
-            self._enter_count -= 1
-        else:
-            self._stack.close()
-            self._enter_count -= 1
-            if self._enter_count == 0:
-                self._stack = None
+        self._enter_count -= 1
 
     def _destruct(self):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
-        for attr in self.__slots__:
+        for attr in self._attrs:
             delattr(self, attr)
 
     def __getattr__(self, name):
@@ -393,40 +363,52 @@ class FlatSubsample(object):
         except KeyError:
             return default
 
-    # ---------------- writer methods only after this point -------------------
 
-    @writer_checkout_only
-    def _schema_spec_get(self):
-        """Nonstandard descriptor method. See notes in ``_schema_spec.getter``.
-        """
-        return self._be_fs['schema_spec']
+# ---------------- writer methods only after this point -------------------
 
-    @property
-    def _schema_spec(self):
-        """
-        Using seperate setter method (with ``@writer_checkout_only`` decorator
-        applied) due to bug in python <3.8.
 
-        From: https://bugs.python.org/issue19072
-            > The classmethod decorator when applied to a function of a class,
-            > does not honour the descriptor binding protocol for whatever it
-            > wraps. This means it will fail when applied around a function which
-            > has a decorator already applied to it and where that decorator
-            > expects that the descriptor binding protocol is executed in order
-            > to properly bind the function to the class.
-        """
-        return self._schema_spec_get()
+class FlatSubsampleWriter(FlatSubsampleReader):
 
-    def _set_arg_validate(self, key: KeyType, value: np.ndarray):
+    __slots__ = ('_schema', '_txnctx')
+    _attrs = __slots__ + FlatSubsampleReader.__slots__
 
+    def __init__(self,
+                 schema,
+                 aset_ctx: Optional[AsetTxnType] = None,
+                 *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+
+        self._schema = schema
+        self._txnctx = aset_ctx
+
+    def __enter__(self):
+        with ExitStack() as stack:
+            self._txnctx.open_write()
+            stack.callback(self._txnctx.close_write)
+            if self._enter_count == 0:
+                for k in self._be_fs.keys():
+                    if k in ('enter_count', 'schema_spec'):
+                        continue
+                    stack.enter_context(self._be_fs[k])
+            self._enter_count += 1
+            self._stack = stack.pop_all()
+        return self
+
+    def __exit__(self, *exc):
+        self._stack.close()
+        self._enter_count -= 1
+        if self._enter_count == 0:
+            self._stack = None
+
+    def __set_arg_validate(self, key: KeyType, value: np.ndarray):
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
         isCompat = self._schema.verify_data_compatible(value)
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
-    @writer_checkout_only
-    def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
+    def __perform_set(self, key: KeyType, value: np.ndarray) -> None:
         """Internal write method. Assumes all arguments validated and context is open
 
         Parameters
@@ -445,8 +427,8 @@ class FlatSubsample(object):
         existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
         if existingDataRecVal:
             # check if data record already with same key & hash value
-            existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
-            if full_hash == existingDataRec.data_hash:
+            existingDataRec = data_record_digest_val_from_db_val(existingDataRecVal)
+            if full_hash == existingDataRec.digest:
                 return
 
         # write new data if data hash does not exist
@@ -461,7 +443,7 @@ class FlatSubsample(object):
             hash_spec = backend_decoder(existingHashVal)
 
         # add the record to the db
-        dataRecVal = data_record_db_val_from_raw_val(full_hash)
+        dataRecVal = data_record_db_val_from_digest(full_hash)
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._subsamples[key] = hash_spec
 
@@ -486,8 +468,8 @@ class FlatSubsample(object):
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
-            self._set_arg_validate(key, value)
-            self._perform_set(key, value)
+            self.__set_arg_validate(key, value)
+            self.__perform_set(key, value)
 
     def append(self, value: np.ndarray) -> KeyType:
         """Store some data in a subsample with an automatically generated key.
@@ -518,8 +500,8 @@ class FlatSubsample(object):
             if not self._is_conman:
                 stack.enter_context(self)
             key = generate_sample_name()
-            self._set_arg_validate(key, value)
-            self._perform_set(key, value)
+            self.__set_arg_validate(key, value)
+            self.__perform_set(key, value)
             return key
 
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
@@ -558,20 +540,14 @@ class FlatSubsample(object):
                 other.update(kwargs)
 
             for key, val in other.items():
-                self._set_arg_validate(key, val)
+                self.__set_arg_validate(key, val)
             for key, val in other.items():
-                self._perform_set(key, val)
+                self.__perform_set(key, val)
 
-    @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
-        """Remove a subsample from the column. Convenience method to :meth:`delete`.
+        """Remove a subsample from the column.`.
 
-        .. seealso::
-
-            :meth:`delete` (the analogous named operation for this method)
-
-            :meth:`pop` to return a records value and then delete it in the same
-            operation
+        .. seealso:: :meth:`pop` to simultaneously get value and delete.
 
         Parameters
         ----------
@@ -608,30 +584,25 @@ class FlatSubsample(object):
         -------
         :class:`np.ndarray`
             Upon success, the value of the removed key.
-
-        Raises
-        ------
-        KeyError
-            If there is no sample with some key in the column.
         """
         value = self[key]
         del self[key]
         return value
 
 
-class NestedSample(metaclass=NestedSampleBuilder):
+class NestedSampleReader:
 
-    __slots__ = ('_mode', '_column_name', '_samples', '_be_fs', '_path',
-                 '_stack', '_txnctx', '_contains_subsamples', '_schema')
+    __slots__ = ('_mode', '_column_name', '_samples',
+                 '_be_fs', '_path', '_stack', '_schema')
+    _attrs = __slots__
 
     def __init__(self,
                  columnname: str,
-                 samples: Dict[KeyType, FlatSubsample],
+                 samples: Dict[KeyType, FlatSubsampleReader],
                  backend_handles: Dict[str, Any],
                  repo_path: Path,
                  mode: str,
-                 aset_ctx: Optional[AsetTxnType] = None,
-                 schema = None,
+                 schema=None,
                  *args, **kwargs):
 
         self._mode = mode
@@ -640,10 +611,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         self._be_fs = backend_handles
         self._path = repo_path
         self._stack: Optional[ExitStack] = None
-        self._txnctx = aset_ctx
         self._schema = schema
-
-        self._contains_subsamples = True
 
     def __repr__(self):
         res = f'{self.__class__}('\
@@ -681,27 +649,11 @@ class NestedSample(metaclass=NestedSampleBuilder):
         return list(self.keys())
 
     def __enter__(self):
-        if self._mode == 'r':
-            self._enter_count += 1
-        else:
-            with ExitStack() as stack:
-                self._txnctx.open_write()
-                stack.callback(self._txnctx.close_write)
-                if self._enter_count == 0:
-                    for k in tuple(self._be_fs.keys()):
-                        if k in ('enter_count', 'schema_spec'):
-                            continue
-                        stack.enter_context(self._be_fs[k])
-                self._enter_count += 1
-                self._stack = stack.pop_all()
+        self._enter_count += 1
         return self
 
     def __exit__(self, *exc):
-        if self._mode == 'r':
-            self._enter_count -= 1
-        else:
-            self._stack.close()
-            self._enter_count -= 1
+        self._enter_count -= 1
 
     def _destruct(self):
         if isinstance(self._stack, ExitStack):
@@ -709,7 +661,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         self._close()
         for sample in self._samples.values():
             sample._destruct()
-        for attr in self.__slots__:
+        for attr in self._attrs:
             delattr(self, attr)
 
     def __getattr__(self, name):
@@ -736,13 +688,13 @@ class NestedSample(metaclass=NestedSampleBuilder):
         """ensure multiprocess operations can pickle relevant data.
 
         Technically should be decorated with @reader_checkout_only, but since
-        at instance creation that is not an attribute, the decorator won't
-        know. Since only readers can be pickled, This isn't much of an issue.
+        at instance creation the '_mode' is not a set attribute, the decorator won't
+        know how to process. Since only readers can be pickled, This isn't much of an issue.
         """
         for slot, value in state.items():
             setattr(self, slot, value)
 
-    def __getitem__(self, key: KeyType) -> FlatSubsample:
+    def __getitem__(self, key: KeyType) -> FlatSubsampleReader:
         """Get the sample access class for some sample key.
 
         Parameters
@@ -752,7 +704,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
 
         Returns
         -------
-        FlatSubsample
+        FlatSubsampleReader
             Sample accessor corresponding to the given key
         """
         return self._samples[key]
@@ -910,25 +862,14 @@ class NestedSample(metaclass=NestedSampleBuilder):
         return self._schema.backend
 
     @property
-    def backend_options(self):
-        """The opts applied to the default backend.
-
-        Returns
-        -------
-        dict
-            config settings used to set up filters
+    def backend_options(self) -> dict:
+        """The config settings applied to the default storage backend filters.
         """
         return self._schema.backend_options
 
     @property
     def contains_subsamples(self) -> bool:
         """Bool indicating if sub-samples are contained in this column container.
-
-        Returns
-        -------
-        bool
-            True if subsamples are included, False otherwise. For this column
-            class, subsamples are stored; the result will always be True
         """
         return True
 
@@ -993,7 +934,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    def get(self, key: GetKeysType, default: Any = None) -> FlatSubsample:
+    def get(self, key: GetKeysType, default: Any = None) -> FlatSubsampleReader:
         """Retrieve tensor data for some sample key(s) in the column.
 
         Parameters
@@ -1006,23 +947,50 @@ class NestedSample(metaclass=NestedSampleBuilder):
 
         Returns
         -------
-        SubsampleTypes:
+        FlatSubsampleReader:
             Sample accessor class given by name ``key`` which can be used to
             access subsample data.
-
-        Raises
-        ------
-        KeyError
-            if the column does not contain a sample with the provided key.
         """
         try:
             return self[key]
         except KeyError:
             return default
 
-    # ---------------- writer methods only after this point -------------------
 
-    def _set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
+# ---------------- writer methods only after this point -------------------
+
+
+class NestedSampleWriter(NestedSampleReader):
+
+    __slots__ = ('_txnctx',)
+    _attrs = __slots__ + NestedSampleReader.__slots__
+
+    def __init__(self,
+                 aset_ctx: Optional[AsetTxnType] = None,
+                 *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+
+        self._txnctx = aset_ctx
+
+    def __enter__(self):
+        with ExitStack() as stack:
+            self._txnctx.open_write()
+            stack.callback(self._txnctx.close_write)
+            if self._enter_count == 0:
+                for k in tuple(self._be_fs.keys()):
+                    if k in ('enter_count', 'schema_spec'):
+                        continue
+                    stack.enter_context(self._be_fs[k])
+            self._enter_count += 1
+            self._stack = stack.pop_all()
+        return self
+
+    def __exit__(self, *exc):
+        self._stack.close()
+        self._enter_count -= 1
+
+    def __set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
 
         if not is_suitable_user_key(sample_key):
             raise ValueError(f'Sample name `{sample_key}` is not suitable.')
@@ -1034,21 +1002,19 @@ class NestedSample(metaclass=NestedSampleBuilder):
             if not isCompat.compatible:
                 raise ValueError(isCompat.reason)
 
-    @writer_checkout_only
-    def _perform_set(self, key: KeyType, value: MapKeyArrType) -> None:
+    def __perform_set(self, key: KeyType, value: MapKeyArrType) -> None:
         if key in self._samples:
             self._samples[key].update(value)
         else:
-            self._samples[key] = FlatSubsample(
+            self._samples[key] = FlatSubsampleWriter(
+                schema=proxy(self._schema),
                 aset_ctx=proxy(self._txnctx),
                 columnname=self._column_name,
                 samplen=key,
                 be_handles=proxy(self._be_fs),
-                schema=proxy(self._schema),
                 specs={},
                 mode='a')
             try:
-                # TODO: class method to eliminate double validation check?
                 self._samples[key].update(value)
             except Exception as e:
                 del self._samples[key]
@@ -1066,8 +1032,8 @@ class NestedSample(metaclass=NestedSampleBuilder):
             if not self._is_conman:
                 stack.enter_context(self)
             value = dict(value)
-            self._set_arg_validate(key, value)
-            self._perform_set(key, value)
+            self.__set_arg_validate(key, value)
+            self.__perform_set(key, value)
 
     def update(self,
                other: Union[None, Dict[KeyType, MapKeyArrType],
@@ -1076,7 +1042,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         """Store some data with the key/value pairs, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
-        :meth:`dict.update` method, accepting either a dictionary or other
+        :py:`dict.update` method, accepting either a dictionary or other
         iterable (of length two) listing key / value pairs.
 
         Parameters
@@ -1113,11 +1079,10 @@ class NestedSample(metaclass=NestedSampleBuilder):
                 other[sample] = dict(other[sample])
 
             for key, val in other.items():
-                self._set_arg_validate(key, val)
+                self.__set_arg_validate(key, val)
             for key, val in other.items():
-                self._perform_set(key, val)
+                self.__perform_set(key, val)
 
-    @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
         """Remove a sample (including all contained subsamples) from the column.
 
@@ -1157,7 +1122,6 @@ class NestedSample(metaclass=NestedSampleBuilder):
         del self[key]
         return res
 
-    @writer_checkout_only
     def change_backend(self, backend: str, backend_options: Optional[dict] = None):
         """Change the default backend and filters applied to future data writes.
 
@@ -1200,7 +1164,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
             ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
 
         if self._schema.backend not in self._be_fs:
-            fhands = _open_file_handles(
+            fhands = open_file_handles(
                 backends=[self._schema.backend],
                 path=self._path,
                 mode='a',

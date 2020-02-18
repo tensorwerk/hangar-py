@@ -2,7 +2,6 @@ import atexit
 from pathlib import Path
 import weakref
 from contextlib import suppress, ExitStack
-from functools import partial
 from uuid import uuid4
 from typing import Optional
 
@@ -151,12 +150,13 @@ class ReaderCheckout(GetMixin):
         PermissionError
             if the checkout was previously close
         """
-        p_hasattr = partial(hasattr, self)
-        if not all(map(p_hasattr, ['_metadata', '_columns', '_differ'])):
-            e = PermissionError(
+        try:
+            self._columns
+        except AttributeError:
+            err = PermissionError(
                 f'Unable to operate on past checkout objects which have been '
                 f'closed. No operation occurred. Please use a new checkout.')
-            raise e from None
+            raise err from None
 
     @property
     def _is_conman(self):

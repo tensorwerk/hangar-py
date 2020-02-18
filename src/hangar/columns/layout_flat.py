@@ -1,37 +1,28 @@
 """Accessor class for columns containing single-level key/value mappings
 
-The FlatSample container is used to store data (in any backend) in a column
+The FlatSampleReader container is used to store data (in any backend) in a column
 containing a single level key/value mapping from names/ids to data.
 
 All backends are supported.
 """
 from contextlib import ExitStack
 from pathlib import Path
-from typing import (
-    Tuple, List, Union, Sequence, Dict, Iterable, Type, Optional, Any
-)
+from typing import Tuple, List, Union, Sequence, Dict, Iterable, Type, Optional, Any
 
 import numpy as np
 
+from .common import open_file_handles
+from ..backends import backend_decoder, AccessorMapType, DataHashSpecsType
+from ..op_state import reader_checkout_only
 from ..records.column_parsers import (
+    data_record_db_val_from_digest,
+    data_record_digest_val_from_db_val,
+    flat_data_db_key_from_names,
     schema_db_key_from_column,
     schema_hash_db_key_from_digest,
     schema_db_val_from_spec,
-    flat_data_db_key_from_names,
 )
-from .constructors import FlatSampleBuilder, _open_file_handles
-from ..backends import (
-    backend_decoder,
-    AccessorMapType,
-    DataHashSpecsType,
-)
-from ..op_state import reader_checkout_only, writer_checkout_only
-from ..records.parsing import (
-    data_record_db_val_from_raw_val,
-    data_record_raw_val_from_db_val,
-    hash_data_db_key_from_raw_key,
-    generate_sample_name,
-)
+from ..records.parsing import hash_data_db_key_from_raw_key, generate_sample_name
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
 KeyType = Union[str, int]
@@ -41,7 +32,7 @@ MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 AsetTxnType = Type['AsetTxn']
 
 
-class FlatSample(metaclass=FlatSampleBuilder):
+class FlatSampleReader:
     """Class implementing get access to data in a column.
 
     This class exposes the standard API to access data stored in a single level
@@ -66,8 +57,8 @@ class FlatSample(metaclass=FlatSampleBuilder):
     the repository.
     """
 
-    __slots__ = ('_mode', '_column_name', '_samples', '_be_fs', '_path',
-                 '_stack', '_txnctx', '_enter_count', '_schema')
+    __slots__ = ('_mode', '_column_name', '_samples', '_be_fs',
+                 '_path', '_stack', '_enter_count', '_schema')
     _attrs = __slots__
 
     def __init__(self,
@@ -77,7 +68,6 @@ class FlatSample(metaclass=FlatSampleBuilder):
                  schema,
                  repo_path: Path,
                  mode: str,
-                 aset_ctx: Optional[AsetTxnType] = None,
                  *args, **kwargs):
 
         self._stack: Optional[ExitStack] = None
@@ -87,7 +77,6 @@ class FlatSample(metaclass=FlatSampleBuilder):
         self._be_fs = backend_handles
         self._path = repo_path
         self._schema = schema
-        self._txnctx = aset_ctx
         self._enter_count = 0
 
     @property
@@ -98,11 +87,9 @@ class FlatSample(metaclass=FlatSampleBuilder):
             '_column_name': self._column_name,
             '_be_fs': self._be_fs,
             '_path': self._path,
-            '_contains_subsamples': self._contains_subsamples,
-            '_txnctx': self._txnctx._debug_,
+            '_contains_subsamples': self.contains_subsamples,
             '_stack': self._stack._exit_callbacks if self._stack else self._stack,
             '_enter_count': self._enter_count,
-            '_datavalidator': self._datavalidator.__dict__,
         }
 
     def __repr__(self):
@@ -156,25 +143,10 @@ class FlatSample(metaclass=FlatSampleBuilder):
             setattr(self, slot, value)
 
     def __enter__(self):
-        if self._mode == 'r':
-            return self
-        else:
-            with ExitStack() as stack:
-                self._txnctx.open_write()
-                stack.callback(self._txnctx.close_write)
-                if self._enter_count == 0:
-                    for k in self._be_fs.keys():
-                        stack.enter_context(self._be_fs[k])
-                self._enter_count += 1
-                self._stack = stack.pop_all()
-            return self
+        return self
 
     def __exit__(self, *exc):
-        if self._mode == 'r':
-            return
-        else:
-            self._stack.close()
-            self._enter_count -= 1
+        return
 
     def _destruct(self):
         if isinstance(self._stack, ExitStack):
@@ -430,9 +402,34 @@ class FlatSample(metaclass=FlatSampleBuilder):
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    # ---------------- writer methods only after this point -------------------
+# ---------------- writer methods only after this point -------------------
 
-    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
+
+class FlatSampleWriter(FlatSampleReader):
+
+    __slots__ = ('_txnctx',)
+    _attrs = __slots__ + FlatSampleReader.__slots__
+
+    def __init__(self, aset_ctx: AsetTxnType, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._txnctx = aset_ctx
+
+    def __enter__(self):
+        with ExitStack() as stack:
+            self._txnctx.open_write()
+            stack.callback(self._txnctx.close_write)
+            if self._enter_count == 0:
+                for k in self._be_fs.keys():
+                    stack.enter_context(self._be_fs[k])
+            self._enter_count += 1
+            self._stack = stack.pop_all()
+        return self
+
+    def __exit__(self, *exc):
+        self._stack.close()
+        self._enter_count -= 1
+
+    def __set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
         """Verify if key / value pair is valid to be written in this column
 
         Parameters
@@ -455,8 +452,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
-    @writer_checkout_only
-    def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
+    def __perform_set(self, key: KeyType, value: np.ndarray) -> None:
         """Internal write method. Assumes all arguments validated and context is open
 
         Parameters
@@ -474,8 +470,8 @@ class FlatSample(metaclass=FlatSampleBuilder):
         existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
         if existingDataRecVal:
             # check if data record already with same key & hash value
-            existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
-            if full_hash == existingDataRec.data_hash:
+            existingDataRec = data_record_digest_val_from_db_val(existingDataRecVal)
+            if full_hash == existingDataRec.digest:
                 return
 
         # write new data if data hash does not exist
@@ -489,7 +485,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
             hash_spec = backend_decoder(existingHashVal)
 
         # add the record to the db
-        dataRecVal = data_record_db_val_from_raw_val(full_hash)
+        dataRecVal = data_record_db_val_from_digest(full_hash)
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._samples[key] = hash_spec
 
@@ -538,8 +534,8 @@ class FlatSample(metaclass=FlatSampleBuilder):
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
-            self._set_arg_validate(key, value)
-            self._perform_set(key, value)
+            self.__set_arg_validate(key, value)
+            self.__perform_set(key, value)
 
     def append(self, value: np.ndarray) -> KeyType:
         """Store some data in a sample with an automatically generated key.
@@ -568,8 +564,8 @@ class FlatSample(metaclass=FlatSampleBuilder):
             if not self._is_conman:
                 stack.enter_context(self)
             key = generate_sample_name()
-            self._set_arg_validate(key, value)
-            self._perform_set(key, value)
+            self.__set_arg_validate(key, value)
+            self.__perform_set(key, value)
             return key
 
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
@@ -591,27 +587,6 @@ class FlatSample(metaclass=FlatSampleBuilder):
         **kwargs
             keyword arguments provided will be saved with keywords as sample keys
             (string type only) and values as np.array instances.
-
-
-        Raises
-        ------
-        ValueError
-            If no `name` arg was provided for column requiring named samples.
-        ValueError
-            If input data tensor rank exceeds specified rank of column samples.
-        ValueError
-            For variable shape columns, if a dimension size of the input data
-            tensor exceeds specified max dimension size of the column samples.
-        ValueError
-            For fixed shape columns, if input data dimensions do not exactly
-            match specified column dimensions.
-        ValueError
-            If type of `data` argument is not an instance of np.ndarray.
-        ValueError
-            If `data` is not "C" contiguous array layout.
-        ValueError
-            If the datatype of the input data does not match the specified data
-            type of the column
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -630,11 +605,10 @@ class FlatSample(metaclass=FlatSampleBuilder):
                 other.update(kwargs)
 
             for key, val in other.items():
-                self._set_arg_validate(key, val)
+                self.__set_arg_validate(key, val)
             for key, val in other.items():
-                self._perform_set(key, val)
+                self.__perform_set(key, val)
 
-    @writer_checkout_only
     def __delitem__(self, key: KeyType) -> None:
         """Remove a sample from the column. Convenience method to :meth:`delete`.
 
@@ -690,7 +664,6 @@ class FlatSample(metaclass=FlatSampleBuilder):
         del self[key]
         return value
 
-    @writer_checkout_only
     def change_backend(self, backend: str, backend_options: Optional[dict] = None):
         """Change the default backend and filters applied to future data writes.
 
@@ -733,7 +706,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
             ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
 
         if self._schema.backend not in self._be_fs:
-            fhands = _open_file_handles(
+            fhands = open_file_handles(
                 backends=[self._schema.backend],
                 path=self._path,
                 mode='a',

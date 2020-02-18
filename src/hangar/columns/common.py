@@ -3,6 +3,7 @@ from typing import Optional
 
 import lmdb
 
+from ..backends import AccessorMapType, BACKEND_ACCESSOR_MAP
 from ..txnctx import TxnRegister
 
 
@@ -96,3 +97,46 @@ class AsetTxn(object):
             self.close_write()
 
 
+def open_file_handles(backends, path, mode, schema) -> AccessorMapType:
+    """Open backend accessor file handles for reading
+
+    Parameters
+    ----------
+    backends : Set[str]
+        if ``mode == 'r'`` then this should be the used backend format
+        codes in the column. if ``mode == 'a'``, then this should be a
+        list of the allowed backend format codes this schema can feasably
+        write to.
+    path : Path
+        path to the hangar repository on disk
+    mode : str
+        one of ['r', 'a'] indicating read or write mode to open backends in.
+    schema : ColumnDefinitionTypes
+        schema spec so required values can be filled in to backend openers.
+
+    Returns
+    -------
+    AccessorMapType
+        dict mapping backend format codes to initialized instances of each
+        read-only backend.
+    """
+    fhandles = {}
+    for be, accessor in BACKEND_ACCESSOR_MAP.items():
+        if be in backends:
+            if accessor is None:
+                continue
+
+            init_requires = schema._beopts.init_requires
+            # TODO rework names for this hack
+            kwargs = {}
+            for arg in init_requires:
+                if arg == 'repo_path':
+                    kwargs[arg] = path
+                elif arg == 'schema_shape':
+                    kwargs[arg] = schema.shape
+                elif arg == 'schema_dtype':
+                    kwargs[arg] = schema.dtype
+
+            fhandles[be] = accessor(**kwargs)
+            fhandles[be].open(mode=mode)
+    return fhandles

@@ -1,4 +1,4 @@
-from ..records.column_parsers import CompatibleData
+from ..records.recordstructs import CompatibleData
 from ..records.hashmachine import metadata_hash_digest
 from .base import ColumnBase
 from .descriptors import OneOf, Descriptor, String, OptionalString, OptionalDict
@@ -84,7 +84,6 @@ class StringVariableShape(StringSchemaBase):
     _backend_options = OptionalDict()
 
     def __init__(self, *args, **kwargs):
-        print(kwargs)
         if 'column_type' in kwargs:
             super().__init__(*args, **kwargs)
         else:

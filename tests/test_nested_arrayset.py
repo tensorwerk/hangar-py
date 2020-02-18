@@ -847,13 +847,13 @@ class TestRemoveData:
 class TestContainerIntrospection:
 
     def test_get_sample_returns_object(self, initialized_arrayset, subsample_data_map):
-        from hangar.columns import FlatSubsample, NestedSample
+        from hangar.columns.layout_nested import FlatSubsampleReader, NestedSampleReader
 
         aset = initialized_arrayset
-        assert isinstance(aset, NestedSample)
+        assert isinstance(aset, NestedSampleReader)
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
-            assert isinstance(sample, FlatSubsample)
+            assert isinstance(sample, FlatSubsampleReader)
 
     # -------------------------- test __dunder__ methods ----------------------------------
 
@@ -1003,12 +1003,12 @@ class TestGetDataMethods:
                 assert_equal(res, subsample_value)
 
     def test_getitem_sample_getitem_subsample(self, initialized_arrayset, subsample_data_map):
-        from hangar.columns.layout_nested import FlatSubsample
+        from hangar.columns.layout_nested import FlatSubsampleReader
 
         aset = initialized_arrayset
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset[sample_name]
-            assert isinstance(sample, FlatSubsample)
+            assert isinstance(sample, FlatSubsampleReader)
             for subsample_name, subsample_value in subsample_data.items():
                 res = sample[subsample_name]
                 assert_equal(res, subsample_value)
@@ -1302,7 +1302,7 @@ class TestGetDataMethods:
         del aset._samples[2]._subsamples[50]
 
     def test_get_sample_values_method(self, initialized_arrayset):
-        from hangar.columns import FlatSubsample
+        from hangar.columns.layout_nested import FlatSubsampleReader
         from collections.abc import Iterator
         aset = initialized_arrayset
 
@@ -1311,10 +1311,10 @@ class TestGetDataMethods:
         assert len(res) == 2
         for sample in res:
             assert sample.sample == 'foo' or 2
-            assert isinstance(sample, FlatSubsample)
+            assert isinstance(sample, FlatSubsampleReader)
 
     def test_get_sample_values_method_local_only(self, initialized_arrayset):
-        from hangar.columns import FlatSubsample
+        from hangar.columns.layout_nested import FlatSubsampleReader
         from collections.abc import Iterator
         aset = initialized_arrayset
         # add subsamples which are not local to each subsample
@@ -1328,7 +1328,7 @@ class TestGetDataMethods:
         assert len(res) == 1
         sample = res[0]
         assert sample.sample == 2
-        assert isinstance(sample, FlatSubsample)
+        assert isinstance(sample, FlatSubsampleReader)
 
         del aset._samples['foo']._subsamples[50]
 
@@ -1376,7 +1376,7 @@ class TestGetDataMethods:
         del aset._samples[2]._subsamples[50]
 
     def test_get_sample_items_method(self, initialized_arrayset):
-        from hangar.columns import FlatSubsample
+        from hangar.columns.layout_nested import FlatSubsampleReader
         from collections.abc import Iterator
         aset = initialized_arrayset
 
@@ -1385,11 +1385,11 @@ class TestGetDataMethods:
         assert len(res) == 2
         for sample_name, sample in res:
             assert sample_name == 2 or 'foo'
-            assert isinstance(sample, FlatSubsample)
+            assert isinstance(sample, FlatSubsampleReader)
             assert sample_name == sample.sample
 
     def test_get_sample_items_method_local_only(self, initialized_arrayset):
-        from hangar.columns import FlatSubsample
+        from hangar.columns.layout_nested import FlatSubsampleReader
         from collections.abc import Iterator
         aset = initialized_arrayset
         # add subsamples which are not local to each subsample
@@ -1403,7 +1403,7 @@ class TestGetDataMethods:
         assert len(res) == 1
         sample_name, sample = res[0]
         assert sample_name == 2
-        assert isinstance(sample, FlatSubsample)
+        assert isinstance(sample, FlatSubsampleReader)
         assert sample.sample == sample_name
 
         del aset._samples['foo']._subsamples[50]

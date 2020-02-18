@@ -5,7 +5,7 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 import lmdb
 import numpy as np
 
-from . import ModifierTypes, FlatSample, NestedSample
+from . import ModifierTypes
 from .common import AsetTxn
 from ..records.column_parsers import (
     schema_db_key_from_column,
@@ -14,7 +14,10 @@ from ..records.column_parsers import (
     schema_column_record_from_db_key,
     dynamic_layout_data_record_db_start_range_key,
 )
-from .constructors import ArraysetConstructors
+from ..records.queries import RecordQuery
+from .constructors import (
+    generate_flat_column, generate_nested_column, column_type_object_from_schema
+)
 from ..op_state import writer_checkout_only
 from ..txnctx import TxnRegister
 from ..typesystem.ndarray import NdarrayFixedShape, NdarrayVariableShape
@@ -29,7 +32,7 @@ Constructor and Interaction Class for Columns
 """
 
 
-class Columns(metaclass=ArraysetConstructors):
+class Columns:
     """Common access patterns and initialization/removal of columns in a checkout.
 
     This object is the entry point to all data stored in their
@@ -42,7 +45,7 @@ class Columns(metaclass=ArraysetConstructors):
     def __init__(self,
                  mode: str,
                  repo_pth: Path,
-                 columns: Dict[str, ModifierTypes],  # TODO: Rename to 'columns'
+                 columns: Dict[str, ModifierTypes],
                  hashenv: Optional[lmdb.Environment] = None,
                  dataenv: Optional[lmdb.Environment] = None,
                  stagehashenv: Optional[lmdb.Environment] = None,
@@ -75,7 +78,7 @@ class Columns(metaclass=ArraysetConstructors):
         txnctx: Optional[AsetTxn]
             class implementing context managers to handle lmdb transactions
         """
-        self._stack = []
+        self._stack: Optional[ExitStack] = None
         self._is_conman_counter = 0
         self._mode = mode
         self._repo_pth = repo_pth
@@ -237,7 +240,7 @@ class Columns(metaclass=ArraysetConstructors):
             samples in column exist locally, True if some reference remote
             sources.
         """
-        res: Mapping[str, bool] = {}
+        res = {}
         for asetn, aset in self._columns.items():
             res[asetn] = aset.contains_remote_references
         return res
@@ -252,7 +255,7 @@ class Columns(metaclass=ArraysetConstructors):
             dict where keys are column names and values are iterables of
             samples in the column containing remote references
         """
-        res: Mapping[str, Iterable[Union[int, str]]] = {}
+        res = {}
         for asetn, aset in self._columns.items():
             res[asetn] = aset.remote_reference_keys
         return res
@@ -439,31 +442,33 @@ class Columns(metaclass=ArraysetConstructors):
             ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
 
         if contains_subsamples:
-            setup_args = NestedSample._generate_writer(
+            setup_args = generate_nested_column(
                 txnctx=self._txnctx,
                 column_name=name,
                 path=self._repo_pth,
-                schema=schema)
+                schema=schema,
+                mode='a')
         else:
-            setup_args = FlatSample._generate_writer(
+            setup_args = generate_flat_column(
                 txnctx=self._txnctx,
                 column_name=name,
                 path=self._repo_pth,
-                schema=schema)
+                schema=schema,
+                mode='a')
         self._columns[name] = setup_args
         return self.get(name)
 
     @writer_checkout_only
     def create_ndarray_column(self,
-                            name: str,
-                            shape: Union[int, Tuple[int]] = None,
-                            dtype: np.dtype = None,
-                            prototype: np.ndarray = None,
-                            variable_shape: bool = False,
-                            contains_subsamples: bool = False,
-                            *,
-                            backend: Optional[str] = None,
-                            backend_options: Optional[dict] = None) -> ModifierTypes:
+                              name: str,
+                              shape: Union[int, Tuple[int]] = None,
+                              dtype: np.dtype = None,
+                              prototype: np.ndarray = None,
+                              variable_shape: bool = False,
+                              contains_subsamples: bool = False,
+                              *,
+                              backend: Optional[str] = None,
+                              backend_options: Optional[dict] = None) -> ModifierTypes:
         """Initializes a column in the repository.
 
         Column columns are created in order to store some arbitrary
@@ -609,17 +614,126 @@ class Columns(metaclass=ArraysetConstructors):
             ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
 
         if contains_subsamples:
-            setup_args = NestedSample._generate_writer(
+            setup_args = generate_nested_column(
                 txnctx=self._txnctx,
                 column_name=name,
                 path=self._repo_pth,
-                schema=schema)
+                schema=schema,
+                mode='a')
         else:
-            setup_args = FlatSample._generate_writer(
+            setup_args = generate_flat_column(
                 txnctx=self._txnctx,
                 column_name=name,
                 path=self._repo_pth,
-                schema=schema)
+                schema=schema,
+                mode='a')
         self._columns[name] = setup_args
         return self.get(name)
 
+    @classmethod
+    def _from_staging_area(cls, repo_pth, hashenv, stageenv, stagehashenv):
+        """Class method factory to checkout :class:`Columns` in write mode
+
+        Once you get here, we assume the write lock verification has
+        passed, and that write operations are safe to perform.
+
+        Parameters
+        ----------
+        repo_pth : Path
+            directory path to the hangar repository on disk
+        hashenv : lmdb.Environment
+            environment where tensor data hash records are open in write mode.
+        stageenv : lmdb.Environment
+            environment where staging records (dataenv) are opened in write mode.
+        stagehashenv: lmdb.Environment
+            environment where the staged hash records are stored in write mode
+
+        Returns
+        -------
+        :class:`~column.Columns`
+            Interface class with write-enabled attributes activate which contains
+            live column data accessors in `write` mode.
+        """
+        columns = {}
+        txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
+        query = RecordQuery(stageenv)
+        stagedSchemaSpecs = query.schema_specs()
+
+        for column_record, schema in stagedSchemaSpecs.items():
+            sch = column_type_object_from_schema(schema)
+            if column_record.layout == 'nested':
+                column = generate_nested_column(
+                    txnctx=txnctx,
+                    column_name=column_record.column,
+                    path=repo_pth,
+                    schema=sch,
+                    mode='a')
+            else:
+                column = generate_flat_column(
+                    txnctx=txnctx,
+                    column_name=column_record.column,
+                    path=repo_pth,
+                    schema=sch,
+                    mode='a')
+            columns[column_record.column] = column
+
+        return cls(mode='a',
+                   repo_pth=repo_pth,
+                   columns=columns,
+                   hashenv=hashenv,
+                   dataenv=stageenv,
+                   stagehashenv=stagehashenv,
+                   txnctx=txnctx)
+
+    @classmethod
+    def _from_commit(cls, repo_pth, hashenv, cmtrefenv):
+        """Class method factory to checkout :class:`.Columns` in read-only mode
+
+        For read mode, no locks need to be verified, but construction should
+        occur through this interface only.
+
+        Parameters
+        ----------
+        repo_pth : Path
+            directory path to the hangar repository on disk
+        hashenv : lmdb.Environment
+            environment where tensor data hash records are open in read-only mode.
+        cmtrefenv : lmdb.Environment
+            environment where staging checkout records are opened in read-only mode.
+
+        Returns
+        -------
+        :class:`~column.Columns`
+            Interface class with write-enabled attributes deactivated which
+            contains live column data accessors in `read-only` mode.
+        """
+        columns = {}
+        txnctx = AsetTxn(cmtrefenv, hashenv, None)
+        query = RecordQuery(cmtrefenv)
+        cmtSchemaSpecs = query.schema_specs()
+
+        for column_record, schema in cmtSchemaSpecs.items():
+            sch = column_type_object_from_schema(schema)
+            if column_record.layout == 'nested':
+                column = generate_nested_column(
+                    txnctx=txnctx,
+                    column_name=column_record.column,
+                    path=repo_pth,
+                    schema=sch,
+                    mode='r')
+            else:
+                column = generate_flat_column(
+                    txnctx=txnctx,
+                    column_name=column_record.column,
+                    path=repo_pth,
+                    schema=sch,
+                    mode='r')
+            columns[column_record.column] = column
+
+        return cls(mode='r',
+                   repo_pth=repo_pth,
+                   columns=columns,
+                   hashenv=None,
+                   dataenv=None,
+                   stagehashenv=None,
+                   txnctx=None)

@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..records.column_parsers import CompatibleData
+from ..records.recordstructs import CompatibleData
 from ..records.hashmachine import array_hash_digest
 from .base import ColumnBase
 from .descriptors import OneOf, String, OptionalString, SizedIntegerTuple, OptionalDict

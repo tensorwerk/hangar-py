@@ -384,11 +384,11 @@ class Remotes(object):
         try:
             m_schema_hash_map = defaultdict(list)
             for hashVal in allHashs:
-                hashKey = parsing.hash_data_db_key_from_raw_key(hashVal.data_hash)
+                hashKey = parsing.hash_data_db_key_from_raw_key(hashVal.digest)
                 hashRef = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hashRef)
                 if be_loc.backend == '50':
-                    m_schema_hash_map[be_loc.schema_hash].append(hashVal.data_hash)
+                    m_schema_hash_map[be_loc.schema_hash].append(hashVal.digest)
         finally:
             TxnRegister().abort_reader_txn(self._env.hashenv)
 

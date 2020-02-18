@@ -3,28 +3,30 @@ from typing import Dict, Iterable, Iterator, List, Set, Tuple, Union
 import lmdb
 
 from .parsing import (
-    data_record_raw_val_from_db_val,
     metadata_range_key,
     metadata_record_raw_key_from_db_key,
     metadata_record_raw_val_from_db_val,
     MetadataRecordKey, MetadataRecordVal,
-    RawDataRecordVal,
 )
 from .column_parsers import (
+    data_record_digest_val_from_db_val,
     dynamic_layout_data_record_db_start_range_key,
     dynamic_layout_data_record_from_db_key,
     schema_column_record_from_db_key,
     schema_db_range_key_from_column_unknown_layout,
     schema_record_count_start_range_key,
     schema_spec_from_db_val,
+)
+from .recordstructs import (
     FlatColumnDataKey,
-    NestedColumnDataKey
+    NestedColumnDataKey,
+    DataRecordVal,
 )
 from ..txnctx import TxnRegister
 from ..utils import ilen
 from ..mixins import CursorRangeIterator
 
-RawDataTuple = Tuple[Union[FlatColumnDataKey, NestedColumnDataKey], RawDataRecordVal]
+RawDataTuple = Tuple[Union[FlatColumnDataKey, NestedColumnDataKey], DataRecordVal]
 RawMetaTuple = Tuple[MetadataRecordKey, MetadataRecordVal]
 
 
@@ -182,8 +184,8 @@ class RecordQuery(CursorRangeIterator):
         arraysets = self.column_names()
         for arrayset in arraysets:
             recs = self._traverse_column_data_records(arrayset, keys=False, values=True)
-            data_rec = map(data_record_raw_val_from_db_val, recs)
-            data_val_rec = [x.data_hash for x in data_rec]
+            data_rec = map(data_record_digest_val_from_db_val, recs)
+            data_val_rec = [x.digest for x in data_rec]
             all_hashes.extend(data_val_rec)
         return all_hashes
 
@@ -204,10 +206,10 @@ class RecordQuery(CursorRangeIterator):
         """
         for data_key, data_val in self._traverse_column_data_records(column_name):
             data_rec_key = dynamic_layout_data_record_from_db_key(data_key)
-            data_rec_val = data_record_raw_val_from_db_val(data_val)
+            data_rec_val = data_record_digest_val_from_db_val(data_val)
             yield (data_rec_key, data_rec_val)
 
-    def column_data_hashes(self, column_name: str) -> Set[RawDataRecordVal]:
+    def column_data_hashes(self, column_name: str) -> Set[DataRecordVal]:
         """Find all data hashes contained within a particular column
 
         Note: this method does not remove any duplicates which may be present,
@@ -220,11 +222,11 @@ class RecordQuery(CursorRangeIterator):
 
         Returns
         -------
-        Set[RawDataRecordVal]
+        Set[DataRecordVal]
             all hash values for all data pieces in the column
         """
         recs = self._traverse_column_data_records(column_name, keys=False, values=True)
-        return set(map(data_record_raw_val_from_db_val, recs))
+        return set(map(data_record_digest_val_from_db_val, recs))
 
     def column_data_count(self, column_name: str) -> int:
         """Return the number of samples in an column with the provided name
@@ -289,7 +291,7 @@ class RecordQuery(CursorRangeIterator):
             aset_hash_vals = self.column_data_hashes(asetn)
             aset_schema_hash = aset_schema_specs[asetn].schema_hash
             for aset_hash_val in aset_hash_vals:
-                odict[aset_hash_val.data_hash] = aset_schema_hash
+                odict[aset_hash_val.digest] = aset_schema_hash
         return odict
 
 # --------------------------- process metadata ------------------------------------------

@@ -19,6 +19,8 @@ from .records.column_parsers import (
     dynamic_layout_data_record_from_db_key,
     schema_column_record_from_db_key,
     schema_spec_from_db_val,
+)
+from .records.recordstructs import (
     ColumnSchemaKey,
     FlatColumnDataKey,
     NestedColumnDataKey,

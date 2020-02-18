@@ -1,14 +1,9 @@
 from typing import Union
 
-ModifierTypes = Union['NestedSample', 'FlatSubsample']
+ModifierTypes = Union['NestedSampleReader', 'FlatSubsampleReader']
 
-from .layout_flat import FlatSample
-from .layout_nested import FlatSubsample, NestedSample
 from .metadata import MetadataReader, MetadataWriter
 from .column import Columns
 
 
-__all__ = (
-    'Columns', 'NestedSample', 'FlatSubsample',
-    'FlatSample', 'ModifierTypes', 'MetadataReader', 'MetadataWriter',
-)
+__all__ = ('Columns', 'ModifierTypes', 'MetadataReader', 'MetadataWriter')
