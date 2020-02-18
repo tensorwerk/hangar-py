@@ -274,7 +274,7 @@ def hdf5_01_encode(uid: str, cksum: str, dset: int, dset_idx: int,
 
 # ------------------------- Accessor Object -----------------------------------
 
-from ..typesystem.typesystem import Descriptor, OneOf, DictItems, checkedmeta
+from ..typesystem.descriptors import Descriptor, OneOf, DictItems, checkedmeta
 
 
 @DictItems(

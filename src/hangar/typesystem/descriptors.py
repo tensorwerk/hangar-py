@@ -34,9 +34,12 @@ descriptors. When found, they simply fill in the descriptor name based on the ke
 
 As a final twist, a class decorator approach can also be used as a replacement for mixin classes,
 multiple inheritance, and tricky use of the super() function
+
+The classes defined in this alternative formulation work in exactly the same manner as before
+(none of the earlier example code changes) except that everything runs much faster. For example,
+a simple timing test of setting a typed attribute reveals that the class decorator approach runs
+almost 100% faster than the approach using mixins.
 """
-
-
 from typing import Sequence
 
 

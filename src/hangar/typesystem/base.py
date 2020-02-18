@@ -1,4 +1,4 @@
-from .typesystem import OneOf, String, checkedmeta
+from .descriptors import OneOf, String, checkedmeta
 from ..records.hashmachine import schema_hash_digest
 from ..backends import BACKEND_OPTIONS_MAP
 

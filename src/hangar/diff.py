@@ -12,12 +12,16 @@ from .records.commiting import (
 )
 from .records.heads import get_branch_head_commit, get_branch_names
 from .records.parsing import (
-    arrayset_record_schema_raw_key_from_db_key,
-    arrayset_record_schema_raw_val_from_db_val,
-    data_record_raw_key_from_db_key,
     metadata_record_raw_key_from_db_key,
     MetadataRecordKey,
-    RawDataRecordKey,
+)
+from .records.column_parsers import (
+    dynamic_layout_data_record_from_db_key,
+    schema_column_record_from_db_key,
+    schema_spec_from_db_val,
+    ColumnSchemaKey,
+    FlatColumnDataKey,
+    NestedColumnDataKey,
 )
 from .records.queries import RecordQuery
 from .txnctx import TxnRegister
@@ -34,8 +38,8 @@ class HistoryDiffStruct(NamedTuple):
 
 class Changes(NamedTuple):
     schema: dict
-    samples: dict
-    metadata: dict
+    samples: tuple
+    metadata: tuple
 
 
 class DiffOutDB(NamedTuple):
@@ -50,7 +54,8 @@ class DiffOut(NamedTuple):
     mutated: Changes
 
 
-ConflictKeys = Union[str, RawDataRecordKey, MetadataRecordKey]
+ConflictKeys = Union[str, FlatColumnDataKey, NestedColumnDataKey,
+                     ColumnSchemaKey, MetadataRecordKey]
 
 
 class Conflicts(NamedTuple):
@@ -175,23 +180,26 @@ def _raw_from_db_change(changes: Set[Tuple[bytes, bytes]]) -> Changes:
     Changes
         human readable formatted dict of key/value pairs.
     """
-    arraysets, metadata, schema = [], [], []
+    columnKeys, metadataKeys, schemaKeyVals = [], [], []
     for k, v in changes:
-        if k[:2] == b'a:':
-            arraysets.append(k)
+        if k[:2] == b'f:':
+            columnKeys.append(k)
+            continue
+        elif k[:2] == b'n:':
+            columnKeys.append(k)
             continue
         elif k[:2] == b'l:':
-            metadata.append(k)
+            metadataKeys.append(k)
             continue
         else:  # k[:2] == b's:'
-            schema.append((k, v))
+            schemaKeyVals.append((k, v))
             continue
 
-    rawAsets = map(data_record_raw_key_from_db_key, arraysets)
-    rawMeta = map(metadata_record_raw_key_from_db_key, metadata)
-    rawSchema = {arrayset_record_schema_raw_key_from_db_key(k):
-                 arrayset_record_schema_raw_val_from_db_val(v) for k, v in schema}
-    return Changes(schema=rawSchema, samples=tuple(rawAsets), metadata=tuple(rawMeta))
+    columndata = map(dynamic_layout_data_record_from_db_key, columnKeys)
+    metadata = map(metadata_record_raw_key_from_db_key, metadataKeys)
+    schemas = {schema_column_record_from_db_key(k):
+                   schema_spec_from_db_val(v) for k, v in schemaKeyVals}
+    return Changes(schema=schemas, samples=tuple(columndata), metadata=tuple(metadata))
 
 
 def _all_raw_from_db_changes(outDb: DiffAndConflictsDB) -> DiffAndConflicts:

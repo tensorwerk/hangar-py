@@ -16,8 +16,8 @@ import lmdb
 from wrapt import ObjectProxy
 
 from .common import AsetTxn
-from ..typesystem.type_ndarray import NdarrayFixedShape, NdarrayVariableShape
-from ..typesystem.type_str import StringVariableShape
+from ..typesystem.ndarray import NdarrayFixedShape, NdarrayVariableShape
+from ..typesystem.pystring import StringVariableShape
 from ..backends import (
     BACKEND_ACCESSOR_MAP,
     BACKEND_IS_LOCAL_MAP,
@@ -127,12 +127,12 @@ def _flat_load_sample_keys_and_specs(
     sspecs = {}
     with txnctx.read() as ctx:
         hashTxn = ctx.hashTxn
-        asetNamesSpec = RecordQuery(ctx.dataenv).arrayset_data_records(column_name)
+        asetNamesSpec = RecordQuery(ctx.dataenv).column_data_records(column_name)
         for asetNames, dataSpec in asetNamesSpec:
             hashKey = hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = hashTxn.get(hashKey)
             be_loc = backend_decoder(hash_ref)
-            sspecs[asetNames.data_name] = be_loc
+            sspecs[asetNames.sample] = be_loc
     seen_bes.update((spc.backend for spc in sspecs.values()))
     return (sspecs, seen_bes)
 
@@ -241,12 +241,12 @@ def _nested_load_sample_keys_and_specs(
     sspecs = defaultdict(dict)
     with txnctx.read() as ctx:
         hashTxn = ctx.hashTxn
-        asetNamesSpec = RecordQuery(ctx.dataenv).arrayset_data_records(column_name)
+        asetNamesSpec = RecordQuery(ctx.dataenv).column_data_records(column_name)
         for asetNames, dataSpec in asetNamesSpec:
             hashKey = hash_data_db_key_from_raw_key(dataSpec.data_hash)
             hash_ref = hashTxn.get(hashKey)
             be_loc = backend_decoder(hash_ref)
-            sspecs[asetNames.data_name].update({asetNames.subsample: be_loc})
+            sspecs[asetNames.sample].update({asetNames.subsample: be_loc})
             seen_bes.add(be_loc.backend)
     return (sspecs, seen_bes)
 
@@ -296,7 +296,7 @@ class NestedSampleBuilder(type):
                 schema=schema_proxy,
                 mode='r')
 
-        return cls(aset_name=column_name,
+        return cls(columnname=column_name,
                    samples=sample_specs,
                    backend_handles=fhand,
                    schema=schema,
@@ -348,7 +348,7 @@ class NestedSampleBuilder(type):
                 mode='a')
 
         return cls(aset_ctx=txnctx,
-                   aset_name=column_name,
+                   columnname=column_name,
                    samples=samples,
                    backend_handles=fhand,
                    schema=schema,
@@ -392,15 +392,16 @@ class ArraysetConstructors(type):
         txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
         query = RecordQuery(stageenv)
         stagedSchemaSpecs = query.schema_specs()
-        for column_name, schema in stagedSchemaSpecs.items():
+
+        for column_record, schema in stagedSchemaSpecs.items():
             sch = column_type_object_from_schema(schema)
-            if sch.column_layout == 'nested':
+            if column_record.layout == 'nested':
                 column = NestedSample._generate_writer(
-                    txnctx=txnctx, column_name=column_name, path=repo_pth, schema=sch)
+                    txnctx=txnctx, column_name=column_record.column, path=repo_pth, schema=sch)
             else:
                 column = FlatSample._generate_writer(
-                    txnctx=txnctx, column_name=column_name, path=repo_pth, schema=sch)
-            columns[column_name] = column
+                    txnctx=txnctx, column_name=column_record.column, path=repo_pth, schema=sch)
+            columns[column_record.column] = column
 
         return cls(mode='a',
                    repo_pth=repo_pth,
@@ -438,15 +439,15 @@ class ArraysetConstructors(type):
         query = RecordQuery(cmtrefenv)
         cmtSchemaSpecs = query.schema_specs()
 
-        for column_name, schema in cmtSchemaSpecs.items():
+        for column_record, schema in cmtSchemaSpecs.items():
             sch = column_type_object_from_schema(schema)
-            if sch.column_layout == 'nested':
+            if column_record.layout == 'nested':
                 column = NestedSample._generate_reader(
-                    txnctx=txnctx, column_name=column_name, path=repo_pth, schema=sch)
+                    txnctx=txnctx, column_name=column_record.column, path=repo_pth, schema=sch)
             else:
                 column = FlatSample._generate_reader(
-                    txnctx=txnctx, column_name=column_name, path=repo_pth, schema=sch)
-            columns[column_name] = column
+                    txnctx=txnctx, column_name=column_record.column, path=repo_pth, schema=sch)
+            columns[column_record.column] = column
 
         return cls(mode='r',
                    repo_pth=repo_pth,

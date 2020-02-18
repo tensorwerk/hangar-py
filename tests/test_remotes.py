@@ -399,7 +399,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     # ------------------ format arguments dependingon options -----------------
 
     kwargs = {
-        'arrayset_names': fetchAsetns,
+        'column_names': fetchAsetns,
         'max_num_bytes': fetchNbytes,
         'retrieve_all_history': fetchAll_history,
     }

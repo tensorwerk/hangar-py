@@ -13,10 +13,11 @@ from typing import (
 
 import numpy as np
 
-from .column_parsers import (
-    schema_db_key_from_column_name,
+from ..records.column_parsers import (
+    schema_db_key_from_column,
     schema_hash_db_key_from_digest,
-    schema_db_val_from_spec
+    schema_db_val_from_spec,
+    flat_data_db_key_from_names,
 )
 from .constructors import FlatSampleBuilder, _open_file_handles
 from ..backends import (
@@ -26,7 +27,6 @@ from ..backends import (
 )
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..records.parsing import (
-    data_record_db_key_from_raw_key,
     data_record_db_val_from_raw_val,
     data_record_raw_val_from_db_val,
     hash_data_db_key_from_raw_key,
@@ -98,13 +98,6 @@ class FlatSample(metaclass=FlatSampleBuilder):
             '_column_name': self._column_name,
             '_be_fs': self._be_fs,
             '_path': self._path,
-            # '_schema_spec': self._schema_spec,
-            # '_schema_variable': self._schema_variable,
-            # '_schema_dtype_num': self._schema_dtype_num,
-            # '_schema_max_shape': self._schema_max_shape,
-            # '_dflt_schema_hash': self._dflt_schema_hash,
-            # '_dflt_backend': self._dflt_backend,
-            # '_dflt_backend_opts': self._dflt_backend_opts,
             '_contains_subsamples': self._contains_subsamples,
             '_txnctx': self._txnctx._debug_,
             '_stack': self._stack._exit_callbacks if self._stack else self._stack,
@@ -125,16 +118,12 @@ class FlatSample(metaclass=FlatSampleBuilder):
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__qualname__} \
-                \n    Arrayset Name            : {self._column_name}\
+                \n    Column Name              : {self._column_name}\
                 \n    Access Mode              : {self._mode}\
                 \n    Number of Samples        : {self.__len__()}\
                 \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\
                 \n    Contains Subsamples      : False\n'
         p.text(res)
-                # \n    Schema Hash              : {self._dflt_schema_hash}\
-                # \n    (max) Shape              : {self._schema_max_shape}\
-                # \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
-                # \n    Variable Shape           : {bool(int(self._schema_variable))}\
 
     def _ipython_key_completions_(self):  # pragma: no cover
         """Let ipython know that any key based access can use the column keys
@@ -224,26 +213,11 @@ class FlatSample(metaclass=FlatSampleBuilder):
 
     def __len__(self) -> int:
         """Check how many samples are present in a given column.
-
-        Returns
-        -------
-        int
-            number of samples the column contains.
         """
         return len(self._samples)
 
     def __contains__(self, key: KeyType) -> bool:
         """Determine if a key is a valid sample name in the column.
-
-        Parameters
-        ----------
-        key : KeyType
-            name to check if it is a sample in the column
-
-        Returns
-        -------
-        bool
-            True if key exists, else False
         """
         return key in self._samples
 
@@ -496,7 +470,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
 
         hashKey = hash_data_db_key_from_raw_key(full_hash)
         # check if data record already exists with given key
-        dataRecKey = data_record_db_key_from_raw_key(self._column_name, key)
+        dataRecKey = flat_data_db_key_from_names(self._column_name, key)
         existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
         if existingDataRecVal:
             # check if data record already with same key & hash value
@@ -683,7 +657,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
             if key not in self._samples:
                 raise KeyError(key)
 
-            dataKey = data_record_db_key_from_raw_key(self._column_name, key)
+            dataKey = flat_data_db_key_from_names(self._column_name, key)
             isRecordDeleted = self._txnctx.dataTxn.delete(dataKey)
             if isRecordDeleted is False:
                 raise RuntimeError(
@@ -748,7 +722,7 @@ class FlatSample(metaclass=FlatSampleBuilder):
         self._schema.change_backend(backend, backend_options=backend_options)
 
         schema_digest = self._schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column_name(self._column_name)
+        columnSchemaKey = schema_db_key_from_column(self._column_name, layout=self.column_layout)
         columnSchemaVal = schema_db_val_from_spec(self._schema.schema)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 

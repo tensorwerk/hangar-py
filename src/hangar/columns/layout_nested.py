@@ -11,10 +11,11 @@ from weakref import proxy
 
 import numpy as np
 
-from .column_parsers import (
-    schema_db_key_from_column_name,
+from ..records.column_parsers import (
+    schema_db_key_from_column,
     schema_hash_db_key_from_digest,
-    schema_db_val_from_spec
+    schema_db_val_from_spec,
+    nested_data_db_key_from_names,
 )
 from .constructors import NestedSampleBuilder, _open_file_handles
 from ..backends import (
@@ -24,11 +25,9 @@ from ..backends import (
 )
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..records.parsing import (
-    data_record_db_key_from_raw_key,
     data_record_db_val_from_raw_val,
     data_record_raw_val_from_db_val,
     hash_data_db_key_from_raw_key,
-    RawArraysetSchemaVal,
     generate_sample_name,
 )
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
@@ -397,7 +396,7 @@ class FlatSubsample(object):
     # ---------------- writer methods only after this point -------------------
 
     @writer_checkout_only
-    def _schema_spec_get(self) -> RawArraysetSchemaVal:
+    def _schema_spec_get(self):
         """Nonstandard descriptor method. See notes in ``_schema_spec.getter``.
         """
         return self._be_fs['schema_spec']
@@ -442,7 +441,7 @@ class FlatSubsample(object):
         hashKey = hash_data_db_key_from_raw_key(full_hash)
 
         # check if data record already exists with given key
-        dataRecKey = data_record_db_key_from_raw_key(self._column_name, self._samplen, subsample=key)
+        dataRecKey = nested_data_db_key_from_names(self._column_name, self._samplen, key)
         existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
         if existingDataRecVal:
             # check if data record already with same key & hash value
@@ -586,7 +585,7 @@ class FlatSubsample(object):
             if key not in self._subsamples:
                 raise KeyError(key)
 
-            dbKey = data_record_db_key_from_raw_key(self._column_name, self._samplen, subsample=key)
+            dbKey = nested_data_db_key_from_names(self._column_name, self._samplen, key)
             isRecordDeleted = self._txnctx.dataTxn.delete(dbKey)
             if isRecordDeleted is False:
                 raise RuntimeError(
@@ -622,17 +621,13 @@ class FlatSubsample(object):
 
 class NestedSample(metaclass=NestedSampleBuilder):
 
-    __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path', '_stack',
-                 # '_schema_spec', '_schema_variable', '_schema_dtype_num',
-                 # '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
-                 # '_dflt_backend_opts', '_datavalidator'
-                 '_txnctx', '_contains_subsamples', '_schema')
+    __slots__ = ('_mode', '_column_name', '_samples', '_be_fs', '_path',
+                 '_stack', '_txnctx', '_contains_subsamples', '_schema')
 
     def __init__(self,
-                 aset_name: str,
+                 columnname: str,
                  samples: Dict[KeyType, FlatSubsample],
                  backend_handles: Dict[str, Any],
-                 # schema_spec: RawArraysetSchemaVal,
                  repo_path: Path,
                  mode: str,
                  aset_ctx: Optional[AsetTxnType] = None,
@@ -640,28 +635,20 @@ class NestedSample(metaclass=NestedSampleBuilder):
                  *args, **kwargs):
 
         self._mode = mode
-        self._asetn = aset_name
+        self._column_name = columnname
         self._samples = samples
         self._be_fs = backend_handles
         self._path = repo_path
         self._stack: Optional[ExitStack] = None
         self._txnctx = aset_ctx
-
-        # self._schema_spec = schema_spec
-        # self._schema_variable = schema_spec.schema_is_var
-        # self._schema_dtype_num = schema_spec.schema_dtype
-        # self._schema_max_shape = tuple(schema_spec.schema_max_shape)
-        # self._dflt_schema_hash = schema_spec.schema_hash
-        # self._dflt_backend = schema_spec.schema_default_backend
-        # self._dflt_backend_opts = schema_spec.schema_default_backend_opts
-        self._contains_subsamples = True
-
         self._schema = schema
+
+        self._contains_subsamples = True
 
     def __repr__(self):
         res = f'{self.__class__}('\
               f'repo_pth={self._path}, '\
-              f'aset_name={self._asetn}, '\
+              f'columnname={self._column_name}, '\
               f'default_schema_hash={self._dflt_schema_hash}, '\
               f'isVar={self._schema_variable}, '\
               f'varMaxShape={self._schema_max_shape}, '\
@@ -671,17 +658,13 @@ class NestedSample(metaclass=NestedSampleBuilder):
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__qualname__} \
-                \n    Arrayset Name            : {self._asetn}\
+                \n    Column Name              : {self._column_name}\
                 \n    Access Mode              : {self._mode}\
                 \n    Number of Samples        : {self.__len__()}\
                 \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\
                 \n    Contains Subsamples      : True\
                 \n    Number of Subsamples     : {self.num_subsamples}\n'
         p.text(res)
-                # \n    Schema Hash              : {self._dflt_schema_hash}\
-                # \n    Variable Shape           : {bool(int(self._schema_variable))}\
-                # \n    (max) Shape              : {self._schema_max_shape}\
-                # \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
 
     def _ipython_key_completions_(self):
         """Let ipython know that any key based access can use the column keys
@@ -791,16 +774,6 @@ class NestedSample(metaclass=NestedSampleBuilder):
 
     def __contains__(self, key: KeyType) -> bool:
         """Determine if some sample key exists in the column.
-
-        Parameters
-        ----------
-        key : KeyType
-            Key to check for existence as sample in column.
-
-        Returns
-        -------
-        bool
-            True if sample key exists, otherwise False
         """
         return key in self._samples
 
@@ -840,7 +813,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
     def column(self) -> str:
         """Name of the column.
         """
-        return self._asetn
+        return self._column_name
 
     @property
     def column_type(self):
@@ -1068,7 +1041,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         else:
             self._samples[key] = FlatSubsample(
                 aset_ctx=proxy(self._txnctx),
-                columnname=self._asetn,
+                columnname=self._column_name,
                 samplen=key,
                 be_handles=proxy(self._be_fs),
                 schema=proxy(self._schema),
@@ -1179,11 +1152,6 @@ class NestedSample(metaclass=NestedSampleBuilder):
             Upon success, a nested dictionary mapping sample names to a dict of
             subsample names and subsample values for every sample key passed
             into this method.
-
-        Raises
-        ------
-        KeyError
-            If there is no sample with some key in the column.
         """
         res = self._samples[key].data
         del self[key]
@@ -1221,7 +1189,7 @@ class NestedSample(metaclass=NestedSampleBuilder):
         self._schema.change_backend(backend, backend_options=backend_options)
 
         schema_digest = self._schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column_name(self._asetn)
+        columnSchemaKey = schema_db_key_from_column(self._column_name, layout=self.column_layout)
         columnSchemaVal = schema_db_val_from_spec(self._schema.schema)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 

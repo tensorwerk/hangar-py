@@ -16,8 +16,6 @@ from ..constants import (
     K_HEAD,
     K_INT,
     K_REMOTES,
-    K_SCHEMA,
-    K_STGARR,
     K_STGMETA,
     K_VERSION,
     K_WLOCK,
@@ -231,68 +229,16 @@ The following records can be parsed:
     * metadata count records
 """
 
-# ------------------- named tuple classes used ----------------------
-
-
-class RawDataRecordKey(NamedTuple):
-    """Represents a Data Sample Record Key"""
-    aset_name: str = None
-    data_name: Union[str, int] = None
-    subsample: Union[str, int] = None
-
 
 class RawDataRecordVal(NamedTuple):
     """Represents a Data Sample Record Hash Value"""
     data_hash: str
 
 
-class RawArraysetSchemaVal(NamedTuple):
-    """Information Specifying a Arrayset Schema"""
-    schema_hash: str
-    schema_dtype: int
-    schema_is_var: bool
-    schema_max_shape: tuple
-    schema_default_backend: str
-    schema_default_backend_opts: dict
-    schema_contains_subsamples: bool
-
-
 """
 Parsing functions to convert lmdb data record keys/vals to/from python vars
 ----------------------------------------------------------------------------
 """
-
-# -------------------- db -> raw (python) -----------------------------
-
-
-def data_record_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_STGARR)) -> RawDataRecordKey:
-    """Convert and split a lmdb record key & value into python objects
-
-    Parameters
-    ----------
-    db_key : bytes
-        full lmdb record key
-
-    Returns
-    -------
-    RawDataRecordKey
-        Tuple containing the record column_name, data_name
-    """
-    key = db_key.decode()
-    key_items = key[_SPLT:].split(SEP_KEY)
-
-    if len(key_items) == 2:
-        aset, sample = key_items
-        if sample[0] == K_INT:
-            sample = int(sample[1:])
-        return RawDataRecordKey(aset, sample)
-    else:
-        aset, sample, subsample = key_items
-        if sample[0] == K_INT:
-            sample = int(sample[1:])
-        if subsample[0] == K_INT:
-            subsample = int(subsample[1:])
-        return RawDataRecordKey(aset, sample, subsample)
 
 
 def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
@@ -311,40 +257,6 @@ def data_record_raw_val_from_db_val(db_val: bytes) -> RawDataRecordVal:
     return RawDataRecordVal(db_val.decode())
 
 
-# -------------------- raw (python) -> db -----------------------------
-
-
-def data_record_db_key_from_raw_key(aset_name: str, data_name: Union[str, int], *,
-                                    subsample: Union[str, int] = None) -> bytes:
-    """converts a python record spec into the appropriate lmdb key
-
-    Parameters
-    ----------
-    aset_name : string
-        name of the column for the record
-    data_name : Union[str, int]
-        name of the data sample for the record
-    subsample : Union[str, int], optional
-        name of the subsample for the record, default = None
-
-    Returns
-    -------
-    bytes
-        Byte encoded db record key
-    """
-    if isinstance(data_name, int):
-        data_part = f'{K_STGARR}{aset_name}{SEP_KEY}{K_INT}{data_name}'
-    else:
-        data_part = f'{K_STGARR}{aset_name}{SEP_KEY}{data_name}'
-
-    if isinstance(subsample, int):
-        return f'{data_part}{SEP_KEY}{K_INT}{subsample}'.encode()
-    elif isinstance(subsample, str):
-        return f'{data_part}{SEP_KEY}{subsample}'.encode()
-    else:
-        return data_part.encode()
-
-
 def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
     """convert a python record spec into the appropriate lmdb value
 
@@ -359,104 +271,6 @@ def data_record_db_val_from_raw_val(data_hash: str) -> bytes:
         Byte encoded db record val.
     """
     return f'{data_hash}'.encode()
-
-
-"""
-Functions to convert column schema records to/from python objects.
---------------------------------------------------------------------
-"""
-
-# ----------------- raw schema -> db schema -----------------------------
-
-
-def arrayset_record_schema_db_key_from_raw_key(aset_name):
-    """Get the db schema key for a named column
-
-    Parameters
-    ----------
-    aset_name : string
-        the name of the column whose schema is found.
-
-    Returns
-    -------
-    bytestring
-        the db_key which can be used to query the schema
-    """
-    return f'{K_SCHEMA}{aset_name}'.encode()
-
-
-def arrayset_record_schema_db_val_from_raw_val(schema_hash,
-                                               schema_is_var,
-                                               schema_max_shape,
-                                               schema_dtype,
-                                               schema_default_backend,
-                                               schema_default_backend_opts,
-                                               schema_contains_subsamples):
-    """Format the db_value which includes all details of the column schema.
-
-    Parameters
-    ----------
-    schema_hash : string
-        The hash of the schema calculated at initialization.
-    schema_is_var : bool
-        Are samples in the column variable shape or not?
-    schema_max_shape : tuple of ints (size along each dimension)
-        The maximum shape of the data pieces. For fixed shape columns, all
-        input tensors must have the same dimension size and rank as this
-        specification. For variable-shape columns, tensor rank must match, but
-        the size of each dimension may be less than or equal to the
-        corresponding dimension here.
-    schema_dtype : int
-        The datatype numeric code (`np.dtype.num`) of the column. All input
-        tensors must exactly match this datatype.
-    schema_default_backend : str
-        backend specification for the schema default backend.
-    schema_default_backend_opts : dict
-        filter options for the default schema backend writer.
-    schema_contains_subsamples: bool
-        **TODO**
-
-    Returns
-    -------
-    bytestring
-        Bytes encoded representation of the schema.
-    """
-    schema_val = {
-        'schema_hash': schema_hash,
-        'schema_dtype': schema_dtype,
-        'schema_is_var': schema_is_var,
-        'schema_max_shape': schema_max_shape,
-        'schema_default_backend': schema_default_backend,
-        'schema_default_backend_opts': schema_default_backend_opts,
-        'schema_contains_subsamples': schema_contains_subsamples,
-    }
-
-    db_schema_val = json.dumps(schema_val, separators=(',', ':')).encode()
-    return db_schema_val
-
-
-# -------------- db schema -> raw schema -------------------------------
-
-def arrayset_record_schema_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_SCHEMA)) -> str:
-    return db_key.decode()[_SPLT:]
-
-
-def arrayset_record_schema_raw_val_from_db_val(db_val: bytes) -> RawArraysetSchemaVal:
-    from ..columns.column_parsers import schema_spec_from_db_val
-    return schema_spec_from_db_val(db_val)
-    # schema_spec = json.loads(db_val)
-    # schema_spec['schema_max_shape'] = tuple(schema_spec['schema_max_shape'])
-    # return RawArraysetSchemaVal(**schema_spec)
-
-
-"""
-Functions to convert total aset count records to/from python objects
----------------------------------------------------------------------
-"""
-
-
-def arrayset_record_count_range_key(aset_name: str) -> bytes:
-    return f'{K_STGARR}{aset_name}{SEP_KEY}'.encode()
 
 
 """
@@ -604,7 +418,7 @@ Data Hash parsing functions used to convert db key/val to raw pyhon obj
 
 
 def hash_schema_db_key_from_raw_key(schema_hash: str) -> bytes:
-    return f'{K_SCHEMA}{schema_hash}'.encode()
+    return f's:{schema_hash}'.encode()
 
 
 def hash_data_db_key_from_raw_key(data_hash: str) -> bytes:
@@ -614,8 +428,8 @@ def hash_data_db_key_from_raw_key(data_hash: str) -> bytes:
 # ----------------------------- db -> raw (python) ----------------------------
 
 
-def hash_schema_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_SCHEMA)) -> str:
-    return db_key.decode()[_SPLT:]
+def hash_schema_raw_key_from_db_key(db_key: bytes) -> str:
+    return db_key.decode()[2:]
 
 
 def hash_data_raw_key_from_db_key(db_key: bytes, *, _SPLT=len(K_HASH)) -> str:

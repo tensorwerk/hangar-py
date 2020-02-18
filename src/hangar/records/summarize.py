@@ -174,11 +174,11 @@ def summary(env, *, branch='', commit='') -> StringIO:
         buf.write(f'| DataSets \n')
         buf.write(f'|----------------- \n')
 
-        buf.write(f'|  Number of Named Arraysets: {query.arrayset_count()} \n')
+        buf.write(f'|  Number of Named Arraysets: {query.column_count()} \n')
         for asetn, asetnSchema in query.schema_specs().items():
             buf.write(f'|\n')
             buf.write(f'|  * Arrayset Name: {asetn} \n')
-            buf.write(f'|    Num Arrays: {query.arrayset_data_count(asetn)} \n')
+            buf.write(f'|    Num Arrays: {query.column_data_count(asetn)} \n')
 
             buf.write(f'|    Details: \n')
             for k, v in asetnSchema._asdict().items():

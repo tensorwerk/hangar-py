@@ -372,11 +372,11 @@ class Remotes(object):
                             while notEmpty:
                                 notEmpty = curs.delete()
                     unpack_commit_ref(self._env.refenv, tmpDB, commit)
-                    # handle arrayset_names option
+                    # handle column_names option
                     if arrayset_names is None:
-                        arrayset_names = queries.RecordQuery(tmpDB).arrayset_names()
+                        arrayset_names = queries.RecordQuery(tmpDB).column_names()
                     for asetn in arrayset_names:
-                        cmtData_hashs = queries.RecordQuery(tmpDB).arrayset_data_hashes(asetn)
+                        cmtData_hashs = queries.RecordQuery(tmpDB).column_data_hashes(asetn)
                         allHashs.update(cmtData_hashs)
             finally:
                 tmpDB.close()

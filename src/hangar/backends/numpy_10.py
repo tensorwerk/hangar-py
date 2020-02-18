@@ -129,7 +129,7 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
 # ------------------------- Accessor Object -----------------------------------
 
 
-from ..typesystem.typesystem import Descriptor, OneOf, EmptyDict, checkedmeta
+from ..typesystem.descriptors import Descriptor, OneOf, EmptyDict, checkedmeta
 
 
 @OneOf(list(map(lambda x: np.dtype(x).name, [

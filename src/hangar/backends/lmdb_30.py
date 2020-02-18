@@ -48,7 +48,7 @@ def lmdb_30_encode(uid, row_idx, checksum):
     return res.encode()
 
 
-from ..typesystem.typesystem import Descriptor, OneOf, EmptyDict, checkedmeta
+from ..typesystem.descriptors import Descriptor, OneOf, EmptyDict, checkedmeta
 
 
 @OneOf(['<class\'str\'>', str])

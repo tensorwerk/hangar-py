@@ -1,7 +1,7 @@
-from ..columns.column_parsers import CompatibleData
+from ..records.column_parsers import CompatibleData
 from ..records.hashmachine import metadata_hash_digest
-from .type_column import ColumnBase
-from .typesystem import OneOf, Descriptor, String, OptionalString, OptionalDict
+from .base import ColumnBase
+from .descriptors import OneOf, Descriptor, String, OptionalString, OptionalDict
 from ..utils import is_ascii
 
 
@@ -84,6 +84,7 @@ class StringVariableShape(StringSchemaBase):
     _backend_options = OptionalDict()
 
     def __init__(self, *args, **kwargs):
+        print(kwargs)
         if 'column_type' in kwargs:
             super().__init__(*args, **kwargs)
         else:

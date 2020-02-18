@@ -4,15 +4,17 @@ from typing import Iterable, List, Tuple, Union
 import lmdb
 
 from .parsing import (
-    arrayset_record_schema_raw_key_from_db_key,
-    arrayset_record_schema_raw_val_from_db_val,
     hash_data_raw_key_from_db_key,
     hash_meta_raw_val_from_db_val,
     hash_schema_raw_key_from_db_key,
-    RawArraysetSchemaVal,
+)
+from .column_parsers import (
+    schema_spec_from_db_val,
+    schema_column_record_from_db_key,
+    schema_record_count_start_range_key,
 )
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder, DataHashSpecsType
-from ..constants import K_HASH, K_SCHEMA
+from ..constants import K_HASH
 from ..txnctx import TxnRegister
 from ..mixins import CursorRangeIterator
 from ..utils import ilen
@@ -78,7 +80,7 @@ class HashQuery(CursorRangeIterator):
         Union[bytes, Tuple[bytes, bytes]]
             Iterable of schema record keys, values, or items tuple
         """
-        startSchemaRangeKey = f'{K_SCHEMA}'.encode()
+        startSchemaRangeKey = schema_record_count_start_range_key()
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             yield from self.cursor_range_iterator(hashtxn, startSchemaRangeKey, keys, values)
@@ -122,10 +124,10 @@ class HashQuery(CursorRangeIterator):
             rawv = hash_meta_raw_val_from_db_val(dbv)
             yield (rawk, rawv)
 
-    def gen_all_schema_keys_raw_vals_parsed(self) -> Iterable[Tuple[str, RawArraysetSchemaVal]]:
+    def gen_all_schema_keys_raw_vals_parsed(self):
         for dbk, dbv in self._traverse_all_schema_records(keys=True, values=True):
-            rawk = arrayset_record_schema_raw_key_from_db_key(dbk)
-            rawv = arrayset_record_schema_raw_val_from_db_val(dbv)
+            rawk = schema_column_record_from_db_key(dbk)
+            rawv = schema_spec_from_db_val(dbv)
             yield (rawk, rawv)
 
 

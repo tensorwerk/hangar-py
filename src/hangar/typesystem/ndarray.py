@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..columns.column_parsers import CompatibleData
+from ..records.column_parsers import CompatibleData
 from ..records.hashmachine import array_hash_digest
-from .type_column import ColumnBase
-from .typesystem import OneOf, String, OptionalString, SizedIntegerTuple, OptionalDict
+from .base import ColumnBase
+from .descriptors import OneOf, String, OptionalString, SizedIntegerTuple, OptionalDict
 
 
 @OneOf(['variable_shape', 'fixed_shape'])

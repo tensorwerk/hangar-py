@@ -79,7 +79,7 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
 # ------------------------- Accessor Object -----------------------------------
 
 
-from ..typesystem.typesystem import EmptyDict, checkedmeta
+from ..typesystem.descriptors import EmptyDict, checkedmeta
 
 
 class REMOTE_50_Options(metaclass=checkedmeta):

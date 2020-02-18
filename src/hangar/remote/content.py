@@ -5,6 +5,9 @@ import numpy as np
 from ..backends import BACKEND_ACCESSOR_MAP, BACKEND_OPTIONS_MAP
 from ..context import Environments
 from ..records import parsing
+from ..records.column_parsers import (
+    schema_spec_from_db_val,
+)
 from ..txnctx import TxnRegister
 
 
@@ -122,7 +125,7 @@ class ContentWriter(object):
             schemaVal = hashTxn.get(schemaKey)
         finally:
             TxnRegister().abort_reader_txn(self.env.hashenv)
-        schema_val = parsing.arrayset_record_schema_raw_val_from_db_val(schemaVal)
+        schema_val = schema_spec_from_db_val(schemaVal)
 
         if backend is not None:
             if backend not in BACKEND_ACCESSOR_MAP:

@@ -7,17 +7,18 @@ import numpy as np
 
 from . import ModifierTypes, FlatSample, NestedSample
 from .common import AsetTxn
-from .column_parsers import (
-    schema_db_key_from_column_name,
+from ..records.column_parsers import (
+    schema_db_key_from_column,
     schema_db_val_from_spec,
     schema_hash_db_key_from_digest,
+    schema_column_record_from_db_key,
+    dynamic_layout_data_record_db_start_range_key,
 )
 from .constructors import ArraysetConstructors
 from ..op_state import writer_checkout_only
-from ..records.parsing import arrayset_record_count_range_key
 from ..txnctx import TxnRegister
-from ..typesystem.type_ndarray import NdarrayFixedShape, NdarrayVariableShape
-from ..typesystem.type_str import StringVariableShape
+from ..typesystem.ndarray import NdarrayFixedShape, NdarrayVariableShape
+from ..typesystem.pystring import StringVariableShape
 from ..utils import is_suitable_user_key, is_ascii
 
 KeyType = Union[str, int]
@@ -62,7 +63,6 @@ class Columns(metaclass=ArraysetConstructors):
         repo_pth : Path
             path to the repository on disk
         columns : Mapping[str, Union[ArraysetDataReader, ArraysetDataWriter]]
-            TODO: rename to columns
             dictionary of ArraysetData objects
         hashenv : Optional[lmdb.Environment]
             environment handle for hash records
@@ -121,7 +121,7 @@ class Columns(metaclass=ArraysetConstructors):
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__}\
-                \n    Writeable: {bool(0 if self._mode == "r" else 1)}\
+                \n    Writeable: {False if self._mode == "r" else True}\
                 \n    Column Names / Partial Remote References:\
                 \n      - ' + '\n      - '.join(
             f'{asetn} / {aset.contains_remote_references}'
@@ -307,11 +307,6 @@ class Columns(metaclass=ArraysetConstructors):
         ModifierTypes
             ColumnData accessor (set to read or write mode as appropriate) which
             governs interaction with the data
-
-        Raises
-        ------
-        KeyError
-            If no column with the given name exists in the checkout
         """
         return self[name]
 
@@ -344,6 +339,59 @@ class Columns(metaclass=ArraysetConstructors):
         return self.delete(key)
 
     @writer_checkout_only
+    def delete(self, column: str) -> str:
+        """remove the column and all data contained within it.
+
+        Parameters
+        ----------
+        column : str
+            name of the column to remove
+
+        Returns
+        -------
+        str
+            name of the removed column
+
+        Raises
+        ------
+        PermissionError
+            If any enclosed column is opened in a connection manager.
+        KeyError
+            If a column does not exist with the provided name
+        """
+        if self._any_is_conman():
+            raise PermissionError(
+                'Not allowed while any columns class is opened in a context manager')
+
+        with ExitStack() as stack:
+            datatxn = TxnRegister().begin_writer_txn(self._dataenv)
+            stack.callback(TxnRegister().commit_writer_txn, self._dataenv)
+
+            if column not in self._columns:
+                e = KeyError(f'Cannot remove: {column}. Key does not exist.')
+                raise e from None
+
+            column_layout = self._columns[column].column_layout
+            columnSchemaKey = schema_db_key_from_column(column, layout=column_layout)
+            column_record = schema_column_record_from_db_key(columnSchemaKey)
+            startRangeKey = dynamic_layout_data_record_db_start_range_key(column_record)
+
+            self._columns[column]._close()
+            self._columns.__delitem__(column)
+            with datatxn.cursor() as cursor:
+                cursor.first()
+                recordsExist = cursor.set_range(startRangeKey)
+                while recordsExist:
+                    k = cursor.key()
+                    if k.startswith(startRangeKey):
+                        recordsExist = cursor.delete()
+                    else:
+                        recordsExist = False
+            datatxn.delete(columnSchemaKey)
+
+        return column
+
+    @writer_checkout_only
     def create_str_column(self,
                           name,
                           contains_subsamples=False,
@@ -374,12 +422,12 @@ class Columns(metaclass=ArraysetConstructors):
 
         column_layout = 'nested' if contains_subsamples else 'flat'
         schema = StringVariableShape(column_layout=column_layout,
-                                     dtype=repr(str),
+                                     dtype=str,
                                      backend=backend,
                                      backend_options=backend_options)
 
         schema_digest = schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column_name(name)
+        columnSchemaKey = schema_db_key_from_column(name, layout=column_layout)
         columnSchemaVal = schema_db_val_from_spec(schema.schema)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
@@ -406,7 +454,7 @@ class Columns(metaclass=ArraysetConstructors):
         return self.get(name)
 
     @writer_checkout_only
-    def init_ndarray_column(self,
+    def create_ndarray_column(self,
                             name: str,
                             shape: Union[int, Tuple[int]] = None,
                             dtype: np.dtype = None,
@@ -549,7 +597,7 @@ class Columns(metaclass=ArraysetConstructors):
                                        backend=backend,
                                        backend_options=backend_options)
         schema_digest = schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column_name(name)
+        columnSchemaKey = schema_db_key_from_column(name, layout=column_layout)
         columnSchemaVal = schema_db_val_from_spec(schema.schema)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
@@ -575,54 +623,3 @@ class Columns(metaclass=ArraysetConstructors):
         self._columns[name] = setup_args
         return self.get(name)
 
-
-    @writer_checkout_only
-    def delete(self, column: str) -> str:
-        """remove the column and all data contained within it.
-
-        Parameters
-        ----------
-        column : str
-            name of the column to remove
-
-        Returns
-        -------
-        str
-            name of the removed column
-
-        Raises
-        ------
-        PermissionError
-            If any enclosed column is opened in a connection manager.
-        KeyError
-            If a column does not exist with the provided name
-        """
-        if self._any_is_conman():
-            raise PermissionError(
-                'Not allowed while any columns class is opened in a context manager')
-
-        with ExitStack() as stack:
-            datatxn = TxnRegister().begin_writer_txn(self._dataenv)
-            stack.callback(TxnRegister().commit_writer_txn, self._dataenv)
-
-            if column not in self._columns:
-                e = KeyError(f'Cannot remove: {column}. Key does not exist.')
-                raise e from None
-
-            self._columns[column]._close()
-            self._columns.__delitem__(column)
-            with datatxn.cursor() as cursor:
-                cursor.first()
-                asetRangeKey = arrayset_record_count_range_key(column)
-                recordsExist = cursor.set_range(asetRangeKey)
-                while recordsExist:
-                    k = cursor.key()
-                    if k.startswith(asetRangeKey):
-                        recordsExist = cursor.delete()
-                    else:
-                        recordsExist = False
-
-            asetSchemaKey = schema_db_key_from_column_name(column)
-            datatxn.delete(asetSchemaKey)
-
-        return column
