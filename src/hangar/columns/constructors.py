@@ -14,13 +14,15 @@ from .layout_nested import (
     FlatSubsampleReader, FlatSubsampleWriter,
     NestedSampleReader, NestedSampleWriter
 )
+from ..records.queries import RecordQuery
+from ..records.column_parsers import hash_data_db_key_from_raw_key
 from ..typesystem.ndarray import NdarrayFixedShape, NdarrayVariableShape
 from ..typesystem.pystring import StringVariableShape
 from ..backends import BACKEND_IS_LOCAL_MAP, backend_decoder, DataHashSpecsType
-from ..records.hash_parsers import hash_data_db_key_from_raw_key
-from ..records.queries import RecordQuery
+
 
 # --------------- methods common to all column layout types -------------------
+
 
 KeyType = Union[str, int]
 FlatSampleMapType = Dict[KeyType, DataHashSpecsType]

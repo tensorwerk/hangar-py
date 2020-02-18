@@ -5,9 +5,14 @@ import lmdb
 import numpy as np
 from tqdm import tqdm
 
+from ..records.column_parsers import (
+    hash_data_db_key_from_raw_key,
+    hash_schema_db_key_from_raw_key,
+    hash_meta_db_key_from_raw_key
+)
 from ..backends import BACKEND_ACCESSOR_MAP
 from ..txnctx import TxnRegister
-from ..records import commiting, hashmachine, hashs, parsing, queries, heads, hash_parsers
+from ..records import commiting, hashmachine, hashs, parsing, queries, heads
 from ..op_state import report_corruption_risk_on_parsing_error
 
 
@@ -139,7 +144,7 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                     schema_digests = set(rq.schema_hashes())
 
                     for datadigest in array_data_digests:
-                        dbk = hash_parsers.hash_data_db_key_from_raw_key(datadigest)
+                        dbk = hash_data_db_key_from_raw_key(datadigest)
                         exists = cur.set_key(dbk)
                         if exists is False:
                             raise RuntimeError(
@@ -148,7 +153,7 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                                 f'exist in data hash db.')
 
                     for schemadigest in schema_digests:
-                        dbk = hash_parsers.hash_schema_db_key_from_raw_key(schemadigest)
+                        dbk = hash_schema_db_key_from_raw_key(schemadigest)
                         exists = cur.set_key(dbk)
                         if exists is False:
                             raise RuntimeError(
@@ -157,7 +162,7 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                                 f'exist in data hash db.')
 
                     for metadigest in meta_digests:
-                        dbk = hash_parsers.hash_meta_db_key_from_raw_key(metadigest)
+                        dbk = hash_meta_db_key_from_raw_key(metadigest)
                         exists = labcur.set_key(dbk)
                         if exists is False:
                             raise RuntimeError(

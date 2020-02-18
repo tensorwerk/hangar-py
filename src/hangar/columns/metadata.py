@@ -4,19 +4,16 @@ from typing import Optional, Union, Iterator, Tuple, Dict, Mapping, List, Sequen
 
 import lmdb
 
-from ..records.hashmachine import metadata_hash_digest
-from ..records.parsing import generate_sample_name
 from ..records.column_parsers import (
-    metadata_record_db_key_from_raw_key,
-    data_record_db_val_from_digest,
-    data_record_digest_val_from_db_val,
-
-)
-from ..records.hash_parsers import (
     hash_meta_db_key_from_raw_key,
     hash_meta_db_val_from_raw_val,
     hash_meta_raw_val_from_db_val,
+    metadata_record_db_key_from_raw_key,
+    data_record_db_val_from_digest,
+    data_record_digest_val_from_db_val,
 )
+from ..records.hashmachine import metadata_hash_digest
+from ..records.parsing import generate_sample_name
 from ..records.queries import RecordQuery
 from ..txnctx import TxnRegister
 from ..utils import is_suitable_user_key, is_ascii

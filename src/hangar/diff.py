@@ -3,6 +3,18 @@ from typing import Iterable, List, NamedTuple, Set, Tuple, Union
 
 import lmdb
 
+from .records.recordstructs import (
+    ColumnSchemaKey,
+    FlatColumnDataKey,
+    NestedColumnDataKey,
+    MetadataRecordKey,
+)
+from .records.column_parsers import (
+    dynamic_layout_data_record_from_db_key,
+    metadata_record_raw_key_from_db_key,
+    schema_column_record_from_db_key,
+    schema_spec_from_db_val,
+)
 from .records.commiting import (
     check_commit_hash_in_history,
     get_commit_ancestors_graph,
@@ -11,18 +23,6 @@ from .records.commiting import (
     tmp_cmt_env,
 )
 from .records.heads import get_branch_head_commit, get_branch_names
-from .records.column_parsers import (
-    dynamic_layout_data_record_from_db_key,
-    metadata_record_raw_key_from_db_key,
-    schema_column_record_from_db_key,
-    schema_spec_from_db_val,
-)
-from .records.recordstructs import (
-    ColumnSchemaKey,
-    FlatColumnDataKey,
-    NestedColumnDataKey,
-    MetadataRecordKey,
-)
 from .records.queries import RecordQuery
 from .txnctx import TxnRegister
 
@@ -197,8 +197,10 @@ def _raw_from_db_change(changes: Set[Tuple[bytes, bytes]]) -> Changes:
 
     columndata = map(dynamic_layout_data_record_from_db_key, columnKeys)
     metadata = map(metadata_record_raw_key_from_db_key, metadataKeys)
-    schemas = {schema_column_record_from_db_key(k):
-                   schema_spec_from_db_val(v) for k, v in schemaKeyVals}
+    schemas = {
+        schema_column_record_from_db_key(k):
+            schema_spec_from_db_val(v) for k, v in schemaKeyVals
+    }
     return Changes(schema=schemas, samples=tuple(columndata), metadata=tuple(metadata))
 
 

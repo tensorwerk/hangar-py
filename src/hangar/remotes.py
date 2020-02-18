@@ -15,13 +15,13 @@ from .backends import backend_decoder
 from .constants import LMDB_SETTINGS
 from .context import Environments
 from .txnctx import TxnRegister
+from .records.column_parsers import hash_data_db_key_from_raw_key
 from .records.commiting import (
     check_commit_hash_in_history,
     move_process_data_to_store,
     unpack_commit_ref,
 )
 from .records import heads
-from .records import hash_parsers
 from .records import queries
 from .records import summarize
 from .remote.client import HangarClient
@@ -384,7 +384,7 @@ class Remotes(object):
         try:
             m_schema_hash_map = defaultdict(list)
             for hashVal in allHashs:
-                hashKey = hash_parsers.hash_data_db_key_from_raw_key(hashVal.digest)
+                hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
                 hashRef = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hashRef)
                 if be_loc.backend == '50':

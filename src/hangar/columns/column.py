@@ -7,6 +7,9 @@ import numpy as np
 
 from . import ModifierTypes
 from .common import AsetTxn
+from .constructors import (
+    generate_flat_column, generate_nested_column, column_type_object_from_schema
+)
 from ..records.column_parsers import (
     schema_db_key_from_column,
     schema_db_val_from_spec,
@@ -15,9 +18,6 @@ from ..records.column_parsers import (
     dynamic_layout_data_record_db_start_range_key,
 )
 from ..records.queries import RecordQuery
-from .constructors import (
-    generate_flat_column, generate_nested_column, column_type_object_from_schema
-)
 from ..op_state import writer_checkout_only
 from ..txnctx import TxnRegister
 from ..typesystem.ndarray import NdarrayFixedShape, NdarrayVariableShape

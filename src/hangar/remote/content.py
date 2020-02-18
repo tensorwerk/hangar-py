@@ -2,11 +2,16 @@ from typing import NamedTuple, Union, Sequence, Tuple, List, Optional
 
 import numpy as np
 
-import hangar.records.hash_parsers
+
 from ..backends import BACKEND_ACCESSOR_MAP, BACKEND_OPTIONS_MAP
 from ..context import Environments
 from ..records import parsing
-from ..records.column_parsers import schema_spec_from_db_val
+from ..records.column_parsers import (
+    schema_spec_from_db_val,
+    hash_schema_db_key_from_raw_key,
+    hash_data_db_key_from_raw_key,
+    hash_meta_db_key_from_raw_key,
+)
 from ..txnctx import TxnRegister
 
 
@@ -81,7 +86,7 @@ class ContentWriter(object):
 
             False if the schema_hash existed in db and no records written.
         """
-        schemaKey = hangar.records.hash_parsers.hash_schema_db_key_from_raw_key(schema_hash)
+        schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
         try:
             schemaExists = hashTxn.put(schemaKey, schemaVal, overwrite=False)
@@ -118,7 +123,7 @@ class ContentWriter(object):
         List[str]
             list of str of all data digests written by this method.
         """
-        schemaKey = hangar.records.hash_parsers.hash_schema_db_key_from_raw_key(schema_hash)
+        schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
         try:
             schemaVal = hashTxn.get(schemaKey)
@@ -153,7 +158,7 @@ class ContentWriter(object):
         try:
             for hdigest, tensor in received_data:
                 hashVal = be_accessor.write_data(tensor, remote_operation=True)
-                hashKey = hangar.records.hash_parsers.hash_data_db_key_from_raw_key(hdigest)
+                hashKey = hash_data_db_key_from_raw_key(hdigest)
                 hashTxn.put(hashKey, hashVal)
                 saved_digests.append(hdigest)
         finally:
@@ -179,7 +184,7 @@ class ContentWriter(object):
             False if some content already exists with the same digest in the
             db and no operation was performed.
         """
-        labelHashKey = hangar.records.hash_parsers.hash_meta_db_key_from_raw_key(digest)
+        labelHashKey = hash_meta_db_key_from_raw_key(digest)
         labelTxn = TxnRegister().begin_writer_txn(self.env.labelenv)
         try:
             labelExists = labelTxn.put(labelHashKey, labelVal, overwrite=False)
@@ -262,7 +267,7 @@ class ContentReader(object):
 
             False if the schema_hash does not exist in the db.
         """
-        schemaKey = hangar.records.hash_parsers.hash_schema_db_key_from_raw_key(schema_hash)
+        schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
         try:
             schemaVal = hashTxn.get(schemaKey, default=False)
@@ -287,7 +292,7 @@ class ContentReader(object):
 
             False if the digest does not exist in the db.
         """
-        labelKey = hangar.records.hash_parsers.hash_meta_db_key_from_raw_key(digest)
+        labelKey = hash_meta_db_key_from_raw_key(digest)
         labelTxn = TxnRegister().begin_reader_txn(self.env.labelenv)
         try:
             labelVal = labelTxn.get(labelKey, default=False)

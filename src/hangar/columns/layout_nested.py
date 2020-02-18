@@ -12,18 +12,18 @@ from weakref import proxy
 import numpy as np
 
 from .common import open_file_handles
-from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP, DataHashSpecsType
-from ..op_state import reader_checkout_only
 from ..records.column_parsers import (
     data_record_db_val_from_digest,
     data_record_digest_val_from_db_val,
     nested_data_db_key_from_names,
+    hash_data_db_key_from_raw_key,
     schema_db_key_from_column,
     schema_hash_db_key_from_digest,
     schema_db_val_from_spec,
 )
 from ..records.parsing import generate_sample_name
-from ..records.hash_parsers import hash_data_db_key_from_raw_key
+from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP, DataHashSpecsType
+from ..op_state import reader_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
 AsetTxnType = Type['AsetTxn']

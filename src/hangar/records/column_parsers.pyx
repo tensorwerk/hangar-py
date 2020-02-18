@@ -1,9 +1,15 @@
-from .recordstructs cimport CompatibleData, \
-    ColumnSchemaKey, \
+from .recordstructs cimport ColumnSchemaKey, \
     FlatColumnDataKey, \
     NestedColumnDataKey, \
     MetadataRecordKey, \
     DataRecordVal
+
+from .recordstructs import ColumnSchemaKey, \
+    FlatColumnDataKey, \
+    NestedColumnDataKey, \
+    MetadataRecordKey, \
+    DataRecordVal
+
 
 import ast
 
@@ -191,6 +197,8 @@ cpdef object dynamic_layout_data_record_from_db_key(bytes raw):
         res = flat_data_record_from_db_key(raw)
     elif raw[0:2] == b'n:':
         res = nested_data_record_from_db_key(raw)
+    elif raw[0:2] == b'l:':
+        res = metadata_record_raw_key_from_db_key(raw)
     elif raw[0:2] == b's:':
         res = schema_column_record_from_db_key(raw)
     else:
@@ -208,3 +216,46 @@ cpdef bytes dynamic_layout_data_record_db_start_range_key(ColumnSchemaKey column
     else:
         raise ValueError(column_record)
     return res
+
+
+#
+# Data Hash parsing functions used to convert db key/val to raw pyhon obj
+# -----------------------------------------------------------------------
+
+
+cpdef bytes hash_schema_db_key_from_raw_key(str schema_hash):
+    return f's:{schema_hash}'.encode()
+
+
+cpdef bytes hash_data_db_key_from_raw_key(str data_hash):
+    return f'h:{data_hash}'.encode()
+
+
+cpdef str hash_schema_raw_key_from_db_key(bytes db_key):
+    return db_key[2:].decode()
+
+
+
+cpdef str hash_data_raw_key_from_db_key(bytes db_key):
+    return db_key[2:].decode()
+
+
+#
+# Metadata/Label Hash parsing functions used to convert db key/val to raw pyhon obj
+# ---------------------------------------------------------------------------------
+#
+
+cpdef bytes hash_meta_db_key_from_raw_key(str meta_hash):
+    return f'h:{meta_hash}'.encode()
+
+
+cpdef bytes hash_meta_db_val_from_raw_val(str meta_val):
+    return meta_val.encode()
+
+
+cpdef str hash_meta_raw_key_from_db_key(bytes db_key):
+    return db_key.decode()[2:]
+
+
+cpdef str hash_meta_raw_val_from_db_val(bytes db_val):
+    return db_val.decode()
