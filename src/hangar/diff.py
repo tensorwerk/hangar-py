@@ -11,12 +11,9 @@ from .records.commiting import (
     tmp_cmt_env,
 )
 from .records.heads import get_branch_head_commit, get_branch_names
-from .records.parsing import (
-    metadata_record_raw_key_from_db_key,
-    MetadataRecordKey,
-)
 from .records.column_parsers import (
     dynamic_layout_data_record_from_db_key,
+    metadata_record_raw_key_from_db_key,
     schema_column_record_from_db_key,
     schema_spec_from_db_val,
 )
@@ -24,6 +21,7 @@ from .records.recordstructs import (
     ColumnSchemaKey,
     FlatColumnDataKey,
     NestedColumnDataKey,
+    MetadataRecordKey,
 )
 from .records.queries import RecordQuery
 from .txnctx import TxnRegister

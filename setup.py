@@ -115,6 +115,7 @@ CYTHON_SOURCES = [
     join('src', 'hangar', 'backends', 'specparse.pyx'),
     join('src', 'hangar', 'records', 'recordstructs.pyx'),
     join('src', 'hangar', 'records', 'column_parsers.pyx'),
+    join('src', 'hangar', 'records', 'hash_parsers.pyx'),
 ]
 CYTHON_HEADERS = [
     join('src', 'hangar', 'backends', 'specs.pxd'),

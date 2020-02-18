@@ -2,9 +2,13 @@ from .recordstructs cimport CompatibleData, \
     ColumnSchemaKey, \
     FlatColumnDataKey, \
     NestedColumnDataKey, \
+    MetadataRecordKey, \
     DataRecordVal
 
 import ast
+
+
+# ----------------------- Schema Record Parsers -------------------------------
 
 
 cpdef bytes schema_record_count_start_range_key():
@@ -88,7 +92,7 @@ cpdef DataRecordVal data_record_digest_val_from_db_val(bytes raw):
 cpdef bytes data_record_db_val_from_digest(str digest):
     """convert a data digest value spec into the appropriate lmdb record value
     """
-    return f'{digest}'.encode()
+    return digest.encode()
 
 
 # -------------------------- flat parser --------------------------------------
@@ -146,6 +150,37 @@ cpdef NestedColumnDataKey nested_data_record_from_db_key(bytes raw):
     serial = raw.decode()
     _, column, sample, subsample = serial.split(':')
     return NestedColumnDataKey(column, sample, subsample)
+
+
+# ------------------------- Metadata Tag Parsers ------------------------------
+
+
+cpdef bytes metadata_range_key():
+    """return the metadata db range counter key
+    """
+    return 'l:'.encode()
+
+
+cpdef MetadataRecordKey metadata_record_raw_key_from_db_key(bytes raw):
+    """Convert and split a lmdb record key & value into python objects
+    """
+    cdef str serial, key
+
+    serial = raw.decode()
+    _, key = serial.split(':')
+    return MetadataRecordKey(key)
+
+
+cpdef bytes metadata_record_db_key_from_raw_key(key):
+    """converts a python metadata name into the appropriate lmdb key
+    """
+    cdef str serial
+
+    if isinstance(key, int):
+        serial = f'l:#{key}'
+    else:
+        serial = f'l:{key}'
+    return serial.encode()
 
 
 # ----------------------- dynamic parser selection ----------------------------

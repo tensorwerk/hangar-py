@@ -2,16 +2,12 @@ from typing import Dict, Iterable, Iterator, List, Set, Tuple, Union
 
 import lmdb
 
-from .parsing import (
-    metadata_range_key,
-    metadata_record_raw_key_from_db_key,
-    metadata_record_raw_val_from_db_val,
-    MetadataRecordKey, MetadataRecordVal,
-)
 from .column_parsers import (
     data_record_digest_val_from_db_val,
     dynamic_layout_data_record_db_start_range_key,
     dynamic_layout_data_record_from_db_key,
+    metadata_range_key,
+    metadata_record_raw_key_from_db_key,
     schema_column_record_from_db_key,
     schema_db_range_key_from_column_unknown_layout,
     schema_record_count_start_range_key,
@@ -21,13 +17,14 @@ from .recordstructs import (
     FlatColumnDataKey,
     NestedColumnDataKey,
     DataRecordVal,
+    MetadataRecordKey,
 )
 from ..txnctx import TxnRegister
 from ..utils import ilen
 from ..mixins import CursorRangeIterator
 
 RawDataTuple = Tuple[Union[FlatColumnDataKey, NestedColumnDataKey], DataRecordVal]
-RawMetaTuple = Tuple[MetadataRecordKey, MetadataRecordVal]
+RawMetaTuple = Tuple[MetadataRecordKey, DataRecordVal]
 
 
 class RecordQuery(CursorRangeIterator):
@@ -306,7 +303,7 @@ class RecordQuery(CursorRangeIterator):
         """
         for meta_key, meta_hash in self._traverse_metadata_records(keys=True, values=True):
             meta_rec_key = metadata_record_raw_key_from_db_key(meta_key)
-            meta_rec_val = metadata_record_raw_val_from_db_val(meta_hash)
+            meta_rec_val = data_record_digest_val_from_db_val(meta_hash)
             yield (meta_rec_key, meta_rec_val)
 
     def metadata_hashes(self) -> List[str]:
@@ -321,8 +318,8 @@ class RecordQuery(CursorRangeIterator):
             list of all hashes in the commit
         """
         recs = self._traverse_metadata_records(keys=False, values=True)
-        meta_rec_vals = map(metadata_record_raw_val_from_db_val, recs)
-        meta_hashs = [x.meta_hash for x in meta_rec_vals]
+        meta_rec_vals = map(data_record_digest_val_from_db_val, recs)
+        meta_hashs = [x.digest for x in meta_rec_vals]
         return meta_hashs
 
     def metadata_count(self) -> int:

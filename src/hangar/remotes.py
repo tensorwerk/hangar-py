@@ -21,7 +21,7 @@ from .records.commiting import (
     unpack_commit_ref,
 )
 from .records import heads
-from .records import parsing
+from .records import hash_parsers
 from .records import queries
 from .records import summarize
 from .remote.client import HangarClient
@@ -384,7 +384,7 @@ class Remotes(object):
         try:
             m_schema_hash_map = defaultdict(list)
             for hashVal in allHashs:
-                hashKey = parsing.hash_data_db_key_from_raw_key(hashVal.digest)
+                hashKey = hash_parsers.hash_data_db_key_from_raw_key(hashVal.digest)
                 hashRef = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hashRef)
                 if be_loc.backend == '50':

@@ -3,10 +3,10 @@ from typing import Iterable, List, Tuple, Union
 
 import lmdb
 
-from .parsing import (
+from .hash_parsers import (
+    hash_schema_raw_key_from_db_key,
     hash_data_raw_key_from_db_key,
     hash_meta_raw_val_from_db_val,
-    hash_schema_raw_key_from_db_key,
 )
 from .column_parsers import (
     schema_spec_from_db_val,

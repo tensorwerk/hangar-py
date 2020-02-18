@@ -10,6 +10,7 @@ import lmdb
 import numpy as np
 from tqdm import tqdm
 
+import hangar.records.hash_parsers
 from . import chunks
 from . import hangar_service_pb2
 from . import hangar_service_pb2_grpc
@@ -21,7 +22,6 @@ from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
 from ..records.hashmachine import array_hash_digest, metadata_hash_digest
-from ..records import parsing
 from ..records import queries
 from ..records import summarize
 from ..utils import set_blosc_nthreads
@@ -387,7 +387,7 @@ class HangarClient(object):
             specs = []
             hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
             for digest in digests:
-                hashKey = parsing.hash_data_db_key_from_raw_key(digest)
+                hashKey = hangar.records.hash_parsers.hash_data_db_key_from_raw_key(digest)
                 hashVal = hashTxn.get(hashKey, default=False)
                 if not hashVal:
                     raise KeyError(f'No hash record with key: {hashKey}')
@@ -563,7 +563,7 @@ class HangarClient(object):
 
     def fetch_find_missing_labels(self, commit):
         c_hash_keys = hashs.HashQuery(self.env.labelenv).gen_all_hash_keys_db()
-        c_hashset = set(map(parsing.hash_meta_raw_key_from_db_key, c_hash_keys))
+        c_hashset = set(map(hangar.records.hash_parsers.hash_meta_raw_key_from_db_key, c_hash_keys))
         c_hashs_raw = [chunks.serialize_ident(digest, '') for digest in c_hashset]
         raw_pack = chunks.serialize_record_pack(c_hashs_raw)
 

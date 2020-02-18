@@ -17,7 +17,7 @@ from .layout_nested import (
 from ..typesystem.ndarray import NdarrayFixedShape, NdarrayVariableShape
 from ..typesystem.pystring import StringVariableShape
 from ..backends import BACKEND_IS_LOCAL_MAP, backend_decoder, DataHashSpecsType
-from ..records.parsing import hash_data_db_key_from_raw_key
+from ..records.hash_parsers import hash_data_db_key_from_raw_key
 from ..records.queries import RecordQuery
 
 # --------------- methods common to all column layout types -------------------

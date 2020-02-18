@@ -5,14 +5,17 @@ from typing import Optional, Union, Iterator, Tuple, Dict, Mapping, List, Sequen
 import lmdb
 
 from ..records.hashmachine import metadata_hash_digest
-from ..records.parsing import (
+from ..records.parsing import generate_sample_name
+from ..records.column_parsers import (
+    metadata_record_db_key_from_raw_key,
+    data_record_db_val_from_digest,
+    data_record_digest_val_from_db_val,
+
+)
+from ..records.hash_parsers import (
     hash_meta_db_key_from_raw_key,
     hash_meta_db_val_from_raw_val,
     hash_meta_raw_val_from_db_val,
-    metadata_record_db_key_from_raw_key,
-    metadata_record_db_val_from_raw_val,
-    metadata_record_raw_val_from_db_val,
-    generate_sample_name,
 )
 from ..records.queries import RecordQuery
 from ..txnctx import TxnRegister
@@ -84,8 +87,8 @@ class MetadataReader(object):
         self._mspecs: Dict[KeyTypes, bytes] = {}
         metaNamesSpec = RecordQuery(dataenv).metadata_records()
         for metaNames, metaSpec in metaNamesSpec:
-            labelKey = hash_meta_db_key_from_raw_key(metaSpec.meta_hash)
-            self._mspecs[metaNames.meta_name] = labelKey
+            labelKey = hash_meta_db_key_from_raw_key(metaSpec.digest)
+            self._mspecs[metaNames.key] = labelKey
 
     def __enter__(self):
         with ExitStack() as stack:
@@ -350,13 +353,13 @@ class MetadataWriter(MetadataReader):
             val_hash = metadata_hash_digest(value=val)
             hashKey = hash_meta_db_key_from_raw_key(val_hash)
             metaRecKey = metadata_record_db_key_from_raw_key(key)
-            metaRecVal = metadata_record_db_val_from_raw_val(val_hash)
+            metaRecVal = data_record_db_val_from_digest(val_hash)
             # check if meta record already exists with same key
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
-                existingMetaRec = metadata_record_raw_val_from_db_val(existingMetaRecVal)
+                existingMetaRec = data_record_digest_val_from_db_val(existingMetaRecVal)
                 # check if meta record already exists with same key/val
-                if val_hash == existingMetaRec.meta_hash:
+                if val_hash == existingMetaRec.digest:
                     return
 
             # write new data if label hash does not exist

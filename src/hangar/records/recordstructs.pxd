@@ -24,3 +24,8 @@ cdef class NestedColumnDataKey:
 
 cdef class DataRecordVal:
     cdef readonly str digest
+
+
+cdef class MetadataRecordKey:
+    cdef str _key
+    cdef bint _k_int

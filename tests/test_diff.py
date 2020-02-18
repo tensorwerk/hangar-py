@@ -3,7 +3,7 @@ import numpy as np
 
 
 def create_meta_nt(name):
-    from hangar.records.parsing import MetadataRecordKey
+    from hangar.records.recordstructs import MetadataRecordKey
     res = MetadataRecordKey(name)
     return res
 

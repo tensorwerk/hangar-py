@@ -22,7 +22,8 @@ from ..records.column_parsers import (
     schema_hash_db_key_from_digest,
     schema_db_val_from_spec,
 )
-from ..records.parsing import hash_data_db_key_from_raw_key, generate_sample_name
+from ..records.parsing import generate_sample_name
+from ..records.hash_parsers import hash_data_db_key_from_raw_key
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
 AsetTxnType = Type['AsetTxn']

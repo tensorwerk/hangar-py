@@ -120,3 +120,27 @@ cdef class DataRecordVal:
     def __iter__(self):
         for attr in ['digest']:
             yield getattr(self, attr)
+
+
+cdef class MetadataRecordKey:
+    """Record listing `key` of metadata
+    """
+
+    def __init__(self, str key):
+        self._key = key
+        self._k_int = True if key[0] == '#' else False
+
+    def __repr__(self):
+        return (f'{self.__class__.__name__}('
+                f'key={f"{self.key if self._k_int else repr(self.key)}"})')
+
+    def __iter__(self):
+        for attr in ['key']:
+            yield getattr(self, attr)
+
+    @property
+    def key(self):
+        if self._k_int:
+            return int(self._key[1:])
+        else:
+            return self._key
