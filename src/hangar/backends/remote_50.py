@@ -59,6 +59,8 @@ from typing import Optional
 
 from . import REMOTE_50_DataHashSpec
 from ..op_state import writer_checkout_only, reader_checkout_only
+from ..typesystem import EmptyDict, checkedmeta
+
 
 # -------------------------------- Parser Implementation ----------------------
 
@@ -77,9 +79,6 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
 
 
 # ------------------------- Accessor Object -----------------------------------
-
-
-from ..typesystem.descriptors import EmptyDict, checkedmeta
 
 
 class REMOTE_50_Options(metaclass=checkedmeta):

@@ -228,6 +228,7 @@ from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import writer_checkout_only, reader_checkout_only
 from ..utils import find_next_prime, random_string, set_blosc_nthreads
+from ..typesystem import Descriptor, OneOf, DictItems, checkedmeta
 
 set_blosc_nthreads()
 
@@ -273,8 +274,6 @@ def hdf5_01_encode(uid: str, cksum: str, dset: int, dset_idx: int,
 
 
 # ------------------------- Accessor Object -----------------------------------
-
-from ..typesystem.descriptors import Descriptor, OneOf, DictItems, checkedmeta
 
 
 @DictItems(

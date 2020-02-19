@@ -20,8 +20,7 @@ from ..records.column_parsers import (
 from ..records.queries import RecordQuery
 from ..op_state import writer_checkout_only
 from ..txnctx import TxnRegister
-from ..typesystem.ndarray import NdarrayFixedShape, NdarrayVariableShape
-from ..typesystem.pystring import StringVariableShape
+from ..typesystem import NdarrayFixedShape, NdarrayVariableShape, StringVariableShape
 from ..utils import is_suitable_user_key, is_ascii
 
 KeyType = Union[str, int]

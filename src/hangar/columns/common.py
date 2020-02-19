@@ -139,4 +139,8 @@ def open_file_handles(backends, path, mode, schema) -> AccessorMapType:
 
             fhandles[be] = accessor(**kwargs)
             fhandles[be].open(mode=mode)
+
+    if mode == 'a':
+        if schema.backend in fhandles:
+            fhandles[schema.backend].backend_opts = schema.backend_options
     return fhandles

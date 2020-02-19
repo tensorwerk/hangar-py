@@ -78,7 +78,7 @@ def repo(managed_tmpdir) -> Repository:
 @pytest.fixture()
 def aset_samples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
+    co.columns.create_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -87,7 +87,7 @@ def aset_samples_initialized_repo(repo) -> Repository:
 @pytest.fixture()
 def aset_subsamples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float64)
+    co.columns.create_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -96,7 +96,7 @@ def aset_subsamples_initialized_repo(repo) -> Repository:
 @pytest.fixture(params=fixed_shape_backend_params)
 def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
     co = aset_samples_initialized_repo.checkout(write=True)
-    second_aset = co.columns.init_arrayset('second_aset', prototype=array5by7, backend_opts=request.param)
+    second_aset = co.columns.create_ndarray_column('second_aset', prototype=array5by7, backend=request.param)
     first_aset = co.columns['writtenaset']
     for i in range(0, 20):
         array5by7[:] = i
@@ -111,7 +111,7 @@ def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) ->
 @pytest.fixture(params=fixed_shape_backend_params)
 def repo_300_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
     co = aset_samples_initialized_repo.checkout(write=True)
-    aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=request.param)
+    aset = co.columns.create_ndarray_column('aset', prototype=array5by7, backend=request.param)
     with aset:
         for i in range(300):
             array5by7[:] = i
@@ -126,7 +126,7 @@ def repo_20_filled_samples_meta(repo) -> Repository:
     # for diff testing
     dummyData = np.arange(50).astype(np.int64)
     co1 = repo.checkout(write=True, branch='master')
-    co1.columns.init_arrayset(name='dummy', prototype=dummyData)
+    co1.columns.create_ndarray_column(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
         co1.columns['dummy'][idx] = dummyData
@@ -140,8 +140,8 @@ def repo_20_filled_samples_meta(repo) -> Repository:
 @pytest.fixture(params=variable_shape_backend_params)
 def aset_samples_var_shape_initialized_repo(request, repo) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.init_arrayset(
-        name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend_opts=request.param)
+    co.columns.create_ndarray_column(
+        name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend=request.param)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -169,8 +169,8 @@ def randomsizedarray():
 @pytest.fixture(params=fixed_shape_backend_params)
 def two_commit_filled_samples_repo(request, repo, array5by7) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.init_arrayset(
-        name='writtenaset', shape=(5, 7), dtype=np.float32, backend_opts=request.param)
+    co.columns.create_ndarray_column(
+        name='writtenaset', shape=(5, 7), dtype=np.float32, backend=request.param)
     for cIdx in range(2):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -191,7 +191,7 @@ def repo_1_br_no_conf(repo) -> Repository:
 
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch='master')
-    co1.columns.init_arrayset(name='dummy', prototype=dummyData)
+    co1.columns.create_ndarray_column(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
         co1.columns['dummy'][str(idx)] = dummyData

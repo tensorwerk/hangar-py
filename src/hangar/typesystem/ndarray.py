@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..records.recordstructs import CompatibleData
-from ..records.hashmachine import array_hash_digest
 from .base import ColumnBase
 from .descriptors import OneOf, String, OptionalString, SizedIntegerTuple, OptionalDict
+from ..records.recordstructs import CompatibleData
+from ..records.hashmachine import array_hash_digest
 
 
 @OneOf(['variable_shape', 'fixed_shape'])
@@ -11,15 +11,26 @@ class NdarraySchemaType(String):
     pass
 
 
+@OneOf(['ndarray'])
+class NdarrayColumnType(String):
+    pass
+
+
 class NdarraySchemaBase(ColumnBase):
     _schema_type = NdarraySchemaType()
+    _column_type = NdarrayColumnType()
 
     def __init__(self, shape, dtype, backend=None, backend_options=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._shape = shape
+
+        if backend_options is not None and backend is None:
+            raise ValueError(
+                '`backend_options` cannot be set if `backend` is not also provided.')
+
         if not isinstance(dtype, str):
             dtype = np.dtype(dtype).name
         self._dtype = dtype
+        self._shape = shape
         self._backend = backend
         self._backend_options = backend_options
         self._schema_attributes.extend(
@@ -69,7 +80,7 @@ class NdarraySchemaBase(ColumnBase):
         try:
             self._backend = backend
             self._backend_options = backend_options
-            # del and reset beopts object to reverify input correctness.
+            # del and reset beopts object to re-verify input correctness.
             del self._beopts
             self._backend_options = self._beopts.backend_options
         except (TypeError, ValueError) as e:
@@ -85,11 +96,17 @@ class NdarrayFixedShapeBackends(OptionalString):
     pass
 
 
+@OneOf(['fixed_shape'])
+class FixedShapeSchemaType(String):
+    pass
+
+
 class NdarrayFixedShape(NdarraySchemaBase):
     _shape = SizedIntegerTuple(size=31)
     _dtype = String()
     _backend = NdarrayFixedShapeBackends()
     _backend_options = OptionalDict()
+    _schema_type = FixedShapeSchemaType()
 
     def __init__(self, *args, **kwargs):
         if 'column_type' in kwargs:
@@ -132,11 +149,17 @@ class NdarrayVariableShapeBackends(OptionalString):
     pass
 
 
+@OneOf(['variable_shape'])
+class VariableShapeSchemaType(String):
+    pass
+
+
 class NdarrayVariableShape(NdarraySchemaBase):
     _shape = SizedIntegerTuple(size=31)
     _dtype = String()
     _backend = NdarrayVariableShapeBackends()
     _backend_options = OptionalDict()
+    _schema_type = VariableShapeSchemaType()
 
     def __init__(self, *args, **kwargs):
         if 'column_type' in kwargs:
@@ -169,7 +192,7 @@ class NdarrayVariableShape(NdarraySchemaBase):
         elif data.ndim != len(self._shape):
             compatible = False
             reason = f'data rank {data.ndim} != aset rank {len(self._shape)}'
-        elif not all([(dim > maxdim) for dim, maxdim in zip(data.shape, self._shape)]):
+        elif not all([(dim <= maxdim) for dim, maxdim in zip(data.shape, self._shape)]):
             compatible = False
             reason = f'shape {data.shape} exceeds schema max {self._shape}'
 

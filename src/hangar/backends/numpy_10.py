@@ -90,6 +90,8 @@ from . import NUMPY_10_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import random_string
+from ..typesystem import Descriptor, OneOf, EmptyDict, checkedmeta
+
 
 # ----------------------------- Configuration ---------------------------------
 
@@ -127,9 +129,6 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
 
 
 # ------------------------- Accessor Object -----------------------------------
-
-
-from ..typesystem.descriptors import Descriptor, OneOf, EmptyDict, checkedmeta
 
 
 @OneOf(list(map(lambda x: np.dtype(x).name, [

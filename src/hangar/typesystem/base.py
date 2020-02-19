@@ -1,6 +1,5 @@
 from .descriptors import OneOf, String, checkedmeta
 from ..records.hashmachine import schema_hash_digest
-from ..backends import BACKEND_OPTIONS_MAP
 
 
 @OneOf(['flat', 'nested'])
@@ -25,6 +24,8 @@ class ColumnBase(metaclass=checkedmeta):
 
     @property
     def _beopts(self):
+        from ..backends import BACKEND_OPTIONS_MAP  # TODO: FIX IMPORT
+
         if self.__beopts is None:
             self.__beopts = BACKEND_OPTIONS_MAP[self.backend](
                 backend_options=self.backend_options,

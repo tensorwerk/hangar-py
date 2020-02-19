@@ -1,7 +1,7 @@
-from ..records.recordstructs import CompatibleData
-from ..records.hashmachine import metadata_hash_digest
 from .base import ColumnBase
 from .descriptors import OneOf, Descriptor, String, OptionalString, OptionalDict
+from ..records.recordstructs import CompatibleData
+from ..records.hashmachine import metadata_hash_digest
 from ..utils import is_ascii
 
 
@@ -20,13 +20,25 @@ class StringSchemaType(String):
     pass
 
 
+@OneOf(['str'])
+class StrColumnType(String):
+    pass
+
+
 class StringSchemaBase(ColumnBase):
     _schema_type = StringSchemaType()
+    _column_type = StrColumnType()
 
     def __init__(self, dtype, backend=None, backend_options=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        if backend_options is not None and backend is None:
+            raise ValueError(
+                '`backend_options` cannot be set if `backend` is not also provided.')
+
         if not isinstance(dtype, str):
             dtype = repr(dtype).replace(' ', '')
+
         self._dtype = dtype
         self._backend = backend
         self._backend_options = backend_options
@@ -78,10 +90,16 @@ class StringVariableShapeBackends(OptionalString):
     pass
 
 
+@OneOf(['variable_shape'])
+class VariableShapeSchemaType(String):
+    pass
+
+
 class StringVariableShape(StringSchemaBase):
     _dtype = StringDType()
     _backend = StringVariableShapeBackends()
     _backend_options = OptionalDict()
+    _schema_type = VariableShapeSchemaType()
 
     def __init__(self, *args, **kwargs):
         if 'column_type' in kwargs:

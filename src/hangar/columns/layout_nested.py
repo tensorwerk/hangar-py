@@ -442,6 +442,23 @@ class FlatSubsampleWriter(FlatSubsampleReader):
             hash_spec = backend_decoder(hashVal)
         else:
             hash_spec = backend_decoder(existingHashVal)
+            if hash_spec.backend not in self._be_fs:
+                # when adding data which is already stored in the repository, the
+                # backing store for the existing data location spec may not be the
+                # same as the backend which the data piece would have been saved in here.
+                #
+                # As only the backends actually referenced by a columns samples are
+                # initialized (accessible by the column), there is no guarantee that
+                # an accessor exists for such a sample. In order to prevent internal
+                # errors from occurring due to an uninitialized backend if a previously
+                # existing data piece is "saved" here and subsequently read back from
+                # the same writer checkout, we perform an existence check and backend
+                # initialization, if appropriate.
+                fh = open_file_handles(backends=(hash_spec.backend,),
+                                       path=self._path,
+                                       mode='a',
+                                       schema=self._schema)
+                self._be_fs[hash_spec.backend] = fh[hash_spec.backend]
 
         # add the record to the db
         dataRecVal = data_record_db_val_from_digest(full_hash)
