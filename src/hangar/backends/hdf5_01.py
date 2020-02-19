@@ -306,8 +306,10 @@ class LzfCompressionOptions(Descriptor):
 
 @OneOf(list(map(lambda x: np.dtype(x).name, [
         np.bool, np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16,
-        np.int32, np.int64, np.float16, np.float32, np.float64, np.float128])))
+        np.int32, np.int64, np.float16, np.float32, np.float64, np.longdouble])))
 class HDF5_01_Allowed_Dtypes(Descriptor):
+    # Note. np.longdouble since np.float128 not guaranteed to be available on
+    # all system. this is a particular issue with some windows numpy builds.
     pass
 
 
