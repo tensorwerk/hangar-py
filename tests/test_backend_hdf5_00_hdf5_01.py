@@ -1,5 +1,4 @@
 import pytest
-import h5py
 import numpy as np
 
 
@@ -73,13 +72,13 @@ def test_gzip_filter_opts_result_in_correct_dataset_args(be_filehandle, clevel, 
 def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, clevel, cshuffle, cshuffleCode, be_code):
 
     opts = {
-        'backend': be_code,
         'shuffle': cshuffle,
         'complib': clib,
         'complevel': clevel,
     }
     wco = repo.checkout(write=True)
-    aset = wco.columns.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    aset = wco.columns.create_ndarray_column(
+        'aset', prototype=array5by7, backend=be_code, backend_options=opts)
     assert aset.backend == be_code
     with aset as a:
         for i in range(10):
@@ -96,18 +95,18 @@ def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, 
     wco.close()
 
 
-@pytest.mark.parametrize('cshuffle,cshuffleCode', [(None, False), ('byte', True)])
+@pytest.mark.parametrize('cshuffle,cshuffleCode', [(False, False), (True, True)])
 @pytest.mark.parametrize('be_code', ['00', '01'])
 def test_arrayset_init_with_various_lzf_opts(repo, array5by7, cshuffle, cshuffleCode, be_code):
 
     opts = {
-        'backend': be_code,
         'shuffle': cshuffle,
         'complib': 'lzf',
         'complevel': None,
     }
     wco = repo.checkout(write=True)
-    aset = wco.columns.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    aset = wco.columns.create_ndarray_column(
+        'aset', prototype=array5by7, backend=be_code, backend_options=opts)
     assert aset.backend == be_code
     with aset as a:
         for i in range(10):
@@ -122,18 +121,18 @@ def test_arrayset_init_with_various_lzf_opts(repo, array5by7, cshuffle, cshuffle
 
 
 @pytest.mark.parametrize('clevel', [1, 4, 8])
-@pytest.mark.parametrize('cshuffle,cshuffleCode', [(None, False), ('byte', True)])
+@pytest.mark.parametrize('cshuffle,cshuffleCode', [(False, False), (True, True)])
 @pytest.mark.parametrize('be_code', ['00', '01'])
 def test_arrayset_init_with_various_gzip_opts(repo, array5by7, clevel, cshuffle, cshuffleCode, be_code):
 
     opts = {
-        'backend': be_code,
         'shuffle': cshuffle,
         'complib': 'gzip',
         'complevel': clevel,
     }
     wco = repo.checkout(write=True)
-    aset = wco.columns.init_arrayset('aset', prototype=array5by7, backend_opts=opts)
+    aset = wco.columns.create_ndarray_column(
+        'aset', prototype=array5by7, backend=be_code, backend_options=opts)
     assert aset.backend == be_code
     with aset as a:
         for i in range(10):
@@ -164,7 +163,7 @@ def test_arrayset_overflows_collection_size_collection_count(be_code, repo, monk
 
     wco = repo.checkout(write=True)
     proto = np.arange(50).astype(np.uint16)
-    aset = wco.columns.init_arrayset('aset', prototype=proto, backend_opts=be_code)
+    aset = wco.columns.create_ndarray_column('aset', prototype=proto, backend=be_code)
     with aset as cm_aset:
         for i in range(500):
             proto[:] = i

@@ -59,9 +59,9 @@ def initialized_arrayset(
     write_enabled, backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map
 ):
     co = classrepo.checkout(write=True)
-    aset = co.columns.init_arrayset(f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}',
-                                    shape=(5, 7), dtype=np.uint16,
-                                    backend_opts=backend_param, contains_subsamples=contains_subsamples)
+    aset = co.columns.create_ndarray_column(f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}',
+                                            shape=(5, 7), dtype=np.uint16,
+                                            backend=backend_param, contains_subsamples=contains_subsamples)
     if contains_subsamples:
         aset.update(subsample_data_map)
     else:
@@ -81,9 +81,9 @@ def initialized_arrayset(
 @pytest.fixture(scope='class')
 def initialized_arrayset_read_only(backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map):
     co = classrepo.checkout(write=True)
-    aset = co.columns.init_arrayset(f'foo{backend_param}{int(contains_subsamples)}',
-                                    shape=(5, 7), dtype=np.uint16,
-                                    backend_opts=backend_param, contains_subsamples=contains_subsamples)
+    aset = co.columns.create_ndarray_column(f'foo{backend_param}{int(contains_subsamples)}',
+                                            shape=(5, 7), dtype=np.uint16,
+                                            backend=backend_param, contains_subsamples=contains_subsamples)
     if contains_subsamples:
         aset.update(subsample_data_map)
     else:

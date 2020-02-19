@@ -370,16 +370,18 @@ class FlatSubsampleReader(object):
 
 class FlatSubsampleWriter(FlatSubsampleReader):
 
-    __slots__ = ('_schema', '_txnctx')
+    __slots__ = ('_schema', '_txnctx', '_path')
     _attrs = __slots__ + FlatSubsampleReader.__slots__
 
     def __init__(self,
                  schema,
+                 repo_path: Path,
                  aset_ctx: Optional[AsetTxnType] = None,
                  *args, **kwargs):
 
         super().__init__(*args, **kwargs)
 
+        self._path = repo_path
         self._schema = schema
         self._txnctx = aset_ctx
 
@@ -1027,6 +1029,7 @@ class NestedSampleWriter(NestedSampleReader):
             self._samples[key] = FlatSubsampleWriter(
                 schema=proxy(self._schema),
                 aset_ctx=proxy(self._txnctx),
+                repo_path=self._path,
                 columnname=self._column_name,
                 samplen=key,
                 be_handles=proxy(self._be_fs),

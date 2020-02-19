@@ -229,6 +229,7 @@ def generate_nested_column(txnctx, column_name, path, schema, mode):
             samples[samp] = FlatSubsampleWriter(
                 schema=schema_proxy,
                 aset_ctx=proxy(txnctx),
+                repo_path=path,
                 columnname=column_name,
                 samplen=samp,
                 be_handles=fhand_proxy,
