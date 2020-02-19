@@ -27,7 +27,7 @@ class TestCheckout(object):
     def test_two_read_checkouts(self, repo, array5by7):
         w_checkout = repo.checkout(write=True)
         arrayset_name = 'aset'
-        r_ds = w_checkout.columns.init_arrayset(name=arrayset_name, prototype=array5by7)
+        r_ds = w_checkout.columns.create_ndarray_column(name=arrayset_name, prototype=array5by7)
         r_ds['1'] = array5by7
         w_checkout.metadata.update({'init': 'array5by7 added'})
         w_checkout.commit('init')
@@ -45,7 +45,7 @@ class TestCheckout(object):
     def test_write_with_read_checkout(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout()
         with pytest.raises(PermissionError):
-            co.columns.init_arrayset(name='aset', shape=(5, 7), dtype=np.float64)
+            co.columns.create_ndarray_column(name='aset', shape=(5, 7), dtype=np.float64)
         with pytest.raises(AttributeError):
             co.metadata.update({'a': 'b'})
         co.close()
@@ -258,7 +258,7 @@ class TestCheckout(object):
 
     def test_operate_on_arrayset_after_closing_old_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.columns.init_arrayset('aset', prototype=array5by7)
+        aset = co.columns.create_ndarray_column('aset', prototype=array5by7)
         co.commit('this is a commit message')
         co.close()
         co = repo.checkout(write=True)
@@ -271,7 +271,7 @@ class TestCheckout(object):
 
     def test_operate_on_closed_checkout(self, repo, array5by7):
         co = repo.checkout(write=True)
-        co.columns.init_arrayset('aset', prototype=array5by7)
+        co.columns.create_ndarray_column('aset', prototype=array5by7)
         co.commit('this is a commit message')
         co.close()
         with pytest.raises(PermissionError):
@@ -282,7 +282,7 @@ class TestCheckout(object):
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_operate_on_arrayset_samples_after_commiting_but_not_closing_checkout(self, aset_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=aset_backend)
+        aset = co.columns.create_ndarray_column('aset', prototype=array5by7, backend=aset_backend)
         aset['1'] = array5by7
         co.commit('hi')
 
@@ -316,11 +316,11 @@ class TestCheckout(object):
     def test_operate_on_arraysets_after_commiting_but_not_closing_checkout(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
         asets = co.columns
-        aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
+        aset = co.columns.create_ndarray_column('aset', prototype=array5by7, backend=aset1_backend)
         aset['1'] = array5by7
         co.commit('hi')
 
-        aset2 = co.columns.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
+        aset2 = co.columns.create_ndarray_column('arange', prototype=np.arange(50), backend=aset2_backend)
         aset2['0'] = np.arange(50)
         co.commit('hello 2')
         assert np.allclose(aset2['0'], np.arange(50))
@@ -351,8 +351,8 @@ class TestCheckout(object):
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     def test_reset_staging_area_no_changes_made_does_not_work(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
-        aset2 = co.columns.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
+        aset = co.columns.create_ndarray_column('aset', prototype=array5by7, backend=aset1_backend)
+        aset2 = co.columns.create_ndarray_column('arange', prototype=np.arange(50), backend=aset2_backend)
         aset['1'] = array5by7
         aset2['0'] = np.arange(50)
         co.commit('hi')
@@ -375,11 +375,11 @@ class TestCheckout(object):
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     def test_reset_staging_area_clears_arraysets(self, aset1_backend, aset2_backend, repo, array5by7):
         co = repo.checkout(write=True)
-        aset = co.columns.init_arrayset('aset', prototype=array5by7, backend_opts=aset1_backend)
+        aset = co.columns.create_ndarray_column('aset', prototype=array5by7, backend=aset1_backend)
         aset['1'] = array5by7
         co.commit('hi')
 
-        aset2 = co.columns.init_arrayset('arange', prototype=np.arange(50), backend_opts=aset2_backend)
+        aset2 = co.columns.create_ndarray_column('arange', prototype=np.arange(50), backend=aset2_backend)
         aset2['0'] = np.arange(50)
         # verifications before reset
         assert np.allclose(aset2['0'], np.arange(50))
@@ -485,7 +485,7 @@ class TestBranchingMergingInCheckout(object):
 
         branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
         co = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
-        second_aset = co.columns.init_arrayset(name='second_aset', prototype=array5by7)
+        second_aset = co.columns.create_ndarray_column(name='second_aset', prototype=array5by7)
         second_aset['1'] = array5by7
         co.commit('this is a commit message')
         co.close()
@@ -529,7 +529,7 @@ class TestBranchingMergingInCheckout(object):
         co1.close()
 
         co2 = aset_samples_initialized_repo.checkout(write=True, branch=branch2.name)
-        co2.columns.init_arrayset('aset2', prototype=array5by7)
+        co2.columns.create_ndarray_column('aset2', prototype=array5by7)
         co2.columns['aset2']['2'] = array5by7
         co2.commit('this is a merge message')
         co2.close()
@@ -549,7 +549,7 @@ class TestBranchingMergingInCheckout(object):
         branch2 = aset_samples_initialized_repo.create_branch('testbranch2')
         co1 = aset_samples_initialized_repo.checkout(write=True, branch=branch1.name)
         initial_cmt = co1.commit_hash
-        co1.columns.init_arrayset('aset2', prototype=array5by7)
+        co1.columns.create_ndarray_column('aset2', prototype=array5by7)
         co1.columns['aset2']['2'] = array5by7
         co1.close()
 
@@ -597,7 +597,7 @@ def test_writer_context_manager_objects_are_gc_removed_after_co_close(two_commit
     assert co.close() is None
     assert m.__dict__ == {}
     with pytest.raises(PermissionError):
-        d.arrayset
+        d.column
     with pytest.raises(PermissionError):
         co.columns
     assert co.__dict__ == {}

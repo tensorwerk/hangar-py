@@ -56,15 +56,7 @@ def _verify_schema_integrity(hashenv: lmdb.Environment):
     nschemas = hq.num_schemas()
     for digest, val in tqdm(schema_kvs, total=nschemas, desc='verifying schemas'):
         tcode = hashmachine.hash_type_code_from_digest(digest)
-        calc_digest = hashmachine.schema_hash_digest(
-            shape=val.schema_max_shape,
-            size=int(np.prod(val.schema_max_shape)),
-            dtype_num=val.schema_dtype,
-            variable_shape=val.schema_is_var,
-            contains_subsamples=val.schema_contains_subsamples,
-            backend_code=val.schema_default_backend,
-            backend_opts=val.schema_default_backend_opts,
-            tcode=tcode)
+        calc_digest = hashmachine.schema_hash_digest(schema=val, tcode=tcode)
         if calc_digest != digest:
             raise RuntimeError(
                 f'Data corruption detected for schema. Expected digest `{digest}` '

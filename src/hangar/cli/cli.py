@@ -120,7 +120,7 @@ def commit(repo: Repository, message):
         co.close()
 
 
-# -------------------------- Arrayset Interactor ------------------------------
+# -------------------------- Column Interactor ------------------------------
 
 
 @main.group(no_args_is_help=True, add_help_option=True)
@@ -131,7 +131,7 @@ def column(ctx):  # pragma: no cover
     pass
 
 
-@arrayset.command(name='create')
+@column.command(name='create')
 @click.option('--variable-shape', 'variable_', is_flag=True, default=False,
               help='flag indicating sample dimensions can be any size up to max shape.')
 @click.option('--contains-subsamples', 'subsamples_', is_flag=True, default=False,
@@ -140,19 +140,22 @@ def column(ctx):  # pragma: no cover
 @click.argument('name', nargs=1, type=click.STRING, required=True)
 @click.argument('dtype', nargs=1, type=click.Choice([
     'UINT8', 'INT8', 'UINT16', 'INT16', 'UINT32', 'INT32',
-    'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64']), required=True)
-@click.argument('shape', nargs=-1, type=click.INT, required=True)
+    'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64', 'STR']), required=True)
+@click.argument('shape', nargs=-1, type=click.INT, required=False)
 @pass_repo
-def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_):
+def create_column(repo: Repository, name, dtype, shape, variable_, subsamples_):
     """Create an column with NAME and DTYPE of SHAPE.
 
     The column will be created in the staging area / branch last used by a
     writer-checkout. Valid NAMEs contain only ascii letters and [``'.'``,
     ``'_'``, ``'-'``] (no whitespace). The DTYPE must be one of [``'UINT8'``,
     ``'INT8'``, ``'UINT16'``, ``'INT16'``, ``'UINT32'``, ``'INT32'``,
-    ``'UINT64'``, ``'INT64'``, ``'FLOAT16'``, ``'FLOAT32'``, ``'FLOAT64'``].
-    The SHAPE must be the last argument(s) specified, where each dimension size
-    is identified by a (space seperated) list of numbers.
+    ``'UINT64'``, ``'INT64'``, ``'FLOAT16'``, ``'FLOAT32'``, ``'FLOAT64'``,
+    ``'STR'``].
+
+    If a ndarray dtype is specified (not 'STR'), then the SHAPE must be the
+    last argument(s) specified, where each dimension size is identified by
+    a (space seperated) list of numbers.
 
     Examples:
 
@@ -186,12 +189,16 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_
     """
     try:
         co = repo.checkout(write=True)
-        aset = co.columns.init_arrayset(name=name,
-                                        shape=shape,
-                                        dtype=np.typeDict[dtype.lower()],
-                                        variable_shape=variable_,
-                                        contains_subsamples=subsamples_)
-        click.echo(f'Initialized Arrayset: {aset.column}')
+        if dtype == 'STR':
+            col = co.columns.create_str_column(name=name,
+                                               contains_subsamples=subsamples_)
+        else:
+            col = co.columns.create_ndarray_column(name=name,
+                                                   shape=shape,
+                                                   dtype=np.typeDict[dtype.lower()],
+                                                   variable_shape=variable_,
+                                                   contains_subsamples=subsamples_)
+        click.echo(f'Initialized Column: {col.column}')
     except (ValueError, LookupError, PermissionError) as e:
         raise click.ClickException(e)
     finally:
@@ -201,10 +208,10 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_
             pass
 
 
-@arrayset.command(name='remove')
+@column.command(name='remove')
 @click.argument('name', nargs=1, type=click.STRING, required=True)
 @pass_repo
-def remove_arrayset(repo: Repository, name):
+def remove_column(repo: Repository, name):
     """Delete the column NAME (and all samples) from staging area.
 
     The column will be removed from the staging area / branch last used by a
@@ -262,14 +269,14 @@ def fetch_records(repo: Repository, remote, branch):
 @main.command(name='fetch-data')
 @click.argument('remote', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, required=True)
-@click.option('--aset', '-d', multiple=True, required=False, default=None,
-              help='specify any number of aset keys to fetch data for.')
+@click.option('--column', '-d', multiple=True, required=False, default=None,
+              help='specify any number of column keys to fetch data for.')
 @click.option('--nbytes', '-n', default=None, required=False,
               help='total amount of data to retrieve in MB/GB.')
 @click.option('--all-history', '-a', 'all_', is_flag=True, default=False, required=False,
               help='Retrieve data referenced in every parent commit accessible to the STARTPOINT')
 @pass_repo
-def fetch_data(repo: Repository, remote, startpoint, aset, nbytes, all_):
+def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
     """Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
@@ -293,12 +300,12 @@ def fetch_data(repo: Repository, remote, startpoint, aset, nbytes, all_):
         max_nbytes = parse_bytes(nbytes)
     except AttributeError:
         max_nbytes = None
-    if len(aset) == 0:
-        aset = None
+    if len(column) == 0:
+        column = None
 
     commits = repo.remote.fetch_data(remote=remote,
                                      commit=commit,
-                                     arrayset_names=aset,
+                                     arrayset_names=column,
                                      max_num_bytes=max_nbytes,
                                      retrieve_all_history=all_)
     click.echo(f'completed data for commits: {commits}')
@@ -559,7 +566,7 @@ def server(overwrite, ip, port, timeout):
 @pass_repo
 @click.pass_context
 def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
-    """Import file or directory of files at PATH to ARRAYSET in the staging area.
+    """Import file or directory of files at PATH to COLUMN in the staging area.
 
     If passing in a directory, all files in the directory will be imported, if
     passing in a file, just that files specified will be
@@ -579,7 +586,7 @@ def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
 
     co = repo.checkout(write=True, branch=branch)
     try:
-        active_aset = co.columns.get(arrayset)
+        active_aset = co.columns.get(column)
         p = Path(path)
         files = [f.resolve() for f in p.iterdir()] if p.is_dir() else [p.resolve()]
         with active_aset as aset, click.progressbar(files) as filesBar:
@@ -630,7 +637,7 @@ def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
 @pass_repo
 @click.pass_context
 def export_data(ctx, repo: Repository, column, outdir, startpoint, sample, format_, plugin):
-    """Export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
+    """Export COLUMN sample data as it existed a STARTPOINT to some format and path.
 
     Specifying which sample to be exported is possible by using the switch
     ``--sample`` (without this, all the samples in the given column will be
@@ -662,7 +669,7 @@ def export_data(ctx, repo: Repository, column, outdir, startpoint, sample, forma
 
     co = repo.checkout(commit=base_commit)
     try:
-        aset = co.columns.get(arrayset)
+        aset = co.columns.get(column)
         sampleNames = [sample] if sample is not None else list(aset.keys())
         extension = format_.lstrip('.') if format_ else None
         with aset, click.progressbar(sampleNames) as sNamesBar:
@@ -689,7 +696,7 @@ def export_data(ctx, repo: Repository, column, outdir, startpoint, sample, forma
 @pass_repo
 @click.pass_context
 def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin):
-    """Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
+    """Use a plugin to view the data of some SAMPLE in COLUMN at STARTPOINT.
     """
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
@@ -706,7 +713,7 @@ def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin
 
     co = repo.checkout(commit=base_commit)
     try:
-        aset = co.columns.get(arrayset)
+        aset = co.columns.get(column)
         extension = format_.lstrip('.') if format_ else None
         data = aset[sample]
         try:

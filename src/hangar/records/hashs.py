@@ -124,7 +124,7 @@ class HashQuery(CursorRangeIterator):
 
     def gen_all_schema_keys_raw_vals_parsed(self):
         for dbk, dbv in self._traverse_all_schema_records(keys=True, values=True):
-            rawk = schema_column_record_from_db_key(dbk)
+            rawk = hash_schema_raw_key_from_db_key(dbk)
             rawv = schema_spec_from_db_val(dbv)
             yield (rawk, rawv)
 

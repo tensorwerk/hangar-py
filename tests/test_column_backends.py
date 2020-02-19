@@ -88,25 +88,6 @@ def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by
     rco.close()
 
 
-@pytest.mark.parametrize('subsamples', [True, False])
-@pytest.mark.parametrize('backend', fixed_shape_backend_params)
-def test_create_ndarray_column_with_backend_opts_works(repo, array5by7, backend, subsamples):
-    expected_opts = {'foo': 'bar'}
-    input_opts = {'backend': backend, **expected_opts}
-
-    wco = repo.checkout(write=True)
-    aset = wco.columns.create_ndarray_column(
-        'aset', prototype=array5by7, contains_subsamples=subsamples, backend=backend, backend_options=expected_opts)
-    assert aset.backend_options == expected_opts
-    wco.commit('first')
-    wco.close()
-
-    rco = repo.checkout()
-    naset = rco.columns['aset']
-    assert naset.backend_opts == expected_opts
-    rco.close()
-
-
 @pytest.mark.parametrize('shape,dtype,variable_shape,expected_backend', [
     [(10,), np.uint16, True, '10'],
     [(1000,), np.uint16, True, '00'],

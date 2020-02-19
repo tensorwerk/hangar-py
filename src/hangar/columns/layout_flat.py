@@ -710,18 +710,26 @@ class FlatSampleWriter(FlatSampleReader):
         if self._is_conman:
             raise RuntimeError('Cannot call method inside column context manager.')
 
+        previous_schema_digest = self._schema.schema_hash_digest()
+        previousColumnSchemaKey = schema_db_key_from_column(column=self._column_name,
+                                                            layout=self.column_layout,
+                                                            digest=previous_schema_digest)
+
         self._schema.change_backend(backend, backend_options=backend_options)
 
-        schema_digest = self._schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column(self._column_name, layout=self.column_layout)
-        columnSchemaVal = schema_db_val_from_spec(self._schema.schema)
-        hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
+        new_schema_digest = self._schema.schema_hash_digest()
+        newColumnSchemaKey = schema_db_key_from_column(column=self._column_name,
+                                                       layout=self.column_layout,
+                                                       digest=new_schema_digest)
+        newColumnSchemaVal = schema_db_val_from_spec(self._schema.schema)
+        newHashSchemaKey = schema_hash_db_key_from_digest(new_schema_digest)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
         with self._txnctx.write() as ctx:
-            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
-            ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
+            ctx.dataTxn.delete(previousColumnSchemaKey)
+            ctx.dataTxn.put(newColumnSchemaKey, newColumnSchemaVal)
+            ctx.hashTxn.put(newHashSchemaKey, newColumnSchemaVal, overwrite=False)
 
         if self._schema.backend not in self._be_fs:
             fhands = open_file_handles(

@@ -215,19 +215,16 @@ def status(branch_name: str, diff: DiffOut) -> StringIO:
         buf.write(f'|---------- \n')
         buf.write(f'| Schema: {len(df.schema)} \n')
         for k, v in df.schema.items():
-            buf.write(f'|  - "{k}": \n')
-            buf.write(f'|       dtype: {np.dtype(np.typeDict[v.schema_dtype])} \n')
-            buf.write(f'|       (max) shape: {v.schema_max_shape} \n')
-            buf.write(f'|       variable shape: {v.schema_is_var} \n')
-            buf.write(f'|       backend: {v.schema_default_backend} \n')
-            buf.write(f'|       backend opts: {v.schema_default_backend_opts} \n')
+            buf.write(f'|  - "{k.column}": \n')
+            for schema_key, schema_val in v.items():
+                buf.write(f'|       {schema_key}: {schema_val} \n')
 
         buf.write('|---------- \n')
         buf.write(f'| Samples: {len(df.samples)} \n')
-        unique = unique_everseen(df.samples, lambda x: x.aset_name)
+        unique = unique_everseen(df.samples, lambda x: x.column)
         for u in unique:
-            un = u.aset_name
-            count = sum((1 for k in df.samples if k.aset_name == un))
+            un = u.column
+            count = sum((1 for k in df.samples if k.column == un))
             buf.write(f'|  - "{un}": {count} \n')
 
         buf.write('|---------- \n')

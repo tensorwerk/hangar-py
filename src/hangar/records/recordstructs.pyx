@@ -16,25 +16,42 @@ cdef class CompatibleData:
         for attr in ['compatible', 'reason']:
             yield getattr(self, attr)
 
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__) and
+                self.compatible == other.compatible and
+                self.reason == other.reason)
+
+    def __hash__(self):
+        return hash((self.__class__, self.compatible, self.reason))
 
 
 cdef class ColumnSchemaKey:
     """Record listing `column` name and `layout` type.
     """
 
-    def __init__(self, str column, str layout):
+    def __init__(self, str column, str layout, str digest):
         self.column = column
         self.layout = layout
+        self.digest = digest
 
     def __repr__(self):
         return (f'{self.__class__.__name__}('
-                f'column={self.column}, '
-                f'reason="{self.layout}")')
+                f'column="{self.column}", '
+                f'layout="{self.layout}", '
+                f'digest="{self.digest}")')
 
     def __iter__(self):
-        for attr in ['column', 'layout']:
+        for attr in ['column', 'layout', 'digest']:
             yield getattr(self, attr)
 
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__) and
+                self.column == other.column and
+                self.layout == other.layout and
+                self.digest == other.digest)
+
+    def __hash__(self):
+        return hash((self.__class__, self.column, self.layout, self.digest))
 
 
 cdef class FlatColumnDataKey:
@@ -48,12 +65,20 @@ cdef class FlatColumnDataKey:
 
     def __repr__(self):
         return (f'{self.__class__.__name__}('
-                f'column={self.column}, '
+                f'column="{self.column}", '
                 f'sample={f"{self.sample if self._s_int else repr(self.sample)}"})')
 
     def __iter__(self):
         for attr in ['column', 'sample']:
             yield getattr(self, attr)
+
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__) and
+                self.column == other.column and
+                self.sample == other.sample)
+
+    def __hash__(self):
+        return hash((self.__class__, self.column, self.sample))
 
     @property
     def sample(self):
@@ -65,7 +90,6 @@ cdef class FlatColumnDataKey:
     @property
     def layout(self):
         return 'flat'
-
 
 
 cdef class NestedColumnDataKey:
@@ -81,13 +105,22 @@ cdef class NestedColumnDataKey:
 
     def __repr__(self):
         return (f'{self.__class__.__name__}('
-                f'column={self.column}, '
+                f'column="{self.column}", '
                 f'sample={f"{self.sample if self._s_int else repr(self.sample)}"}, '
                 f'subsample={f"{self.subsample if self._ss_int else repr(self.subsample)}"})')
 
     def __iter__(self):
         for attr in ['column', 'sample', 'subsample']:
             yield getattr(self, attr)
+
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__) and
+                self.column == other.column and
+                self.sample == other.sample and
+                self.subsample == other.subsample)
+
+    def __hash__(self):
+        return hash((self.__class__, self.column, self.sample, self.subsample))
 
     @property
     def sample(self):
@@ -121,6 +154,13 @@ cdef class DataRecordVal:
         for attr in ['digest']:
             yield getattr(self, attr)
 
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__)
+                and self.digest == other.digest)
+
+    def __hash__(self):
+        return hash((self.__class__, self.digest))
+
 
 cdef class MetadataRecordKey:
     """Record listing `key` of metadata
@@ -137,6 +177,13 @@ cdef class MetadataRecordKey:
     def __iter__(self):
         for attr in ['key']:
             yield getattr(self, attr)
+
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__)
+                and self.key == other.key)
+
+    def __hash__(self):
+        return hash((self.__class__, self.key))
 
     @property
     def key(self):

@@ -124,6 +124,7 @@ def test_delete_metadata_and_samples(repo_20_filled_samples_meta):
                '|---------- \n'\
                '| Metadata: 0 \n'\
                ' \n'
+
     co2 = repo_20_filled_samples_meta.checkout(write=True)
     for idx in range(5, 10):
         del co2.columns['dummy'][idx]
@@ -143,11 +144,13 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
                '|---------- \n'\
                '| Schema: 1 \n'\
                '|  - "new_aset": \n'\
+               '|       column_layout: flat \n'\
+               '|       column_type: ndarray \n'\
+               '|       schema_type: fixed_shape \n'\
+               '|       shape: (10, 10) \n'\
                '|       dtype: float32 \n'\
-               '|       (max) shape: (10, 10) \n'\
-               '|       variable shape: False \n'\
                '|       backend: 01 \n'\
-               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:lz4hc', 'complevel': 5} \n"\
+               "|       backend_options: {'complib': 'blosc:lz4hc', 'complevel': 5, 'shuffle': 'byte'} \n"\
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "new_aset": 5 \n'\
@@ -172,13 +175,15 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
                '|---------- \n'\
                '| Metadata: 0 \n'\
                ' \n'
+
     co2 = repo_20_filled_samples_meta.checkout(write=True)
-    co2.columns.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
+    co2.columns.create_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
         co2.columns['new_aset'][idx] = dummyData
     df = co2.diff.staged()
     co2.close()
+    print(status('master', df.diff).getvalue())
     assert status('master', df.diff).getvalue() == expected
 
 
@@ -192,32 +197,36 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
                '|---------- \n'\
                '| Schema: 1 \n'\
                '|  - "new_aset": \n'\
+               '|       column_layout: flat \n'\
+               '|       column_type: ndarray \n'\
+               '|       schema_type: fixed_shape \n'\
+               '|       shape: (10, 10) \n'\
                '|       dtype: float32 \n'\
-               '|       (max) shape: (10, 10) \n'\
-               '|       variable shape: False \n'\
                '|       backend: 01 \n'\
-               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:lz4hc', 'complevel': 5} \n"\
+               "|       backend_options: {'complib': 'blosc:lz4hc', 'complevel': 5, 'shuffle': 'byte'} \n"\
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "new_aset": 5 \n'\
                '|---------- \n'\
-               '| Metadata: 0 \n'\
+               '| Metadata: 0 \n' \
                ' \n'\
                '============ \n'\
                '| DELETED \n'\
                '|---------- \n'\
                '| Schema: 1 \n'\
                '|  - "dummy": \n'\
+               '|       column_layout: flat \n'\
+               '|       column_type: ndarray \n'\
+               '|       schema_type: fixed_shape \n'\
+               '|       shape: (50,) \n'\
                '|       dtype: int64 \n'\
-               '|       (max) shape: (50,) \n'\
-               '|       variable shape: False \n'\
                '|       backend: 10 \n'\
-               '|       backend opts: {} \n'\
+               '|       backend_options: {} \n'\
                '|---------- \n'\
                '| Samples: 10 \n'\
                '|  - "dummy": 10 \n'\
                '|---------- \n'\
-               '| Metadata: 0 \n'\
+               '| Metadata: 0 \n' \
                ' \n'\
                '============ \n'\
                '| MUTATED \n'\
@@ -228,11 +237,12 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
                '|---------- \n'\
                '| Metadata: 0 \n'\
                ' \n'
+
     co2 = repo_20_filled_samples_meta.checkout(write=True)
-    new = co2.columns.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
+    new = co2.columns.create_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
-        dummyData = np.random.randn(10, 10).astype(np.float32)
-        co2.columns['new_aset'][idx] = dummyData
+               dummyData = np.random.randn(10, 10).astype(np.float32)
+               co2.columns['new_aset'][idx] = dummyData
     del co2.columns['dummy']
     df = co2.diff.staged()
     co2.close()
@@ -247,13 +257,23 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
                '============ \n'\
                '| ADDED \n'\
                '|---------- \n'\
-               '| Schema: 1 \n'\
+               '| Schema: 2 \n'\
                '|  - "new_aset": \n'\
+               '|       column_layout: flat \n'\
+               '|       column_type: ndarray \n'\
+               '|       schema_type: fixed_shape \n'\
+               '|       shape: (10, 10) \n'\
                '|       dtype: float32 \n'\
-               '|       (max) shape: (10, 10) \n'\
-               '|       variable shape: False \n'\
                '|       backend: 01 \n'\
-               "|       backend opts: {'shuffle': 'byte', 'complib': 'blosc:lz4hc', 'complevel': 5} \n"\
+               "|       backend_options: {'complib': 'blosc:lz4hc', 'complevel': 5, 'shuffle': 'byte'} \n"\
+               '|  - "dummy": \n'\
+               '|       column_layout: flat \n'\
+               '|       column_type: ndarray \n'\
+               '|       schema_type: fixed_shape \n'\
+               '|       shape: (50,) \n'\
+               '|       dtype: int64 \n'\
+               '|       backend: 00 \n'\
+               "|       backend_options: {'complib': 'blosc:zstd', 'complevel': 3, 'shuffle': 'byte'} \n"\
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "new_aset": 5 \n'\
@@ -263,7 +283,15 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
                '============ \n'\
                '| DELETED \n'\
                '|---------- \n'\
-               '| Schema: 0 \n'\
+               '| Schema: 1 \n'\
+               '|  - "dummy": \n'\
+               '|       column_layout: flat \n'\
+               '|       column_type: ndarray \n'\
+               '|       schema_type: fixed_shape \n'\
+               '|       shape: (50,) \n'\
+               '|       dtype: int64 \n'\
+               '|       backend: 10 \n'\
+               "|       backend_options: {} \n"\
                '|---------- \n'\
                '| Samples: 0 \n'\
                '|---------- \n'\
@@ -272,22 +300,17 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
                '============ \n'\
                '| MUTATED \n'\
                '|---------- \n'\
-               '| Schema: 1 \n'\
-               '|  - "dummy": \n'\
-               '|       dtype: int64 \n'\
-               '|       (max) shape: (50,) \n'\
-               '|       variable shape: False \n'\
-               '|       backend: 00 \n'\
-               "|       backend opts: {'shuffle': None, 'complib': 'blosc:zstd', 'complevel': 3} \n"\
+               '| Schema: 0 \n'\
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "dummy": 5 \n'\
                '|---------- \n'\
                '| Metadata: 0 \n'\
                ' \n'
+
     co2 = repo_20_filled_samples_meta.checkout(write=True)
     co2.columns['dummy'].change_backend('00')
-    co2.columns.init_arrayset('new_aset', shape=(10, 10), dtype=np.float32)
+    co2.columns.create_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
         co2.columns['new_aset'][idx] = dummyData

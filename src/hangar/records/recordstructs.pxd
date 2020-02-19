@@ -8,6 +8,7 @@ cdef class CompatibleData:
 cdef class ColumnSchemaKey:
     cdef readonly str column
     cdef readonly str layout
+    cpdef readonly str digest
 
 
 cdef class FlatColumnDataKey:

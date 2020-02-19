@@ -53,7 +53,7 @@ cpdef bytes schema_record_count_start_range_key():
     return 's:'.encode()
 
 
-cpdef bytes schema_db_key_from_column(str column, str layout):
+cpdef bytes schema_db_key_from_column(str column, str layout, str digest):
     """column schema db formated key from name and layout.
 
     Parameters
@@ -62,19 +62,35 @@ cpdef bytes schema_db_key_from_column(str column, str layout):
         name of the column
     layout: str
         layout of the column schema ('flat', 'nested', etc.)
+    digest: str
+        hash digest of the array schema (including type code)
     """
     cdef str serial
 
     if layout == 'flat':
-        serial = f's:{column}:f'
+        serial = f's:{column}:f:{digest}'
     elif layout == 'nested':
-        serial = f's:{column}:n'
+        serial = f's:{column}:n:{digest}'
     else:
         raise ValueError(f'layout {layout} not valid')
     return serial.encode()
 
 
 cpdef bytes schema_db_range_key_from_column_unknown_layout(str column):
+    """Find a cursor range key which will select a column schema key.
+    
+    Due to how information is appended onto the end of the schema db key,
+    there is no need to know the column_layout or schema_digest to uniquely
+    identify a column's schema record. set the cursor range and query the full
+    key value (passed into a seperate parser) to recieve the column_layout 
+    and schema_digest / hash type code. The schema spec is accessed at the 
+    record value, or in the hash db under the corresponding schema_digest key.
+    
+    Parameters
+    ----------
+    column: str
+        name of the column to query.
+    """
     cdef str serial
 
     serial = f's:{column}:'
@@ -82,17 +98,17 @@ cpdef bytes schema_db_range_key_from_column_unknown_layout(str column):
 
 
 cpdef ColumnSchemaKey schema_column_record_from_db_key(bytes raw):
-    cdef str serial, column, layout
+    cdef str serial, column, layout, digest
 
     serial = raw.decode()
-    _, column, layout = serial.split(':')
+    _, column, layout, digest = serial.split(':')
     if layout == 'f':
         layout = 'flat'
     elif layout == 'n':
         layout = 'nested'
     else:
         raise ValueError(f'layout unknown for serial key {serial}')
-    return ColumnSchemaKey(column, layout)
+    return ColumnSchemaKey(column, layout, digest)
 
 
 cpdef bytes schema_db_val_from_spec(dict schema):

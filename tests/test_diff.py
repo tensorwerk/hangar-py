@@ -99,9 +99,9 @@ class TestReaderWriterDiff(object):
         assert len(diffs.mutated.schema) == 0
 
         for datarecord in diffs.added.samples:
-            assert 9 < int(datarecord.data_name) < 20
+            assert 9 < int(datarecord.sample) < 20
         for mutated in diffs.mutated.samples:
-            assert mutated.data_name == '1'
+            assert mutated.sample == '1'
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
@@ -129,7 +129,7 @@ class TestReaderWriterDiff(object):
         assert conflicts.conflict is True
         assert len(conflicts.t1.samples) == 1
         for k in conflicts.t1.samples:
-            assert k.data_name == '55'
+            assert k.sample == '55'
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
@@ -155,9 +155,9 @@ class TestReaderWriterDiff(object):
         assert len(conflicts.t21.samples) == 1
         assert len(conflicts.t22.samples) == 1
         for k in conflicts.t21.samples:
-            assert k.data_name == '6'
+            assert k.sample == '6'
         for k in conflicts.t22.samples:
-            assert k.data_name == '7'
+            assert k.sample == '7'
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
@@ -181,7 +181,7 @@ class TestReaderWriterDiff(object):
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t3.samples) == 1
         for k in conflicts.t3.samples:
-            assert k.data_name == '7'
+            assert k.sample == '7'
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
@@ -191,12 +191,12 @@ class TestReaderWriterDiff(object):
 
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='master')
-        co.columns.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float64)
+        co.columns.create_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
         co.commit('aset init in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.columns.init_arrayset(name='testing_aset', shape=(7, 7), dtype=np.float64)
+        co.columns.create_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
         co.commit('aset init in dev')
         co.close()
 
@@ -204,7 +204,7 @@ class TestReaderWriterDiff(object):
         conflicts = co.diff.branch('testbranch').conflict
         assert len(conflicts.t1.schema) == 1
         for k in conflicts.t1.schema:
-            assert k == 'testing_aset'
+            assert k.column == 'testing_aset'
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
@@ -212,8 +212,8 @@ class TestReaderWriterDiff(object):
         # t21 and t22
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True, branch='master')
-        co.columns.init_arrayset(name='testing_aset1', shape=(5, 7), dtype=np.float64)
-        co.columns.init_arrayset(name='testing_aset2', shape=(5, 7), dtype=np.float64)
+        co.columns.create_ndarray_column(name='testing_aset1', shape=(5, 7), dtype=np.float64)
+        co.columns.create_ndarray_column(name='testing_aset2', shape=(5, 7), dtype=np.float64)
         co.commit('added asets')
         co.close()
         repo.create_branch('testbranch')
@@ -221,14 +221,14 @@ class TestReaderWriterDiff(object):
         co = repo.checkout(write=True, branch='master')
         del co.columns['testing_aset1']
         del co.columns['testing_aset2']
-        co.columns.init_arrayset(name='testing_aset2', shape=(5, 7), dtype=np.float32)
+        co.columns.create_ndarray_column(name='testing_aset2', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         del co.columns['testing_aset1']
         del co.columns['testing_aset2']
-        co.columns.init_arrayset(name='testing_aset1', shape=(5, 7), dtype=np.float32)
+        co.columns.create_ndarray_column(name='testing_aset1', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from dev')
         co.close()
 
@@ -236,8 +236,8 @@ class TestReaderWriterDiff(object):
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts.t21.schema) == 1
         assert len(conflicts.t22.schema) == 1
-        assert list(conflicts.t21.schema.keys()) == ['testing_aset1']
-        assert list(conflicts.t22.schema.keys()) == ['testing_aset2']
+        assert list(conflicts.t21.schema.keys())[0].column == 'testing_aset1'
+        assert list(conflicts.t22.schema.keys())[0].column == 'testing_aset2'
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
@@ -245,27 +245,27 @@ class TestReaderWriterDiff(object):
         # t3
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True, branch='master')
-        co.columns.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float64)
+        co.columns.create_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
         co.commit('added aset')
         co.close()
         repo.create_branch('testbranch')
 
         co = repo.checkout(write=True, branch='master')
         del co.columns['testing_aset']
-        co.columns.init_arrayset(name='testing_aset', shape=(7, 7), dtype=np.float64)
+        co.columns.create_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
         co.commit('mutation from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         del co.columns['testing_aset']
-        co.columns.init_arrayset(name='testing_aset', shape=(5, 7), dtype=np.float32)
+        co.columns.create_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float32)
         co.commit('mutation from dev')
         co.close()
 
         co = repo.checkout(write=writer, branch='master')
         conflicts = co.diff.branch('testbranch')[1]
         assert len(conflicts.t3.schema) == 1
-        assert list(conflicts.t3.schema.keys()) == ['testing_aset']
+        assert list(conflicts.t3.schema.keys())[0].column == 'testing_aset'
         co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
@@ -343,7 +343,7 @@ class TestReaderWriterDiff(object):
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='testbranch')
         aset = co.columns['writtenaset']
-        aset2 = co.columns.init_arrayset('aset2', prototype=array5by7)
+        aset2 = co.columns.create_ndarray_column('aset2', prototype=array5by7)
         aset2[1] = array5by7
         with aset, co.metadata:
             aset[100] = array5by7
@@ -356,12 +356,12 @@ class TestReaderWriterDiff(object):
         assert np.allclose(co.columns['writtenaset'][101], array5by7)
         diff = co.diff.branch('master').diff
         assert create_meta_nt('crazykey') in diff.added.metadata
-        assert 'aset2' in diff.added.schema.keys()
+        assert 'aset2' in [x.column for x in diff.added.schema.keys()]
         calledWithAset = False
         for record in diff.added.samples:
-            if record.aset_name == 'writtenaset':
+            if record.column == 'writtenaset':
                 calledWithAset = True
-                assert record.data_name in [100, 101]
+                assert record.sample in [100, 101]
         assert calledWithAset is True
         co.close()
 
@@ -392,9 +392,9 @@ class TestWriterDiff(object):
         diff = co.diff.staged()
         calledWithAset = False
         for record in diff.diff.added.samples:
-            if record.aset_name == 'writtenaset':
+            if record.column == 'writtenaset':
                 calledWithAset = True
-                assert record.data_name in '45'
+                assert record.sample in '45'
         assert calledWithAset is True
         co.commit('adding')
         assert co.diff.status() == 'CLEAN'
@@ -403,10 +403,10 @@ class TestWriterDiff(object):
     def test_status_and_staged_aset(self, aset_samples_initialized_repo):
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
-        co.columns.init_arrayset(name='sampleaset', shape=(3, 5), dtype=np.float32)
+        co.columns.create_ndarray_column(name='sampleaset', shape=(3, 5), dtype=np.float32)
         assert co.diff.status() == 'DIRTY'
         diff = co.diff.staged()
-        assert 'sampleaset' in diff.diff.added.schema
+        assert 'sampleaset' in [x.column for x in diff.diff.added.schema]
         co.commit('init aset')
         assert co.diff.status() == 'CLEAN'
         co.close()

@@ -87,8 +87,8 @@ def variable_shape_repo_co_uint8_aset_nested(managed_tmpdir, request) -> Reposit
 def variable_shape_repo_co_str_aset_nested(managed_tmpdir, request) -> Repository:
     # needed because fixtures don't reset between each hypothesis run
     # tracks added_samples = set(sample_key)
-    global added_samples
-    added_samples = set()
+    global added_samples_subsamples
+    added_samples_subsamples = defaultdict(set)
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
@@ -165,7 +165,7 @@ def test_arrayset_variable_shape_float32_nested(key, val, subkey, variable_shape
 
     co = variable_shape_repo_co_float32_aset_nested
     col = co.columns['writtenaset']
-    assert col.schema_type == 'fixed_shape'
+    assert col.schema_type == 'variable_shape'
     assert col.contains_subsamples is True
     col[key] = {subkey: val}
     out = col[key][subkey]
@@ -191,7 +191,7 @@ def test_arrayset_variable_shape_uint8_nested(key, val, subkey, variable_shape_r
 
     co = variable_shape_repo_co_uint8_aset_nested
     col = co.columns['writtenaset']
-    assert col.schema_type == 'fixed_shape'
+    assert col.schema_type == 'variable_shape'
     assert col.contains_subsamples is True
     col[key] = {subkey: val}
     out = col[key][subkey]
@@ -220,8 +220,9 @@ def test_str_column_variable_shape_nested(key, subkey, val, variable_shape_repo_
     assert col.contains_subsamples is True
 
     col[key] = {subkey: val}
-    added_samples_subsamples[key].add(subkey)
     out = col[key][subkey]
-    assert out == val
+    added_samples_subsamples[key].add(subkey)
+
     assert len(col) == len(added_samples_subsamples)
     assert len(col[key]) == len(added_samples_subsamples[key])
+    assert out == val

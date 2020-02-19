@@ -374,7 +374,9 @@ class Columns:
                 raise e from None
 
             column_layout = self._columns[column].column_layout
-            columnSchemaKey = schema_db_key_from_column(column, layout=column_layout)
+            schema_digest = self._columns[column]._schema.schema_hash_digest()
+            columnSchemaKey = schema_db_key_from_column(
+                column, layout=column_layout, digest=schema_digest)
             column_record = schema_column_record_from_db_key(columnSchemaKey)
             startRangeKey = dynamic_layout_data_record_db_start_range_key(column_record)
 
@@ -429,7 +431,8 @@ class Columns:
                                      backend_options=backend_options)
 
         schema_digest = schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column(name, layout=column_layout)
+        columnSchemaKey = schema_db_key_from_column(
+            name, layout=column_layout, digest=schema_digest)
         columnSchemaVal = schema_db_val_from_spec(schema.schema)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 
@@ -601,7 +604,8 @@ class Columns:
                                        backend=backend,
                                        backend_options=backend_options)
         schema_digest = schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column(name, layout=column_layout)
+        columnSchemaKey = schema_db_key_from_column(
+            name, layout=column_layout, digest=schema_digest)
         columnSchemaVal = schema_db_val_from_spec(schema.schema)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
 

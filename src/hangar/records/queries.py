@@ -262,12 +262,12 @@ class RecordQuery(CursorRangeIterator):
         Returns
         -------
         List[str]
-            list of all schema hash digests
+            list of all schema hash digests in the commit
         """
         all_schema_hashes = []
-        for schema_rec_val in self._traverse_column_schema_records(keys=False, values=True):
-            schema_rec = schema_spec_from_db_val(schema_rec_val)
-            all_schema_hashes.append(schema_rec.schema_hash)
+        for schema_rec_key in self._traverse_column_schema_records(keys=True, values=False):
+            column_schema = schema_column_record_from_db_key(schema_rec_key)
+            all_schema_hashes.append(column_schema.digest)
         return all_schema_hashes
 
     def data_hash_to_schema_hash(self) -> Dict[str, str]:
@@ -281,10 +281,10 @@ class RecordQuery(CursorRangeIterator):
         odict = {}
         aset_names = self.column_names()
         aset_schema_specs = self.schema_specs()
-        aset_schema_specs = {k.column: v for k, v in aset_schema_specs.items()}
+        col_names_schema_digests = {k.column: k.digest for k in aset_schema_specs.keys()}
         for asetn in aset_names:
             aset_hash_vals = self.column_data_hashes(asetn)
-            aset_schema_hash = aset_schema_specs[asetn].schema_hash
+            aset_schema_hash = col_names_schema_digests[asetn]
             for aset_hash_val in aset_hash_vals:
                 odict[aset_hash_val.digest] = aset_schema_hash
         return odict

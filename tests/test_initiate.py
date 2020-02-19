@@ -65,8 +65,8 @@ def test_initial_arrayset(managed_tmpdir, randomsizedarray):
     assert len(w_checkout.columns) == 0
     with pytest.raises(KeyError):
         w_checkout.columns['aset']
-    aset = w_checkout.columns.init_arrayset('aset', prototype=randomsizedarray)
-    assert aset._asetn == 'aset'
+    aset = w_checkout.columns.create_ndarray_column('aset', prototype=randomsizedarray)
+    assert aset.column == 'aset'
     w_checkout.close()
     repo._env._close_environments()
 

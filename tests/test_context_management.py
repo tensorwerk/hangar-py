@@ -10,8 +10,8 @@ all_backend_params = list(set(fixed_shape_backend_params).union(set(variable_sha
 @pytest.mark.parametrize('backend2', all_backend_params)
 def test_nested_context_manager_does_not_close_all_open(repo, backend1, backend2):
     co = repo.checkout(write=True)
-    fooaset = co.columns.create_ndarray_column('foo', prototype=np.arange(10), backend_opts=backend1)
-    baraset = co.columns.create_ndarray_column('bar', prototype=np.arange(10), backend_opts=backend2, contains_subsamples=True)
+    fooaset = co.columns.create_ndarray_column('foo', prototype=np.arange(10), backend=backend1)
+    baraset = co.columns.create_ndarray_column('bar', prototype=np.arange(10), backend=backend2, contains_subsamples=True)
 
     with co:
         assert co.metadata._is_conman is True
