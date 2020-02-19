@@ -4,6 +4,7 @@ from typing import Iterable, List, Tuple, Union
 import lmdb
 
 from .column_parsers import (
+    hash_record_count_start_range_key,
     hash_schema_raw_key_from_db_key,
     hash_data_raw_key_from_db_key,
     hash_meta_raw_val_from_db_val,
@@ -12,7 +13,6 @@ from .column_parsers import (
     schema_record_count_start_range_key
 )
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder, DataHashSpecsType
-from ..constants import K_HASH
 from ..txnctx import TxnRegister
 from ..mixins import CursorRangeIterator
 from ..utils import ilen
@@ -55,7 +55,7 @@ class HashQuery(CursorRangeIterator):
         Union[bytes, Tuple[bytes, bytes]]
             Iterable of schema record keys, values, or items tuple
         """
-        startHashRangeKey = f'{K_HASH}'.encode()
+        startHashRangeKey = hash_record_count_start_range_key()
         try:
             hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
             yield from self.cursor_range_iterator(hashtxn, startHashRangeKey, keys, values)

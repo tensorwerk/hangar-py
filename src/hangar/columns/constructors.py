@@ -12,12 +12,11 @@ from .common import AsetTxn, open_file_handles
 from .layout_flat import FlatSampleReader, FlatSampleWriter
 from .layout_nested import (
     FlatSubsampleReader, FlatSubsampleWriter,
-    NestedSampleReader, NestedSampleWriter
+    NestedSampleReader, NestedSampleWriter,
 )
 from ..records.queries import RecordQuery
-from ..records.column_parsers import hash_data_db_key_from_raw_key
-from ..typesystem.ndarray import NdarrayFixedShape, NdarrayVariableShape
-from ..typesystem.pystring import StringVariableShape
+from ..records import hash_data_db_key_from_raw_key
+from ..typesystem import NdarrayFixedShape, NdarrayVariableShape, StringVariableShape
 from ..backends import BACKEND_IS_LOCAL_MAP, backend_decoder, DataHashSpecsType
 
 

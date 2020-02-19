@@ -73,8 +73,3 @@ class TestInvalidValues:
         with pytest.raises(ValueError):
             NdarrayFixedShape(shape=(1,), dtype=np.uint8, column_layout='flat', schema_type=schema_type)
 
-
-
-class TestValidArray:
-
-

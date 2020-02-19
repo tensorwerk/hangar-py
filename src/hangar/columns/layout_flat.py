@@ -12,7 +12,7 @@ from typing import Tuple, List, Union, Sequence, Dict, Iterable, Type, Optional,
 import numpy as np
 
 from .common import open_file_handles
-from ..records.column_parsers import (
+from ..records import (
     data_record_db_val_from_digest,
     data_record_digest_val_from_db_val,
     flat_data_db_key_from_names,

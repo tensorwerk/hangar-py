@@ -2,7 +2,7 @@ import numpy as np
 
 from .base import ColumnBase
 from .descriptors import OneOf, String, OptionalString, SizedIntegerTuple, OptionalDict
-from ..records.recordstructs import CompatibleData
+from ..records import CompatibleData
 from ..records.hashmachine import array_hash_digest
 
 

@@ -12,7 +12,7 @@ from weakref import proxy
 import numpy as np
 
 from .common import open_file_handles
-from ..records.column_parsers import (
+from ..records import (
     data_record_db_val_from_digest,
     data_record_digest_val_from_db_val,
     nested_data_db_key_from_names,

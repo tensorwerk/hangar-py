@@ -10,7 +10,7 @@ from .common import AsetTxn
 from .constructors import (
     generate_flat_column, generate_nested_column, column_type_object_from_schema
 )
-from ..records.column_parsers import (
+from ..records import (
     schema_db_key_from_column,
     schema_db_val_from_spec,
     schema_hash_db_key_from_digest,

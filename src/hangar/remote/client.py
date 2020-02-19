@@ -21,7 +21,7 @@ from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
 from ..records.hashmachine import array_hash_digest, metadata_hash_digest
-from ..records.column_parsers import hash_data_db_key_from_raw_key, hash_meta_raw_key_from_db_key
+from ..records import hash_data_db_key_from_raw_key, hash_meta_raw_key_from_db_key
 from ..records import queries
 from ..records import summarize
 from ..utils import set_blosc_nthreads

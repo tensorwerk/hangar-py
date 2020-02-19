@@ -55,7 +55,7 @@ def contains_subsamples(request):
 
 
 @pytest.fixture(scope='class')
-def initialized_arrayset(
+def initialized_column(
     write_enabled, backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map
 ):
     co = classrepo.checkout(write=True)
@@ -79,7 +79,7 @@ def initialized_arrayset(
 
 
 @pytest.fixture(scope='class')
-def initialized_arrayset_read_only(backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map):
+def initialized_column_read_only(backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map):
     co = classrepo.checkout(write=True)
     aset = co.columns.create_ndarray_column(f'foo{backend_param}{int(contains_subsamples)}',
                                             shape=(5, 7), dtype=np.uint16,
@@ -96,12 +96,12 @@ def initialized_arrayset_read_only(backend_param, contains_subsamples, classrepo
     nco.close()
 
 
-class TestPickleableArraysets:
+class TestPickleableColumns:
 
-    def test_is_pickleable(self, initialized_arrayset, sample_data_map, subsample_data_map):
+    def test_is_pickleable(self, initialized_column, sample_data_map, subsample_data_map):
         import pickle
 
-        aset = initialized_arrayset
+        aset = initialized_column
         if aset.iswriteable:
             with pytest.raises(PermissionError, match='Method "__getstate__" cannot'):
                 pickle.dumps(aset, protocol=pickle.HIGHEST_PROTOCOL)
@@ -110,12 +110,12 @@ class TestPickleableArraysets:
             assert isinstance(pkl, bytes)
 
 
-class TestLoadableArraysets:
+class TestLoadableColumns:
 
-    def test_is_pickle_is_loadable(self, initialized_arrayset_read_only, sample_data_map, subsample_data_map):
+    def test_is_pickle_is_loadable(self, initialized_column_read_only, sample_data_map, subsample_data_map):
         import pickle
 
-        aset = initialized_arrayset_read_only
+        aset = initialized_column_read_only
         pkl = pickle.dumps(aset, protocol=pickle.HIGHEST_PROTOCOL)
         assert isinstance(pkl, bytes)
         equiv = pickle.loads(pkl)

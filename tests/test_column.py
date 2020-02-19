@@ -37,7 +37,7 @@ class TestColumn(object):
         assert len(co.columns['writtenaset']) == 0
         co.close()
 
-    def test_get_arrayset(self, aset_samples_initialized_repo, array5by7):
+    def test_get_column(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
 
         # getting the column with `get`
@@ -96,7 +96,7 @@ class TestColumn(object):
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
-    def test_arrayset_with_more_dimension(self, aset_backend, repo):
+    def test_column_with_more_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
         with pytest.raises(ValueError):
@@ -111,7 +111,7 @@ class TestColumn(object):
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
-    def test_arrayset_with_empty_dimension(self, aset_backend, repo):
+    def test_column_with_empty_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.array(1, dtype=np.int64)
         aset = co.columns.create_ndarray_column('aset1', shape=(), dtype=np.int64, backend=aset_backend)
@@ -129,7 +129,7 @@ class TestColumn(object):
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
-    def test_arrayset_with_int_specifier_as_dimension(self, aset_backend, repo):
+    def test_column_with_int_specifier_as_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.arange(10, dtype=np.int64)
         aset = co.columns.create_ndarray_column('aset1', shape=10, dtype=np.int64, backend=aset_backend)
@@ -172,12 +172,12 @@ class TestColumn(object):
             hasattr(aset, '_mode')
 
 
-class TestDataWithFixedSizedArrayset(object):
+class TestDataWithFixedSizedColumn(object):
 
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset3_backend", fixed_shape_backend_params)
-    def test_arrayset_remote_references_property_with_none(
+    def test_column_remote_references_property_with_none(
             self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
     ):
         co = repo.checkout(write=True)
@@ -197,7 +197,7 @@ class TestDataWithFixedSizedArrayset(object):
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset3_backend", fixed_shape_backend_params)
-    def test_arrayset_remote_references_property_with_remotes(
+    def test_column_remote_references_property_with_remotes(
             self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
     ):
         co = repo.checkout(write=True)
@@ -881,7 +881,7 @@ class TestDataWithFixedSizedArrayset(object):
 
     @pytest.mark.parametrize("aset1_backend", fixed_shape_backend_params)
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
-    def test_multiple_arraysets_single_commit(self, aset1_backend, aset2_backend,
+    def test_multiple_columns_single_commit(self, aset1_backend, aset2_backend,
                                               aset_samples_initialized_repo, randomsizedarray):
         co = aset_samples_initialized_repo.checkout(write=True)
         aset1 = co.columns.create_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
@@ -988,7 +988,7 @@ class TestDataWithFixedSizedArrayset(object):
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
-    def test_writer_context_manager_arrayset_add_sample(self, aset_backend, repo, randomsizedarray):
+    def test_writer_context_manager_column_add_sample(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         aset = co.columns.create_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
         with co.columns['aset'] as aset:
@@ -1042,7 +1042,7 @@ class TestDataWithFixedSizedArrayset(object):
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
-    def test_arrayset_context_manager_aset_sample_and_metadata_add(self, aset_backend, repo, randomsizedarray):
+    def test_column_context_manager_aset_sample_and_metadata_add(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         aset = co.columns.create_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
         with co.columns['aset'] as aset:
@@ -1062,7 +1062,7 @@ class TestDataWithFixedSizedArrayset(object):
         assert co.metadata.get('hello') == 'world'
         co.close()
 
-    def test_writer_arrayset_properties_are_correct(self, aset_samples_initialized_repo, array5by7):
+    def test_writer_column_properties_are_correct(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
         assert co.columns.iswriteable is True
         d = co.columns['writtenaset']
@@ -1079,7 +1079,7 @@ class TestDataWithFixedSizedArrayset(object):
         assert d.contains_remote_references is False
         co.close()
 
-    def test_reader_arrayset_properties_are_correct(self, aset_samples_initialized_repo, array5by7):
+    def test_reader_column_properties_are_correct(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=False)
         assert co.columns.iswriteable is False
         d = co.columns['writtenaset']
@@ -1095,7 +1095,7 @@ class TestDataWithFixedSizedArrayset(object):
         assert d.remote_reference_keys == ()
         assert d.contains_remote_references is False
 
-    def test_iter_arrayset_samples_yields_keys(self, aset_samples_initialized_repo, array5by7):
+    def test_iter_column_samples_yields_keys(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
         co.columns['writtenaset'][0] = array5by7
         new_array = np.zeros_like(array5by7)
@@ -1107,20 +1107,20 @@ class TestDataWithFixedSizedArrayset(object):
         assert idx == 2
         co.close()
 
-    def test_iter_arraysets_yields_aset_names(self, repo_20_filled_samples):
+    def test_iter_columns_yields_aset_names(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout(write=True)
         for k in iter(co.columns):
             assert k in ['second_aset', 'writtenaset']
         co.close()
 
-    def test_set_item_arrayset_fails(self, aset_samples_initialized_repo):
+    def test_set_item_column_fails(self, aset_samples_initialized_repo):
         co = aset_samples_initialized_repo.checkout(write=True)
         with pytest.raises(AttributeError):
             co.columns['newaset'] = co.columns['writtenaset']
         co.close()
 
 
-class TestVariableSizedArrayset(object):
+class TestVariableSizedColumn(object):
 
     @pytest.mark.parametrize(
         'test_shapes,max_shape',
@@ -1201,7 +1201,7 @@ class TestVariableSizedArrayset(object):
          [[(100, 100, 100), (100, 100, 1), (100, 1, 100), (1, 100, 100), (1, 1, 1), (34, 6, 3)], (100, 100, 100)]])
     @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
     @pytest.mark.parametrize('backend', variable_shape_backend_params)
-    def test_writer_can_create_variable_size_arrayset(
+    def test_writer_can_create_variable_size_column(
         self, aset_samples_initialized_repo, dtype, test_shapes, shape, backend
     ):
         repo = aset_samples_initialized_repo
@@ -1233,7 +1233,7 @@ class TestVariableSizedArrayset(object):
     ])
     @pytest.mark.parametrize("dtype", [np.uint8, np.float32])
     @pytest.mark.parametrize('backend', variable_shape_backend_params)
-    def test_reader_recieves_expected_values_for_variable_size_arrayset(
+    def test_reader_recieves_expected_values_for_variable_size_column(
         self, aset_samples_initialized_repo, dtype, test_shapes, shape, backend
     ):
         repo = aset_samples_initialized_repo
@@ -1269,7 +1269,7 @@ class TestVariableSizedArrayset(object):
          ['aset2', [(100,), (1,), (50,)], (100,)]]])
     @pytest.mark.parametrize('backends', permutations(variable_shape_backend_params, 2))
     @pytest.mark.parametrize('dtype', [np.float32, np.uint8])
-    def test_writer_reader_can_create_read_multiple_variable_size_arrayset(
+    def test_writer_reader_can_create_read_multiple_variable_size_column(
         self, aset_samples_initialized_repo, aset_specs, backends, dtype
     ):
         repo = aset_samples_initialized_repo
@@ -1302,7 +1302,7 @@ class TestVariableSizedArrayset(object):
         wco.close()
         rco.close()
 
-    def test_writer_arrayset_properties_are_correct(self, aset_samples_var_shape_initialized_repo):
+    def test_writer_column_properties_are_correct(self, aset_samples_var_shape_initialized_repo):
         co = aset_samples_var_shape_initialized_repo.checkout(write=True)
         d = co.columns['writtenaset']
         assert d.column =='writtenaset'
@@ -1317,7 +1317,7 @@ class TestVariableSizedArrayset(object):
         assert d.contains_remote_references is False
         co.close()
 
-    def test_reader_arrayset_properties_are_correct(self, aset_samples_var_shape_initialized_repo):
+    def test_reader_column_properties_are_correct(self, aset_samples_var_shape_initialized_repo):
         co = aset_samples_var_shape_initialized_repo.checkout(write=False)
         d = co.columns['writtenaset']
         assert d.column =='writtenaset'
@@ -1333,7 +1333,7 @@ class TestVariableSizedArrayset(object):
         co.close()
 
 
-class TestMultiprocessArraysetReads(object):
+class TestMultiprocessColumnReads(object):
 
     @pytest.mark.parametrize('backend', fixed_shape_backend_params)
     def test_external_multi_process_pool(self, repo, backend):

@@ -14,6 +14,38 @@ from .recordstructs import ColumnSchemaKey, \
 import ast
 
 
+__all__ = [
+    'schema_record_count_start_range_key',
+    'schema_db_key_from_column',
+    'schema_db_range_key_from_column_unknown_layout',
+    'schema_column_record_from_db_key',
+    'schema_db_val_from_spec',
+    'schema_spec_from_db_val',
+    'schema_hash_db_key_from_digest',
+    'data_record_digest_val_from_db_val',
+    'data_record_db_val_from_digest',
+    'flat_data_column_record_start_range_key',
+    'flat_data_db_key_from_names',
+    'flat_data_record_from_db_key',
+    'nested_data_column_record_start_range_key',
+    'nested_data_db_key_from_names',
+    'nested_data_record_from_db_key',
+    'metadata_range_key',
+    'metadata_record_raw_key_from_db_key',
+    'metadata_record_db_key_from_raw_key',
+    'dynamic_layout_data_record_from_db_key',
+    'dynamic_layout_data_record_db_start_range_key',
+    'hash_schema_db_key_from_raw_key',
+    'hash_data_db_key_from_raw_key',
+    'hash_schema_raw_key_from_db_key',
+    'hash_data_raw_key_from_db_key',
+    'hash_meta_db_key_from_raw_key',
+    'hash_meta_db_val_from_raw_val',
+    'hash_meta_raw_key_from_db_key',
+    'hash_meta_raw_val_from_db_val',
+]
+
+
 # ----------------------- Schema Record Parsers -------------------------------
 
 
@@ -223,6 +255,10 @@ cpdef bytes dynamic_layout_data_record_db_start_range_key(ColumnSchemaKey column
 # -----------------------------------------------------------------------
 
 
+cpdef bytes hash_record_count_start_range_key():
+    return 'h:'.encode()
+
+
 cpdef bytes hash_schema_db_key_from_raw_key(str schema_hash):
     return f's:{schema_hash}'.encode()
 
@@ -233,7 +269,6 @@ cpdef bytes hash_data_db_key_from_raw_key(str data_hash):
 
 cpdef str hash_schema_raw_key_from_db_key(bytes db_key):
     return db_key[2:].decode()
-
 
 
 cpdef str hash_data_raw_key_from_db_key(bytes db_key):

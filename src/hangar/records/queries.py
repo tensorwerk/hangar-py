@@ -2,7 +2,7 @@ from typing import Dict, Iterable, Iterator, List, Set, Tuple, Union
 
 import lmdb
 
-from .column_parsers import (
+from . import (
     data_record_digest_val_from_db_val,
     dynamic_layout_data_record_db_start_range_key,
     dynamic_layout_data_record_from_db_key,
@@ -12,8 +12,6 @@ from .column_parsers import (
     schema_db_range_key_from_column_unknown_layout,
     schema_record_count_start_range_key,
     schema_spec_from_db_val,
-)
-from .recordstructs import (
     FlatColumnDataKey,
     NestedColumnDataKey,
     DataRecordVal,
@@ -178,9 +176,9 @@ class RecordQuery(CursorRangeIterator):
             all hash values for all data pieces in the commit
         """
         all_hashes = []
-        arraysets = self.column_names()
-        for arrayset in arraysets:
-            recs = self._traverse_column_data_records(arrayset, keys=False, values=True)
+        columns = self.column_names()
+        for column in columns:
+            recs = self._traverse_column_data_records(column, keys=False, values=True)
             data_rec = map(data_record_digest_val_from_db_val, recs)
             data_val_rec = [x.digest for x in data_rec]
             all_hashes.extend(data_val_rec)

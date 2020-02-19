@@ -4,7 +4,7 @@ from typing import Optional, Union, Iterator, Tuple, Dict, Mapping, List, Sequen
 
 import lmdb
 
-from ..records.column_parsers import (
+from ..records import (
     hash_meta_db_key_from_raw_key,
     hash_meta_db_val_from_raw_val,
     hash_meta_raw_val_from_db_val,

@@ -1,6 +1,6 @@
 from .base import ColumnBase
 from .descriptors import OneOf, Descriptor, String, OptionalString, OptionalDict
-from ..records.recordstructs import CompatibleData
+from ..records import CompatibleData
 from ..records.hashmachine import metadata_hash_digest
 from ..utils import is_ascii
 

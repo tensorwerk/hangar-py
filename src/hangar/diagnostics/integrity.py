@@ -5,7 +5,7 @@ import lmdb
 import numpy as np
 from tqdm import tqdm
 
-from ..records.column_parsers import (
+from ..records import (
     hash_data_db_key_from_raw_key,
     hash_schema_db_key_from_raw_key,
     hash_meta_db_key_from_raw_key

@@ -6,7 +6,7 @@ import numpy as np
 from ..backends import BACKEND_ACCESSOR_MAP, BACKEND_OPTIONS_MAP
 from ..context import Environments
 from ..records import parsing
-from ..records.column_parsers import (
+from ..records import (
     schema_spec_from_db_val,
     hash_schema_db_key_from_raw_key,
     hash_data_db_key_from_raw_key,

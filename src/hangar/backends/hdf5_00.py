@@ -161,14 +161,15 @@ Technical Notes
 """
 import logging
 import os
-from contextlib import suppress
 from collections import ChainMap
+from contextlib import suppress
 from functools import partial
 from pathlib import Path
 from typing import MutableMapping, Tuple, Optional, Union, Callable
 
 import h5py
 import numpy as np
+
 try:
     # hdf5plugin warns if a filter is already loaded.
     _logger = logging.getLogger('hdf5plugin')
@@ -184,7 +185,7 @@ from xxhash import xxh64_hexdigest
 from . import HDF5_00_DataHashSpec
 from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
-from ..utils import find_next_prime, random_string, set_blosc_nthreads, valfilter
+from ..utils import find_next_prime, random_string, set_blosc_nthreads
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..typesystem import Descriptor, OneOf, DictItems, checkedmeta
 
