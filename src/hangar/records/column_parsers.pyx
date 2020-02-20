@@ -19,7 +19,7 @@ __all__ = [
     'schema_db_key_from_column',
     'schema_db_range_key_from_column_unknown_layout',
     'schema_column_record_from_db_key',
-    'schema_db_val_from_spec',
+    'schema_hash_record_db_val_from_spec',
     'schema_spec_from_db_val',
     'schema_hash_db_key_from_digest',
     'data_record_digest_val_from_db_val',
@@ -43,6 +43,7 @@ __all__ = [
     'hash_meta_db_val_from_raw_val',
     'hash_meta_raw_key_from_db_key',
     'hash_meta_raw_val_from_db_val',
+    'schema_record_db_val_from_digest',
 ]
 
 
@@ -53,7 +54,7 @@ cpdef bytes schema_record_count_start_range_key():
     return 's:'.encode()
 
 
-cpdef bytes schema_db_key_from_column(str column, str layout, str digest):
+cpdef bytes schema_db_key_from_column(str column, str layout):
     """column schema db formated key from name and layout.
 
     Parameters
@@ -62,15 +63,13 @@ cpdef bytes schema_db_key_from_column(str column, str layout, str digest):
         name of the column
     layout: str
         layout of the column schema ('flat', 'nested', etc.)
-    digest: str
-        hash digest of the array schema (including type code)
     """
     cdef str serial
 
     if layout == 'flat':
-        serial = f's:{column}:f:{digest}'
+        serial = f's:{column}:f'
     elif layout == 'nested':
-        serial = f's:{column}:n:{digest}'
+        serial = f's:{column}:n'
     else:
         raise ValueError(f'layout {layout} not valid')
     return serial.encode()
@@ -98,20 +97,20 @@ cpdef bytes schema_db_range_key_from_column_unknown_layout(str column):
 
 
 cpdef ColumnSchemaKey schema_column_record_from_db_key(bytes raw):
-    cdef str serial, column, layout, digest
+    cdef str serial, column, layout
 
     serial = raw.decode()
-    _, column, layout, digest = serial.split(':')
+    _, column, layout = serial.split(':')
     if layout == 'f':
         layout = 'flat'
     elif layout == 'n':
         layout = 'nested'
     else:
         raise ValueError(f'layout unknown for serial key {serial}')
-    return ColumnSchemaKey(column, layout, digest)
+    return ColumnSchemaKey(column, layout)
 
 
-cpdef bytes schema_db_val_from_spec(dict schema):
+cpdef bytes schema_hash_record_db_val_from_spec(dict schema):
     cdef str serial
 
     serial = repr(schema).replace(' ', '')
@@ -129,6 +128,10 @@ cpdef dict schema_spec_from_db_val(bytes raw):
 
 cpdef bytes schema_hash_db_key_from_digest(str digest):
     return f's:{digest}'.encode()
+
+
+cpdef bytes schema_record_db_val_from_digest(str digest):
+    return digest.encode()
 
 
 # -------------------- Data Digest Record Value Parser -------------------------

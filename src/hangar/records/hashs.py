@@ -8,8 +8,8 @@ from .column_parsers import (
     hash_schema_raw_key_from_db_key,
     hash_data_raw_key_from_db_key,
     hash_meta_raw_val_from_db_val,
+    schema_hash_db_key_from_digest,
     schema_spec_from_db_val,
-    schema_column_record_from_db_key,
     schema_record_count_start_range_key
 )
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder, DataHashSpecsType
@@ -92,41 +92,58 @@ class HashQuery(CursorRangeIterator):
     def gen_all_hash_keys_db(self) -> Iterable[bytes]:
         return self._traverse_all_hash_records(keys=True, values=False)
 
-    def num_arrays(self) -> int:
-        num_total = self._hashenv.stat()['entries']
-        remaining = num_total - self.num_schemas()
-        return remaining
-
-    def list_all_schema_keys_raw(self) -> List[str]:
+    def list_all_schema_digests(self) -> List[str]:
         recs = self._traverse_all_schema_records(keys=True, values=False)
         return list(map(hash_schema_raw_key_from_db_key, recs))
 
     def gen_all_schema_keys_db(self) -> Iterable[bytes]:
         return self._traverse_all_schema_records(keys=True, values=False)
 
-    def num_schemas(self) -> int:
+    def num_data_records(self) -> int:
+        """Total count of all data digests / backends specs stored over all repo history.
+        """
+        num_total = self._hashenv.stat()['entries']
+        remaining = num_total - self.num_schema_records()
+        return remaining
+
+    def num_schema_records(self) -> int:
+        """Total count of schema digests / spec defs stored over all repo history.
+        """
         return ilen(self._traverse_all_schema_records(keys=True, values=False))
 
-    def num_meta(self) -> int:
+    def num_metadata_records(self) -> int:
+        """Total count of metadata digests / values stored over all repo history.
+        """
         return self._hashenv.stat()['entries']
 
-    def gen_all_hash_keys_raw_array_vals_parsed(self) -> Iterable[Tuple[str, DataHashSpecsType]]:
+    def gen_all_data_digests_and_parsed_backend_specs(self) -> Iterable[Tuple[str, DataHashSpecsType]]:
         for dbk, dbv in self._traverse_all_hash_records(keys=True, values=True):
             rawk = hash_data_raw_key_from_db_key(dbk)
             rawv = backend_decoder(dbv)
             yield (rawk, rawv)
 
-    def gen_all_hash_keys_raw_meta_vals_parsed(self) -> Iterable[Tuple[str, str]]:
+    def gen_all_metadata_digests_and_decoded_values(self) -> Iterable[Tuple[str, str]]:
         for dbk, dbv in self._traverse_all_hash_records(keys=True, values=True):
             rawk = hash_data_raw_key_from_db_key(dbk)
             rawv = hash_meta_raw_val_from_db_val(dbv)
             yield (rawk, rawv)
 
-    def gen_all_schema_keys_raw_vals_parsed(self):
+    def gen_all_schema_digests_and_parsed_specs(self) -> Iterable[Tuple[str, dict]]:
         for dbk, dbv in self._traverse_all_schema_records(keys=True, values=True):
             rawk = hash_schema_raw_key_from_db_key(dbk)
             rawv = schema_spec_from_db_val(dbv)
             yield (rawk, rawv)
+
+    def get_schema_digest_spec(self, digest) -> dict:
+        schemaHashKey = schema_hash_db_key_from_digest(digest)
+        try:
+            hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
+            schemaSpecVal = hashtxn.get(schemaHashKey)
+        finally:
+            TxnRegister().abort_reader_txn(self._hashenv)
+
+        schema_spec = schema_spec_from_db_val(schemaSpecVal)
+        return schema_spec
 
 
 def backends_remove_in_process_data(repo_path: Path, *, remote_operation: bool = False):
@@ -183,7 +200,6 @@ def remove_stage_hash_records_from_hashenv(hashenv, stagehashenv):
         db where all the permanent hash records are stored
     stagehashenv : lmdb.Environment
         db where all the staged hash records to be removed are stored.
-
     """
     stageHashKeys = HashQuery(stagehashenv).gen_all_hash_keys_db()
     hashtxn = TxnRegister().begin_writer_txn(hashenv)

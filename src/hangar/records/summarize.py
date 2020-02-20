@@ -8,6 +8,7 @@ import numpy as np
 from .commiting import get_commit_ancestors_graph, get_commit_spec, tmp_cmt_env
 from .heads import get_staging_branch_head, get_branch_head_commit
 from .queries import RecordQuery
+from .hashs import HashQuery
 from ..diff import DiffOut, Changes
 from ..txnctx import TxnRegister
 from ..utils import format_bytes, file_size, folder_size, unique_everseen
@@ -146,6 +147,11 @@ def summary(env, *, branch='', commit='') -> StringIO:
         buf.write('No commits made')
         return buf
 
+    def _schema_digest_spec_dict(hashenv, digest):
+        hq = HashQuery(hashenv)
+        res = hq.get_schema_digest_spec(digest)
+        return res
+
     with tmp_cmt_env(env.refenv, cmt) as cmtrefenv:
         query = RecordQuery(cmtrefenv)
 
@@ -174,14 +180,15 @@ def summary(env, *, branch='', commit='') -> StringIO:
         buf.write(f'| DataSets \n')
         buf.write(f'|----------------- \n')
 
-        buf.write(f'|  Number of Named Arraysets: {query.column_count()} \n')
+        buf.write(f'|  Number of Named Columns: {query.column_count()} \n')
         for asetn, asetnSchema in query.schema_specs().items():
             buf.write(f'|\n')
-            buf.write(f'|  * Arrayset Name: {asetn} \n')
-            buf.write(f'|    Num Arrays: {query.column_data_count(asetn)} \n')
+            buf.write(f'|  * Column Name: {asetn} \n')
+            buf.write(f'|    Num Data Pieces: {query.column_data_count(asetn.column)} \n')
 
             buf.write(f'|    Details: \n')
-            for k, v in asetnSchema._asdict().items():
+            schema_dict = _schema_digest_spec_dict(env.hashenv, asetnSchema.digest)
+            for k, v in schema_dict.items():
                 buf.write(f'|    - {k}: {v} \n')
 
         buf.write(f' \n')
@@ -193,11 +200,13 @@ def summary(env, *, branch='', commit='') -> StringIO:
     return buf
 
 
-def status(branch_name: str, diff: DiffOut) -> StringIO:
+def status(hashenv: lmdb.Environment, branch_name: str, diff: DiffOut) -> StringIO:
     """Format human readable string buffer of changes in a staging area
 
     Parameters
     ----------
+    hashenv : lmdb.Environment
+        hashenv to pull usefull schema spec info from.
     branch_name : str
         Name of the branch the diff is from.
     diff : DiffOut
@@ -208,6 +217,11 @@ def status(branch_name: str, diff: DiffOut) -> StringIO:
     StringIO
         Buffer containing human readable printable string of change summary
     """
+    def _schema_digest_spec_dict(digest):
+        hq = HashQuery(hashenv)
+        res = hq.get_schema_digest_spec(digest)
+        return res
+
     def _diff_info(df: Changes) -> StringIO:
         """Format buffer for each of `ADDED`, `DELETED`, `MUTATED` changes
         """
@@ -215,8 +229,11 @@ def status(branch_name: str, diff: DiffOut) -> StringIO:
         buf.write(f'|---------- \n')
         buf.write(f'| Schema: {len(df.schema)} \n')
         for k, v in df.schema.items():
+            digest = v.digest
             buf.write(f'|  - "{k.column}": \n')
-            for schema_key, schema_val in v.items():
+            buf.write(f'|       digest="{digest}" \n')
+            schema_spec = _schema_digest_spec_dict(digest)
+            for schema_key, schema_val in schema_spec.items():
                 buf.write(f'|       {schema_key}: {schema_val} \n')
 
         buf.write('|---------- \n')

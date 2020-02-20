@@ -5,11 +5,11 @@ from typing import Iterable, Optional, Union, Tuple
 ArraysetsRef = Union['ArraysetDataReader', Iterable['ArraysetDataReader']]
 
 
-class GroupedAsets(object):
+class GroupedColumns(object):
     """Groups hangar columns and validate suitability for usage in dataloaders.
 
     It can choose a subset of samples in the hangar columns by checking the
-    list of keys or an index range. :class:`GroupedAsets` does not expect all
+    list of keys or an index range. :class:`GroupedColumns` does not expect all
     the input hangar columns to have same length and same keys. It takes a
     `set.intersection` of sample names from all the columns and `keys`
     argument if passed and hence discard non-common keys. This is then
@@ -24,28 +24,28 @@ class GroupedAsets(object):
                  keys: Optional[Iterable[Union[int, str]]] = None,
                  index_range: Optional[slice] = None):
 
-        self.arrayset_array = []
-        self.arrayset_names = []
+        self.columns_col = []
+        self.column_names = []
         self._allowed_samples: Tuple[Union[str, int]] = None
 
-        if not isinstance(arraysets, (list, tuple, set)):
-            arraysets = (arraysets,)
-        if len(arraysets) == 0:
+        if not isinstance(columns, (list, tuple, set)):
+            columns = (columns,)
+        if len(columns) == 0:
             raise ValueError('len(columns) cannot == 0')
 
-        aset_lens = set()
+        column_lens = set()
         all_keys = []
         all_remote_keys = []
-        for aset in arraysets:
-            if aset.iswriteable is True:
+        for col in columns:
+            if col.iswriteable is True:
                 raise TypeError(f'Cannot load columns opened in `write-enabled` checkout.')
-            self.arrayset_array.append(aset)
-            self.arrayset_names.append(aset.column)
-            aset_lens.add(len(aset))
-            all_keys.append(set(aset.keys()))
-            all_remote_keys.append(set(aset.remote_reference_keys))
+            self.columns_col.append(col)
+            self.column_names.append(col.column)
+            column_lens.add(len(col))
+            all_keys.append(set(col.keys()))
+            all_remote_keys.append(set(col.remote_reference_keys))
 
-        if len(aset_lens) > 1:
+        if len(column_lens) > 1:
             warnings.warn('Columns do not contain equal number of samples', UserWarning)
 
         common_keys = set.intersection(*all_keys)
@@ -81,7 +81,7 @@ class GroupedAsets(object):
 
     def get_types(self, converter=None):
         """
-        Get dtypes of the all the columns in the `GroupedAsets`.
+        Get dtypes of the all the columns in the `GroupedColumns`.
 
         Parameters
         ----------
@@ -94,16 +94,16 @@ class GroupedAsets(object):
         Tuple[np.dtype]
         """
         dtypes = []
-        for aset in self.arrayset_array:
+        for col in self.columns_col:
             if converter:
-                dtypes.append(converter(aset.dtype))
+                dtypes.append(converter(col.dtype))
             else:
-                dtypes.append(aset.dtype)
+                dtypes.append(col.dtype)
         return tuple(dtypes)
 
     def get_shapes(self, converter=None):
         """
-        Get shapes of the all the columns in the `GroupedAsets`.
+        Get shapes of the all the columns in the `GroupedColumns`.
 
         Parameters
         ----------
@@ -116,11 +116,11 @@ class GroupedAsets(object):
         A tuple of column shapes
         """
         shapes = []
-        for aset in self.arrayset_array:
-            if aset.variable_shape:
-                aset_shape = (None,) * len(aset.shape)
+        for col in self.columns_col:
+            if col.column_layout == 'variable_shape':
+                aset_shape = (None,) * len(col.shape)
             else:
-                aset_shape = aset.shape
+                aset_shape = col.shape
             if converter:
                 shapes.append(converter(aset_shape))
             else:

@@ -247,12 +247,12 @@ class RecordQuery(CursorRangeIterator):
         Returns
         -------
         dict
-            dict of column names raw schema spec for each column schema
+            dict of column spec key and digest for each column schema
         """
         recs = {}
         for schema_key, schema_val in self._traverse_column_schema_records():
             schema_record = schema_column_record_from_db_key(schema_key)
-            schema_val = schema_spec_from_db_val(schema_val)
+            schema_val = data_record_digest_val_from_db_val(schema_val)
             recs[schema_record] = schema_val
         return recs
 
@@ -265,9 +265,9 @@ class RecordQuery(CursorRangeIterator):
             list of all schema hash digests in the commit
         """
         all_schema_hashes = []
-        for schema_rec_key in self._traverse_column_schema_records(keys=True, values=False):
-            column_schema = schema_column_record_from_db_key(schema_rec_key)
-            all_schema_hashes.append(column_schema.digest)
+        for schema_rec_val in self._traverse_column_schema_records(keys=False, values=True):
+            digest = data_record_digest_val_from_db_val(schema_rec_val)
+            all_schema_hashes.append(digest.digest)
         return all_schema_hashes
 
     def data_hash_to_schema_hash(self) -> Dict[str, str]:
@@ -281,7 +281,7 @@ class RecordQuery(CursorRangeIterator):
         odict = {}
         aset_names = self.column_names()
         aset_schema_specs = self.schema_specs()
-        col_names_schema_digests = {k.column: k.digest for k in aset_schema_specs.keys()}
+        col_names_schema_digests = {k.column: v.digest for k, v in aset_schema_specs.items()}
         for asetn in aset_names:
             aset_hash_vals = self.column_data_hashes(asetn)
             aset_schema_hash = col_names_schema_digests[asetn]

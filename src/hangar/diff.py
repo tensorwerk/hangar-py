@@ -8,6 +8,8 @@ from .records import (
     metadata_record_raw_key_from_db_key,
     schema_column_record_from_db_key,
     schema_spec_from_db_val,
+    data_record_digest_val_from_db_val,
+    schema_hash_db_key_from_digest,
     ColumnSchemaKey,
     FlatColumnDataKey,
     NestedColumnDataKey,
@@ -197,7 +199,7 @@ def _raw_from_db_change(changes: Set[Tuple[bytes, bytes]]) -> Changes:
     metadata = map(metadata_record_raw_key_from_db_key, metadataKeys)
     schemas = {
         schema_column_record_from_db_key(k):
-            schema_spec_from_db_val(v) for k, v in schemaKeyVals
+            data_record_digest_val_from_db_val(v) for k, v in schemaKeyVals
     }
     return Changes(schema=schemas, samples=tuple(columndata), metadata=tuple(metadata))
 

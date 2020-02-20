@@ -19,7 +19,8 @@ from ..records import (
     hash_data_db_key_from_raw_key,
     schema_db_key_from_column,
     schema_hash_db_key_from_digest,
-    schema_db_val_from_spec,
+    schema_hash_record_db_val_from_spec,
+    schema_record_db_val_from_digest,
 )
 from ..records.parsing import generate_sample_name
 from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP, DataHashSpecsType
@@ -69,13 +70,13 @@ class FlatSubsampleReader(object):
 
     def __repr__(self):
         res = f'{self.__class__}('\
-              f'aset_name={self._column_name}, '\
+              f'column_name={self._column_name}, '\
               f'sample_name={self._samplen})'
         return res
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__} \
-                \n    Arrayset Name            : {self._column_name}\
+                \n    Column Name              : {self._column_name}\
                 \n    Sample Name              : {self._samplen}\
                 \n    Mode (read/write)        : "{self._mode}"\
                 \n    Number of Subsamples     : {self.__len__()}\n'
@@ -635,7 +636,7 @@ class NestedSampleReader:
 
     def __repr__(self):
         res = (
-            f'{self.__class__}('
+            f'{self.__class__.__qualname__}('
             f'repo_pth={self._path}, '
             f'columnname={self._column_name}, '
             f"{[f'{key}={val}, ' for key, val in self._schema.schema.items()]}, "
@@ -1169,36 +1170,30 @@ class NestedSampleWriter(NestedSampleReader):
         if self._is_conman:
             raise RuntimeError('Cannot call method inside column context manager.')
 
-        previous_schema_digest = self._schema.schema_hash_digest()
-        previousColumnSchemaKey = schema_db_key_from_column(column=self._column_name,
-                                                            layout=self.column_layout,
-                                                            digest=previous_schema_digest)
-
         self._schema.change_backend(backend, backend_options=backend_options)
 
         new_schema_digest = self._schema.schema_hash_digest()
-        newColumnSchemaKey = schema_db_key_from_column(column=self._column_name,
-                                                       layout=self.column_layout,
-                                                       digest=new_schema_digest)
-        newColumnSchemaVal = schema_db_val_from_spec(self._schema.schema)
-        newHashSchemaKey = schema_hash_db_key_from_digest(new_schema_digest)
+        columnSchemaKey = schema_db_key_from_column(self._column_name, layout=self.column_layout)
+        columnSchemaVal = schema_record_db_val_from_digest(new_schema_digest)
+        hashSchemaKey = schema_hash_db_key_from_digest(new_schema_digest)
+        hashSchemaVal = schema_hash_record_db_val_from_spec(self._schema.schema)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
         with self._txnctx.write() as ctx:
-            ctx.dataTxn.delete(previousColumnSchemaKey)
-            ctx.dataTxn.put(newColumnSchemaKey, newColumnSchemaVal)
-            ctx.hashTxn.put(newHashSchemaKey, newColumnSchemaVal, overwrite=False)
+            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
 
-        if self._schema.backend not in self._be_fs:
+        new_backend = self._schema.backend
+        if new_backend not in self._be_fs:
             fhands = open_file_handles(
-                backends=[self._schema.backend],
+                backends=[new_backend],
                 path=self._path,
                 mode='a',
                 schema=self._schema)
-            self._be_fs[self._schema.backend] = fhands[self._schema.backend]
+            self._be_fs[new_backend] = fhands[new_backend]
         else:
-            self._be_fs[self._schema.backend].close()
-        self._be_fs[self._schema.backend].open(mode='a')
-        self._be_fs[self._schema.backend].backend_opts = self._schema.backend_options
+            self._be_fs[new_backend].close()
+        self._be_fs[new_backend].open(mode='a')
+        self._be_fs[new_backend].backend_opts = self._schema.backend_options
         return

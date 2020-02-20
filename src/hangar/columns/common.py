@@ -97,7 +97,7 @@ class AsetTxn(object):
             self.close_write()
 
 
-def open_file_handles(backends, path, mode, schema) -> AccessorMapType:
+def open_file_handles(backends, path, mode, schema, *, remote_operation=False) -> AccessorMapType:
     """Open backend accessor file handles for reading
 
     Parameters
@@ -138,7 +138,7 @@ def open_file_handles(backends, path, mode, schema) -> AccessorMapType:
                     kwargs[arg] = schema.dtype
 
             fhandles[be] = accessor(**kwargs)
-            fhandles[be].open(mode=mode)
+            fhandles[be].open(mode=mode, remote_operation=remote_operation)
 
     if mode == 'a':
         if schema.backend in fhandles:

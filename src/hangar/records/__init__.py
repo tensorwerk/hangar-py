@@ -15,5 +15,5 @@ __all__ = column_parsers.__all__ + [
     'FlatColumnDataKey',
     'NestedColumnDataKey',
     'DataRecordVal',
-    'MetadataRecordKey'
+    'MetadataRecordKey',
 ]

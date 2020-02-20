@@ -92,7 +92,7 @@ def commit(repo: Repository, message):
     try:
         if not message:
             diff = co.diff.staged()
-            status_txt = status(co.branch_name, diff.diff)
+            status_txt = status(co._hashenv, co.branch_name, diff.diff)
             status_txt.seek(0)
             marker = '# Changes To Be committed: \n'
             hint = ['\n', '\n', marker, '# \n']
@@ -305,7 +305,7 @@ def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
 
     commits = repo.remote.fetch_data(remote=remote,
                                      commit=commit,
-                                     arrayset_names=column,
+                                     column_names=column,
                                      max_num_bytes=max_nbytes,
                                      retrieve_all_history=all_)
     click.echo(f'completed data for commits: {commits}')
@@ -419,7 +419,7 @@ def status(repo: Repository):
     co = repo.checkout(write=True)
     try:
         diff = co.diff.staged()
-        click.echo(status(co.branch_name, diff.diff).getvalue(), nl=False)
+        click.echo(status(co._hashenv, co.branch_name, diff.diff).getvalue(), nl=False)
     finally:
         co.close()
 

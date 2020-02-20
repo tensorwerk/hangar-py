@@ -2,7 +2,6 @@ from pathlib import Path
 import warnings
 
 import lmdb
-import numpy as np
 from tqdm import tqdm
 
 from ..records import (
@@ -20,8 +19,8 @@ from ..op_state import report_corruption_risk_on_parsing_error
 def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: Path):
 
     hq = hashs.HashQuery(hashenv)
-    narrays, nremote = hq.num_arrays(), 0
-    array_kvs = hq.gen_all_hash_keys_raw_array_vals_parsed()
+    narrays, nremote = hq.num_data_records(), 0
+    array_kvs = hq.gen_all_data_digests_and_parsed_backend_specs()
     try:
         bes = {}
         for digest, spec in tqdm(array_kvs, total=narrays, desc='verifying arrays'):
@@ -52,8 +51,8 @@ def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: Path):
 def _verify_schema_integrity(hashenv: lmdb.Environment):
 
     hq = hashs.HashQuery(hashenv)
-    schema_kvs = hq.gen_all_schema_keys_raw_vals_parsed()
-    nschemas = hq.num_schemas()
+    schema_kvs = hq.gen_all_schema_digests_and_parsed_specs()
+    nschemas = hq.num_schema_records()
     for digest, val in tqdm(schema_kvs, total=nschemas, desc='verifying schemas'):
         tcode = hashmachine.hash_type_code_from_digest(digest)
         calc_digest = hashmachine.schema_hash_digest(schema=val, tcode=tcode)
@@ -67,8 +66,8 @@ def _verify_schema_integrity(hashenv: lmdb.Environment):
 def _verify_metadata_integrity(labelenv: lmdb.Environment):
 
     mhq = hashs.HashQuery(labelenv)
-    meta_kvs = mhq.gen_all_hash_keys_raw_meta_vals_parsed()
-    nmeta = mhq.num_meta()
+    meta_kvs = mhq.gen_all_metadata_digests_and_decoded_values()
+    nmeta = mhq.num_metadata_records()
     for digest, val in tqdm(meta_kvs, total=nmeta, desc='verifying metadata'):
         tcode = hashmachine.hash_type_code_from_digest(digest)
         calc_digest = hashmachine.metadata_hash_digest(value=val, tcode=tcode)

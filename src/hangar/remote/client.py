@@ -614,7 +614,7 @@ class HangarClient(object):
         return s_mis_hsh
 
     def fetch_find_missing_schemas(self, commit):
-        c_schemaset = set(hashs.HashQuery(self.env.hashenv).list_all_schema_keys_raw())
+        c_schemaset = set(hashs.HashQuery(self.env.hashenv).list_all_schema_digests())
         c_schemas = list(c_schemaset)
 
         request = hangar_service_pb2.FindMissingSchemasRequest()

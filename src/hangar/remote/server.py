@@ -21,6 +21,7 @@ from .. import constants as c
 from ..context import Environments
 from ..txnctx import TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
+from ..columns.constructors import open_file_handles
 from ..records import commiting, hashs, heads, parsing, queries, summarize
 from ..records import (
     hash_schema_db_key_from_raw_key,
@@ -646,7 +647,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         """
         commit = request.commit
         c_schemas = set(request.schema_digests)
-        s_schemas = set(hashs.HashQuery(self.env.hashenv).list_all_schema_keys_raw())
+        s_schemas = set(hashs.HashQuery(self.env.hashenv).list_all_schema_digests())
         s_missing = list(c_schemas.difference(s_schemas))
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')

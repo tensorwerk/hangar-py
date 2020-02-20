@@ -29,29 +29,26 @@ cdef class ColumnSchemaKey:
     """Record listing `column` name and `layout` type.
     """
 
-    def __init__(self, str column, str layout, str digest):
+    def __init__(self, str column, str layout):
         self.column = column
         self.layout = layout
-        self.digest = digest
 
     def __repr__(self):
         return (f'{self.__class__.__name__}('
                 f'column="{self.column}", '
-                f'layout="{self.layout}", '
-                f'digest="{self.digest}")')
+                f'layout="{self.layout}")')
 
     def __iter__(self):
-        for attr in ['column', 'layout', 'digest']:
+        for attr in ['column', 'layout']:
             yield getattr(self, attr)
 
     def __eq__(self, other):
         return (isinstance(other, self.__class__) and
                 self.column == other.column and
-                self.layout == other.layout and
-                self.digest == other.digest)
+                self.layout == other.layout)
 
     def __hash__(self):
-        return hash((self.__class__, self.column, self.layout, self.digest))
+        return hash((self.__class__, self.column, self.layout))
 
 
 cdef class FlatColumnDataKey:

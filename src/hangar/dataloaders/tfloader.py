@@ -3,7 +3,7 @@ import warnings
 from typing import Sequence
 import random
 
-from .common import GroupedAsets
+from .common import GroupedColumns
 
 try:
     import tensorflow as tf
@@ -13,15 +13,15 @@ except (ImportError, ModuleNotFoundError):
         'installed correctly to use tensorflow dataloader functions') from None
 
 
-def yield_data(arraysets, sample_names, shuffle=False):  # pragma: no cover
+def yield_data(columns, sample_names, shuffle=False):  # pragma: no cover
     if shuffle:
         sample_names = list(sample_names)
         random.shuffle(sample_names)
     for name in sample_names:
-        yield tuple([aset[name] for aset in arraysets])
+        yield tuple([col[name] for col in columns])
 
 
-def make_tf_dataset(arraysets,
+def make_tf_dataset(columns,
                     keys: Sequence[str] = None,
                     index_range: slice = None,
                     shuffle: bool = True):
@@ -49,7 +49,7 @@ def make_tf_dataset(arraysets,
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.columns.column.Columns` or Sequence
+    columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column
         objects`
     keys : Sequence[str]
@@ -85,10 +85,10 @@ def make_tf_dataset(arraysets,
     :class:`tf.data.Dataset`
     """
     warnings.warn("Dataloaders are experimental in the current release.", UserWarning)
-    gasets = GroupedAsets(arraysets, keys, index_range)
-    generator = partial(yield_data, gasets.arrayset_array, gasets.sample_names, shuffle)
+    gcolumns = GroupedColumns(columns, keys, index_range)
+    generator = partial(yield_data, gcolumns.columns_col, gcolumns.sample_names, shuffle)
     res = tf.data.Dataset.from_generator(
         generator=generator,
-        output_types=gasets.get_types(converter=tf.as_dtype),
-        output_shapes=gasets.get_shapes(converter=tf.TensorShape))
+        output_types=gcolumns.get_types(converter=tf.as_dtype),
+        output_shapes=gcolumns.get_shapes(converter=tf.TensorShape))
     return res

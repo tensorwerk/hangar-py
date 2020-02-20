@@ -1,7 +1,7 @@
 import warnings
 from collections import namedtuple
 from typing import Sequence
-from .common import GroupedAsets
+from .common import GroupedColumns
 
 
 try:
@@ -67,23 +67,23 @@ def make_torch_dataset(columns,
         if not isinstance(keys, (list, tuple, set)):
             raise TypeError(f'type(keys): {type(keys)} != (list, tuple, set)')
 
-    gasets = GroupedAsets(arraysets, keys, index_range)
+    gcols = GroupedColumns(columns, keys, index_range)
     if field_names:
         if not isinstance(field_names, (list, tuple, set)):
             raise TypeError(f'type(field_names): {type(field_names)} not collection')
-        if len(field_names) != len(arraysets):
-            err = f'# field_names {len(field_names)} != # columns: {len(arraysets)}'
+        if len(field_names) != len(columns):
+            err = f'# field_names {len(field_names)} != # columns: {len(columns)}'
             raise ValueError(err)
         BTName = '_'.join(['BatchTuple', *field_names])
         BTFieldNames = field_names
     else:
-        BTName = '_'.join(['BatchTuple', *gasets.arrayset_names])
-        BTFieldNames = gasets.arrayset_names
+        BTName = '_'.join(['BatchTuple', *gcols.column_names])
+        BTFieldNames = gcols.column_names
 
     wrapper = namedtuple(BTName, field_names=BTFieldNames, rename=True)
     globals()[BTName] = wrapper
-    return TorchDataset(hangar_arraysets=gasets.arrayset_array,
-                        sample_names=gasets.sample_names,
+    return TorchDataset(hangar_columns=gcols.columns_col,
+                        sample_names=gcols.sample_names,
                         wrapper=wrapper)
 
 
@@ -114,8 +114,8 @@ class TorchDataset(torchdata.Dataset):
         __getitem__
     """
 
-    def __init__(self, hangar_arraysets, sample_names, wrapper):
-        self.hangar_arraysets = hangar_arraysets
+    def __init__(self, hangar_columns, sample_names, wrapper):
+        self.hangar_columns = hangar_columns
         self.sample_names = sample_names
         self.wrapper: namedtuple = wrapper
 
@@ -146,6 +146,6 @@ class TorchDataset(torchdata.Dataset):
         """
         key = self.sample_names[index]
         out = []
-        for aset in self.hangar_arraysets:
+        for aset in self.hangar_columns:
             out.append(aset.get(key))
         return self.wrapper._make(out)

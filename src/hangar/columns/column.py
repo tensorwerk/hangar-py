@@ -12,9 +12,11 @@ from .constructors import (
 )
 from ..records import (
     schema_db_key_from_column,
-    schema_db_val_from_spec,
+    schema_hash_record_db_val_from_spec,
     schema_hash_db_key_from_digest,
     schema_column_record_from_db_key,
+    schema_record_db_val_from_digest,
+    schema_spec_from_db_val,
     dynamic_layout_data_record_db_start_range_key,
 )
 from ..records.queries import RecordQuery
@@ -374,9 +376,7 @@ class Columns:
                 raise e from None
 
             column_layout = self._columns[column].column_layout
-            schema_digest = self._columns[column]._schema.schema_hash_digest()
-            columnSchemaKey = schema_db_key_from_column(
-                column, layout=column_layout, digest=schema_digest)
+            columnSchemaKey = schema_db_key_from_column(column, layout=column_layout)
             column_record = schema_column_record_from_db_key(columnSchemaKey)
             startRangeKey = dynamic_layout_data_record_db_start_range_key(column_record)
 
@@ -424,39 +424,29 @@ class Columns:
         except (ValueError, LookupError) as e:
             raise e from None
 
-        column_layout = 'nested' if contains_subsamples else 'flat'
-        schema = StringVariableShape(column_layout=column_layout,
-                                     dtype=str,
-                                     backend=backend,
-                                     backend_options=backend_options)
+        layout = 'nested' if contains_subsamples else 'flat'
+        schema = StringVariableShape(
+            dtype=str, column_layout=layout, backend=backend, backend_options=backend_options)
 
         schema_digest = schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column(
-            name, layout=column_layout, digest=schema_digest)
-        columnSchemaVal = schema_db_val_from_spec(schema.schema)
+        columnSchemaKey = schema_db_key_from_column(name, layout=layout)
+        columnSchemaVal = schema_record_db_val_from_digest(schema_digest)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
+        hashSchemaVal = schema_hash_record_db_val_from_spec(schema.schema)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
         txnctx = AsetTxn(self._dataenv, self._hashenv, self._stagehashenv)
         with txnctx.write() as ctx:
             ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
-            ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
+            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
 
         if contains_subsamples:
             setup_args = generate_nested_column(
-                txnctx=self._txnctx,
-                column_name=name,
-                path=self._repo_pth,
-                schema=schema,
-                mode='a')
+                txnctx=self._txnctx, column_name=name, path=self._repo_pth, schema=schema, mode='a')
         else:
             setup_args = generate_flat_column(
-                txnctx=self._txnctx,
-                column_name=name,
-                path=self._repo_pth,
-                schema=schema,
-                mode='a')
+                txnctx=self._txnctx, column_name=name, path=self._repo_pth, schema=schema, mode='a')
         self._columns[name] = setup_args
         return self.get(name)
 
@@ -533,27 +523,6 @@ class Columns:
         -------
         ModifierTypes
             instance object of the initialized column.
-
-        Raises
-        ------
-        PermissionError
-            If any enclosed column is opened in a connection manager.
-        ValueError
-            If provided name contains any non ascii letter characters
-            characters, or if the string is longer than 64 characters long.
-        ValueError
-            If required `shape` and `dtype` arguments are not provided in absence of
-            `prototype` argument.
-        ValueError
-            If `prototype` argument is not a C contiguous ndarray.
-        LookupError
-            If a column already exists with the provided name.
-        ValueError
-            If rank of maximum tensor shape > 31.
-        ValueError
-            If zero sized dimension in `shape` argument
-        ValueError
-            If the specified backend is not valid.
         """
         if self._any_is_conman():
             raise PermissionError('Not allowed while context manager is used.')
@@ -569,67 +538,53 @@ class Columns:
             if name in self._columns:
                 raise LookupError(f'Column already exists with name: {name}.')
 
-            if prototype is not None:
-                if not isinstance(prototype, np.ndarray):
-                    raise ValueError(
-                        f'If not `None`, `prototype` argument be `np.ndarray`-like.'
-                        f'Invalid value: {prototype} of type: {type(prototype)}')
-                elif not prototype.flags.c_contiguous:
-                    raise ValueError(f'`prototype` must be "C" contiguous array.')
-            elif isinstance(shape, (tuple, list, int)) and (dtype is not None):
-                prototype = np.zeros(shape, dtype=dtype)
-            else:
-                raise ValueError(f'`shape` & `dtype` required if no `prototype` set.')
+            if not isinstance(contains_subsamples, bool):
+                raise ValueError(f'contains_subsamples is not bool type')
 
-            if (0 in prototype.shape) or (prototype.ndim > 31):
-                raise ValueError(
-                    f'Invalid shape specification with ndim: {prototype.ndim} and '
-                    f'shape: {prototype.shape}. Array rank > 31 dimensions not '
-                    f'allowed AND all dimension sizes must be > 0.')
+            if prototype is not None:
+                if (shape is not None) or (dtype is not None):
+                    raise ValueError(f'cannot set both prototype and shape/dtype args.')
+            else:
+                prototype = np.zeros(shape, dtype=dtype)
+
+            # these shape and dtype vars will be used as downstream input
+            # (now that they have been sanitized for really crazy input values).
+            dtype = prototype.dtype
+            shape = prototype.shape
+            if not all([x > 0 for x in shape]):
+                raise ValueError(f'all dimensions must be sized greater than zero')
 
         except (ValueError, LookupError) as e:
             raise e from None
 
         column_layout = 'nested' if contains_subsamples else 'flat'
         if variable_shape:
-            schema = NdarrayVariableShape(dtype=prototype.dtype,
-                                          shape=prototype.shape,
-                                          column_layout=column_layout,
-                                          backend=backend,
-                                          backend_options=backend_options)
+            schema = NdarrayVariableShape(dtype=dtype, shape=shape, column_layout=column_layout,
+                                          backend=backend, backend_options=backend_options)
         else:
-            schema = NdarrayFixedShape(dtype=prototype.dtype,
-                                       shape=prototype.shape,
-                                       column_layout=column_layout,
-                                       backend=backend,
-                                       backend_options=backend_options)
+            schema = NdarrayFixedShape(dtype=dtype, shape=shape, column_layout=column_layout,
+                                       backend=backend, backend_options=backend_options)
+
         schema_digest = schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column(
-            name, layout=column_layout, digest=schema_digest)
-        columnSchemaVal = schema_db_val_from_spec(schema.schema)
+        columnSchemaKey = schema_db_key_from_column(name, layout=column_layout)
+        columnSchemaVal = schema_record_db_val_from_digest(schema_digest)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
+        hashSchemaVal = schema_hash_record_db_val_from_spec(schema.schema)
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
         txnctx = AsetTxn(self._dataenv, self._hashenv, self._stagehashenv)
         with txnctx.write() as ctx:
             ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
-            ctx.hashTxn.put(hashSchemaKey, columnSchemaVal, overwrite=False)
+            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
 
         if contains_subsamples:
             setup_args = generate_nested_column(
-                txnctx=self._txnctx,
-                column_name=name,
-                path=self._repo_pth,
-                schema=schema,
-                mode='a')
+                txnctx=self._txnctx, column_name=name, path=self._repo_pth, schema=schema, mode='a')
         else:
             setup_args = generate_flat_column(
-                txnctx=self._txnctx,
-                column_name=name,
-                path=self._repo_pth,
-                schema=schema,
-                mode='a')
+                txnctx=self._txnctx, column_name=name, path=self._repo_pth, schema=schema, mode='a')
+
         self._columns[name] = setup_args
         return self.get(name)
 
@@ -662,22 +617,24 @@ class Columns:
         query = RecordQuery(stageenv)
         stagedSchemaSpecs = query.schema_specs()
 
-        for column_record, schema in stagedSchemaSpecs.items():
-            sch = column_type_object_from_schema(schema)
+        staged_col_schemas = {}
+        with txnctx.read() as r_txn:
+            # need to do some conversions here...
+            # ref record digest -> hash db key -> schema spec dict -> schema obj
+            for column_record, schema_digest_rec in stagedSchemaSpecs.items():
+                hashSchemaKey = schema_hash_db_key_from_digest(schema_digest_rec.digest)
+                hashSchemaVal = r_txn.hashTxn.get(hashSchemaKey)
+                schema_dict = schema_spec_from_db_val(hashSchemaVal)
+                schema = column_type_object_from_schema(schema_dict)
+                staged_col_schemas[column_record] = schema
+
+        for column_record, schema in staged_col_schemas.items():
             if column_record.layout == 'nested':
                 column = generate_nested_column(
-                    txnctx=txnctx,
-                    column_name=column_record.column,
-                    path=repo_pth,
-                    schema=sch,
-                    mode='a')
+                    txnctx=txnctx, column_name=column_record.column, path=repo_pth, schema=schema, mode='a')
             else:
                 column = generate_flat_column(
-                    txnctx=txnctx,
-                    column_name=column_record.column,
-                    path=repo_pth,
-                    schema=sch,
-                    mode='a')
+                    txnctx=txnctx, column_name=column_record.column, path=repo_pth, schema=schema, mode='a')
             columns[column_record.column] = column
 
         return cls(mode='a',
@@ -715,22 +672,24 @@ class Columns:
         query = RecordQuery(cmtrefenv)
         cmtSchemaSpecs = query.schema_specs()
 
-        for column_record, schema in cmtSchemaSpecs.items():
-            sch = column_type_object_from_schema(schema)
+        cmt_col_schemas = {}
+        with txnctx.read() as r_txn:
+            # need to do some conversions here...
+            # ref record digest -> hash db key -> schema spec dict -> schema obj
+            for column_record, schema_digest_rec in cmtSchemaSpecs.items():
+                hashSchemaKey = schema_hash_db_key_from_digest(schema_digest_rec.digest)
+                hashSchemaVal = r_txn.hashTxn.get(hashSchemaKey)
+                schema_dict = schema_spec_from_db_val(hashSchemaVal)
+                schema = column_type_object_from_schema(schema_dict)
+                cmt_col_schemas[column_record] = schema
+
+        for column_record, schema in cmt_col_schemas.items():
             if column_record.layout == 'nested':
                 column = generate_nested_column(
-                    txnctx=txnctx,
-                    column_name=column_record.column,
-                    path=repo_pth,
-                    schema=sch,
-                    mode='r')
+                    txnctx=txnctx, column_name=column_record.column, path=repo_pth, schema=schema, mode='r')
             else:
                 column = generate_flat_column(
-                    txnctx=txnctx,
-                    column_name=column_record.column,
-                    path=repo_pth,
-                    schema=sch,
-                    mode='r')
+                    txnctx=txnctx, column_name=column_record.column, path=repo_pth, schema=schema, mode='r')
             columns[column_record.column] = column
 
         return cls(mode='r',

@@ -2,7 +2,7 @@ from typing import NamedTuple, Union, Sequence, Tuple, List, Optional
 
 import numpy as np
 
-
+from ..columns.constructors import open_file_handles, column_type_object_from_schema
 from ..backends import BACKEND_ACCESSOR_MAP, BACKEND_OPTIONS_MAP
 from ..context import Environments
 from ..records import parsing
@@ -100,7 +100,7 @@ class ContentWriter(object):
              schema_hash: str,
              received_data: Sequence[Tuple[str, np.ndarray]],
              backend: Optional[str] = None,
-             backend_opts: Optional[dict] = None) -> List[str]:
+             backend_options: Optional[dict] = None) -> List[str]:
         """Write data content to the hash records database
 
         Parameters
@@ -130,29 +130,16 @@ class ContentWriter(object):
         finally:
             TxnRegister().abort_reader_txn(self.env.hashenv)
         schema_val = schema_spec_from_db_val(schemaVal)
+        schema = column_type_object_from_schema(schema_val)
 
-        if backend is not None:
-            if backend not in BACKEND_ACCESSOR_MAP:
-                raise ValueError(f'Backend specifier: {backend} not known')
-            if backend_opts is None:
-                if backend == schema_val.schema_default_backend:
-                    backend_opts = schema_val.schema_default_backend_opts
-                else:
-                    backend_opts = BACKEND_OPTIONS_MAP[backend](
-                        backend_options=None,
-                        dtype=schema_val.schema_dtype).backend_options
-        else:
-            backend = schema_val.schema_default_backend
-            backend_opts = schema_val.schema_default_backend_opts
+        if (backend is not None) and ((backend != schema.backend) or (backend_options is not None)):
+            schema.change_backend(backend, backend_options=backend_options)
 
-        accessor = BACKEND_ACCESSOR_MAP[backend]
-        be_accessor = accessor(
-            repo_path=self.env.repo_path,
-            schema_shape=schema_val.schema_max_shape,
-            schema_dtype=np.typeDict[int(schema_val.schema_dtype)])
-        be_accessor.open(mode='a', remote_operation=True)
-        be_accessor.backend_opts = backend_opts
-
+        be_accessor = open_file_handles(backends=[schema.backend],
+                                        path=self.env.repo_path,
+                                        mode='a',
+                                        schema=schema,
+                                        remote_operation=True)[schema.backend]
         saved_digests = []
         hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
         try:

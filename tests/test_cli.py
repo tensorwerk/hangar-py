@@ -226,7 +226,6 @@ def test_commit_editor_empty_message(monkeypatch, repo_20_filled_samples_meta):
         nco.close()
 
 
-@pytest.mark.xfail(reason='remotes not updated yet')
 def test_clone(written_two_cmt_server_repo):
     server, base_repo = written_two_cmt_server_repo
     runner = CliRunner()
@@ -248,7 +247,6 @@ def test_clone(written_two_cmt_server_repo):
             new_repo._env._close_environments()
 
 
-@pytest.mark.xfail(reason='remotes not updated yet')
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_push_fetch_records(server_instance, backend):
 
@@ -259,8 +257,8 @@ def test_push_fetch_records(server_instance, backend):
             repo.init('foo', 'bar')
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
-            co1.columns.init_arrayset(
-                name='dummy', prototype=dummyData, backend_opts=backend)
+            co1.columns.create_ndarray_column(
+                name='dummy', prototype=dummyData, backend=backend)
             for idx in range(10):
                 dummyData[:] = idx
                 co1.columns['dummy'][str(idx)] = dummyData
@@ -288,18 +286,17 @@ def test_push_fetch_records(server_instance, backend):
             repo._env._close_environments()
 
 
-@pytest.mark.xfail(reason='remotes not updated yet')
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)
 @pytest.mark.parametrize('options', [
     ['origin', 'testbranch'],
     ['origin', 'master'],
     ['origin', 'testbranch', '--all-history'],
     ['origin', 'master', '--all-history'],
-    ['origin', 'testbranch', '--aset', 'data'],
-    ['origin', 'master', '--aset', 'data'],
-    ['origin', 'testbranch', '--aset', 'data', '--all-history'],
-    ['origin', 'master', '--aset', 'data', '--all-history'],
-    ['origin', 'testbranch', '--aset', 'data', '--all-history'],
+    ['origin', 'testbranch', '--column', 'data'],
+    ['origin', 'master', '--column', 'data'],
+    ['origin', 'testbranch', '--column', 'data', '--all-history'],
+    ['origin', 'master', '--column', 'data', '--all-history'],
+    ['origin', 'testbranch', '--column', 'data', '--all-history'],
     ['origin', 'master', '--nbytes', '3Kb'],
 ])
 def test_fetch_records_and_data(server_instance, backend, options):
@@ -310,8 +307,8 @@ def test_fetch_records_and_data(server_instance, backend, options):
             repo.init('foo', 'bar')
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
-            co1.columns.init_arrayset(
-                name='dummy', prototype=dummyData, backend_opts=backend)
+            co1.columns.create_ndarray_column(
+                name='dummy', prototype=dummyData, backend=backend)
             for idx in range(10):
                 dummyData[:] = idx
                 co1.columns['dummy'][str(idx)] = dummyData
@@ -486,9 +483,10 @@ def test_log(written_two_cmt_server_repo, capsys):
 
 def test_status(repo_20_filled_samples_meta):
     from hangar.records.summarize import status
+    repo = repo_20_filled_samples_meta
 
     dummyData = np.arange(50).astype(np.int64)
-    co2 = repo_20_filled_samples_meta.checkout(write=True)
+    co2 = repo.checkout(write=True)
     for idx in range(10, 20):
         dummyData[:] = idx
         co2.columns['dummy'][str(idx)] = dummyData
@@ -496,10 +494,9 @@ def test_status(repo_20_filled_samples_meta):
     co2.metadata['foo'] = 'bar'
     df = co2.diff.staged()
     co2.close()
-    expected = status('master', df.diff).getvalue()
-
+    expected = status(repo._env.hashenv, 'master', df.diff).getvalue()
     runner = CliRunner()
-    res = runner.invoke(cli.status, obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.status, obj=repo)
     assert res.exit_code == 0
     assert res.stdout == expected
 
@@ -767,7 +764,6 @@ def written_repo_with_1_sample(aset_samples_initialized_repo):
     yield aset_samples_initialized_repo
 
 
-@pytest.mark.xfail(reason='not sure if this will work or not')
 class TestImport(object):
 
     @staticmethod
@@ -878,7 +874,6 @@ class TestImport(object):
             co.close()
 
 
-@pytest.mark.xfail(reason='not sure if this will work or not')
 class TestExport(object):
     save_msg = "Data saved from custom save function"
 
@@ -986,7 +981,6 @@ class TestExport(object):
             assert res.exit_code == 0
 
 
-@pytest.mark.xfail(reason='not sure if this will work or not')
 class TestShow(object):
     show_msg = "Data is displayed from custom show function"
 

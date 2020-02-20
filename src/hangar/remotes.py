@@ -284,7 +284,7 @@ class Remotes(object):
                    branch: str = None,
                    commit: str = None,
                    *,
-                   arrayset_names: Optional[Sequence[str]] = None,
+                   column_names: Optional[Sequence[str]] = None,
                    max_num_bytes: int = None,
                    retrieve_all_history: bool = False) -> List[str]:
         """Retrieve the data for some commit which exists in a `partial` state.
@@ -299,7 +299,7 @@ class Remotes(object):
         commit : str, optional
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
-        arrayset_names : Optional[Sequence[str]]
+        column_names : Optional[Sequence[str]]
             Names of the columns which should be retrieved for the particular
             commits, any columns not named will not have their data fetched
             from the server. Default behavior is to retrieve all columns
@@ -371,9 +371,9 @@ class Remotes(object):
                                 notEmpty = curs.delete()
                     unpack_commit_ref(self._env.refenv, tmpDB, commit)
                     # handle column_names option
-                    if arrayset_names is None:
-                        arrayset_names = queries.RecordQuery(tmpDB).column_names()
-                    for asetn in arrayset_names:
+                    if column_names is None:
+                        column_names = queries.RecordQuery(tmpDB).column_names()
+                    for asetn in column_names:
                         cmtData_hashs = queries.RecordQuery(tmpDB).column_data_hashes(asetn)
                         allHashs.update(cmtData_hashs)
             finally:
