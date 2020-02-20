@@ -187,7 +187,7 @@ from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..utils import find_next_prime, random_string, set_blosc_nthreads
 from ..op_state import reader_checkout_only, writer_checkout_only
-from ..typesystem import Descriptor, OneOf, DictItems, checkedmeta
+from ..typesystem import Descriptor, OneOf, DictItems, SizedIntegerTuple, checkedmeta
 
 set_blosc_nthreads()
 
@@ -269,23 +269,27 @@ class LzfCompressionOptions(Descriptor):
         np.bool, np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16,
         np.int32, np.int64, np.float16, np.float32, np.float64, np.longdouble])))
 class HDF5_00_Allowed_Dtypes(Descriptor):
-    # Note. np.longdouble since np.float128 not guaranteed to be available on
-    # all system. this is a particular issue with some windows numpy builds.
+    """
+    Note. np.longdouble since np.float128 not guaranteed to be available on
+    all system. this is a particular issue with some windows numpy builds
+    """
     pass
 
 
 class HDF5_00_Options(metaclass=checkedmeta):
+    _shape = SizedIntegerTuple(size=32)
     _dtype = HDF5_00_Allowed_Dtypes()
     _lzf = LzfCompressionOptions()
     _gzip = GzipCompressionOptions()
     _blosc = BloscCompressionOptions()
     _avail_filters = ('_lzf', '_gzip', '_blosc')
 
-    def __init__(self, backend_options, dtype, *args, **kwargs):
+    def __init__(self, backend_options, dtype, shape, *args, **kwargs):
+        self._shape = shape
         self._dtype = dtype
+        self._selected_filter = None
         if backend_options is None:
             backend_options = self.default_options
-        self._selected_filter = None
 
         for filter_attr in self._avail_filters:
             with suppress((KeyError, ValueError)):
@@ -294,13 +298,32 @@ class HDF5_00_Options(metaclass=checkedmeta):
                 break
         else:  # N.B. for-else loop (ie. "no-break")
             raise ValueError(f'Invalid backend_options {backend_options}')
+        self._verify_data_nbytes_larger_than_clib_min()
+
+    def _verify_data_nbytes_larger_than_clib_min(self):
+        """blosc clib should not be used if data buffer size < 16 bytes.
+
+        Raises
+        ------
+        ValueError:
+            if the data size is not valid for the clib
+        """
+        if self._selected_filter in ['_blosc', None]:
+            num_items = np.prod(self._shape)
+            itemsize = np.dtype(self._dtype).itemsize
+            nbytes = itemsize * num_items
+            if nbytes <= 16:
+                raise ValueError(f'blosc clib requires data buffer size > 16 bytes')
 
     @property
     def default_options(self):
         if 'blosc' in hdf5plugin.FILTERS:
-            return {'complib': 'blosc:zstd', 'complevel': 3, 'shuffle': 'byte'}
-        else:
-            return {'complib': 'lzf', 'complevel': None, 'shuffle': True}
+            try:
+                self._verify_data_nbytes_larger_than_clib_min()
+                return {'complib': 'blosc:zstd', 'complevel': 3, 'shuffle': 'byte'}
+            except ValueError:
+                pass
+        return {'complib': 'lzf', 'complevel': None, 'shuffle': True}
 
     @property
     def backend_options(self):

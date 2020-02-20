@@ -78,15 +78,14 @@ class NdarraySchemaBase(ColumnBase):
         old_backend = self._backend
         old_backend_options = self._backend_options
         try:
-            self._backend = backend
-            self._backend_options = backend_options
-            # del and reset beopts object to re-verify input correctness.
             del self._beopts
+            self._backend = backend
+            self._beopts = backend_options
             self._backend_options = self._beopts.backend_options
         except (TypeError, ValueError) as e:
             del self._beopts
             self._backend = old_backend
-            self._backend_options = old_backend_options
+            self._beopts = old_backend_options
             self._backend_options = self._beopts.backend_options
             raise e from None
 

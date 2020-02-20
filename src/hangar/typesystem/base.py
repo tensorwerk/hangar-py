@@ -20,21 +20,29 @@ class ColumnBase(metaclass=checkedmeta):
         self._column_layout = column_layout
         self._column_type = column_type
         self._schema_attributes = ['_column_layout', '_column_type']
-        self.__beopts = None
+        self._hidden_be_opts = None
 
     @property
     def _beopts(self):
-        from ..backends import BACKEND_OPTIONS_MAP  # TODO: FIX IMPORT
-
-        if self.__beopts is None:
-            self.__beopts = BACKEND_OPTIONS_MAP[self.backend](
+        from ..backends import BACKEND_OPTIONS_MAP
+        if self._hidden_be_opts is None:
+            self._hidden_be_opts = BACKEND_OPTIONS_MAP[self.backend](
                 backend_options=self.backend_options,
-                dtype=self.dtype)
-        return self.__beopts
+                dtype=self.dtype,
+                shape=(self.shape if hasattr(self, '_shape') else None))
+        return self._hidden_be_opts
 
     @_beopts.deleter
     def _beopts(self):
-        self.__beopts = None
+        self._hidden_be_opts = None
+
+    @_beopts.setter
+    def _beopts(self, backend_options):
+        from ..backends import BACKEND_OPTIONS_MAP
+        self._hidden_be_opts = BACKEND_OPTIONS_MAP[self.backend](
+            backend_options=backend_options,
+            dtype=self.dtype,
+            shape=(self.shape if hasattr(self, '_shape') else None))
 
     @property
     def column_layout(self):

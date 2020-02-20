@@ -634,14 +634,12 @@ class NestedSampleReader:
         self._schema = schema
 
     def __repr__(self):
-        res = f'{self.__class__}('\
-              f'repo_pth={self._path}, '\
-              f'columnname={self._column_name}, '\
-              f'default_schema_hash={self._dflt_schema_hash}, '\
-              f'isVar={self._schema_variable}, '\
-              f'varMaxShape={self._schema_max_shape}, '\
-              f'varDtypeNum={self._schema_dtype_num}, '\
-              f'mode={self._mode})'
+        res = (
+            f'{self.__class__}('
+            f'repo_pth={self._path}, '
+            f'columnname={self._column_name}, '
+            f"{[f'{key}={val}, ' for key, val in self._schema.schema.items()]}, "
+            f'mode={self._mode})')
         return res
 
     def _repr_pretty_(self, p, cycle):

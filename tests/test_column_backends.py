@@ -39,31 +39,6 @@ def test_setting_backend_property_cannot_change_backend(repo, array5by7, backend
     rco.close()
 
 
-@pytest.mark.xfail(reason='no longer exists')
-@pytest.mark.parametrize('backend', fixed_shape_backend_params)
-@pytest.mark.parametrize('subsamples', [True, False])
-def test_backend_opts_property_reports_correct_defaults(repo, array5by7, backend, subsamples):
-    from hangar.backends import backend_opts_from_heuristics
-    expected_opts = backend_opts_from_heuristics(backend,
-                                                 array5by7,
-                                                 variable_shape=False)
-    wco = repo.checkout(write=True)
-    aset = wco.columns.create_ndarray_column('aset', prototype=array5by7,
-                                     backend_opts=backend, contains_subsamples=subsamples)
-    assert aset.backend_options == expected_opts
-    if subsamples:
-        aset[0] = {0: array5by7}
-    else:
-        aset[0] = array5by7
-    wco.commit('first')
-    wco.close()
-
-    rco = repo.checkout()
-    naset = rco.columns['aset']
-    assert naset.backend_opts == expected_opts
-    rco.close()
-
-
 @pytest.mark.parametrize('subsamples', [True, False])
 @pytest.mark.parametrize('backend', fixed_shape_backend_params)
 def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by7, backend, subsamples):
@@ -327,7 +302,6 @@ def dummy_writer_checkout(classrepo):
 
 class TestComplibRestrictions:
 
-    @pytest.mark.xfail(reason='check not yet implemented', strict=True)
     @pytest.mark.parametrize('backend', ['01', '00'])
     @pytest.mark.parametrize('subsamples', [True, False])
     @pytest.mark.parametrize('complib', [
@@ -347,20 +321,19 @@ class TestComplibRestrictions:
         be_opts = {'complib': complib, 'complevel': 3, 'shuffle': 'byte'}
 
         # prototype spec
-        with pytest.raises(ValueError, match='Blosc compression'):
+        with pytest.raises(ValueError, match='blosc clib requires'):
             proto = np.zeros(shape, dtype=dtype)
             wco.columns.create_ndarray_column(
                 'aset', prototype=proto, backend=backend,
                 backend_options=be_opts, contains_subsamples=subsamples)
 
         # shape and dtype spec
-        with pytest.raises(ValueError, match='Blosc compression'):
+        with pytest.raises(ValueError, match='blosc clib requires'):
             wco.columns.create_ndarray_column(
                 'aset', shape=shape, dtype=dtype, backend=backend,
                 backend_options=be_opts, contains_subsamples=subsamples)
 
 
-@pytest.mark.xfail(reason='check not yet implemented', strict=True)
 @pytest.mark.parametrize('backend', ['01', '00'])
 @pytest.mark.parametrize('subsamples', [True, False])
 @pytest.mark.parametrize('dtype,shape', [
@@ -377,17 +350,16 @@ def test_schema_smaller_16_bytes_does_not_use_heuristic_to_select_blosc(
     proto = np.zeros(shape, dtype=dtype)
     aset = wco.columns.create_ndarray_column(
         'aset', prototype=proto, backend=backend, contains_subsamples=subsamples)
+    bad_clibs = ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd']
+    assert aset.backend_options['complib'] not in bad_clibs
     if subsamples:
         aset[0] = {0: proto}
     else:
         aset[0] = proto
-
-    bad_clibs = ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd']
     assert aset.backend_options['complib'] not in bad_clibs
     wco.close()
 
 
-@pytest.mark.xfail(reason='check not yet implemented', strict=True)
 @pytest.mark.parametrize('backend', ['01', '00'])
 @pytest.mark.parametrize('subsamples', [True, False])
 @pytest.mark.parametrize('complib', [
@@ -405,14 +377,14 @@ def test_schema_smaller_16_bytes_cannot_change_to_blosc_backend(
 
     wco = repo.checkout(write=True)
     aset = wco.columns.create_ndarray_column(
-        'aset', shape=shape, dtype=dtype, backend_opts=backend, contains_subsamples=subsamples)
+        'aset', shape=shape, dtype=dtype, backend=backend, contains_subsamples=subsamples)
     proto = np.zeros(shape, dtype=dtype)
     if subsamples:
         aset[0] = {0: proto}
     else:
         aset[0] = proto
 
-    be_opts = {'backend': backend, 'complib': complib, 'complevel': 3, 'shuffle': None}
-    with pytest.raises(ValueError, match='Blosc compression'):
-        aset.change_backend(be_opts)
+    be_opts = {'complib': complib, 'complevel': 3, 'shuffle': None}
+    with pytest.raises(ValueError, match='blosc clib requires'):
+        aset.change_backend(backend=backend, backend_options=be_opts)
     wco.close()
