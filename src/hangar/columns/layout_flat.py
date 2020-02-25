@@ -429,7 +429,7 @@ class FlatSampleWriter(FlatSampleReader):
         self._stack.close()
         self._enter_count -= 1
 
-    def __set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
+    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
         """Verify if key / value pair is valid to be written in this column
 
         Parameters
@@ -452,7 +452,7 @@ class FlatSampleWriter(FlatSampleReader):
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
-    def __perform_set(self, key: KeyType, value: np.ndarray) -> None:
+    def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
         """Internal write method. Assumes all arguments validated and context is open
 
         Parameters
@@ -551,8 +551,8 @@ class FlatSampleWriter(FlatSampleReader):
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
-            self.__set_arg_validate(key, value)
-            self.__perform_set(key, value)
+            self._set_arg_validate(key, value)
+            self._perform_set(key, value)
 
     def append(self, value: np.ndarray) -> KeyType:
         """Store some data in a sample with an automatically generated key.
@@ -581,8 +581,8 @@ class FlatSampleWriter(FlatSampleReader):
             if not self._is_conman:
                 stack.enter_context(self)
             key = generate_sample_name()
-            self.__set_arg_validate(key, value)
-            self.__perform_set(key, value)
+            self._set_arg_validate(key, value)
+            self._perform_set(key, value)
             return key
 
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
@@ -622,9 +622,9 @@ class FlatSampleWriter(FlatSampleReader):
                 other.update(kwargs)
 
             for key, val in other.items():
-                self.__set_arg_validate(key, val)
+                self._set_arg_validate(key, val)
             for key, val in other.items():
-                self.__perform_set(key, val)
+                self._perform_set(key, val)
 
     def __delitem__(self, key: KeyType) -> None:
         """Remove a sample from the column. Convenience method to :meth:`delete`.

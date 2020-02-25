@@ -191,12 +191,12 @@ class TestReaderWriterDiff(object):
 
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='master')
-        co.columns.create_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
+        co.define_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
         co.commit('aset init in master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
-        co.columns.create_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
+        co.define_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
         co.commit('aset init in dev')
         co.close()
 
@@ -212,8 +212,8 @@ class TestReaderWriterDiff(object):
         # t21 and t22
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True, branch='master')
-        co.columns.create_ndarray_column(name='testing_aset1', shape=(5, 7), dtype=np.float64)
-        co.columns.create_ndarray_column(name='testing_aset2', shape=(5, 7), dtype=np.float64)
+        co.define_ndarray_column(name='testing_aset1', shape=(5, 7), dtype=np.float64)
+        co.define_ndarray_column(name='testing_aset2', shape=(5, 7), dtype=np.float64)
         co.commit('added asets')
         co.close()
         repo.create_branch('testbranch')
@@ -221,14 +221,14 @@ class TestReaderWriterDiff(object):
         co = repo.checkout(write=True, branch='master')
         del co.columns['testing_aset1']
         del co.columns['testing_aset2']
-        co.columns.create_ndarray_column(name='testing_aset2', shape=(5, 7), dtype=np.float32)
+        co.define_ndarray_column(name='testing_aset2', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         del co.columns['testing_aset1']
         del co.columns['testing_aset2']
-        co.columns.create_ndarray_column(name='testing_aset1', shape=(5, 7), dtype=np.float32)
+        co.define_ndarray_column(name='testing_aset1', shape=(5, 7), dtype=np.float32)
         co.commit('mutation and removal from dev')
         co.close()
 
@@ -245,20 +245,20 @@ class TestReaderWriterDiff(object):
         # t3
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True, branch='master')
-        co.columns.create_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
+        co.define_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
         co.commit('added aset')
         co.close()
         repo.create_branch('testbranch')
 
         co = repo.checkout(write=True, branch='master')
         del co.columns['testing_aset']
-        co.columns.create_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
+        co.define_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
         co.commit('mutation from master')
         co.close()
 
         co = repo.checkout(write=True, branch='testbranch')
         del co.columns['testing_aset']
-        co.columns.create_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float32)
+        co.define_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float32)
         co.commit('mutation from dev')
         co.close()
 
@@ -343,7 +343,7 @@ class TestReaderWriterDiff(object):
         repo.create_branch('testbranch')
         co = repo.checkout(write=True, branch='testbranch')
         aset = co.columns['writtenaset']
-        aset2 = co.columns.create_ndarray_column('aset2', prototype=array5by7)
+        aset2 = co.define_ndarray_column('aset2', prototype=array5by7)
         aset2[1] = array5by7
         with aset, co.metadata:
             aset[100] = array5by7
@@ -403,7 +403,7 @@ class TestWriterDiff(object):
     def test_status_and_staged_aset(self, aset_samples_initialized_repo):
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
-        co.columns.create_ndarray_column(name='sampleaset', shape=(3, 5), dtype=np.float32)
+        co.define_ndarray_column(name='sampleaset', shape=(3, 5), dtype=np.float32)
         assert co.diff.status() == 'DIRTY'
         diff = co.diff.staged()
         assert 'sampleaset' in [x.column for x in diff.diff.added.schema]

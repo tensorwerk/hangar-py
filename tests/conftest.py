@@ -61,6 +61,7 @@ def managed_tmpdir(monkeypatch, tmp_path):
     monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 5)
     monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
     monkeypatch.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 50)
+    monkeypatch.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
     hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
@@ -77,7 +78,7 @@ def repo(managed_tmpdir) -> Repository:
 @pytest.fixture()
 def aset_samples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float64)
+    co.define_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float64)
     co.commit('this is a commit message')
     co.close()
     yield repo
@@ -86,7 +87,7 @@ def aset_samples_initialized_repo(repo) -> Repository:
 @pytest.fixture()
 def aset_subsamples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(
+    co.define_ndarray_column(
         name='writtenaset', shape=(5, 7), dtype=np.float64, contains_subsamples=True)
     co.commit('this is a commit message')
     co.close()
@@ -96,7 +97,7 @@ def aset_subsamples_initialized_repo(repo) -> Repository:
 @pytest.fixture(params=fixed_shape_backend_params)
 def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
     co = aset_samples_initialized_repo.checkout(write=True)
-    second_aset = co.columns.create_ndarray_column('second_aset', prototype=array5by7, backend=request.param)
+    second_aset = co.define_ndarray_column('second_aset', prototype=array5by7, backend=request.param)
     first_aset = co.columns['writtenaset']
     for i in range(0, 20):
         array5by7[:] = i
@@ -111,7 +112,7 @@ def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) ->
 @pytest.fixture(params=fixed_shape_backend_params)
 def repo_300_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
     co = aset_samples_initialized_repo.checkout(write=True)
-    aset = co.columns.create_ndarray_column('aset', prototype=array5by7, backend=request.param)
+    aset = co.define_ndarray_column('aset', prototype=array5by7, backend=request.param)
     with aset:
         for i in range(300):
             array5by7[:] = i
@@ -126,7 +127,7 @@ def repo_20_filled_samples_meta(repo) -> Repository:
     # for diff testing
     dummyData = np.arange(50).astype(np.int64)
     co1 = repo.checkout(write=True, branch='master')
-    co1.columns.create_ndarray_column(name='dummy', prototype=dummyData)
+    co1.define_ndarray_column(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
         co1.columns['dummy'][idx] = dummyData
@@ -140,7 +141,7 @@ def repo_20_filled_samples_meta(repo) -> Repository:
 @pytest.fixture(params=variable_shape_backend_params)
 def aset_samples_var_shape_initialized_repo(request, repo) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(
+    co.define_ndarray_column(
         name='writtenaset', shape=(10, 10), dtype=np.float64, variable_shape=True, backend=request.param)
     co.commit('this is a commit message')
     co.close()
@@ -169,7 +170,7 @@ def randomsizedarray():
 @pytest.fixture(params=fixed_shape_backend_params)
 def two_commit_filled_samples_repo(request, repo, array5by7) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(
+    co.define_ndarray_column(
         name='writtenaset', shape=(5, 7), dtype=np.float32, backend=request.param)
     for cIdx in range(2):
         if cIdx != 0:
@@ -191,7 +192,7 @@ def repo_1_br_no_conf(repo) -> Repository:
 
     dummyData = np.arange(50)
     co1 = repo.checkout(write=True, branch='master')
-    co1.columns.create_ndarray_column(name='dummy', prototype=dummyData)
+    co1.define_ndarray_column(name='dummy', prototype=dummyData)
     for idx in range(10):
         dummyData[:] = idx
         co1.columns['dummy'][str(idx)] = dummyData

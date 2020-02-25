@@ -68,7 +68,7 @@ def test_write_multiple_arrayset_single_samples(aset_samples_initialized_repo, a
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
     assert np.allclose(array5by7, wco.columns['writtenaset']['0'])
     assert np.allclose(array10, wco.columns['newaset']['0'])
@@ -87,7 +87,7 @@ def test_write_in_context_manager_no_loop(aset_samples_initialized_repo, array5b
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     with wco:
         assert wco._is_conman is True
         wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
@@ -110,7 +110,7 @@ def test_write_in_context_manager_many_samples_looping(aset_samples_initialized_
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     with wco:
         assert wco._is_conman is True
         for idx in range(100):
@@ -144,7 +144,7 @@ def test_write_in_context_manager_many_samples_looping(aset_samples_initialized_
 def test_write_fails_if_checkout_closed(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], 0] = [array5by7, array10]
     wco.close()
     with pytest.raises((PermissionError, UnboundLocalError)):
@@ -161,7 +161,7 @@ def test_write_fails_if_checkout_closed(aset_samples_initialized_repo, array5by7
 def test_write_context_manager_fails_if_checkout_closed(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], 0] = [array5by7, array10]
     wco.close()
     with pytest.raises(PermissionError):
@@ -179,7 +179,7 @@ def test_write_fails_multiple_arrayset_multiple_samples(aset_samples_initialized
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     with pytest.raises(SyntaxError):
         wco[['writtenaset', 'newaset'], ['0', 1]] = [[array5by7, array5by7], [array10, array10]]
     wco.close()
@@ -189,7 +189,7 @@ def test_write_fails_nonmatching_multiple_asets_single_sample(aset_samples_initi
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     with pytest.raises(ValueError):
         wco[['writtenaset', 'newaset'], '0'] = [array5by7]
     with pytest.raises(TypeError):
@@ -215,7 +215,7 @@ def test_write_fails_nonmatching_single_aset_multiple_samples(aset_samples_initi
 def test_write_fails_multiple_asets_single_sample_not_compatible(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
 
     with pytest.raises(ValueError):
         wco[['writtenaset', 'newaset'], 0] = [array10, array5by7]
@@ -266,7 +266,7 @@ def test_writer_co_read_multiple_aset_single_samples(aset_samples_initialized_re
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -299,7 +299,7 @@ def test_writer_co_read_multtiple_aset_multiple_samples(aset_samples_initialized
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -357,7 +357,7 @@ def test_writer_co_read_in_context_manager_no_loop(aset_samples_initialized_repo
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
     with wco:
         assert wco._is_conman is True
@@ -369,7 +369,7 @@ def test_writer_co_read_in_context_manager_many_samples_looping(aset_samples_ini
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     with wco:
         for idx in range(100):
             array10[:] = idx
@@ -403,7 +403,7 @@ def test_writer_co_read_ellipses_select_aset_single_sample(aset_samples_initiali
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -426,7 +426,7 @@ def test_writer_co_read_slice_select_aset_single_sample(aset_samples_initialized
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -449,7 +449,7 @@ def test_writer_co_read_ellipses_select_aset_multiple_samples(aset_samples_initi
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -481,7 +481,7 @@ def test_writer_co_read_slice_select_aset_multiple_samples(aset_samples_initiali
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -510,7 +510,7 @@ def test_writer_co_read_two_asets_one_invalid_fieldname_is_renamed(aset_samples_
     wco = aset_samples_initialized_repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.columns.create_ndarray_column(invalid_name, prototype=array10)
+    wco.define_ndarray_column(invalid_name, prototype=array10)
     wco['writtenaset', (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
 
@@ -539,8 +539,8 @@ def test_writer_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array
     wco = repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.columns.create_ndarray_column(invalid_name1, prototype=array5by7)
-    wco.columns.create_ndarray_column(invalid_name2, prototype=array10)
+    wco.define_ndarray_column(invalid_name1, prototype=array5by7)
+    wco.define_ndarray_column(invalid_name2, prototype=array10)
     wco[invalid_name1, (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name2, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
 
@@ -573,8 +573,8 @@ def test_writer_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array
     wco = repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.columns.create_ndarray_column(invalid_name1, prototype=array5by7)
-    wco.columns.create_ndarray_column(invalid_name2, prototype=array10)
+    wco.define_ndarray_column(invalid_name1, prototype=array5by7)
+    wco.define_ndarray_column(invalid_name2, prototype=array10)
     wco[invalid_name1, (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name2, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
 
@@ -609,7 +609,7 @@ def test_writer_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(
     wco = aset_samples_initialized_repo.checkout(write=True)
     wco.columns['writtenaset'][0] = array5by7
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column(invalid_name, prototype=array10)
+    wco.define_ndarray_column(invalid_name, prototype=array10)
     wco.columns[invalid_name][0] = array10
 
     with pytest.warns(UserWarning, match='Column names contains characters'):
@@ -621,7 +621,7 @@ def test_writer_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(
 
 def test_writer_co_aset_finds_connection_manager_of_any_aset_in_cm(aset_samples_initialized_repo):
     wco = aset_samples_initialized_repo.checkout(write=True)
-    wco.columns.create_ndarray_column('second', shape=(20,), dtype=np.uint8)
+    wco.define_ndarray_column('second', shape=(20,), dtype=np.uint8)
     asets = wco.columns
 
     with wco.columns['second'] as second_aset:
@@ -809,7 +809,7 @@ def test_reader_co_read_multiple_aset_single_samples(aset_samples_initialized_re
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -845,7 +845,7 @@ def test_reader_co_read_multtiple_aset_multiple_samples(aset_samples_initialized
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -910,7 +910,7 @@ def test_reader_co_read_in_context_manager_no_loop(aset_samples_initialized_repo
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
     wco.commit('first')
     wco.close()
@@ -926,7 +926,7 @@ def test_reader_co_read_in_context_manager_many_samples_looping(aset_samples_ini
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     with wco:
         for idx in range(100):
             array10[:] = idx
@@ -963,7 +963,7 @@ def test_reader_co_read_ellipses_select_aset_single_sample(aset_samples_initiali
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -989,7 +989,7 @@ def test_reader_co_read_slice_select_aset_single_sample(aset_samples_initialized
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -1015,7 +1015,7 @@ def test_reader_co_read_ellipses_select_aset_multiple_samples(aset_samples_initi
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -1050,7 +1050,7 @@ def test_reader_co_read_slice_select_aset_multiple_samples(aset_samples_initiali
     wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column('newaset', prototype=array10)
+    wco.define_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
     wco.columns['newaset'][0] = array10
     wco.columns['newaset'][1] = array10 + 1
@@ -1082,7 +1082,7 @@ def test_reader_co_read_two_asets_one_invalid_fieldname_is_renamed(aset_samples_
     wco = aset_samples_initialized_repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.columns.create_ndarray_column(invalid_name, prototype=array10)
+    wco.define_ndarray_column(invalid_name, prototype=array10)
     wco['writtenaset', (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
     wco.commit('yo')
@@ -1114,8 +1114,8 @@ def test_reader_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array
     wco = repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.columns.create_ndarray_column(invalid_name1, prototype=array5by7)
-    wco.columns.create_ndarray_column(invalid_name2, prototype=array10)
+    wco.define_ndarray_column(invalid_name1, prototype=array5by7)
+    wco.define_ndarray_column(invalid_name2, prototype=array10)
     wco[invalid_name1, (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name2, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
     wco.commit('yo')
@@ -1151,8 +1151,8 @@ def test_reader_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array
     wco = repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.columns.create_ndarray_column(invalid_name1, prototype=array5by7)
-    wco.columns.create_ndarray_column(invalid_name2, prototype=array10)
+    wco.define_ndarray_column(invalid_name1, prototype=array5by7)
+    wco.define_ndarray_column(invalid_name2, prototype=array10)
     wco[invalid_name1, (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name2, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
     wco.commit('yo')
@@ -1190,7 +1190,7 @@ def test_reader_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(as
     wco = aset_samples_initialized_repo.checkout(write=True)
     wco.columns['writtenaset'][0] = array5by7
     array10 = np.arange(10, dtype=np.float32)
-    wco.columns.create_ndarray_column(invalid_name, prototype=array10)
+    wco.define_ndarray_column(invalid_name, prototype=array10)
     wco.columns[invalid_name][0] = array10
     wco.commit('commit message')
     wco.close()

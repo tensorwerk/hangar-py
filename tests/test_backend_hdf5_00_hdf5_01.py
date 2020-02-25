@@ -77,7 +77,7 @@ def test_arrayset_init_with_various_blosc_opts(repo, array5by7, clib, clibCode, 
         'complevel': clevel,
     }
     wco = repo.checkout(write=True)
-    aset = wco.columns.create_ndarray_column(
+    aset = wco.define_ndarray_column(
         'aset', prototype=array5by7, backend=be_code, backend_options=opts)
     assert aset.backend == be_code
     with aset as a:
@@ -105,7 +105,7 @@ def test_arrayset_init_with_various_lzf_opts(repo, array5by7, cshuffle, cshuffle
         'complevel': None,
     }
     wco = repo.checkout(write=True)
-    aset = wco.columns.create_ndarray_column(
+    aset = wco.define_ndarray_column(
         'aset', prototype=array5by7, backend=be_code, backend_options=opts)
     assert aset.backend == be_code
     with aset as a:
@@ -131,7 +131,7 @@ def test_arrayset_init_with_various_gzip_opts(repo, array5by7, clevel, cshuffle,
         'complevel': clevel,
     }
     wco = repo.checkout(write=True)
-    aset = wco.columns.create_ndarray_column(
+    aset = wco.define_ndarray_column(
         'aset', prototype=array5by7, backend=be_code, backend_options=opts)
     assert aset.backend == be_code
     with aset as a:
@@ -163,7 +163,7 @@ def test_arrayset_overflows_collection_size_collection_count(be_code, repo, monk
 
     wco = repo.checkout(write=True)
     proto = np.arange(50).astype(np.uint16)
-    aset = wco.columns.create_ndarray_column('aset', prototype=proto, backend=be_code)
+    aset = wco.define_ndarray_column('aset', prototype=proto, backend=be_code)
     with aset as cm_aset:
         for i in range(500):
             proto[:] = i

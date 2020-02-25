@@ -6,7 +6,7 @@ import numpy as np
 @pytest.fixture()
 def diverse_repo(repo):
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column('test', prototype=np.arange(10))
+    co.define_ndarray_column('test', prototype=np.arange(10))
     co.columns['test'][0] = np.arange(10)
     co.columns['test'][1] = np.arange(10) + 1
     co.columns['test'][2] = np.arange(10) + 2
@@ -24,8 +24,8 @@ def diverse_repo(repo):
     co.close()
     repo.create_branch('dev')
     co = repo.checkout(write=True, branch='dev')
-    dset_trlabels = co.columns.create_ndarray_column(name='train_labels', prototype=sample_trlabel)
-    dset_trimgs = co.columns.create_ndarray_column('train_images', prototype=sample_trimg, backend='01')
+    dset_trlabels = co.define_ndarray_column(name='train_labels', prototype=sample_trlabel)
+    dset_trimgs = co.define_ndarray_column('train_images', prototype=sample_trimg, backend='01')
     dset_trlabels[0] = sample_trlabel
     dset_trlabels[1] = sample_trlabel + 1
     dset_trlabels[2] = sample_trlabel + 2
@@ -36,8 +36,8 @@ def diverse_repo(repo):
     co.close()
 
     co = repo.checkout(write=True, branch='master')
-    dset_vimgs = co.columns.create_ndarray_column('valid_images', prototype=sample_vimg)
-    dset_vlabels = co.columns.create_ndarray_column('valid_labels', prototype=sample_vlabel)
+    dset_vimgs = co.define_ndarray_column('valid_images', prototype=sample_vimg)
+    dset_vlabels = co.define_ndarray_column('valid_labels', prototype=sample_vlabel)
     dset_vlabels[0] = sample_vlabel
     dset_vlabels[1] = sample_vlabel + 1
     dset_vlabels[2] = sample_vlabel + 2

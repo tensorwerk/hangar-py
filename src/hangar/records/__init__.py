@@ -8,6 +8,7 @@ from .recordstructs import (
     MetadataRecordKey,
 )
 
+
 __all__ = column_parsers.__all__ + [
     'CompatibleData',
     'ColumnSchemaKey',

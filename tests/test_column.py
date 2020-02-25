@@ -17,19 +17,19 @@ class TestColumn(object):
     def test_invalid_column_name(self, repo, randomsizedarray, name):
         co = repo.checkout(write=True)
         with pytest.raises(ValueError):
-            co.columns.create_ndarray_column(name=name, prototype=randomsizedarray)
+            co.define_ndarray_column(name=name, prototype=randomsizedarray)
         with pytest.raises(ValueError):
-            co.columns.create_str_column(name=name)
+            co.define_str_column(name=name)
         co.close()
 
     def test_read_only_mode(self, aset_samples_initialized_repo):
         import hangar
         co = aset_samples_initialized_repo.checkout()
         assert isinstance(co, hangar.checkout.ReaderCheckout)
-        with pytest.raises(PermissionError):
-            assert co.columns.create_ndarray_column('foo')
-        with pytest.raises(PermissionError):
-            assert co.columns.create_str_column('foo')
+        with pytest.raises(AttributeError):
+            assert co.define_ndarray_column('foo')
+        with pytest.raises(AttributeError):
+            assert co.define_str_column('foo')
         with pytest.raises(PermissionError):
             del co.columns['foo']
         with pytest.raises(PermissionError):
@@ -66,7 +66,7 @@ class TestColumn(object):
         with pytest.raises(KeyError):
             del co.columns['writtenaset']
 
-        co.columns.create_ndarray_column(
+        co.define_ndarray_column(
             name='writtenaset', shape=(5, 7), dtype=np.float64, backend=aset_backend)
         assert len(co.columns) == 1
         del co.columns['writtenaset']
@@ -76,7 +76,7 @@ class TestColumn(object):
         co = aset_samples_initialized_repo.checkout(write=True)
         assert len(co.columns) == 0
 
-        co.columns.create_ndarray_column(
+        co.define_ndarray_column(
             name='writtenaset', shape=(5, 7), dtype=np.float64, backend=aset_backend)
         co.commit('this is a commit message')
         co.close()
@@ -90,9 +90,9 @@ class TestColumn(object):
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_init_again(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        co.columns.create_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
+        co.define_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
         with pytest.raises(LookupError):
-            co.columns.create_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
+            co.define_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
@@ -100,24 +100,24 @@ class TestColumn(object):
         co = repo.checkout(write=True)
         shape = (0, 1, 2)
         with pytest.raises(ValueError):
-            co.columns.create_ndarray_column('aset', shape=shape, dtype=np.int, backend=aset_backend)
+            co.define_ndarray_column('aset', shape=shape, dtype=np.int, backend=aset_backend)
         shape = [1] * 31
-        aset = co.columns.create_ndarray_column('aset1', shape=shape, dtype=np.int, backend=aset_backend)
+        aset = co.define_ndarray_column('aset1', shape=shape, dtype=np.int, backend=aset_backend)
         assert len(aset.shape) == 31
         shape = [1] * 32
         with pytest.raises(ValueError):
             # maximum tensor rank must be <= 31
-            co.columns.create_ndarray_column('aset2', shape=shape, dtype=np.int, backend=aset_backend)
+            co.define_ndarray_column('aset2', shape=shape, dtype=np.int, backend=aset_backend)
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_column_with_empty_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.array(1, dtype=np.int64)
-        aset = co.columns.create_ndarray_column('aset1', shape=(), dtype=np.int64, backend=aset_backend)
+        aset = co.define_ndarray_column('aset1', shape=(), dtype=np.int64, backend=aset_backend)
         aset['1'] = arr
         co.commit('this is a commit message')
-        aset = co.columns.create_ndarray_column('aset2', prototype=arr)
+        aset = co.define_ndarray_column('aset2', prototype=arr)
         aset['1'] = arr
         co.commit('this is a commit message')
         co.close()
@@ -132,11 +132,11 @@ class TestColumn(object):
     def test_column_with_int_specifier_as_dimension(self, aset_backend, repo):
         co = repo.checkout(write=True)
         arr = np.arange(10, dtype=np.int64)
-        aset = co.columns.create_ndarray_column('aset1', shape=10, dtype=np.int64, backend=aset_backend)
+        aset = co.define_ndarray_column('aset1', shape=10, dtype=np.int64, backend=aset_backend)
         aset['1'] = arr
         co.commit('this is a commit message')
         arr2 = np.array(53, dtype=np.int64)
-        aset = co.columns.create_ndarray_column('aset2', prototype=arr2)
+        aset = co.define_ndarray_column('aset2', prototype=arr2)
         aset['1'] = arr2
         co.commit('this is a commit message')
         co.close()
@@ -152,7 +152,7 @@ class TestColumn(object):
     def test_getattr_does_not_raise_permission_error_if_alive(self, aset_backend, write, repo):
         co = repo.checkout(write=True)
         arr = np.arange(10, dtype=np.int64)
-        aset = co.columns.create_ndarray_column('aset1', shape=10, dtype=np.int64, backend=aset_backend)
+        aset = co.define_ndarray_column('aset1', shape=10, dtype=np.int64, backend=aset_backend)
         aset['1'] = arr
         co.commit('hello')
         co.close()
@@ -181,9 +181,9 @@ class TestDataWithFixedSizedColumn(object):
             self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
     ):
         co = repo.checkout(write=True)
-        aset1 = co.columns.create_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
-        aset2 = co.columns.create_ndarray_column('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
-        aset3 = co.columns.create_ndarray_column('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
+        aset1 = co.define_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
+        aset2 = co.define_ndarray_column('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
+        aset3 = co.define_ndarray_column('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
 
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1[1] = randomsizedarray
@@ -201,9 +201,9 @@ class TestDataWithFixedSizedColumn(object):
             self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray
     ):
         co = repo.checkout(write=True)
-        aset1 = co.columns.create_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
-        aset2 = co.columns.create_ndarray_column('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
-        aset3 = co.columns.create_ndarray_column('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
+        aset1 = co.define_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
+        aset2 = co.define_ndarray_column('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
+        aset3 = co.define_ndarray_column('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
 
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1[1] = randomsizedarray
@@ -232,9 +232,9 @@ class TestDataWithFixedSizedColumn(object):
     def test_iterating_over(self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
-        aset1 = co.columns.create_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
-        aset2 = co.columns.create_ndarray_column('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
-        aset3 = co.columns.create_ndarray_column('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
+        aset1 = co.define_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
+        aset2 = co.define_ndarray_column('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
+        aset3 = co.define_ndarray_column('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
 
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1['1'] = randomsizedarray
@@ -282,9 +282,9 @@ class TestDataWithFixedSizedColumn(object):
     def test_iterating_over_local_only(self, aset1_backend, aset2_backend, aset3_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         all_tensors = []
-        aset1 = co.columns.create_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
-        aset2 = co.columns.create_ndarray_column('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
-        aset3 = co.columns.create_ndarray_column('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
+        aset1 = co.define_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
+        aset2 = co.define_ndarray_column('aset2', shape=(2, 2), dtype=np.int, backend=aset2_backend)
+        aset3 = co.define_ndarray_column('aset3', shape=(3, 4), dtype=np.float32, backend=aset3_backend)
 
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1['1'] = randomsizedarray
@@ -855,7 +855,7 @@ class TestDataWithFixedSizedColumn(object):
         # recreating same and verifying
         co = aset_samples_initialized_repo.checkout(write=True)
         assert len(co.columns) == 0
-        co.columns.create_ndarray_column('writtenaset', prototype=array5by7)
+        co.define_ndarray_column('writtenaset', prototype=array5by7)
         co.columns['writtenaset']['1'] = array5by7
         assert len(co.columns) == 1
         assert len(co.columns['writtenaset']) == 1
@@ -884,8 +884,8 @@ class TestDataWithFixedSizedColumn(object):
     def test_multiple_columns_single_commit(self, aset1_backend, aset2_backend,
                                               aset_samples_initialized_repo, randomsizedarray):
         co = aset_samples_initialized_repo.checkout(write=True)
-        aset1 = co.columns.create_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
-        aset2 = co.columns.create_ndarray_column('aset2', prototype=randomsizedarray, backend=aset2_backend)
+        aset1 = co.define_ndarray_column('aset1', prototype=randomsizedarray, backend=aset1_backend)
+        aset2 = co.define_ndarray_column('aset2', prototype=randomsizedarray, backend=aset2_backend)
         aset1['arr'] = randomsizedarray
         aset2['arr'] = randomsizedarray
         co.commit('this is a commit message')
@@ -899,9 +899,9 @@ class TestDataWithFixedSizedColumn(object):
     @pytest.mark.parametrize("aset2_backend", fixed_shape_backend_params)
     def test_prototype_and_shape(self, aset1_backend, aset2_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset1 = co.columns.create_ndarray_column(
+        aset1 = co.define_ndarray_column(
             'aset1', prototype=randomsizedarray, backend=aset1_backend)
-        aset2 = co.columns.create_ndarray_column(
+        aset2 = co.define_ndarray_column(
             'aset2', shape=randomsizedarray.shape, dtype=randomsizedarray.dtype, backend=aset2_backend)
 
         newarray = np.random.random(randomsizedarray.shape).astype(randomsizedarray.dtype)
@@ -917,11 +917,11 @@ class TestDataWithFixedSizedColumn(object):
 
     def test_samples_without_name(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset = co.columns.create_ndarray_column('aset', prototype=randomsizedarray)
+        aset = co.define_ndarray_column('aset', prototype=randomsizedarray)
         with pytest.raises(TypeError):
             aset[randomsizedarray]
 
-        aset_no_name = co.columns.create_ndarray_column('aset_no_name', prototype=randomsizedarray)
+        aset_no_name = co.define_ndarray_column('aset_no_name', prototype=randomsizedarray)
         added = aset_no_name.append(randomsizedarray)
         assert_equal(next(aset_no_name.values()), randomsizedarray)
         assert_equal(aset_no_name[added], randomsizedarray)
@@ -929,11 +929,11 @@ class TestDataWithFixedSizedColumn(object):
 
     def test_append_samples(self, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset = co.columns.create_ndarray_column('aset', prototype=randomsizedarray)
+        aset = co.define_ndarray_column('aset', prototype=randomsizedarray)
         with pytest.raises((ValueError, TypeError)):
             aset[randomsizedarray]
 
-        aset_no_name = co.columns.create_ndarray_column('aset_no_name', prototype=randomsizedarray)
+        aset_no_name = co.define_ndarray_column('aset_no_name', prototype=randomsizedarray)
         generated_key = aset_no_name.append(randomsizedarray)
         assert generated_key in aset_no_name
         assert len(aset_no_name) == 1
@@ -947,7 +947,7 @@ class TestDataWithFixedSizedColumn(object):
         another_dtype = np.float64
         another_shape = (3, 4)
         arr = np.random.random(shape).astype(dtype)
-        aset = co.columns.create_ndarray_column('aset', shape=shape, dtype=dtype)
+        aset = co.define_ndarray_column('aset', shape=shape, dtype=dtype)
         aset['1'] = arr
 
         newarr = np.random.random(shape).astype(another_dtype)
@@ -973,7 +973,7 @@ class TestDataWithFixedSizedColumn(object):
 
     def test_add_sample_with_dimension_rank_fails(self, repo):
         co = repo.checkout(write=True)
-        aset = co.columns.create_ndarray_column('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
+        aset = co.define_ndarray_column('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
         arr = np.random.randn(2, 3, 2).astype(np.float32)
         with pytest.raises(ValueError, match='data rank 3 != aset rank 2'):
             aset[1] = arr
@@ -981,7 +981,7 @@ class TestDataWithFixedSizedColumn(object):
 
     def test_add_sample_with_dimension_exceeding_max_fails(self, repo):
         co = repo.checkout(write=True)
-        aset = co.columns.create_ndarray_column('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
+        aset = co.define_ndarray_column('aset', shape=(2, 3), dtype=np.float32, variable_shape=True)
         arr = np.random.randn(2, 4).astype(np.float32)
         with pytest.raises(ValueError, match='exceeds schema max'):
             aset[1] = arr
@@ -990,7 +990,7 @@ class TestDataWithFixedSizedColumn(object):
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_writer_context_manager_column_add_sample(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset = co.columns.create_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
+        aset = co.define_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
         with co.columns['aset'] as aset:
             aset['1'] = randomsizedarray
         co.commit('this is a commit message')
@@ -1044,7 +1044,7 @@ class TestDataWithFixedSizedColumn(object):
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
     def test_column_context_manager_aset_sample_and_metadata_add(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
-        aset = co.columns.create_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
+        aset = co.define_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
         with co.columns['aset'] as aset:
             aset['1'] = randomsizedarray
             co.metadata['hello'] = 'world'
@@ -1135,8 +1135,8 @@ class TestVariableSizedColumn(object):
         self, repo, test_shapes, max_shape, dtype1, dtype2, backend1, backend2
     ):
         wco = repo.checkout(write=True)
-        aset1 = wco.columns.create_ndarray_column('aset1', shape=max_shape, dtype=dtype1, variable_shape=True, backend=backend1)
-        aset2 = wco.columns.create_ndarray_column('aset2', shape=max_shape, dtype=dtype2, variable_shape=True, backend=backend2)
+        aset1 = wco.define_ndarray_column('aset1', shape=max_shape, dtype=dtype1, variable_shape=True, backend=backend1)
+        aset2 = wco.define_ndarray_column('aset2', shape=max_shape, dtype=dtype2, variable_shape=True, backend=backend2)
 
         arrdict1, arrdict2 = {}, {}
         for idx, shape in enumerate(test_shapes):
@@ -1206,7 +1206,7 @@ class TestVariableSizedColumn(object):
     ):
         repo = aset_samples_initialized_repo
         wco = repo.checkout(write=True)
-        wco.columns.create_ndarray_column('varaset', shape=shape, dtype=dtype, variable_shape=True, backend=backend)
+        wco.define_ndarray_column('varaset', shape=shape, dtype=dtype, variable_shape=True, backend=backend)
         d = wco.columns['varaset']
 
         arrdict = {}
@@ -1238,7 +1238,7 @@ class TestVariableSizedColumn(object):
     ):
         repo = aset_samples_initialized_repo
         wco = repo.checkout(write=True)
-        wco.columns.create_ndarray_column('varaset', shape=shape, dtype=dtype, variable_shape=True, backend=backend)
+        wco.define_ndarray_column('varaset', shape=shape, dtype=dtype, variable_shape=True, backend=backend)
         wd = wco.columns['varaset']
 
         arrdict = {}
@@ -1277,7 +1277,7 @@ class TestVariableSizedColumn(object):
         arrdict = {}
         for backend, aset_spec in zip(backends, aset_specs):
             aset_name, test_shapes, max_shape = aset_spec
-            wco.columns.create_ndarray_column(
+            wco.define_ndarray_column(
                 aset_name, shape=max_shape, dtype=dtype, variable_shape=True, backend=backend)
 
             arrdict[aset_name] = {}
@@ -1341,7 +1341,7 @@ class TestMultiprocessColumnReads(object):
 
         masterCmtList = []
         co = repo.checkout(write=True)
-        co.columns.create_ndarray_column(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
+        co.define_ndarray_column(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
         for cIdx in range(2):
             if cIdx != 0:
@@ -1375,7 +1375,7 @@ class TestMultiprocessColumnReads(object):
         from multiprocessing import get_context
 
         co = repo.checkout(write=True)
-        co.columns.create_ndarray_column(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
+        co.define_ndarray_column(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
         with co.columns['writtenaset'] as d:
             for sIdx in range(20):
                 d[sIdx] = np.random.randn(20, 20).astype(np.float32) * 100
@@ -1397,7 +1397,7 @@ class TestMultiprocessColumnReads(object):
         from multiprocessing import get_context
 
         co = repo.checkout(write=True)
-        co.columns.create_ndarray_column(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
+        co.define_ndarray_column(name='writtenaset', shape=(20, 20), dtype=np.float32, backend=backend)
         masterSampList = []
         with co.columns['writtenaset'] as d:
             for sIdx in range(20):

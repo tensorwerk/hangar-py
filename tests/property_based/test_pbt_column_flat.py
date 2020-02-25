@@ -30,7 +30,7 @@ def fixed_shape_repo_co_float32_aset_flat(managed_tmpdir, request) -> Repository
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset',
+    co.define_ndarray_column(name='writtenaset',
                                      shape=(5, 5, 5),
                                      dtype=np.float32,
                                      variable_shape=False,
@@ -50,7 +50,7 @@ def variable_shape_repo_co_float32_aset_flat(managed_tmpdir, request) -> Reposit
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset',
+    co.define_ndarray_column(name='writtenaset',
                                      shape=(5, 5, 5),
                                      dtype=np.float32,
                                      variable_shape=True,
@@ -70,7 +70,7 @@ def variable_shape_repo_co_uint8_aset_flat(managed_tmpdir, request) -> Repositor
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset',
+    co.define_ndarray_column(name='writtenaset',
                                      shape=(5, 5, 5),
                                      dtype=np.uint8,
                                      variable_shape=True,
@@ -90,7 +90,7 @@ def variable_shape_repo_co_str_aset_flat(managed_tmpdir, request) -> Repository:
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.columns.create_str_column(name='strcolumn',
+    co.define_str_column(name='strcolumn',
                                  contains_subsamples=False,
                                  backend=request.param)
     yield co

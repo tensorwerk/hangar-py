@@ -257,7 +257,7 @@ def test_push_fetch_records(server_instance, backend):
             repo.init('foo', 'bar')
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
-            co1.columns.create_ndarray_column(
+            co1.define_ndarray_column(
                 name='dummy', prototype=dummyData, backend=backend)
             for idx in range(10):
                 dummyData[:] = idx
@@ -307,7 +307,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
             repo.init('foo', 'bar')
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
-            co1.columns.create_ndarray_column(
+            co1.define_ndarray_column(
                 name='dummy', prototype=dummyData, backend=backend)
             for idx in range(10):
                 dummyData[:] = idx

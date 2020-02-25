@@ -36,7 +36,7 @@ def _lexicographic_keys():
     ])
     # permutations generates results in lexicographic order
     # total of 14_776_336 total ids can be generated with
-    # a row_id consiting of 4 characters. This is more keys than
+    # a row_id consisting of 4 characters. This is more keys than
     # we will ever allow in a single LMDB database
     p = permutations(lexicographic_ids, 4)
 
@@ -45,18 +45,18 @@ def _lexicographic_keys():
         yield res
 
 
-def lmdb_30_encode(uid, row_idx, checksum):
-    res = f'{_FmtCode}:{uid}:{row_idx}:{checksum}'
+def lmdb_30_encode(uid: str, row_idx: int, checksum: str) -> bytes:
+    res = f'30:{uid}:{row_idx}:{checksum}'
     return res.encode()
 
 
 @OneOf(['<class\'str\'>', str])
-class LMDB_30_Allowed_Dtypes(Descriptor):
+class AllowedDtypes(Descriptor):
     pass
 
 
 class LMDB_30_Options(metaclass=checkedmeta):
-    _dtype = LMDB_30_Allowed_Dtypes()
+    _dtype = AllowedDtypes()
     _backend_options = EmptyDict()
 
     def __init__(self, backend_options, dtype, *args, **kwargs):

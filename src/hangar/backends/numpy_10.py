@@ -134,14 +134,14 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
 @OneOf(list(map(lambda x: np.dtype(x).name, [
         np.bool, np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16,
         np.int32, np.int64, np.float16, np.float32, np.float64, np.longdouble])))
-class NUMPY_10_Allowed_Dtypes(Descriptor):
+class AllowedDtypes(Descriptor):
     # Note. np.longdouble since np.float128 not guaranteed to be available on
     # all system. this is a particular issue with some windows numpy builds.
     pass
 
 
 class NUMPY_10_Options(metaclass=checkedmeta):
-    _dtype = NUMPY_10_Allowed_Dtypes()
+    _dtype = AllowedDtypes()
     _backend_options = EmptyDict()
 
     def __init__(self, backend_options, dtype, *args, **kwargs):

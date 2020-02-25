@@ -184,7 +184,7 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
         ' \n'
     )
     co2 = repo.checkout(write=True)
-    co2.columns.create_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
+    co2.define_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
         co2.columns['new_aset'][idx] = dummyData
@@ -249,7 +249,7 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
         ' \n'
     )
     co2 = repo.checkout(write=True)
-    new = co2.columns.create_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
+    new = co2.define_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
                dummyData = np.random.randn(10, 10).astype(np.float32)
                co2.columns['new_aset'][idx] = dummyData
@@ -316,7 +316,7 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
     )
     co2 = repo.checkout(write=True)
     co2.columns['dummy'].change_backend('00')
-    co2.columns.create_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
+    co2.define_ndarray_column('new_aset', shape=(10, 10), dtype=np.float32)
     for idx in range(5):
         dummyData = np.random.randn(10, 10).astype(np.float32)
         co2.columns['new_aset'][idx] = dummyData

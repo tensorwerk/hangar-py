@@ -84,7 +84,7 @@ def test_push_and_clone_master_linear_history_multiple_commits(
 
     cmtList = []
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.define_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -140,7 +140,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
 
     masterCmtList, devCmtList = [], []
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.define_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -190,7 +190,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.define_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -332,8 +332,8 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     # Push master branch test
     masterCmts = {}
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
-    co.columns.create_ndarray_column(name='_two', shape=(20), dtype=np.float32)
+    co.define_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.define_ndarray_column(name='_two', shape=(20), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -625,7 +625,7 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='aset', shape=(50, 20), dtype=np.float32)
+    co.define_ndarray_column(name='aset', shape=(50, 20), dtype=np.float32)
     for cIdx in range(4):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -679,7 +679,7 @@ def test_push_restricted_with_right_username_password(server_instance_push_restr
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='aset', shape=(50, 20), dtype=np.float32)
+    co.define_ndarray_column(name='aset', shape=(50, 20), dtype=np.float32)
     for cIdx in range(1):
         if cIdx != 0:
             co = repo.checkout(write=True)
@@ -725,7 +725,7 @@ def test_push_restricted_wrong_user_and_password(server_instance_push_restricted
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='aset', shape=(50, 20), dtype=np.float32)
+    co.define_ndarray_column(name='aset', shape=(50, 20), dtype=np.float32)
     for cIdx in range(1):
         if cIdx != 0:
             co = repo.checkout(write=True)

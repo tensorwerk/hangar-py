@@ -10,9 +10,7 @@ from .recordstructs import ColumnSchemaKey, \
     MetadataRecordKey, \
     DataRecordVal
 
-
 import ast
-
 
 __all__ = [
     'schema_record_count_start_range_key',

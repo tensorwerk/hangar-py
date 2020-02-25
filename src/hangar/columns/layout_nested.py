@@ -405,14 +405,14 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         if self._enter_count == 0:
             self._stack = None
 
-    def __set_arg_validate(self, key: KeyType, value: np.ndarray):
+    def _set_arg_validate(self, key: KeyType, value: np.ndarray):
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
         isCompat = self._schema.verify_data_compatible(value)
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
-    def __perform_set(self, key: KeyType, value: np.ndarray) -> None:
+    def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
         """Internal write method. Assumes all arguments validated and context is open
 
         Parameters
@@ -489,8 +489,8 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
-            self.__set_arg_validate(key, value)
-            self.__perform_set(key, value)
+            self._set_arg_validate(key, value)
+            self._perform_set(key, value)
 
     def append(self, value: np.ndarray) -> KeyType:
         """Store some data in a subsample with an automatically generated key.
@@ -521,8 +521,8 @@ class FlatSubsampleWriter(FlatSubsampleReader):
             if not self._is_conman:
                 stack.enter_context(self)
             key = generate_sample_name()
-            self.__set_arg_validate(key, value)
-            self.__perform_set(key, value)
+            self._set_arg_validate(key, value)
+            self._perform_set(key, value)
             return key
 
     def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
@@ -561,9 +561,9 @@ class FlatSubsampleWriter(FlatSubsampleReader):
                 other.update(kwargs)
 
             for key, val in other.items():
-                self.__set_arg_validate(key, val)
+                self._set_arg_validate(key, val)
             for key, val in other.items():
-                self.__perform_set(key, val)
+                self._perform_set(key, val)
 
     def __delitem__(self, key: KeyType) -> None:
         """Remove a subsample from the column.`.
@@ -1009,7 +1009,7 @@ class NestedSampleWriter(NestedSampleReader):
         self._stack.close()
         self._enter_count -= 1
 
-    def __set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
+    def _set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
 
         if not is_suitable_user_key(sample_key):
             raise ValueError(f'Sample name `{sample_key}` is not suitable.')
@@ -1021,7 +1021,7 @@ class NestedSampleWriter(NestedSampleReader):
             if not isCompat.compatible:
                 raise ValueError(isCompat.reason)
 
-    def __perform_set(self, key: KeyType, value: MapKeyArrType) -> None:
+    def _perform_set(self, key: KeyType, value: MapKeyArrType) -> None:
         if key in self._samples:
             self._samples[key].update(value)
         else:
@@ -1052,8 +1052,8 @@ class NestedSampleWriter(NestedSampleReader):
             if not self._is_conman:
                 stack.enter_context(self)
             value = dict(value)
-            self.__set_arg_validate(key, value)
-            self.__perform_set(key, value)
+            self._set_arg_validate(key, value)
+            self._perform_set(key, value)
 
     def update(self,
                other: Union[None, Dict[KeyType, MapKeyArrType],
@@ -1099,9 +1099,9 @@ class NestedSampleWriter(NestedSampleReader):
                 other[sample] = dict(other[sample])
 
             for key, val in other.items():
-                self.__set_arg_validate(key, val)
+                self._set_arg_validate(key, val)
             for key, val in other.items():
-                self.__perform_set(key, val)
+                self._perform_set(key, val)
 
     def __delitem__(self, key: KeyType) -> None:
         """Remove a sample (including all contained subsamples) from the column.

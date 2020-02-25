@@ -241,7 +241,7 @@ def hdf5_00_encode(uid: str, cksum: str, dset: int, dset_idx: int, shape: Tuple[
     expected_keys_required={'complib': True, 'complevel': True, 'shuffle': True},
     expected_values={
         'complib': ['blosc:blosclz', 'blosc:lz4','blosc:lz4hc', 'blosc:zlib', 'blosc:zstd'],
-        'complevel': [*(i for i in range(10))],
+        'complevel': [i for i in range(10)],
         'shuffle': [None, 'none', 'byte', 'bit']})
 class BloscCompressionOptions(Descriptor):
     pass
@@ -250,9 +250,7 @@ class BloscCompressionOptions(Descriptor):
 @DictItems(
     expected_keys_required={'complib': True, 'complevel': True, 'shuffle': True},
     expected_values={
-        'complib': ['gzip'],
-        'complevel': [*(i for i in range(10))],
-        'shuffle': [True, False]})
+        'complib': ['gzip'], 'complevel': [i for i in range(10)], 'shuffle': [True, False]})
 class GzipCompressionOptions(Descriptor):
     pass
 
@@ -268,7 +266,7 @@ class LzfCompressionOptions(Descriptor):
 @OneOf(list(map(lambda x: np.dtype(x).name, [
         np.bool, np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16,
         np.int32, np.int64, np.float16, np.float32, np.float64, np.longdouble])))
-class HDF5_00_Allowed_Dtypes(Descriptor):
+class AllowedDtypes(Descriptor):
     """
     Note. np.longdouble since np.float128 not guaranteed to be available on
     all system. this is a particular issue with some windows numpy builds
@@ -278,7 +276,7 @@ class HDF5_00_Allowed_Dtypes(Descriptor):
 
 class HDF5_00_Options(metaclass=checkedmeta):
     _shape = SizedIntegerTuple(size=32)
-    _dtype = HDF5_00_Allowed_Dtypes()
+    _dtype = AllowedDtypes()
     _lzf = LzfCompressionOptions()
     _gzip = GzipCompressionOptions()
     _blosc = BloscCompressionOptions()
@@ -657,7 +655,6 @@ class HDF5_00_FileHandles(object):
             http://docs.h5py.org/en/stable/high/file.html#chunk-cache
 
         """
-
         # -------------------- Chunk & RDCC Vals ------------------------------
 
         sample_array = np.zeros(self.schema_shape, dtype=self.schema_dtype)

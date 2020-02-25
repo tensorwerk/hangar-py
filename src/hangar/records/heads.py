@@ -658,7 +658,7 @@ def get_remote_names(branchenv):
     list of str
         list of remote names active in the repository.
     """
-    remoteStartKey = K_REMOTES.encode()  # TODO: This is odd, why??
+    remoteStartKey = K_REMOTES.encode()
     remoteNames = []
     branchTxn = TxnRegister().begin_reader_txn(branchenv)
     try:
