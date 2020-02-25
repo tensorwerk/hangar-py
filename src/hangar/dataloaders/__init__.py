@@ -1,7 +1,8 @@
 __all__ = ('make_torch_dataset', 'make_tf_dataset')
 
 
-def __getattr__(name):  # lazy loader
+# lazy loader
+def __getattr__(name):
     global make_tf_dataset, make_torch_dataset
 
     if name == 'make_tf_dataset':

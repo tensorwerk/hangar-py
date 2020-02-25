@@ -54,6 +54,30 @@ def init(repo: Repository, name, email, overwrite):
         repo.init(user_name=name, user_email=email, remove_old=overwrite)
 
 
+# -------------------------- Writer Lock -------------------------------------
+
+
+@main.command(name='writer-lock')
+@click.option('--force-release', 'force_release_', is_flag=True, default=False,
+              help='force release writer lock from the CLI.')
+@pass_repo
+def writer_lock_held(repo: Repository, force_release_):
+    """Determine if the writer lock is held for a repository.
+
+    Passing the --force-release flag will instantly release the writer lock,
+    invalidating any process which currently holds it.
+    """
+    if force_release_:
+        repo.force_release_writer_lock()
+        click.echo(f'Success force release of writer lock.')
+    else:
+        if repo.writer_lock_held:
+            click.echo(f'Writer lock is held.')
+        else:
+            click.echo(f'Writer lock is available.')
+
+
+
 # -------------------------- Checkout Writer ----------------------------------
 
 

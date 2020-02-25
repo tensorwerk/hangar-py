@@ -408,7 +408,7 @@ class HangarClient(object):
                 totalSize += len(record)
                 if (totalSize >= self.cfg['push_max_nbytes']) or (len(records) > 2000):
                     # send tensor pack when >= configured max nbytes occupied in memory
-                    pbar.update(2000)
+                    pbar.update(len(records))
                     pack = chunks.serialize_record_pack(records)
                     cIter = chunks.tensorChunkedIterator(
                         buf=pack, uncomp_nbytes=len(pack), itemsize=1,
@@ -418,7 +418,7 @@ class HangarClient(object):
                     totalSize = 0
                     records = []
         except grpc.RpcError as rpc_error:
-            logger.error(rpc_error)
+            logger.error(rpc_error.with_traceback())
             raise rpc_error
         finally:
             for k in self._rFs.keys():

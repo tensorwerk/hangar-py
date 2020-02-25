@@ -455,7 +455,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         try:
             heads.acquire_writer_lock(self._branchenv, self._writer_lock)
-        except PermissionError as e:
+        except Exception as e:
             with suppress(AttributeError):
                 self._columns._destruct()
                 del self._columns
@@ -808,6 +808,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         :class:`~.columns.column.Columns`
             instance object of the initialized column.
         """
+        self._verify_alive()
         if self.columns._any_is_conman() or self._is_conman:
             raise PermissionError('Not allowed while context manager is used.')
 
@@ -930,6 +931,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         :class:`~.columns.column.Columns`
             instance object of the initialized column.
         """
+        self._verify_alive()
         if self.columns._any_is_conman() or self._is_conman:
             raise PermissionError('Not allowed while context manager is used.')
 
@@ -1151,9 +1153,15 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         branch_head = heads.get_staging_branch_head(self._branchenv)
         head_commit = heads.get_branch_head_commit(self._branchenv, branch_head)
-        commiting.replace_staging_area_with_commit(refenv=self._refenv,
-                                                   stageenv=self._stageenv,
-                                                   commit_hash=head_commit)
+        if head_commit == '':
+            with suppress(ValueError):
+                commiting.replace_staging_area_with_commit(refenv=self._refenv,
+                                                           stageenv=self._stageenv,
+                                                           commit_hash=head_commit)
+        else:
+            commiting.replace_staging_area_with_commit(refenv=self._refenv,
+                                                       stageenv=self._stageenv,
+                                                       commit_hash=head_commit)
 
         self._metadata = MetadataWriter(
             mode='a',
@@ -1179,15 +1187,22 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         will result in a lock being placed on the repository which will not
         allow any writes until it has been manually cleared.
         """
-        self._verify_alive()
+        with suppress(lmdb.Error):
+            self._verify_alive()
+
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        if hasattr(self._columns, '_destruct'):
-            self._columns._destruct()
-        if hasattr(self._metadata, '_destruct'):
-            self._metadata._destruct()
-        heads.release_writer_lock(self._branchenv, self._writer_lock)
+        if hasattr(self, '_columns'):
+            if hasattr(self._columns, '_destruct'):
+                self._columns._destruct()
+        if hasattr(self, '_metadata'):
+            if hasattr(self._metadata, '_destruct'):
+                self._metadata._destruct()
+
+        with suppress(lmdb.Error):
+            heads.release_writer_lock(self._branchenv, self._writer_lock)
+
         for attr in list(self.__dict__.keys()):
             delattr(self, attr)
         atexit.unregister(self.close)
