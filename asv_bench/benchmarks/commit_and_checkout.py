@@ -24,7 +24,7 @@ class MakeCommit(object):
         except TypeError:
             aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='10')
         except AttributeError:
-            aset = self.co.define_ndarray_column('aset', prototype=arr, backend='10')
+            aset = self.co.add_ndarray_column('aset', prototype=arr, backend='10')
 
         with aset as cm_aset:
             for i in range(num_samples):
@@ -63,7 +63,7 @@ class CheckoutCommit(object):
         except TypeError:
             aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='10')
         except AttributeError:
-            aset = self.co.define_ndarray_column('aset', prototype=arr, backend='10')
+            aset = self.co.add_ndarray_column('aset', prototype=arr, backend='10')
 
         with aset as cm_aset:
             for i in range(num_samples):

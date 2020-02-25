@@ -7,9 +7,7 @@ All backends are supported.
 """
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Tuple, List, Union, Sequence, Dict, Iterable, Type, Optional, Any
-
-import numpy as np
+from typing import Tuple, Union, Iterable, Optional, Any
 
 from .common import open_file_handles
 from ..records import (
@@ -27,11 +25,8 @@ from ..backends import backend_decoder
 from ..op_state import reader_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
+
 KeyType = Union[str, int]
-KeyArrMap = Dict[KeyType, np.ndarray]
-KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
-MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
-AsetTxnType = Type['AsetTxn']
 
 
 class FlatSampleReader:
@@ -39,24 +34,24 @@ class FlatSampleReader:
 
     This class exposes the standard API to access data stored in a single level
     key / value mapping column. Usage is modeled after the python :py:`dict`
-    style syntax -- with a few additional utility and inspection methods
-    and properties added. Methods named after those of a python :py:`dict`
-    have syntactically identical arguments and behavior to that of the standard
+    style syntax -- with a few additional utility and inspection methods and
+    properties added. Methods named after those of a python :py:`dict` have
+    syntactically identical arguments and behavior to that of the standard
     library.
 
-    If not opened in a ``write-enabled`` checkout, then attempts to add or delete
-    data or container properties will raise an exception (in the form of a
-    :py:`PermissionError`). No changes will be propogated unless a ``write-enabled``
-    checkout is used.
+    If not opened in a ``write-enabled`` checkout, then attempts to add or
+    delete data or container properties will raise an exception (in the form of
+    a :py:`PermissionError`). No changes will be propogated unless a
+    ``write-enabled`` checkout is used.
 
-    This object can be serialized -- pickled -- for parallel processing / reading
-    if opened in a ``read-only`` checkout. Parallel operations are both
-    thread and process safe, though performance may significantly differ between
-    multithreaded vs multiprocessed code (depending on the backend data is stored
-    in). Attempts to serialize objects opened in ``write-enabled`` checkouts are not
-    supported and will raise a :py:`PermissionError` if attempted. This behavior
-    is enforced in order to ensure data and record integrity while writing to
-    the repository.
+    This object can be serialized -- pickled -- for parallel processing /
+    reading if opened in a ``read-only`` checkout. Parallel operations are both
+    thread and process safe, though performance may significantly differ
+    between multithreaded vs multiprocessed code (depending on the backend data
+    is stored in). Attempts to serialize objects opened in ``write-enabled``
+    checkouts are not supported and will raise a :py:`PermissionError` if
+    attempted. This behavior is enforced in order to ensure data and record
+    integrity while writing to the repository.
     """
 
     __slots__ = ('_mode', '_column_name', '_samples', '_be_fs',
@@ -106,10 +101,14 @@ class FlatSampleReader:
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__qualname__} \
                 \n    Column Name              : {self._column_name}\
-                \n    Access Mode              : {self._mode}\
+                \n    Writeable                : {self.iswriteable}\
+                \n    Column Type              : {self.column_type}\
+                \n    Column Layout            : {self.column_layout}\
+                \n    Schema Type              : {self.schema_type}\
+                \n    DType                    : {self.dtype}\
+                \n    Shape                    : {self.shape}\
                 \n    Number of Samples        : {self.__len__()}\
-                \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\
-                \n    Contains Subsamples      : False\n'
+                \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\n'
         p.text(res)
 
     def _ipython_key_completions_(self):  # pragma: no cover
@@ -201,7 +200,7 @@ class FlatSampleReader:
         for val in self._be_fs.values():
             val.close()
 
-    def __getitem__(self, key: KeyType) -> np.ndarray:
+    def __getitem__(self, key: KeyType):
         """Retrieve data for some sample key via dict style access conventions.
 
         .. seealso:: :meth:`get`
@@ -213,8 +212,8 @@ class FlatSampleReader:
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            Sample array data corresponding to the provided key.
+        value
+            Data corresponding to the provided sample key.
 
         Raises
         ------
@@ -224,23 +223,23 @@ class FlatSampleReader:
         spec = self._samples[key]
         return self._be_fs[spec.backend].read_data(spec)
 
-    def get(self, key: KeyType, default: Any = None) -> Union[np.ndarray, Any]:
+    def get(self, key: KeyType, default=None):
         """Retrieve the data associated with some sample key
 
         Parameters
         ----------
         key : KeyType
             The name of the subsample(s) to retrieve. Passing a single
-            subsample key will return the stored :class:`numpy.ndarray`
+            subsample key will return the stored data value.
         default : Any
             if a `key` parameter is not found, then return this value instead.
             By default, None.
 
         Returns
         -------
-        np.ndarray
-            :class:`numpy.ndarray` array data stored under subsample key
-            if key exists, else default value if not found.
+        value
+            data data stored under subsample key if key exists, else
+            default value if not found.
         """
         try:
             return self[key]
@@ -255,22 +254,32 @@ class FlatSampleReader:
 
     @property
     def column_type(self):
+        """Data container type of the column ('ndarray', 'str', etc).
+        """
         return self._schema.column_type
 
     @property
     def column_layout(self):
+        """Column layout type ('nested', 'flat', etc).
+        """
         return self._schema.column_layout
 
     @property
     def schema_type(self):
+        """Schema type of the contained data ('variable_shape', 'fixed_shape', etc).
+        """
         return self._schema.schema_type
 
     @property
     def dtype(self):
+        """Dtype of the columns data (np.float, str, etc).
+        """
         return self._schema.dtype
 
     @property
     def shape(self):
+        """(Max) shape of data that can (is) written in the column.
+        """
         try:
             return self._schema.shape
         except AttributeError:
@@ -278,23 +287,27 @@ class FlatSampleReader:
 
     @property
     def backend(self) -> str:
+        """Code indicating which backing store is used when writing data.
+        """
         return self._schema.backend
 
     @property
     def backend_options(self):
-        return self._schema.backend_options
-
-    @property
-    def contains_subsamples(self) -> bool:
-        """Bool indicating if sub-samples are contained in this column container.
+        """Filter / Compression options applied to backend when writing data.
         """
-        return False
+        return self._schema.backend_options
 
     @property
     def iswriteable(self) -> bool:
         """Bool indicating if this column object is write-enabled.
         """
         return False if self._mode == 'r' else True
+
+    @property
+    def contains_subsamples(self) -> bool:
+        """Bool indicating if sub-samples are contained in this column container.
+        """
+        return False
 
     @property
     def contains_remote_references(self) -> bool:
@@ -366,8 +379,8 @@ class FlatSampleReader:
         """
         yield from self._mode_local_aware_key_looper(local)
 
-    def values(self, local: bool = False) -> Iterable[np.ndarray]:
-        """Generator yielding the tensor data for every subsample.
+    def values(self, local: bool = False) -> Iterable[Any]:
+        """Generator yielding the data for every subsample.
 
         Parameters
         ----------
@@ -378,14 +391,14 @@ class FlatSampleReader:
 
         Yields
         ------
-        Iterable[:class:`numpy.ndarray`]
+        Iterable[Any]
             Values of one subsample at a time inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield self[key]
 
-    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, np.ndarray]]:
-        """Generator yielding (name, tensor) tuple for every subsample.
+    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, Any]]:
+        """Generator yielding (name, data) tuple for every subsample.
 
         Parameters
         ----------
@@ -396,7 +409,7 @@ class FlatSampleReader:
 
         Yields
         ------
-        Iterable[Tuple[KeyType, np.ndarray]]
+        Iterable[Tuple[KeyType, Any]]
             Name and stored value for every subsample inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
@@ -410,7 +423,7 @@ class FlatSampleWriter(FlatSampleReader):
     __slots__ = ('_txnctx',)
     _attrs = __slots__ + FlatSampleReader.__slots__
 
-    def __init__(self, aset_ctx: AsetTxnType, *args, **kwargs):
+    def __init__(self, aset_ctx, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._txnctx = aset_ctx
 
@@ -429,14 +442,14 @@ class FlatSampleWriter(FlatSampleReader):
         self._stack.close()
         self._enter_count -= 1
 
-    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> None:
+    def _set_arg_validate(self, key, value):
         """Verify if key / value pair is valid to be written in this column
 
         Parameters
         ----------
-        key : KeyType
+        key
             name to associate with this data piece
-        value : :class:`np.ndarray`
+        value
             piece of data to store in the column
 
         Raises
@@ -452,15 +465,15 @@ class FlatSampleWriter(FlatSampleReader):
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
-    def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
+    def _perform_set(self, key, value):
         """Internal write method. Assumes all arguments validated and context is open
 
         Parameters
         ----------
-        key : KeyType
+        key
             sample key to store
-        value : np.ndarray
-            tensor data to store
+        value
+            data to store
         """
         full_hash = self._schema.data_hash_digest(value)
 
@@ -506,13 +519,10 @@ class FlatSampleWriter(FlatSampleReader):
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._samples[key] = hash_spec
 
-    def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
+    def __setitem__(self, key, value):
         """Store a piece of data in a column.
 
         .. seealso::
-
-            :meth:`add` alternative way to set key / value where input is expressed
-            as parameters in a method call.
 
             :meth:`update` for an implementation analogous to python's built in
             :meth:`dict.update` method which accepts a dict or iterable of
@@ -520,33 +530,13 @@ class FlatSampleWriter(FlatSampleReader):
 
         Parameters
         ----------
-        key : KeyType, optional
+        key
             name to assign to the sample (assuming the column accepts named
             samples), If str, can only contain alpha-numeric ascii characters
             (in addition to '-', '.', '_'). Integer key must be >= 0. by
             default, None
-        value : :class:`numpy.ndarray`
+        value
             data to store as a sample in the column.
-
-        Raises
-        ------
-        ValueError
-            If no `name` arg was provided for column requiring named samples.
-        ValueError
-            If input data tensor rank exceeds specified rank of column samples.
-        ValueError
-            For variable shape columns, if a dimension size of the input data
-            tensor exceeds specified max dimension size of the column samples.
-        ValueError
-            For fixed shape columns, if input data dimensions do not exactly match
-            specified column dimensions.
-        ValueError
-            If type of `data` argument is not an instance of np.ndarray.
-        ValueError
-            If `data` is not "C" contiguous array layout.
-        ValueError
-            If the datatype of the input data does not match the specified data type of
-            the column
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -554,7 +544,7 @@ class FlatSampleWriter(FlatSampleReader):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
-    def append(self, value: np.ndarray) -> KeyType:
+    def append(self, value) -> KeyType:
         """Store some data in a sample with an automatically generated key.
 
         This method should only be used if the context some piece of data is
@@ -569,25 +559,25 @@ class FlatSampleWriter(FlatSampleReader):
 
         Parameters
         ----------
-        value: :class:`numpy.ndarray`
+        value
             Piece of data to store in the column.
 
         Returns
         -------
         KeyType
             Name of the generated key this data is stored with.
-
-        TODO: verify append generated key is unique and non-colliding!!
         """
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
             key = generate_sample_name()
+            while key in self._samples:
+                key = generate_sample_name()
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
             return key
 
-    def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
+    def update(self, other=None, **kwargs):
         """Store some data with the key/value pairs from other, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
@@ -596,10 +586,10 @@ class FlatSampleWriter(FlatSampleReader):
 
         Parameters
         ----------
-        other : Union[None, MapKeyArrType], optional
+        other
             Accepts either another dictionary object or an iterable of
             key/value pairs (as tuples or other iterables of length two).
-            mapping sample names to :class:`np.ndarray` instances, If sample
+            mapping sample names to data value instances instances, If sample
             name is string type, can only contain alpha-numeric ascii
             characters (in addition to '-', '.', '_'). Int key must be >= 0. By
             default, None.
@@ -633,10 +623,7 @@ class FlatSampleWriter(FlatSampleReader):
 
         .. seealso::
 
-            :meth:`delete` (the analogous named operation for this method)
-
-            :meth:`pop` to return a records value and then delete it in the same
-            operation
+            :meth:`pop` to return a value and then delete it in the same operation
 
         Parameters
         ----------
@@ -661,7 +648,7 @@ class FlatSampleWriter(FlatSampleReader):
                     f'isRecordDeleted: <{isRecordDeleted}>', f'DEBUG STRING: {self._debug_}')
             del self._samples[key]
 
-    def pop(self, key: KeyType) -> np.ndarray:
+    def pop(self, key: KeyType):
         """Retrieve some value for some key(s) and delete it in the same operation.
 
         Parameters
@@ -671,7 +658,7 @@ class FlatSampleWriter(FlatSampleReader):
 
         Returns
         -------
-        :class:`np.ndarray`
+        value
             Upon success, the value of the removed key.
 
         Raises
@@ -696,9 +683,10 @@ class FlatSampleWriter(FlatSampleReader):
         ----------
         backend : str
             Backend format code to swtich to.
-        backend_options
-            Backend option specification to use (if specified). If left to default
-            value of None, then default options for backend are automatically used.
+        backend_options : Optional[dict]
+            Backend option specification to use (if specified). If left to
+            default value of None, then default options for backend are
+            automatically used.
 
         Raises
         ------

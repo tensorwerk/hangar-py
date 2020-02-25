@@ -180,8 +180,8 @@ Two strategies exist:
    up the data, just copy/paste or rsync it to another machine! (edited)
 
 
-On Determining ``Arrayset`` Schema Sizes
-========================================
+On Determining ``Column`` Schema Sizes
+=======================================
 
    Say I have a data group that specifies a data array with one dimension,
    three elements (say height, width, num channels) and later on I want to add
@@ -189,14 +189,14 @@ On Determining ``Arrayset`` Schema Sizes
    have been three scalar data groups from the start?
 
 So right now it’s not possible to change the schema (shape, dtype) of a
-arrayset. I’ve thought about such a feature for a while now, and while it will
+column. I’ve thought about such a feature for a while now, and while it will
 require a new user facing API option, its (almost) trivial to make it work in
 the core. It just hasn’t seemed like a priority yet...
 
 And no, I wouldn’t specify each of those as scalar data groups, they are a
 related piece of information, and generally would want to be accessed together
 
-Access patterns should generally dictate how much info is placed in a arrayset
+Access patterns should generally dictate how much info is placed in a column
 
 
 Is there a performance/space penalty for having lots of small data groups?

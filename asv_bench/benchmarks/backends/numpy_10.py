@@ -43,7 +43,7 @@ class _WriterSuite_NUMPY_10:
             # marks as skipped benchmark for commits which do not have this backend.
             raise NotImplementedError
         except AttributeError:
-            self.aset = self.co.define_ndarray_column('aset', prototype=arr, backend='10')
+            self.aset = self.co.add_ndarray_column('aset', prototype=arr, backend='10')
 
         if self.method == 'read':
             with self.aset as cm_aset:

@@ -213,7 +213,7 @@ class TestTorchDataLoader(object):
         assert count == 10
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -228,7 +228,7 @@ class TestTorchDataLoader(object):
         repo._env._close_environments()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -243,7 +243,7 @@ class TestTorchDataLoader(object):
         repo._env._close_environments()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -416,7 +416,7 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -431,7 +431,7 @@ class TestTfDataLoader(object):
         repo._env._close_environments()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -446,7 +446,7 @@ class TestTfDataLoader(object):
         repo._env._close_environments()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)

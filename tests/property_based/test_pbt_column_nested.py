@@ -32,12 +32,12 @@ def fixed_shape_repo_co_float32_aset_nested(managed_tmpdir, request) -> Reposito
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.define_ndarray_column(name='writtenaset',
-                             shape=(5, 5, 5),
-                             dtype=np.float32,
-                             variable_shape=False,
-                             contains_subsamples=True,
-                             backend=request.param)
+    co.add_ndarray_column(name='writtenaset',
+                          shape=(5, 5, 5),
+                          dtype=np.float32,
+                          variable_shape=False,
+                          contains_subsamples=True,
+                          backend=request.param)
     yield co
     co.close()
     repo_obj._env._close_environments()
@@ -52,12 +52,12 @@ def variable_shape_repo_co_float32_aset_nested(managed_tmpdir, request) -> Repos
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.define_ndarray_column(name='writtenaset',
-                             shape=(5, 5, 5),
-                             dtype=np.float32,
-                             variable_shape=True,
-                             contains_subsamples=True,
-                             backend=request.param)
+    co.add_ndarray_column(name='writtenaset',
+                          shape=(5, 5, 5),
+                          dtype=np.float32,
+                          variable_shape=True,
+                          contains_subsamples=True,
+                          backend=request.param)
     yield co
     co.close()
     repo_obj._env._close_environments()
@@ -72,12 +72,12 @@ def variable_shape_repo_co_uint8_aset_nested(managed_tmpdir, request) -> Reposit
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.define_ndarray_column(name='writtenaset',
-                             shape=(5, 5, 5),
-                             dtype=np.uint8,
-                             variable_shape=True,
-                             contains_subsamples=True,
-                             backend=request.param)
+    co.add_ndarray_column(name='writtenaset',
+                          shape=(5, 5, 5),
+                          dtype=np.uint8,
+                          variable_shape=True,
+                          contains_subsamples=True,
+                          backend=request.param)
     yield co
     co.close()
     repo_obj._env._close_environments()
@@ -92,9 +92,9 @@ def variable_shape_repo_co_str_aset_nested(managed_tmpdir, request) -> Repositor
     repo_obj = Repository(path=managed_tmpdir, exists=False)
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
-    co.define_str_column(name='strcolumn',
-                         contains_subsamples=True,
-                         backend=request.param)
+    co.add_str_column(name='strcolumn',
+                      contains_subsamples=True,
+                      backend=request.param)
     yield co
     co.close()
     repo_obj._env._close_environments()

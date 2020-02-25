@@ -115,7 +115,7 @@ def column_permutation_repo(repo, num_samples_gen, num_subsamples_gen):
                     is_var = False if schema_type == 'fixed_shape' else True
 
                     if col_dtype == 'ndarray':
-                        col = co.define_ndarray_column(name,
+                        col = co.add_ndarray_column(name,
                                                        shape=shape,
                                                        dtype=dtype,
                                                        variable_shape=is_var,
@@ -129,7 +129,7 @@ def column_permutation_repo(repo, num_samples_gen, num_subsamples_gen):
                         else:
                             raise ValueError(f'invalid layout {layout}')
                     elif col_dtype == 'str':
-                        col = co.define_str_column(name, contains_subsamples=has_subs, backend=backend)
+                        col = co.add_str_column(name, contains_subsamples=has_subs, backend=backend)
                         data_partial = partial(generator)
                         if layout == 'flat':
                             column_data_copy[name] = add_data_to_column(col, data_partial, nsamp)

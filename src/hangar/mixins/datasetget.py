@@ -59,7 +59,7 @@ class GetMixin:
             >>> out
             [ColumnData(foo=array([1]), bar=array([11]), baz=array([111])),
              ColumnData(foo=array([2]), bar=array([22]), baz=array([222]))]
-
+            >>>
             >>> out = dset[:, '1']
             >>> out
             ColumnData(foo=array([1]), bar=array([11]), baz=array([111]))
@@ -142,7 +142,6 @@ class GetMixin:
             ('_0', 'raw', '_2', 'try_2')
             >>>
             >>> # ordering in a single query is preserved
-            ...
             >>> multi_sample = dset[..., ('1', '2')]
             >>> multi_sample[0]._fields
             ('try_2', '_1', 'raw', '_3')
@@ -180,14 +179,14 @@ class GetMixin:
         :class:`~.columns.column.Columns`
             single column parameter, no samples specified
 
-        :class:`numpy.ndarray`
+        Any
             Single column specified, single sample key specified
 
-        List[:class:`numpy.ndarray`]
+        List[Any]
             Single column, multiple samples array data for each sample is
             returned in same order sample keys are received.
 
-        List[NamedTuple[``*``:class:`numpy.ndarray`]]
+        List[NamedTuple[``*``Any]]
             Multiple columns, multiple samples. Each column's name is used
             as a field in the NamedTuple elements, each NamedTuple contains
             arrays stored in each column via a common sample key. Each sample
@@ -262,14 +261,14 @@ class GetMixin:
         :class:`~.columns.column.Columns`
             single column parameter, no samples specified
 
-        :class:`numpy.ndarray`
+        Any
             Single column specified, single sample key specified
 
-        List[:class:`numpy.ndarray`]
+        List[Any]
             Single column, multiple samples array data for each sample is
             returned in same order sample keys are received.
 
-        List[NamedTuple[``*``:class:`numpy.ndarray`]]
+        List[NamedTuple[``*``Any]]
             Multiple columns, multiple samples. Each column's name is used
             as a field in the NamedTuple elements, each NamedTuple contains
             arrays stored in each column via a common sample key. Each sample

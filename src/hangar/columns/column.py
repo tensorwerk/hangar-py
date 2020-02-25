@@ -116,8 +116,9 @@ class Columns:
 # ------------- Methods Available To Both Read & Write Checkouts ------------------
 
     def _repr_pretty_(self, p, cycle):
-        res = f'Hangar {self.__class__.__name__}\
-                \n    Writeable: {False if self._mode == "r" else True}\
+        res = f'Hangar {self.__class__.__qualname__}\
+                \n    Writeable         : {False if self._mode == "r" else True}\
+                \n    Number of Columns : {len(self)}\
                 \n    Column Names / Partial Remote References:\
                 \n      - ' + '\n      - '.join(
             f'{asetn} / {aset.contains_remote_references}'

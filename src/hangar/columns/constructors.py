@@ -3,12 +3,11 @@
 import warnings
 from _weakref import proxy
 from collections import defaultdict
-from pathlib import Path
-from typing import Tuple, Dict, Union, Set
+from typing import Union
 
 from wrapt import ObjectProxy
 
-from .common import AsetTxn, open_file_handles
+from .common import open_file_handles
 from .layout_flat import FlatSampleReader, FlatSampleWriter
 from .layout_nested import (
     FlatSubsampleReader, FlatSubsampleWriter,
@@ -41,7 +40,7 @@ def column_type_object_from_schema(schema: dict):
 
 def _warn_remote(aset_name):
     warnings.warn(
-        f'Arrayset: {aset_name} contains `reference-only` samples, with '
+        f'Column: {aset_name} contains `reference-only` samples, with '
         f'actual data residing on a remote server. A `fetch-data` '
         f'operation is required to access these samples.', UserWarning)
 

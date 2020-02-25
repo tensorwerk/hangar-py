@@ -5,11 +5,9 @@ All backends are supported.
 from contextlib import ExitStack
 from pathlib import Path
 from typing import (
-    Tuple, List, Union, Sequence, Dict, Iterable, Any, Type, Optional
+    Tuple, Union, Dict, Iterable, Any, Optional
 )
 from weakref import proxy
-
-import numpy as np
 
 from .common import open_file_handles
 from ..records import (
@@ -27,18 +25,16 @@ from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP
 from ..op_state import reader_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
-AsetTxnType = Type['AsetTxn']
+
 KeyType = Union[str, int]
 EllipsisType = type(Ellipsis)
 GetKeysType = Union[KeyType, EllipsisType, slice]
-KeyArrMap = Dict[KeyType, np.ndarray]
-KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
-MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 
 
 class FlatSubsampleReader(object):
 
-    __slots__ = ('_column_name', '_stack', '_be_fs', '_mode', '_subsamples', '_samplen')
+    __slots__ = ('_column_name', '_stack', '_be_fs',
+                 '_mode', '_subsamples', '_samplen')
     _attrs = __slots__
 
     def __init__(self,
@@ -76,10 +72,10 @@ class FlatSubsampleReader(object):
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__} \
-                \n    Column Name              : {self._column_name}\
-                \n    Sample Name              : {self._samplen}\
-                \n    Mode (read/write)        : "{self._mode}"\
-                \n    Number of Subsamples     : {self.__len__()}\n'
+                \n    Column Name          : {self._column_name}\
+                \n    Sample Name          : {self._samplen}\
+                \n    Writeable            : "{self.iswriteable}"\
+                \n    Number of Subsamples : {len(self)}\n'
         p.text(res)
 
     def _ipython_key_completions_(self):
@@ -148,7 +144,7 @@ class FlatSubsampleReader(object):
     def __iter__(self) -> Iterable[KeyType]:
         yield from self.keys()
 
-    def __getitem__(self, key: GetKeysType) -> Union[np.ndarray, KeyArrMap]:
+    def __getitem__(self, key: GetKeysType) -> Union[Any, Dict[KeyType, Any]]:
         """Retrieve data for some subsample key via dict style access conventions.
 
         .. seealso:: :meth:`get`
@@ -168,16 +164,14 @@ class FlatSubsampleReader(object):
 
         Returns
         -------
-        Union[:class:`numpy.ndarray`, KeyArrMap]
-            Sample array data corresponding to the provided key. or dictionary
+        Union[Any, Dict[KeyType, Any]]
+            Sample data corresponding to the provided key. or dictionary
             of subsample keys/data if Ellipsis or slice passed in as key.
 
         Raises
         ------
         KeyError
             if no sample with the requested key exists.
-        ValueError
-            If the keys argument if not a valid format.
         """
         # select subsample(s) with regular keys
         if isinstance(key, (str, int)):
@@ -214,23 +208,29 @@ class FlatSubsampleReader(object):
 
     @property
     def sample(self) -> KeyType:
-        """Return name (key) of this sample.
+        """Name of the sample this column subsamples are stured under.
         """
         return self._samplen
 
     @property
     def column(self) -> str:
-        """Return name (key) of column this sample is contained in.
+        """Name of the column.
         """
         return self._column_name
 
     @property
-    def data(self) -> KeyArrMap:
+    def iswriteable(self) -> bool:
+        """Bool indicating if this column object is write-enabled.
+        """
+        return False if self._mode == 'r' else True
+
+    @property
+    def data(self) -> Dict[KeyType, Any]:
         """Return dict mapping every subsample key / data value stored in the sample.
 
         Returns
         -------
-        KeyArrMap
+        Dict[KeyType, Any]
             Dictionary mapping subsample name(s) (keys) to their stored values
             as :class:`numpy.ndarray` instances.
         """
@@ -306,8 +306,8 @@ class FlatSubsampleReader(object):
         """
         yield from self._mode_local_aware_key_looper(local)
 
-    def values(self, local: bool = False) -> Iterable[np.ndarray]:
-        """Generator yielding the tensor data for every subsample.
+    def values(self, local: bool = False) -> Iterable[Any]:
+        """Generator yielding the data for every subsample.
 
         Parameters
         ----------
@@ -318,14 +318,14 @@ class FlatSubsampleReader(object):
 
         Yields
         ------
-        Iterable[:class:`numpy.ndarray`]
+        Iterable[Any]
             Values of one subsample at a time inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield self[key]
 
-    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, np.ndarray]]:
-        """Generator yielding (name, tensor) tuple for every subsample.
+    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, Any]]:
+        """Generator yielding (name, data) tuple for every subsample.
 
         Parameters
         ----------
@@ -336,13 +336,13 @@ class FlatSubsampleReader(object):
 
         Yields
         ------
-        Iterable[Tuple[KeyType, np.ndarray]]
+        Iterable[Tuple[KeyType, Any]]
             Name and stored value for every subsample inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    def get(self, key: KeyType, default: Any = None) -> np.ndarray:
+    def get(self, key: KeyType, default=None):
         """Retrieve the data associated with some subsample key
 
         Parameters
@@ -350,15 +350,15 @@ class FlatSubsampleReader(object):
         key : GetKeysType
             The name of the subsample(s) to retrieve. Passing a single
             subsample key will return the stored :class:`numpy.ndarray`
-        default : Any
+        default
             if a `key` parameter is not found, then return this value instead.
             By default, None.
 
         Returns
         -------
-        np.ndarray
-            :class:`numpy.ndarray` array data stored under subsample key
-            if key exists, else default value if not found.
+        value
+            data stored under subsample key if key exists, else default
+            value if not found.
         """
         try:
             return self[key]
@@ -377,11 +377,10 @@ class FlatSubsampleWriter(FlatSubsampleReader):
     def __init__(self,
                  schema,
                  repo_path: Path,
-                 aset_ctx: Optional[AsetTxnType] = None,
+                 aset_ctx=None,
                  *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-
         self._path = repo_path
         self._schema = schema
         self._txnctx = aset_ctx
@@ -405,22 +404,22 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         if self._enter_count == 0:
             self._stack = None
 
-    def _set_arg_validate(self, key: KeyType, value: np.ndarray):
+    def _set_arg_validate(self, key, value):
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
         isCompat = self._schema.verify_data_compatible(value)
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
-    def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
-        """Internal write method. Assumes all arguments validated and context is open
+    def _perform_set(self, key, value):
+        """Internal write method. Assumes all arguments validated and cm open.
 
         Parameters
         ----------
-        key : KeyType
+        key
             subsample key to store
-        value : np.ndarray
-            tensor data to store
+        value
+            data to store
         """
         # full_hash = array_hash_digest(value)
         full_hash = self._schema.data_hash_digest(value)
@@ -468,12 +467,10 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._subsamples[key] = hash_spec
 
-    def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
-        """Store a piece of data as a subsample. Convenience method to :meth:`add`.
+    def __setitem__(self, key, value):
+        """Store data as a subsample. Convenience method to :meth:`add`.
 
         .. seealso::
-
-            :meth:`add` for the actual method called.
 
             :meth:`update` for an implementation analogous to python's built
             in :meth:`dict.update` method which accepts a dict or iterable of
@@ -481,10 +478,10 @@ class FlatSubsampleWriter(FlatSubsampleReader):
 
         Parameters
         ----------
-        key : KeyType
+        key
             Key (name) of the subsample to add to the column.
-        value : :class:`numpy.ndarray`
-            Tensor data to add as the sample.
+        value
+            Data to add as the sample.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -492,7 +489,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
-    def append(self, value: np.ndarray) -> KeyType:
+    def append(self, value) -> KeyType:
         """Store some data in a subsample with an automatically generated key.
 
         This method should only be used if the context some piece of data is
@@ -509,7 +506,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
 
         Parameters
         ----------
-        value: :class:`numpy.ndarray`
+        value
             Piece of data to store in the column.
 
         Returns
@@ -521,11 +518,13 @@ class FlatSubsampleWriter(FlatSubsampleReader):
             if not self._is_conman:
                 stack.enter_context(self)
             key = generate_sample_name()
+            while key in self._subsamples:
+                key = generate_sample_name()
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
             return key
 
-    def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
+    def update(self, other=None, **kwargs):
         """Store data with the key/value pairs, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
@@ -534,12 +533,12 @@ class FlatSubsampleWriter(FlatSubsampleReader):
 
         Parameters
         ----------
-        other : Union[None, MapKeyArrType], optional
-            Accepts either another dictionary object or an iterable of key/value
-            pairs (as tuples or other iterables of length two). mapping sample
-            names to :class:`np.ndarray` instances, If sample name is string type,
-            can only contain alpha-numeric ascii characters (in addition to '-',
-            '.', '_'). Int key must be >= 0. By default, None.
+        other
+            Accepts either another dictionary object or an iterable of
+            key/value pairs (as tuples or other iterables of length two).
+            mapping sample names to data values, If sample name is string type,
+            can only contain alpha-numeric ascii characters (in addition to
+            '-', '.', '_'). Int key must be >= 0. By default, None.
         **kwargs
             keyword arguments provided will be saved with keywords as subsample
             keys (string type only) and values as np.array instances.
@@ -565,10 +564,12 @@ class FlatSubsampleWriter(FlatSubsampleReader):
             for key, val in other.items():
                 self._perform_set(key, val)
 
-    def __delitem__(self, key: KeyType) -> None:
+    def __delitem__(self, key: KeyType):
         """Remove a subsample from the column.`.
 
-        .. seealso:: :meth:`pop` to simultaneously get value and delete.
+        .. seealso::
+
+            :meth:`pop` to simultaneously get a keys value and delete it.
 
         Parameters
         ----------
@@ -593,7 +594,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
                     f'isRecordDeleted: <{isRecordDeleted}>', f'DEBUG STRING: {self._debug_}')
             del self._subsamples[key]
 
-    def pop(self, key: KeyType) -> np.ndarray:
+    def pop(self, key: KeyType):
         """Retrieve some value for some key(s) and delete it in the same operation.
 
         Parameters
@@ -603,7 +604,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
 
         Returns
         -------
-        :class:`np.ndarray`
+        value
             Upon success, the value of the removed key.
         """
         value = self[key]
@@ -645,12 +646,16 @@ class NestedSampleReader:
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__qualname__} \
-                \n    Column Name              : {self._column_name}\
-                \n    Access Mode              : {self._mode}\
-                \n    Number of Samples        : {self.__len__()}\
-                \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\
-                \n    Contains Subsamples      : True\
-                \n    Number of Subsamples     : {self.num_subsamples}\n'
+                \n    Column Name              : {self.column}\
+                \n    Writeable                : {self.iswriteable}\
+                \n    Column Type              : {self.column_type}\
+                \n    Column Layout            : {self.column_layout}\
+                \n    Schema Type              : {self.schema_type}\
+                \n    DType                    : {self.dtype}\
+                \n    Shape                    : {self.shape}\
+                \n    Number of Samples        : {len(self)}\
+                \n    Number of Subsamples     : {self.num_subsamples}\
+                \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\n'
         p.text(res)
 
     def _ipython_key_completions_(self):
@@ -707,8 +712,9 @@ class NestedSampleReader:
         """ensure multiprocess operations can pickle relevant data.
 
         Technically should be decorated with @reader_checkout_only, but since
-        at instance creation the '_mode' is not a set attribute, the decorator won't
-        know how to process. Since only readers can be pickled, This isn't much of an issue.
+        at instance creation the '_mode' is not a set attribute, the decorator
+        won't know how to process. Since only readers can be pickled, This
+        isn't much of an issue.
         """
         for slot, value in state.items():
             setattr(self, slot, value)
@@ -725,6 +731,11 @@ class NestedSampleReader:
         -------
         FlatSubsampleReader
             Sample accessor corresponding to the given key
+
+        Raises
+        ------
+        KeyError
+            If no sample with the provided key exists.
         """
         return self._samples[key]
 
@@ -788,26 +799,48 @@ class NestedSampleReader:
 
     @property
     def column_type(self):
+        """Data container type of the column ('ndarray', 'str', etc).
+        """
         return self._schema.column_type
 
     @property
     def column_layout(self):
+        """Column layout type ('nested', 'flat', etc).
+        """
         return self._schema.column_layout
 
     @property
     def schema_type(self):
+        """Schema type of the contained data ('variable_shape', 'fixed_shape', etc).
+        """
         return self._schema.schema_type
 
     @property
     def dtype(self):
+        """Dtype of the columns data (np.float, str, etc).
+        """
         return self._schema.dtype
 
     @property
     def shape(self):
+        """(Max) shape of data that can (is) written in the column.
+        """
         try:
             return self._schema.shape
         except AttributeError:
             return None
+
+    @property
+    def backend(self) -> str:
+        """Code indicating which backing store is used when writing data.
+        """
+        return self._schema.backend
+
+    @property
+    def backend_options(self):
+        """Filter / Compression options applied to backend when writing data.
+        """
+        return self._schema.backend_options
 
     @property
     def iswriteable(self) -> bool:
@@ -870,23 +903,6 @@ class NestedSampleReader:
         return tuple(valfilter(lambda x: x.contains_remote_references, self._samples).keys())
 
     @property
-    def backend(self) -> str:
-        """The default backend for the column.
-
-        Returns
-        -------
-        str
-            numeric format code of the default backend.
-        """
-        return self._schema.backend
-
-    @property
-    def backend_options(self) -> dict:
-        """The config settings applied to the default storage backend filters.
-        """
-        return self._schema.backend_options
-
-    @property
     def contains_subsamples(self) -> bool:
         """Bool indicating if sub-samples are contained in this column container.
         """
@@ -917,7 +933,7 @@ class NestedSampleReader:
         """
         yield from self._mode_local_aware_key_looper(local)
 
-    def values(self, local: bool = False) -> Iterable[np.ndarray]:
+    def values(self, local: bool = False) -> Iterable[Any]:
         """Generator yielding the tensor data for every subsample.
 
         Parameters
@@ -929,14 +945,14 @@ class NestedSampleReader:
 
         Yields
         ------
-        Iterable[:class:`numpy.ndarray`]
+        Iterable[Any]
             Values of one subsample at a time inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield self[key]
 
-    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, np.ndarray]]:
-        """Generator yielding (name, tensor) tuple for every subsample.
+    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, Any]]:
+        """Generator yielding (name, data) tuple for every subsample.
 
         Parameters
         ----------
@@ -947,14 +963,14 @@ class NestedSampleReader:
 
         Yields
         ------
-        Iterable[Tuple[KeyType, np.ndarray]]
+        Iterable[Tuple[KeyType, Any]]
             Name and stored value for every subsample inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
     def get(self, key: GetKeysType, default: Any = None) -> FlatSubsampleReader:
-        """Retrieve tensor data for some sample key(s) in the column.
+        """Retrieve data for some sample key(s) in the column.
 
         Parameters
         ----------
@@ -984,12 +1000,9 @@ class NestedSampleWriter(NestedSampleReader):
     __slots__ = ('_txnctx',)
     _attrs = __slots__ + NestedSampleReader.__slots__
 
-    def __init__(self,
-                 aset_ctx: Optional[AsetTxnType] = None,
-                 *args, **kwargs):
+    def __init__(self, aset_ctx=None, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-
         self._txnctx = aset_ctx
 
     def __enter__(self):
@@ -1009,8 +1022,7 @@ class NestedSampleWriter(NestedSampleReader):
         self._stack.close()
         self._enter_count -= 1
 
-    def _set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
-
+    def _set_arg_validate(self, sample_key, subsample_map):
         if not is_suitable_user_key(sample_key):
             raise ValueError(f'Sample name `{sample_key}` is not suitable.')
 
@@ -1021,7 +1033,7 @@ class NestedSampleWriter(NestedSampleReader):
             if not isCompat.compatible:
                 raise ValueError(isCompat.reason)
 
-    def _perform_set(self, key: KeyType, value: MapKeyArrType) -> None:
+    def _perform_set(self, key, value) -> None:
         if key in self._samples:
             self._samples[key].update(value)
         else:
@@ -1040,13 +1052,12 @@ class NestedSampleWriter(NestedSampleReader):
                 del self._samples[key]
                 raise e
 
-    def __setitem__(self, key: KeyType, value: MapKeyArrType) -> None:
+    def __setitem__(self, key, value) -> None:
         """Store some subsample key / subsample data map, overwriting existing keys.
 
         .. seealso::
 
-            :meth:`add` for the actual implementation of the method and docstring
-            for this methods parameters
+            :meth:`update` for alternative syntax for setting values.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -1055,29 +1066,23 @@ class NestedSampleWriter(NestedSampleReader):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
-    def update(self,
-               other: Union[None, Dict[KeyType, MapKeyArrType],
-                            Sequence[Sequence[Union[KeyType, MapKeyArrType]]]] = None,
-               **kwargs) -> None:
+    def update(self, other=None, **kwargs) -> None:
         """Store some data with the key/value pairs, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
-        :py:`dict.update` method, accepting either a dictionary or other
+        :meth:`dict.update` method, accepting either a dictionary or other
         iterable (of length two) listing key / value pairs.
 
         Parameters
         ----------
-        other : Union[None, Dict[KeyType, MapKeyArrType],
-                      Sequence[Sequence[Union[KeyType, MapKeyArrType]]]]
-
+        other
             Dictionary mapping sample names to subsample data maps. Or Sequence
             (list or tuple) where element one is the sample name and element
             two is a subsample data map.
-
-        **kwargs :
+        **kwargs
             keyword arguments provided will be saved with keywords as sample
             keys (string type only) and values as a mapping of subarray keys
-            to :class:`np.ndarray` instances.
+            to data values.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -1103,13 +1108,13 @@ class NestedSampleWriter(NestedSampleReader):
             for key, val in other.items():
                 self._perform_set(key, val)
 
-    def __delitem__(self, key: KeyType) -> None:
+    def __delitem__(self, key: KeyType):
         """Remove a sample (including all contained subsamples) from the column.
 
         .. seealso::
 
-            :meth:`delete` for the actual implementation of the method and
-            docstring for this methods parameters
+            :meth:`pop` for alternative implementing a simultaneous get value
+            and delete operation.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -1123,7 +1128,7 @@ class NestedSampleWriter(NestedSampleReader):
             self._samples[key]._destruct()
             del self._samples[key]
 
-    def pop(self, key: KeyType) -> Dict[KeyType, KeyArrMap]:
+    def pop(self, key: KeyType) -> Dict[KeyType, Any]:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
         Parameters
@@ -1156,8 +1161,9 @@ class NestedSampleWriter(NestedSampleReader):
         backend : str
             Backend format code to swtich to.
         backend_options
-            Backend option specification to use (if specified). If left to default
-            value of None, then default options for backend are automatically used.
+            Backend option specification to use (if specified). If left to
+            default value of None, then default options for backend are
+            automatically used.
 
         Raises
         ------

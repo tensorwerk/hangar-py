@@ -60,7 +60,7 @@ class _WriterSuite:
         except ValueError:
             raise NotImplementedError
         except AttributeError:
-            self.aset = self.co.define_ndarray_column(
+            self.aset = self.co.add_ndarray_column(
                 'aset', prototype=self.arr, backend=self.backend_code[backend])
 
     def teardown(self, backend):
@@ -138,7 +138,7 @@ class _ReaderSuite:
             except ValueError:
                 pass
             except AttributeError:
-                co.define_ndarray_column(backend, prototype=arr, backend=code)
+                co.add_ndarray_column(backend, prototype=arr, backend=code)
 
         try:
             col = co.columns

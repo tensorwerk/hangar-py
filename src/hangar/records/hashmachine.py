@@ -9,7 +9,7 @@ def hash_type_code_from_digest(digest: str) -> str:
     return type_code
 
 
-# ---------------------------- Arrayset Data ----------------------------------
+# ---------------------------- Column Data ----------------------------------
 
 
 def array_hash_digest(array: np.ndarray, *, tcode='0') -> str:

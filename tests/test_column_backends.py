@@ -7,7 +7,7 @@ from conftest import fixed_shape_backend_params
 def test_backend_property_reports_correct_backend(repo, array5by7, backend):
 
     wco = repo.checkout(write=True)
-    aset = wco.define_ndarray_column('aset', prototype=array5by7, backend=backend)
+    aset = wco.add_ndarray_column('aset', prototype=array5by7, backend=backend)
     assert aset.backend == backend
     aset[0] = array5by7
     wco.commit('first')
@@ -23,7 +23,7 @@ def test_backend_property_reports_correct_backend(repo, array5by7, backend):
 def test_setting_backend_property_cannot_change_backend(repo, array5by7, backend):
 
     wco = repo.checkout(write=True)
-    aset = wco.define_ndarray_column('aset', prototype=array5by7, backend=backend)
+    aset = wco.add_ndarray_column('aset', prototype=array5by7, backend=backend)
     assert aset.backend == backend
     aset[0] = array5by7
     with pytest.raises(AttributeError):
@@ -44,7 +44,7 @@ def test_setting_backend_property_cannot_change_backend(repo, array5by7, backend
 def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by7, backend, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.define_ndarray_column(
+    aset = wco.add_ndarray_column(
         'aset', prototype=array5by7, backend=backend, contains_subsamples=subsamples)
     if subsamples:
         aset.update({0: {0: array5by7}})
@@ -80,7 +80,7 @@ def test_setting_backend_opts_property_cannot_change_backend_opts(repo, array5by
 def test_heuristics_select_backend(repo, shape, dtype, variable_shape, expected_backend, subsamples):
     wco = repo.checkout(write=True)
     prototype = np.ones(shape, dtype=dtype)
-    aset = wco.define_ndarray_column(
+    aset = wco.add_ndarray_column(
         'aset', prototype=prototype, variable_shape=variable_shape, contains_subsamples=subsamples)
     assert aset.backend == expected_backend
     if subsamples:
@@ -111,7 +111,7 @@ def test_heuristics_select_backend(repo, shape, dtype, variable_shape, expected_
 def test_manual_override_heuristics_select_backend(repo, prototype, backend, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.define_ndarray_column(
+    aset = wco.add_ndarray_column(
         'aset', prototype=prototype, backend=backend, contains_subsamples=subsamples)
     assert aset.backend == backend
     if subsamples:
@@ -140,7 +140,7 @@ def test_manual_override_heuristics_invalid_value_raises_error(repo):
 
     wco = repo.checkout(write=True)
     with pytest.raises(ValueError):
-        wco.define_ndarray_column('aset', prototype=np.arange(10), backend='ERROR')
+        wco.add_ndarray_column('aset', prototype=np.arange(10), backend='ERROR')
     wco.close()
 
 
@@ -150,7 +150,7 @@ def test_manual_override_heuristics_invalid_value_raises_error(repo):
 def test_manual_change_backends_after_write_works(repo, array5by7, backendStart, backendEnd, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.define_ndarray_column(
+    aset = wco.add_ndarray_column(
         'aset', prototype=array5by7, backend=backendStart, contains_subsamples=subsamples)
     assert aset.backend == backendStart
     if subsamples:
@@ -196,7 +196,7 @@ def test_manual_change_backends_after_write_works(repo, array5by7, backendStart,
 def test_manual_change_backend_to_invalid_fmt_code_fails(repo, array5by7, backendStart, backendFail, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.define_ndarray_column(
+    aset = wco.add_ndarray_column(
         'aset', prototype=array5by7, backend=backendStart, contains_subsamples=subsamples)
     assert aset.backend == backendStart
     if subsamples:
@@ -239,7 +239,7 @@ def test_manual_change_backend_to_invalid_fmt_code_fails(repo, array5by7, backen
 def test_manual_change_backend_fails_while_in_cm(repo, array5by7, backendStart, backendEnd, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.define_ndarray_column(
+    aset = wco.add_ndarray_column(
         'aset', prototype=array5by7, backend=backendStart, contains_subsamples=subsamples)
     assert aset.backend == backendStart
     if subsamples:
@@ -323,13 +323,13 @@ class TestComplibRestrictions:
         # prototype spec
         with pytest.raises(ValueError, match='blosc clib requires'):
             proto = np.zeros(shape, dtype=dtype)
-            wco.define_ndarray_column(
+            wco.add_ndarray_column(
                 'aset', prototype=proto, backend=backend,
                 backend_options=be_opts, contains_subsamples=subsamples)
 
         # shape and dtype spec
         with pytest.raises(ValueError, match='blosc clib requires'):
-            wco.define_ndarray_column(
+            wco.add_ndarray_column(
                 'aset', shape=shape, dtype=dtype, backend=backend,
                 backend_options=be_opts, contains_subsamples=subsamples)
 
@@ -348,7 +348,7 @@ def test_schema_smaller_16_bytes_does_not_use_heuristic_to_select_blosc(
 ):
     wco = repo.checkout(write=True)
     proto = np.zeros(shape, dtype=dtype)
-    aset = wco.define_ndarray_column(
+    aset = wco.add_ndarray_column(
         'aset', prototype=proto, backend=backend, contains_subsamples=subsamples)
     bad_clibs = ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd']
     assert aset.backend_options['complib'] not in bad_clibs
@@ -376,7 +376,7 @@ def test_schema_smaller_16_bytes_cannot_change_to_blosc_backend(
     repo, backend, complib, shape, dtype, subsamples):
 
     wco = repo.checkout(write=True)
-    aset = wco.define_ndarray_column(
+    aset = wco.add_ndarray_column(
         'aset', shape=shape, dtype=dtype, backend=backend, contains_subsamples=subsamples)
     proto = np.zeros(shape, dtype=dtype)
     if subsamples:

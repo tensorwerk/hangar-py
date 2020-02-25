@@ -190,14 +190,13 @@ def create_column(repo: Repository, name, dtype, shape, variable_, subsamples_):
     try:
         co = repo.checkout(write=True)
         if dtype == 'STR':
-            col = co.define_str_column(name=name,
-                                               contains_subsamples=subsamples_)
+            col = co.add_str_column(name=name, contains_subsamples=subsamples_)
         else:
-            col = co.define_ndarray_column(name=name,
-                                                   shape=shape,
-                                                   dtype=np.typeDict[dtype.lower()],
-                                                   variable_shape=variable_,
-                                                   contains_subsamples=subsamples_)
+            col = co.add_ndarray_column(name=name,
+                                        shape=shape,
+                                        dtype=np.typeDict[dtype.lower()],
+                                        variable_shape=variable_,
+                                        contains_subsamples=subsamples_)
         click.echo(f'Initialized Column: {col.column}')
     except (ValueError, LookupError, PermissionError) as e:
         raise click.ClickException(e)

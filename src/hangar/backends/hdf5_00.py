@@ -142,7 +142,7 @@ Technical Notes
    performance of variable shaped datasets. Due to the way that we initialize
    an entire HDF5 file with all datasets pre-created (to the size of the max
    subarray shape), we need to ensure that storing smaller sized arrays (in a
-   variable sized Hangar Arrayset) would be effective. Because we use chunked
+   variable sized Hangar Column) would be effective. Because we use chunked
    storage, certain dimensions which are incomplete could have potentially
    required writes to chunks which do are primarily empty (worst case "C" index
    ordering), increasing read / write speeds significantly.
@@ -435,7 +435,7 @@ class HDF5_00_FileHandles(object):
         ----------
         mode : str
             one of `r` or `a` for read only / read-write.
-        repote_operation : optional, kwarg only, bool
+        remote_operation : optional, kwarg only, bool
             if this hdf5 data is being created from a remote fetch operation, then
             we don't open any files for reading, and only open files for writing
             which exist in the remote data dir. (default is false, which means that

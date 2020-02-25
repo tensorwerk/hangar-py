@@ -1,3 +1,86 @@
+"""Local LMDB Backend Implementation, Identifier: ``LMDB_30``
+
+Backend Identifiers
+===================
+
+*  Backend: ``3``
+*  Version: ``0``
+*  Format Code: ``30``
+*  Canonical Name: ``LMDB_30``
+
+Storage Method
+==============
+
+*  This module is meant to handle string typed data which is of any size. IO
+   is performed via the LMDB storage system.
+
+*  This module does not compress values upon writing, the full (uncompressed)
+   value of the text is written to the DB for each key.
+
+*  For each LMDB file generated, data is indexed by keys which are generated
+   in lexicographically sorted order of key length 4. Keys consist of 4 characters
+   chosen from an alphabet consisting of ASCII digits, lowercase letters, and
+   upercase letters. Within a single write instance (when an LMDB file is created
+   and written to), lexicographically sorted permutations of the chosen characters
+   are used as key indexes.
+
+   This means that for each LMDB file written in a repo, the sequence of generated
+   index keys will be identical, even though two databases with the same key will
+   store different values. As such, the File UID is crucial in order to identify
+   a unique db/index key combo to access a particular value by.
+
+*  There is no limit to the size which each record can occupy. Data is stored
+   "as-is" and is uncompressed. Reading the data back will return the exact
+   data stored (regardless of how large the data record is).
+
+*  On read and write of all samples the xxhash64_hexdigest is calculated for
+   the raw data bytes. This is to ensure that all data in == data out of the
+   lmdb files. That way even if a file is manually edited we have a quick way
+   to tell that things are not as they should be. (full data hash digests may
+   not be calculated every time a read is performed).
+
+Compression Options
+===================
+
+None
+
+Record Format
+=============
+
+Fields Recorded for Each Array
+------------------------------
+
+*  Format Code
+*  File UID
+*  Row Index
+
+Examples
+--------
+
+1)  Adding the first piece of data to a file:
+
+    *  File UID: "rlUK3C"
+    *  Row Index: "0123"
+    *  xxhash64_hexdigest: 8067007c0f05c359
+
+    ``Record Data => "30:rlUK3C:0123:8067007c0f05c359"``
+
+2)  Adding a second piece of data:
+
+    *  File UID: "rlUK3C"
+    *  Row Index: "0124"
+    *  xxhash64_hexdigest: b89f873d3d153a9c
+
+    ``Record Data => "30:rlUK3C:0124:b89f873d3d153a9c"``
+
+3)  Adding a the 500th piece of data:
+
+    *  File UID: "rlUK3C"
+    *  Row Index: "01AU"
+    *  xxhash64_hexdigest: cf3fc53cad153a5a
+
+    ``Record Data => "30:rlUK3C:01AU:cf3fc53cad153a5a"``
+"""
 import os
 import shutil
 import string

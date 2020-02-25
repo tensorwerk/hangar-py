@@ -76,7 +76,7 @@ stores a key/value pair of (`hash`, `backend_specification`).
 .. note::
 
   The record backend stores hash information in a separate location from the
-  commit references (which associate a `(arraysetname, sample name/id)` to a
+  commit references (which associate a `(columnname, sample name/id)` to a
   `sample_hash`). This let's us separate the historical repository
   information from a particular computer's location of a data piece. All we need in
   the public history is to know that some data with a particular hash is

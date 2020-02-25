@@ -59,7 +59,7 @@ def initialized_column(
     write_enabled, backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map
 ):
     co = classrepo.checkout(write=True)
-    aset = co.define_ndarray_column(f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}',
+    aset = co.add_ndarray_column(f'foo{backend_param}{int(write_enabled)}{int(contains_subsamples)}',
                                     shape=(5, 7), dtype=np.uint16,
                                     backend=backend_param, contains_subsamples=contains_subsamples)
     if contains_subsamples:
@@ -81,7 +81,7 @@ def initialized_column(
 @pytest.fixture(scope='class')
 def initialized_column_read_only(backend_param, contains_subsamples, classrepo, subsample_data_map, sample_data_map):
     co = classrepo.checkout(write=True)
-    aset = co.define_ndarray_column(f'foo{backend_param}{int(contains_subsamples)}',
+    aset = co.add_ndarray_column(f'foo{backend_param}{int(contains_subsamples)}',
                                     shape=(5, 7), dtype=np.uint16,
                                     backend=backend_param, contains_subsamples=contains_subsamples)
     if contains_subsamples:

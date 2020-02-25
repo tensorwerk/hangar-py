@@ -257,8 +257,7 @@ def test_push_fetch_records(server_instance, backend):
             repo.init('foo', 'bar')
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
-            co1.define_ndarray_column(
-                name='dummy', prototype=dummyData, backend=backend)
+            co1.add_ndarray_column(name='dummy', prototype=dummyData, backend=backend)
             for idx in range(10):
                 dummyData[:] = idx
                 co1.columns['dummy'][str(idx)] = dummyData
@@ -307,8 +306,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
             repo.init('foo', 'bar')
             dummyData = np.arange(50)
             co1 = repo.checkout(write=True, branch='master')
-            co1.define_ndarray_column(
-                name='dummy', prototype=dummyData, backend=backend)
+            co1.add_ndarray_column(name='dummy', prototype=dummyData, backend=backend)
             for idx in range(10):
                 dummyData[:] = idx
                 co1.columns['dummy'][str(idx)] = dummyData
@@ -669,7 +667,7 @@ def test_branch_create_and_list(written_two_cmt_server_repo):
             new_repo._env._close_environments()
 
 
-@pytest.mark.filterwarnings("ignore:Arrayset.* contains `reference-only` samples")
+@pytest.mark.filterwarnings("ignore:Column.* contains `reference-only` samples")
 def test_branch_create_and_delete(written_two_cmt_server_repo):
     server, base_repo = written_two_cmt_server_repo
 

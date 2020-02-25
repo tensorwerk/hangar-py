@@ -8,7 +8,7 @@ from typing import Optional, Union
 import numpy as np
 import lmdb
 
-from .mixins import GetMixin
+from .mixins import GetMixin, CheckoutDictIteration
 from .columns import (
     AsetTxn,
     Columns,
@@ -30,7 +30,7 @@ from .records import (
 )
 
 
-class ReaderCheckout(GetMixin):
+class ReaderCheckout(GetMixin, CheckoutDictIteration):
     """Checkout the repository as it exists at a particular branch.
 
     This class is instantiated automatically from a repository checkout
@@ -130,7 +130,7 @@ class ReaderCheckout(GetMixin):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : False\
                 \n    Commit Hash  : {self._commit_hash}\
-                \n    Num Columns : {len(self._columns)}\
+                \n    Num Columns  : {len(self)}\
                 \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
@@ -295,7 +295,7 @@ class ReaderCheckout(GetMixin):
 # --------------- Write enabled checkout ---------------------------------------
 
 
-class WriterCheckout(GetMixin):
+class WriterCheckout(GetMixin, CheckoutDictIteration):
     """Checkout the repository at the head of a given branch for writing.
 
     This is the entry point for all writing operations to the repository, the
@@ -328,7 +328,7 @@ class WriterCheckout(GetMixin):
     terminated via non-python SIGKILL, fatal internal python error, or or
     special os exit methods, cleanup will occur on interpreter shutdown and the
     writer lock will be released. If a non-handled termination method does
-    occur, the :py:meth:`~.Repository.force_release_writer_lock` method must be
+    occur, the :meth:`~.Repository.force_release_writer_lock` method must be
     called manually when a new python process wishes to open the writer
     checkout.
     """
@@ -393,7 +393,7 @@ class WriterCheckout(GetMixin):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : True\
                 \n    Base Branch  : {self._branch_name}\
-                \n    Num Columns : {len(self._columns)}\
+                \n    Num Columns  : {len(self)}\
                 \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
@@ -434,8 +434,9 @@ class WriterCheckout(GetMixin):
         Raises
         ------
         PermissionError
-            If the checkout was previously closed (no :attr:``_writer_lock``) or if
-            the writer lock value does not match that recorded in the branch db
+            If the checkout was previously closed (no :attr:``_writer_lock``)
+            or if the writer lock value does not match that recorded in the
+            branch db
         """
         try:
             self._writer_lock
@@ -533,18 +534,18 @@ class WriterCheckout(GetMixin):
         of samples across columns:
 
             >>> dset = repo.checkout(branch='master', write=True)
-
-            # Add single sample to single column
+            >>>
+            >>> # Add single sample to single column
             >>> dset['foo', 1] = np.array([1])
             >>> dset['foo', 1]
             array([1])
-
-            # Add multiple samples to single column
+            >>>
+            >>> # Add multiple samples to single column
             >>> dset['foo', [1, 2, 3]] = [np.array([1]), np.array([2]), np.array([3])]
             >>> dset['foo', [1, 2, 3]]
             [array([1]), array([2]), array([3])]
-
-            # Add single sample to multiple columns
+            >>>
+            >>> # Add single sample to multiple columns
             >>> dset[['foo', 'bar'], 1] = [np.array([1]), np.array([11])]
             >>> dset[:, 1]
             ArraysetData(foo=array([1]), bar=array([11]))
@@ -581,7 +582,6 @@ class WriterCheckout(GetMixin):
            fields/keys
 
         *  Add multiple samples to multiple columns not yet supported.
-
         """
         self._verify_alive()
         with ExitStack() as stack:
@@ -600,7 +600,7 @@ class WriterCheckout(GetMixin):
             elif isinstance(asetsIdx, (tuple, list)):
                 asets = [self._columns._columns[aidx] for aidx in asetsIdx]
             else:
-                raise TypeError(f'Arrayset idx: {asetsIdx} of type: {type(asetsIdx)}')
+                raise TypeError(f'Column idx: {asetsIdx} of type: {type(asetsIdx)}')
             nAsets = len(asets)
 
             # Parse sample names
@@ -660,10 +660,14 @@ class WriterCheckout(GetMixin):
             >>> asets = co.columns
             >>> len(asets)
             0
-            >>> fooAset = asets.init_arrayset('foo', shape=(10, 10), dtype=np.uint8)
+            >>> fooAset = co.add_ndarray_column('foo', shape=(10, 10), dtype=np.uint8)
             >>> len(co.columns)
             1
-            >>> print(co.columns.keys())
+            >>> len(co)
+            1
+            >>> list(co.columns.keys())
+            ['foo']
+            >>> list(co.keys())
             ['foo']
             >>> fooAset = co.columns['foo']
             >>> fooAset.dtype
@@ -671,18 +675,22 @@ class WriterCheckout(GetMixin):
             >>> fooAset = asets.get('foo')
             >>> fooAset.dtype
             np.fooDtype
+            >>> 'foo' in co.columns
+            True
+            >>> 'bar' in co.columns
+            False
 
         .. seealso::
 
-            The class :class:`~.columns.column.Columns` contains all methods accessible
-            by this property accessor
+            The class :class:`~.columns.column.Columns` contains all methods
+            accessible by this property accessor
 
         Returns
         -------
         :class:`~.columns.column.Columns`
-            the columns object which behaves exactly like a
-            columns accessor class but which can be invalidated when the writer
-            lock is released.
+            the columns object which behaves exactly like a columns accessor
+            class but which can be invalidated when the writer lock is
+            released.
         """
         self._verify_alive()
         return self._columns
@@ -693,15 +701,14 @@ class WriterCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`hangar.columns.metadata.MetadataWriter` contains all methods
-            accessible by this property accessor
+            The class :class:`~.columns.metadata.MetadataWriter` contains
+            all methods accessible by this property accessor
 
         Returns
         -------
         MetadataWriter
-            the metadata object which behaves exactly like a
-            metadata class but which can be invalidated when the writer lock is
-            released.
+            the metadata object which behaves exactly like a metadata class but
+            which can be invalidated when the writer lock is released.
         """
         self._verify_alive()
         return self._metadata
@@ -718,9 +725,9 @@ class WriterCheckout(GetMixin):
         Returns
         -------
         WriterUserDiff
-            weakref proxy to the differ object (and contained methods) which behaves
-            exactly like the differ class but which can be invalidated when the
-            writer lock is released.
+            weakref proxy to the differ object (and contained methods) which
+            behaves exactly like the differ class but which can be invalidated
+            when the writer lock is released.
         """
         self._verify_alive()
         wr = weakref.proxy(self._differ)
@@ -752,12 +759,55 @@ class WriterCheckout(GetMixin):
                                            branch_name=self._branch_name)
         return cmt
 
-    def define_str_column(self,
-                          name,
-                          contains_subsamples=False,
-                          *,
-                          backend=None,
-                          backend_options=None):
+    def add_str_column(self,
+                       name: str,
+                       contains_subsamples: bool = False,
+                       *,
+                       backend: Optional[str] = None,
+                       backend_options: Optional[dict] = None):
+        """Initializes a :class:`str` container column
+
+        Columns are created in order to store some arbitrary collection of data
+        pieces. In this case, we store :class:`str` data. Items need not be
+        related to each-other in any direct capacity; the only criteria hangar
+        requires is that all pieces of data stored in the column have a
+        compatible schema with each-other (more on this below). Each piece of
+        data is indexed by some key (either user defined or automatically
+        generated depending on the user's preferences). Both single level
+        stores (sample keys mapping to data on disk) and nested stores (where
+        some sample key maps to an arbitrary number of subsamples, in turn each
+        pointing to some piece of store data on disk) are supported.
+
+        All data pieces within a column have the same data type. For
+        :class:`str` columns, there is no distinction between
+        ``'variable_shape'`` and ``'fixed_shape'`` schema types. Values are
+        allowed to take on a value of any size so long as the datatype and
+        contents are valid for the schema definition.
+
+        Parameters
+        ----------
+        name : str
+            Name assigned to the column
+        contains_subsamples : bool, optional
+            True if the column column should store data in a nested structure.
+            In this scheme, a sample key is used to index an arbitrary number
+            of subsamples which map some (sub)key to a piece of data. If False,
+            sample keys map directly to a single piece of data; essentially
+            acting as a single level key/value store. By default, False.
+        backend : Optional[str], optional
+            ADVANCED USERS ONLY, backend format code to use for column data. If
+            None, automatically inferred and set based on data shape and type.
+            by default None
+        backend_options : Optional[dict], optional
+            ADVANCED USERS ONLY, filter opts to apply to column data. If None,
+            automatically inferred and set based on data shape and type.
+            by default None
+
+        Returns
+        -------
+        :class:`~.columns.column.Columns`
+            instance object of the initialized column.
+        """
         if self.columns._any_is_conman() or self._is_conman:
             raise PermissionError('Not allowed while context manager is used.')
 
@@ -808,37 +858,36 @@ class WriterCheckout(GetMixin):
         self.columns._columns[name] = setup_args
         return self[name]
 
-    def define_ndarray_column(self,
-                              name: str,
-                              shape: Optional[Union[int, tuple]] = None,
-                              dtype: Optional[np.dtype] = None,
-                              prototype: Optional[np.ndarray] = None,
-                              variable_shape: bool = False,
-                              contains_subsamples: bool = False,
-                              *,
-                              backend: Optional[str] = None,
-                              backend_options: Optional[dict] = None):
-        """Initializes a column in the repository.
+    def add_ndarray_column(self,
+                           name: str,
+                           shape: Optional[Union[int, tuple]] = None,
+                           dtype: Optional[np.dtype] = None,
+                           prototype: Optional[np.ndarray] = None,
+                           variable_shape: bool = False,
+                           contains_subsamples: bool = False,
+                           *,
+                           backend: Optional[str] = None,
+                           backend_options: Optional[dict] = None):
+        """Initializes a :class:`numpy.ndarray` container column.
 
-        Column columns are created in order to store some arbitrary
-        collection of data pieces (arrays). Items need not be related to
-        each-other in any direct capacity; the only criteria hangar requires is
-        that all pieces of data stored in the column have a compatible schema
-        with each-other (more on this below). Each piece of data is indexed by
-        some key (either user defined or automatically generated depending on
-        the user's preferences). Both single level stores (sample keys mapping
-        to data on disk) and nested stores (where some sample key maps to an
-        arbitrary number of subsamples, in turn each pointing to some piece of
-        store data on disk) are supported.
+        Columns are created in order to store some arbitrary collection of data
+        pieces. In this case, we store :class:`numpy.ndarray` data. Items need
+        not be related to each-other in any direct capacity; the only criteria
+        hangar requires is that all pieces of data stored in the column have a
+        compatible schema with each-other (more on this below). Each piece of
+        data is indexed by some key (either user defined or automatically
+        generated depending on the user's preferences). Both single level
+        stores (sample keys mapping to data on disk) and nested stores (where
+        some sample key maps to an arbitrary number of subsamples, in turn each
+        pointing to some piece of store data on disk) are supported.
 
         All data pieces within a column have the same data type and number of
         dimensions. The size of each dimension can be either fixed (the default
         behavior) or variable per sample. For fixed dimension sizes, all data
-        pieces written to the column must have the same shape & size which
-        was specified at the time the column column was initialized.
-        Alternatively, variable sized columns can write data pieces with
-        dimensions of any size (up to a specified maximum).
-
+        pieces written to the column must have the same shape & size which was
+        specified at the time the column column was initialized. Alternatively,
+        variable sized columns can write data pieces with dimensions of any
+        size (up to a specified maximum).
 
         Parameters
         ----------
@@ -878,7 +927,7 @@ class WriterCheckout(GetMixin):
 
         Returns
         -------
-        Column
+        :class:`~.columns.column.Columns`
             instance object of the initialized column.
         """
         if self.columns._any_is_conman() or self._is_conman:
@@ -958,7 +1007,8 @@ class WriterCheckout(GetMixin):
         message : str
             commit message to attach to a three-way merge
         dev_branch : str
-            name of the branch which should be merge into this branch (`master`)
+            name of the branch which should be merge into this branch
+            (ie `master`)
 
         Returns
         -------
@@ -1023,9 +1073,9 @@ class WriterCheckout(GetMixin):
         self._verify_alive()
 
         open_asets = []
-        for arrayset in self._columns.values():
-            if arrayset._is_conman:
-                open_asets.append(arrayset.column)
+        for column in self._columns.values():
+            if column._is_conman:
+                open_asets.append(column.column)
         open_meta = self._metadata._is_conman
 
         try:
@@ -1125,9 +1175,9 @@ class WriterCheckout(GetMixin):
     def close(self) -> None:
         """Close all handles to the writer checkout and release the writer lock.
 
-        Failure to call this method after the writer checkout has been used will
-        result in a lock being placed on the repository which will not allow any
-        writes until it has been manually cleared.
+        Failure to call this method after the writer checkout has been used
+        will result in a lock being placed on the repository which will not
+        allow any writes until it has been manually cleared.
         """
         self._verify_alive()
         if isinstance(self._stack, ExitStack):
