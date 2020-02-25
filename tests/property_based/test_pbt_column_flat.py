@@ -71,11 +71,11 @@ def variable_shape_repo_co_uint8_aset_flat(managed_tmpdir, request) -> Repositor
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
     co.define_ndarray_column(name='writtenaset',
-                                     shape=(5, 5, 5),
-                                     dtype=np.uint8,
-                                     variable_shape=True,
-                                     backend=request.param,
-                                     contains_subsamples=False)
+                             shape=(5, 5, 5),
+                             dtype=np.uint8,
+                             variable_shape=True,
+                             backend=request.param,
+                             contains_subsamples=False)
     yield co
     co.close()
     repo_obj._env._close_environments()
@@ -91,8 +91,8 @@ def variable_shape_repo_co_str_aset_flat(managed_tmpdir, request) -> Repository:
     repo_obj.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo_obj.checkout(write=True)
     co.define_str_column(name='strcolumn',
-                                 contains_subsamples=False,
-                                 backend=request.param)
+                         contains_subsamples=False,
+                         backend=request.param)
     yield co
     co.close()
     repo_obj._env._close_environments()

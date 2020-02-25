@@ -6,7 +6,7 @@ on:
     - master
 
 jobs:
-  build:
+  run_benchmarks:
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 4

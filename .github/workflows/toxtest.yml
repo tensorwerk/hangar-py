@@ -7,7 +7,7 @@ on:
 
 
 jobs:
-  build:
+  run_test_suite:
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false

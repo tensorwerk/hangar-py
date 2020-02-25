@@ -576,6 +576,8 @@ class FlatSampleWriter(FlatSampleReader):
         -------
         KeyType
             Name of the generated key this data is stored with.
+
+        TODO: verify append generated key is unique and non-colliding!!
         """
         with ExitStack() as stack:
             if not self._is_conman:

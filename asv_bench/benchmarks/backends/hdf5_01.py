@@ -36,15 +36,17 @@ class _WriterSuite_HDF5_01:
         arr = np.prod(component_arrays).astype(np.float32)
 
         try:
-            self.aset = self.co.columns.init_arrayset('aset', prototype=arr, backend_opts='01')
+            self.aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend_opts='01')
         except TypeError:
             try:
-                self.aset = self.co.columns.init_arrayset('aset', prototype=arr, backend='01')
+                self.aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='01')
             except ValueError:
                 raise NotImplementedError
         except ValueError:
             # marks as skipped benchmark for commits which do not have this backend.
             raise NotImplementedError
+        except AttributeError:
+            self.aset = self.co.define_ndarray_column('aset', prototype=arr, backend='01')
 
         if self.method == 'read':
             with self.aset as cm_aset:
@@ -54,7 +56,10 @@ class _WriterSuite_HDF5_01:
             self.co.commit('first commit')
             self.co.close()
             self.co = self.repo.checkout(write=False)
-            self.aset = self.co.columns['aset']
+            try:
+                self.aset = self.co.columns['aset']
+            except AttributeError:
+                self.aset = self.co.arraysets['aset']
         else:
             self.arr = arr
 

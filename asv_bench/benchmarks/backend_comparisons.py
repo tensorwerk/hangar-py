@@ -49,16 +49,19 @@ class _WriterSuite:
         self.arr = np.prod(component_arrays).astype(np.float32)
 
         try:
-            self.aset = self.co.columns.init_arrayset(
+            self.aset = self.co.arraysets.init_arrayset(
                 'aset', prototype=self.arr, backend_opts=self.backend_code[backend])
         except TypeError:
             try:
-                self.aset = self.co.columns.init_arrayset(
+                self.aset = self.co.arraysets.init_arrayset(
                     'aset', prototype=self.arr, backend=self.backend_code[backend])
             except ValueError:
                 raise NotImplementedError
         except ValueError:
             raise NotImplementedError
+        except AttributeError:
+            self.aset = self.co.define_ndarray_column(
+                'aset', prototype=self.arr, backend=self.backend_code[backend])
 
     def teardown(self, backend):
         self.co.close()
@@ -124,16 +127,18 @@ class _ReaderSuite:
 
         for backend, code in backend_code.items():
             try:
-                co.columns.init_arrayset(
+                co.arraysets.init_arrayset(
                     backend, prototype=arr, backend_opts=code)
             except TypeError:
                 try:
-                    co.columns.init_arrayset(
+                    co.arraysets.init_arrayset(
                         backend, prototype=arr, backend=code)
                 except ValueError:
                     pass
             except ValueError:
                 pass
+            except AttributeError:
+                co.define_ndarray_column(backend, prototype=arr, backend=code)
 
         with co.columns as asets_cm:
             for aset in asets_cm.values():
@@ -150,7 +155,10 @@ class _ReaderSuite:
         self.repo = Repository(path=os.getcwd(), exists=True)
         self.co = self.repo.checkout(write=False)
         try:
-            self.aset = self.co.columns[backend]
+            try:
+                self.aset = self.co.columns[backend]
+            except AttributeError:
+                self.aset = self.co.arraysets[backend]
         except KeyError:
             raise NotImplementedError
 
