@@ -23,7 +23,7 @@ from ..records import (
     schema_record_db_val_from_digest,
 )
 from ..records.parsing import generate_sample_name
-from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP, DataHashSpecsType
+from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP
 from ..op_state import reader_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
@@ -45,7 +45,7 @@ class FlatSubsampleReader(object):
                  columnname: str,
                  samplen: str,
                  be_handles: BACKEND_ACCESSOR_MAP,
-                 specs: Dict[KeyType, DataHashSpecsType],
+                 specs,
                  mode: str,
                  *args, **kwargs):
 

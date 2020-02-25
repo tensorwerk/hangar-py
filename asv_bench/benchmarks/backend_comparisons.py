@@ -15,7 +15,7 @@ class _WriterSuite:
 
     params = ['hdf5_00', 'hdf5_01', 'numpy_10']
     param_names = ['backend']
-    processes = 1
+    processes = 2
     repeat = (2, 4, 30.0)
     # repeat == tuple (min_repeat, max_repeat, max_time)
     number = 2
@@ -94,7 +94,7 @@ class _ReaderSuite:
 
     params = ['hdf5_00', 'hdf5_01', 'numpy_10']
     param_names = ['backend']
-    processes = 1
+    processes = 2
     repeat = (2, 4, 30.0)
     # repeat == tuple (min_repeat, max_repeat, max_time)
     number = 3
@@ -140,7 +140,12 @@ class _ReaderSuite:
             except AttributeError:
                 co.define_ndarray_column(backend, prototype=arr, backend=code)
 
-        with co.columns as asets_cm:
+        try:
+            col = co.columns
+        except AttributeError:
+            col = co.arraysets
+
+        with col as asets_cm:
             for aset in asets_cm.values():
                 changer = 0
                 for i in range(num_samples):

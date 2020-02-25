@@ -84,7 +84,7 @@ reaching out to the Hangar core development team so we can guide you through the
 process.
 """
 import string
-from typing import Union, Dict
+from typing import Dict
 
 from .specs import (
     HDF5_00_DataHashSpec,
@@ -101,19 +101,6 @@ from .lmdb_30 import LMDB_30_FileHandles, LMDB_30_Options
 from .numpy_10 import NUMPY_10_FileHandles, NUMPY_10_Options
 from .remote_50 import REMOTE_50_Handler, REMOTE_50_Options
 
-DataHashSpecsType = Union[
-    HDF5_00_DataHashSpec,
-    HDF5_01_DataHashSpec,
-    NUMPY_10_DataHashSpec,
-    LMDB_30_DataHashSpec,
-    REMOTE_50_DataHashSpec,
-]
-
-_BeAccessors = Union[HDF5_00_FileHandles, HDF5_01_FileHandles,
-                     NUMPY_10_FileHandles, LMDB_30_FileHandles,
-                     REMOTE_50_Handler]
-
-AccessorMapType = Dict[str, _BeAccessors]
 
 BACKEND_ACCESSOR_MAP = {
     # LOCALS -> [00:50] + ['aa':'zz']
@@ -140,7 +127,7 @@ BACKEND_IS_LOCAL_MAP: Dict[str, bool] = {
 }
 
 __all__ = [
-    'backend_decoder', 'DataHashSpecsType', 'HDF5_00_DataHashSpec', 'HDF5_01_DataHashSpec',
+    'backend_decoder', 'HDF5_00_DataHashSpec', 'HDF5_01_DataHashSpec',
     'NUMPY_10_DataHashSpec', 'LMDB_30_DataHashSpec', 'REMOTE_50_DataHashSpec',
-    'BACKEND_OPTIONS_MAP', 'BACKEND_ACCESSOR_MAP', 'BACKEND_IS_LOCAL_MAP', 'AccessorMapType',
+    'BACKEND_OPTIONS_MAP', 'BACKEND_ACCESSOR_MAP', 'BACKEND_IS_LOCAL_MAP',
 ]

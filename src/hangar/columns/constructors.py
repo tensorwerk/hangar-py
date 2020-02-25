@@ -17,16 +17,13 @@ from .layout_nested import (
 from ..records.queries import RecordQuery
 from ..records import hash_data_db_key_from_raw_key
 from ..typesystem import NdarrayFixedShape, NdarrayVariableShape, StringVariableShape
-from ..backends import BACKEND_IS_LOCAL_MAP, backend_decoder, DataHashSpecsType
+from ..backends import BACKEND_IS_LOCAL_MAP, backend_decoder
 
 
 # --------------- methods common to all column layout types -------------------
 
 
 KeyType = Union[str, int]
-FlatSampleMapType = Dict[KeyType, DataHashSpecsType]
-NestedSampleMapType = Dict[KeyType, FlatSampleMapType]
-
 
 _column_definitions = (NdarrayVariableShape, NdarrayFixedShape, StringVariableShape)
 
@@ -52,8 +49,7 @@ def _warn_remote(aset_name):
 # --------- FlatSampleReader constructor metaclass / setup methods ------------------
 
 
-def _flat_load_sample_keys_and_specs(
-        column_name, txnctx) -> Tuple[FlatSampleMapType, Set[str]]:
+def _flat_load_sample_keys_and_specs(column_name, txnctx):
     """Load flat sample key / backend location mapping info memory.
 
     Parameters
@@ -139,8 +135,7 @@ def generate_flat_column(txnctx, column_name, path, schema, mode):
 # --------- NestedSampleReader constructor metaclass / setup methods ----------------
 
 
-def _nested_load_sample_keys_and_specs(
-        column_name, txnctx) -> Tuple[NestedSampleMapType, Set[str]]:
+def _nested_load_sample_keys_and_specs(column_name, txnctx):
     """Load nested sample/subsample keys and backend location into memory from disk.
 
     Parameters

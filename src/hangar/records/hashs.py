@@ -12,7 +12,7 @@ from .column_parsers import (
     schema_spec_from_db_val,
     schema_record_count_start_range_key
 )
-from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder, DataHashSpecsType
+from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..txnctx import TxnRegister
 from ..mixins import CursorRangeIterator
 from ..utils import ilen
@@ -116,7 +116,7 @@ class HashQuery(CursorRangeIterator):
         """
         return self._hashenv.stat()['entries']
 
-    def gen_all_data_digests_and_parsed_backend_specs(self) -> Iterable[Tuple[str, DataHashSpecsType]]:
+    def gen_all_data_digests_and_parsed_backend_specs(self):
         for dbk, dbv in self._traverse_all_hash_records(keys=True, values=True):
             rawk = hash_data_raw_key_from_db_key(dbk)
             rawv = backend_decoder(dbv)

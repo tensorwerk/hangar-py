@@ -3,7 +3,7 @@ from pathlib import Path
 import weakref
 from contextlib import suppress, ExitStack
 from uuid import uuid4
-from typing import Optional, Union, Tuple
+from typing import Optional, Union
 
 import numpy as np
 import lmdb
@@ -16,7 +16,6 @@ from .columns import (
     MetadataWriter,
     generate_nested_column,
     generate_flat_column,
-    column_type_object_from_schema,
 )
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm

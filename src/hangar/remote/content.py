@@ -3,7 +3,6 @@ from typing import NamedTuple, Union, Sequence, Tuple, List, Optional
 import numpy as np
 
 from ..columns.constructors import open_file_handles, column_type_object_from_schema
-from ..backends import BACKEND_ACCESSOR_MAP, BACKEND_OPTIONS_MAP
 from ..context import Environments
 from ..records import parsing
 from ..records import (

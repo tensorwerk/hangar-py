@@ -2,7 +2,7 @@ from typing import Dict, Iterable, Iterator, List, Set, Tuple, Union
 
 import lmdb
 
-from . import (
+from .column_parsers import (
     data_record_digest_val_from_db_val,
     dynamic_layout_data_record_db_start_range_key,
     dynamic_layout_data_record_from_db_key,
@@ -11,7 +11,8 @@ from . import (
     schema_column_record_from_db_key,
     schema_db_range_key_from_column_unknown_layout,
     schema_record_count_start_range_key,
-    schema_spec_from_db_val,
+)
+from .recordstructs import (
     FlatColumnDataKey,
     NestedColumnDataKey,
     DataRecordVal,

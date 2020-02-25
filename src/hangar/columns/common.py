@@ -3,7 +3,6 @@ from typing import Optional
 
 import lmdb
 
-from ..backends import AccessorMapType, BACKEND_ACCESSOR_MAP
 from ..txnctx import TxnRegister
 
 
@@ -97,7 +96,7 @@ class AsetTxn(object):
             self.close_write()
 
 
-def open_file_handles(backends, path, mode, schema, *, remote_operation=False) -> AccessorMapType:
+def open_file_handles(backends, path, mode, schema, *, remote_operation=False):
     """Open backend accessor file handles for reading
 
     Parameters
@@ -120,6 +119,8 @@ def open_file_handles(backends, path, mode, schema, *, remote_operation=False) -
         dict mapping backend format codes to initialized instances of each
         read-only backend.
     """
+    from ..backends import BACKEND_ACCESSOR_MAP
+
     fhandles = {}
     for be, accessor in BACKEND_ACCESSOR_MAP.items():
         if be in backends:

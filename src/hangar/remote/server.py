@@ -21,7 +21,6 @@ from .. import constants as c
 from ..context import Environments
 from ..txnctx import TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
-from ..columns.constructors import open_file_handles
 from ..records import commiting, hashs, heads, parsing, queries, summarize
 from ..records import (
     hash_schema_db_key_from_raw_key,

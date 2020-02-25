@@ -8,7 +8,7 @@ class MakeCommit(object):
 
     params = [(5_000, 20_000), (5_000, 20_000)]
     param_names = ['num_samples', 'num_metadata']
-    processes = 1
+    processes = 2
     repeat = (2, 4, 20)
     number = 1
     warmup_time = 0
@@ -47,7 +47,7 @@ class CheckoutCommit(object):
 
     params = [(5_000, 20_000), (5_000, 20_000)]
     param_names = ['num_samples', 'num_metadata']
-    processes = 1
+    processes = 2
     number = 1
     repeat = (2, 4, 20)
     warmup_time = 0

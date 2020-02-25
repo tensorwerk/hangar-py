@@ -318,7 +318,7 @@ class HDF5_00_Options(metaclass=checkedmeta):
         if 'blosc' in hdf5plugin.FILTERS:
             try:
                 self._verify_data_nbytes_larger_than_clib_min()
-                return {'complib': 'blosc:zstd', 'complevel': 3, 'shuffle': 'byte'}
+                return {'complib': 'blosc:lz4hc', 'complevel': 5, 'shuffle': 'byte'}
             except ValueError:
                 pass
         return {'complib': 'lzf', 'complevel': None, 'shuffle': True}

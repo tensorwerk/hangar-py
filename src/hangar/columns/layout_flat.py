@@ -23,7 +23,7 @@ from ..records import (
     schema_record_db_val_from_digest
 )
 from ..records.parsing import generate_sample_name
-from ..backends import backend_decoder, AccessorMapType, DataHashSpecsType
+from ..backends import backend_decoder
 from ..op_state import reader_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
 
@@ -65,8 +65,8 @@ class FlatSampleReader:
 
     def __init__(self,
                  columnname: str,
-                 samples: Dict[KeyType, DataHashSpecsType],
-                 backend_handles: AccessorMapType,
+                 samples,
+                 backend_handles,
                  schema,
                  repo_path: Path,
                  mode: str,

@@ -9,7 +9,7 @@ from hangar.utils import folder_size
 
 class _WriterSuite_HDF5_00:
 
-    processes = 1
+    processes = 2
     repeat = (2, 4, 20.0)
     # repeat == tuple (min_repeat, max_repeat, max_time)
     number = 2
