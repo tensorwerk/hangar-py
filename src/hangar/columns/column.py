@@ -1,3 +1,5 @@
+"""Constructor and Interaction Class for Columns
+"""
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
@@ -5,7 +7,6 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 import lmdb
 import numpy as np
 
-from . import ModifierTypes
 from .common import AsetTxn
 from .constructors import (
     generate_flat_column, generate_nested_column, column_type_object_from_schema
@@ -26,11 +27,7 @@ from ..typesystem import NdarrayFixedShape, NdarrayVariableShape, StringVariable
 from ..utils import is_suitable_user_key, is_ascii
 
 KeyType = Union[str, int]
-
-"""
-Constructor and Interaction Class for Columns
---------------------------------------------------
-"""
+ModifierTypes = Union['NestedSampleReader', 'FlatSubsampleReader']
 
 
 class Columns:

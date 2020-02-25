@@ -1,4 +1,3 @@
-from . import column_parsers
 from .column_parsers import *
 from .recordstructs import (
     CompatibleData,

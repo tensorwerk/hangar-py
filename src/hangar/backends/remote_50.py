@@ -57,7 +57,7 @@ Technical Notes
 from pathlib import Path
 from typing import Optional
 
-from . import REMOTE_50_DataHashSpec
+from .specs import REMOTE_50_DataHashSpec
 from ..op_state import writer_checkout_only, reader_checkout_only
 from ..typesystem import EmptyDict, checkedmeta
 

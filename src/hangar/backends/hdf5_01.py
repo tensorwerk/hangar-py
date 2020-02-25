@@ -222,8 +222,8 @@ finally:
 from xxhash import xxh64_hexdigest
 
 
-from . import HDF5_01_DataHashSpec
 from .chunk import calc_chunkshape
+from .specs import HDF5_01_DataHashSpec
 from .. import __version__
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import writer_checkout_only, reader_checkout_only
@@ -279,7 +279,7 @@ def hdf5_01_encode(uid: str, cksum: str, dset: int, dset_idx: int,
 @DictItems(
     expected_keys_required={'complib': True, 'complevel': True, 'shuffle': True},
     expected_values={
-        'complib': ['blosc:blosclz', 'blosc:lz4','blosc:lz4hc', 'blosc:zlib', 'blosc:zstd'],
+        'complib': ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd'],
         'complevel': [*(i for i in range(10))],
         'shuffle': [None, 'none', 'byte', 'bit']})
 class BloscCompressionOptions(Descriptor):

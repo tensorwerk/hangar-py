@@ -420,6 +420,7 @@ class TestAddData:
         for sample_idx in range(multi_item_generator):
             aset[f'sample{sample_idx}'] = {'foo': np.arange(16, dtype=np.uint8).reshape(4, 4) + 10}
             aset[f'sample{sample_idx}'].update(iterable_subsamples, bar=np.arange(16, dtype=np.uint8).reshape(4, 4))
+
         assert len(aset._samples) == multi_item_generator
 
         for sample_idx in range(multi_item_generator):

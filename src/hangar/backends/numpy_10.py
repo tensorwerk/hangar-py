@@ -86,7 +86,7 @@ import numpy as np
 from numpy.lib.format import open_memmap
 from xxhash import xxh64_hexdigest
 
-from . import NUMPY_10_DataHashSpec
+from .specs import NUMPY_10_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import random_string

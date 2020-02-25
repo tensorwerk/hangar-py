@@ -142,7 +142,7 @@ class Environments(object):
         self.repo_path.joinpath(DIR_DATA_STAGE).mkdir()
         self.repo_path.joinpath(DIR_DATA_REMOTE).mkdir()
         self.repo_path.joinpath(DIR_DATA).mkdir()
-        # print(f'Hangar Repo initialized at: {self.repo_path}')
+        print(f'Hangar Repo initialized at: {self.repo_path}')
 
         userConf = {'USER': {'name': user_name, 'email': user_email}}
         CFG = configparser.ConfigParser()
@@ -165,8 +165,6 @@ class Environments(object):
 
         Parameters
         ----------
-        repo_pth : str
-            path to the repository directory on the local disk
         branch_name : str, optional
             name of the branch to read, defaults to ''
         commit : str, optional
@@ -188,7 +186,7 @@ class Environments(object):
             commit_hash = get_branch_head_commit(self.branchenv, head_branch)
             txt = f'\n Neither BRANCH or COMMIT specified.'\
                   f'\n * Checking out writing HEAD BRANCH: {head_branch}'
-        # print(txt)
+        print(txt)
 
         # On UNIX-like system, an open process still retains ability to
         # interact with disk space allocated to a file when it is removed from

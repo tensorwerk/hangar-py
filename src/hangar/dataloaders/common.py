@@ -117,7 +117,7 @@ class GroupedColumns(object):
         """
         shapes = []
         for col in self.columns_col:
-            if col.column_layout == 'variable_shape':
+            if col.schema_type == 'variable_shape':
                 aset_shape = (None,) * len(col.shape)
             else:
                 aset_shape = col.shape

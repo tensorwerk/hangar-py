@@ -122,7 +122,7 @@ valid_arrays_fixed = npst.arrays(np.float32,
 
 
 @given(key=st_valid_keys, val=valid_arrays_fixed)
-@settings(max_examples=200, deadline=100.0, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=200, deadline=None)
 def test_arrayset_fixed_key_values(key, val, fixed_shape_repo_co_float32_aset_flat):
     global added_samples
 
@@ -155,7 +155,7 @@ valid_arrays_var_float32 = npst.arrays(np.float32,
 
 
 @given(key=st_valid_keys, val=valid_arrays_var_float32)
-@settings(max_examples=200, deadline=100.0, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=200, deadline=None)
 def test_arrayset_variable_shape_float32(key, val, variable_shape_repo_co_float32_aset_flat):
     global added_samples
 
@@ -179,7 +179,7 @@ valid_arrays_var_uint8 = npst.arrays(np.uint8,
 
 
 @given(key=st_valid_keys, val=valid_arrays_var_uint8)
-@settings(max_examples=200, deadline=100.0, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=200, deadline=None)
 def test_arrayset_variable_shape_uint8(key, val, variable_shape_repo_co_uint8_aset_flat):
     global added_samples
 
@@ -201,7 +201,7 @@ ascii_text_stratagy = st.text(alphabet=ascii_characters, min_size=0, max_size=50
 
 
 @given(key=st_valid_keys, val=ascii_text_stratagy)
-@settings(max_examples=400, deadline=100.0, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=200, deadline=None)
 def test_str_column_variable_shape(key, val, variable_shape_repo_co_str_aset_flat):
     global added_samples
 

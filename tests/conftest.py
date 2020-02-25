@@ -86,7 +86,8 @@ def aset_samples_initialized_repo(repo) -> Repository:
 @pytest.fixture()
 def aset_subsamples_initialized_repo(repo) -> Repository:
     co = repo.checkout(write=True)
-    co.columns.create_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float64)
+    co.columns.create_ndarray_column(
+        name='writtenaset', shape=(5, 7), dtype=np.float64, contains_subsamples=True)
     co.commit('this is a commit message')
     co.close()
     yield repo

@@ -3,7 +3,6 @@ import time
 from io import StringIO
 
 import lmdb
-import numpy as np
 
 from .commiting import get_commit_ancestors_graph, get_commit_spec, tmp_cmt_env
 from .heads import get_staging_branch_head, get_branch_head_commit

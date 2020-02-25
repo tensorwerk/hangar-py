@@ -11,7 +11,7 @@ from typing import Optional
 import lmdb
 from xxhash import xxh64_hexdigest
 
-from . import LMDB_30_DataHashSpec
+from .specs import LMDB_30_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import random_string
