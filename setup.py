@@ -158,7 +158,7 @@ SETUP_REQUIRES = [
 ]
 
 INSTALL_REQUIRES = [
-    'blosc',
+    'blosc<1.8.2',
     'click',
     'grpcio',
     'protobuf',

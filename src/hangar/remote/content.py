@@ -30,6 +30,7 @@ class ContentWriter(object):
     def __init__(self, envs):
 
         self.env: Environments = envs
+        self.txnctx: TxnRegister = TxnRegister()
 
     def commit(self, commit: str, parentVal: bytes, specVal: bytes,
                refVal: bytes) -> Union[str, bool]:
@@ -57,13 +58,13 @@ class ContentWriter(object):
         commitSpecKey = parsing.commit_spec_db_key_from_raw_key(commit)
         commitParentKey = parsing.commit_parent_db_key_from_raw_key(commit)
         commitRefKey = parsing.commit_ref_db_key_from_raw_key(commit)
-        refTxn = TxnRegister().begin_writer_txn(self.env.refenv)
+        refTxn = self.txnctx.begin_writer_txn(self.env.refenv)
         try:
             cmtParExists = refTxn.put(commitParentKey, parentVal, overwrite=False)
             cmtRefExists = refTxn.put(commitRefKey, refVal, overwrite=False)
             cmtSpcExists = refTxn.put(commitSpecKey, specVal, overwrite=False)
         finally:
-            TxnRegister().commit_writer_txn(self.env.refenv)
+            self.txnctx.commit_writer_txn(self.env.refenv)
 
         ret = False if not all([cmtParExists, cmtRefExists, cmtSpcExists]) else commit
         return ret
@@ -86,11 +87,11 @@ class ContentWriter(object):
             False if the schema_hash existed in db and no records written.
         """
         schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-        hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
+        hashTxn = self.txnctx.begin_writer_txn(self.env.hashenv)
         try:
             schemaExists = hashTxn.put(schemaKey, schemaVal, overwrite=False)
         finally:
-            TxnRegister().commit_writer_txn(self.env.hashenv)
+            self.txnctx.commit_writer_txn(self.env.hashenv)
 
         ret = False if not schemaExists else schema_hash
         return ret
@@ -123,11 +124,11 @@ class ContentWriter(object):
             list of str of all data digests written by this method.
         """
         schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-        hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
+        hashTxn = self.txnctx.begin_reader_txn(self.env.hashenv)
         try:
             schemaVal = hashTxn.get(schemaKey)
         finally:
-            TxnRegister().abort_reader_txn(self.env.hashenv)
+            self.txnctx.abort_reader_txn(self.env.hashenv)
         schema_val = schema_spec_from_db_val(schemaVal)
         schema = column_type_object_from_schema(schema_val)
 
@@ -140,7 +141,7 @@ class ContentWriter(object):
                                         schema=schema,
                                         remote_operation=True)[schema.backend]
         saved_digests = []
-        hashTxn = TxnRegister().begin_writer_txn(self.env.hashenv)
+        hashTxn = self.txnctx.begin_writer_txn(self.env.hashenv)
         try:
             for hdigest, tensor in received_data:
                 hashVal = be_accessor.write_data(tensor, remote_operation=True)
@@ -148,8 +149,8 @@ class ContentWriter(object):
                 hashTxn.put(hashKey, hashVal)
                 saved_digests.append(hdigest)
         finally:
+            self.txnctx.commit_writer_txn(self.env.hashenv)
             be_accessor.close()
-            TxnRegister().commit_writer_txn(self.env.hashenv)
         return saved_digests
 
     def label(self, digest: str, labelVal: bytes) -> Union[str, bool]:
@@ -171,11 +172,11 @@ class ContentWriter(object):
             db and no operation was performed.
         """
         labelHashKey = hash_meta_db_key_from_raw_key(digest)
-        labelTxn = TxnRegister().begin_writer_txn(self.env.labelenv)
+        labelTxn = self.txnctx.begin_writer_txn(self.env.labelenv)
         try:
             labelExists = labelTxn.put(labelHashKey, labelVal, overwrite=False)
         finally:
-            TxnRegister().commit_writer_txn(self.env.labelenv)
+            self.txnctx.commit_writer_txn(self.env.labelenv)
 
         ret = False if not labelExists else digest
         return ret
@@ -202,6 +203,7 @@ class ContentReader(object):
     def __init__(self, envs):
 
         self.env: Environments = envs
+        self.txnctx: TxnRegister = TxnRegister()
 
     def commit(self, commit: str) -> Union[RawCommitContent, bool]:
         """Read a commit with a given hash and get db formatted content
@@ -223,13 +225,13 @@ class ContentReader(object):
         cmtParentKey = parsing.commit_parent_db_key_from_raw_key(commit)
         cmtSpecKey = parsing.commit_spec_db_key_from_raw_key(commit)
 
-        reftxn = TxnRegister().begin_reader_txn(self.env.refenv)
+        reftxn = self.txnctx.begin_reader_txn(self.env.refenv)
         try:
             cmtRefVal = reftxn.get(cmtRefKey, default=False)
             cmtParentVal = reftxn.get(cmtParentKey, default=False)
             cmtSpecVal = reftxn.get(cmtSpecKey, default=False)
         finally:
-            TxnRegister().abort_reader_txn(self.env.refenv)
+            self.txnctx.abort_reader_txn(self.env.refenv)
 
         ret = RawCommitContent(commit, cmtParentVal, cmtSpecVal, cmtRefVal)
 
@@ -254,11 +256,11 @@ class ContentReader(object):
             False if the schema_hash does not exist in the db.
         """
         schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-        hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
+        hashTxn = self.txnctx.begin_reader_txn(self.env.hashenv)
         try:
             schemaVal = hashTxn.get(schemaKey, default=False)
         finally:
-            TxnRegister().abort_reader_txn(self.env.hashenv)
+            self.txnctx.abort_reader_txn(self.env.hashenv)
 
         ret = False if not schemaVal else schemaVal
         return ret
@@ -279,11 +281,11 @@ class ContentReader(object):
             False if the digest does not exist in the db.
         """
         labelKey = hash_meta_db_key_from_raw_key(digest)
-        labelTxn = TxnRegister().begin_reader_txn(self.env.labelenv)
+        labelTxn = self.txnctx.begin_reader_txn(self.env.labelenv)
         try:
             labelVal = labelTxn.get(labelKey, default=False)
         finally:
-            TxnRegister().abort_reader_txn(self.env.labelenv)
+            self.txnctx.abort_reader_txn(self.env.labelenv)
 
         ret = False if not labelVal else labelVal
         return ret

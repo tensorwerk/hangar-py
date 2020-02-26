@@ -229,13 +229,16 @@ def repo_2_br_no_conf(repo_1_br_no_conf) -> Repository:
 
 
 @pytest.fixture()
-def server_instance(managed_tmpdir, worker_id):
+def server_instance(managed_tmpdir, worker_id, monkeypatch):
     from hangar.remote.server import serve
 
     address = f'localhost:{randint(50000, 59999)}'
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
     mkdir(base_tmpdir)
+
     server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
+    monkeypatch.setitem(hangserver.CFG['SERVER_GRPC'], 'max_concurrent_rpcs', '10')
+    monkeypatch.setitem(hangserver.CFG['SERVER_GRPC'], 'max_thread_pool_workers', '5')
     server.start()
     yield address
 
