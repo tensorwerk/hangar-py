@@ -225,6 +225,7 @@ from xxhash import xxh64_hexdigest
 from .chunk import calc_chunkshape
 from .specs import HDF5_01_DataHashSpec
 from .. import __version__
+from ..optimized_utils import SizedDict
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import writer_checkout_only, reader_checkout_only
 from ..utils import find_next_prime, random_string, set_blosc_nthreads
@@ -389,7 +390,7 @@ class HDF5_01_FileHandles(object):
         self.rFp: HDF5_01_MapTypes = {}
         self.wFp: HDF5_01_MapTypes = {}
         self.Fp: HDF5_01_MapTypes = ChainMap(self.rFp, self.wFp)
-        self.rDatasets = {}
+        self.rDatasets = SizedDict(maxsize=100)
         self.wdset: h5py.Dataset = None
 
         self.mode: Optional[str] = None

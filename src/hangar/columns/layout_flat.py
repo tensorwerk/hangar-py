@@ -33,15 +33,15 @@ class FlatSampleReader:
     """Class implementing get access to data in a column.
 
     This class exposes the standard API to access data stored in a single level
-    key / value mapping column. Usage is modeled after the python :py:`dict`
+    key / value mapping column. Usage is modeled after the python :class:`dict`
     style syntax -- with a few additional utility and inspection methods and
-    properties added. Methods named after those of a python :py:`dict` have
+    properties added. Methods named after those of a python :class:`dict` have
     syntactically identical arguments and behavior to that of the standard
     library.
 
     If not opened in a ``write-enabled`` checkout, then attempts to add or
     delete data or container properties will raise an exception (in the form of
-    a :py:`PermissionError`). No changes will be propogated unless a
+    a :class:`PermissionError`). No changes will be propogated unless a
     ``write-enabled`` checkout is used.
 
     This object can be serialized -- pickled -- for parallel processing /
@@ -49,7 +49,7 @@ class FlatSampleReader:
     thread and process safe, though performance may significantly differ
     between multithreaded vs multiprocessed code (depending on the backend data
     is stored in). Attempts to serialize objects opened in ``write-enabled``
-    checkouts are not supported and will raise a :py:`PermissionError` if
+    checkouts are not supported and will raise a :class:`PermissionError` if
     attempted. This behavior is enforced in order to ensure data and record
     integrity while writing to the repository.
     """

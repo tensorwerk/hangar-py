@@ -111,12 +111,14 @@ for arg in args:
 
 # Source files for build
 CYTHON_SOURCES = [
+    join('src', 'hangar', 'optimized_utils.pyx'),
     join('src', 'hangar', 'backends', 'specs.pyx'),
     join('src', 'hangar', 'backends', 'specparse.pyx'),
     join('src', 'hangar', 'records', 'recordstructs.pyx'),
     join('src', 'hangar', 'records', 'column_parsers.pyx'),
 ]
 CYTHON_HEADERS = [
+    join('src', 'hangar', 'optimized_utils.pxd'),
     join('src', 'hangar', 'backends', 'specs.pxd'),
     join('src', 'hangar', 'records', 'recordstructs.pxd'),
 ]

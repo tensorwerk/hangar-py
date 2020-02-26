@@ -1,6 +1,4 @@
 """Accessor column containing nested mapping of data under top level keys.
-
-All backends are supported.
 """
 from contextlib import ExitStack
 from pathlib import Path
@@ -1088,18 +1086,16 @@ class NestedSampleWriter(NestedSampleReader):
             if not self._is_conman:
                 stack.enter_context(self)
 
-            if other:
-                if not isinstance(other, dict):
-                    other = dict(other)
-                else:
-                    other = other.copy()
-            elif other is None:
+            if isinstance(other, dict):
+                other = other.copy()
+            elif other:
+                other = dict(other)
+            else:
                 other = {}
             if kwargs:
                 # we merge kwargs dict with `other` before operating on either
                 # so all necessary validation and writing occur atomically
                 other.update(kwargs)
-
             for sample in tuple(other.keys()):
                 other[sample] = dict(other[sample])
 
