@@ -165,8 +165,6 @@ class Environments(object):
 
         Parameters
         ----------
-        repo_pth : str
-            path to the repository directory on the local disk
         branch_name : str, optional
             name of the branch to read, defaults to ''
         commit : str, optional

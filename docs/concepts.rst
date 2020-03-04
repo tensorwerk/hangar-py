@@ -91,7 +91,7 @@ time by various "Committers" across any number of "Branches". Though there are
 many conceptual similarities in what a Git repo and a Hangar Repository
 achieve, Hangar is designed with the express purpose of dealing with numeric
 data. As such, when you read/write to/from a Repository, the main way of
-interaction with information will be through (an arbitrary number of) Arraysets
+interaction with information will be through (an arbitrary number of) Columns
 in each Commit. A simple key/value store is also included to store metadata,
 but as it is a minor point is will largely be ignored for the rest of this
 post.
@@ -142,16 +142,16 @@ each samples.
 *A single scan is a bunch of disparate information stuck together, many of
 those put together makes a Dataset, but looking down from the top, we identify
 pattern of common fields across all items. We call these groupings of similar
-typed information:* **Arraysets**.
+typed information:* **Columns**.
 
-Abstraction 2: What Makes up a Arrayset?
-========================================
+Abstraction 2: What Makes up a Column?
+======================================
 
-A ``Dataset`` is made of one or more ``Arraysets`` (and optionally some
-``Metadata``), with each item placed in some ``Arrayset`` belonging to and
+A ``Dataset`` is made of one or more ``Columns`` (and optionally some
+``Metadata``), with each item placed in some ``Column`` belonging to and
 making up an individual ``Sample``. It is important to remember that all data
 needed to fully describe a single ``sample`` in a ``Dataset`` may consist of
-information spread across any number of ``Arraysets``. To define a ``Arrayset``
+information spread across any number of ``Columns``. To define a ``Column``
 in Hangar, we only need to provide:
 
 * a name
@@ -159,26 +159,26 @@ in Hangar, we only need to provide:
 * a shape
 
 The individual pieces of information (``Data``) which fully describe some
-phenomenon via an aggregate mapping access across any number of "Arraysets" are
+phenomenon via an aggregate mapping access across any number of "Columns" are
 both individually and collectively referred to as ``Samples`` in the Hangar
 vernacular. According to the specification above, all samples contained in a
-``Arrayset`` must be numeric arrays with each having:
+``Column`` must be numeric arrays with each having:
 
 1) Same data type (standard ``numpy`` data types are supported).
 2) A shape with each dimension size <= the shape (``max shape``) set in the
-   ``arrayset`` specification (more on this later).
+   ``column`` specification (more on this later).
 
-Additionally, samples in a ``arrayset`` can either be named, or unnamed
+Additionally, samples in a ``column`` can either be named, or unnamed
 (depending on how you interpret what the information contained in the
-``arrayset`` actually represents).
+``column`` actually represents).
 
 
 
 Effective use of Hangar relies on having an understanding of what exactly a
-``"Sample"`` is in a particular ``Arrayset``. The most effective way to find
+``"Sample"`` is in a particular ``Column``. The most effective way to find
 out is to ask: "What is the smallest piece of data which has a useful meaning
-to 'me' (or 'my' downstream processes"). In the MNIST ``arrayset``, this would
-be a single digit image (a 28x28 array); for a medical ``arrayset`` it might be
+to 'me' (or 'my' downstream processes"). In the MNIST ``column``, this would
+be a single digit image (a 28x28 array); for a medical ``column`` it might be
 an entire (512x320x320) MRI volume scan for a particular patient; while for the
 NASDAQ Stock Ticker it might be an hours worth of price data points (or less,
 or more!) The point is that **when you think about what a ``sample`` is, it
@@ -201,7 +201,7 @@ Summary
 .. code-block:: text
 
    A Dataset is thought of as containing Samples, but is actually defined by
-   Arraysets, which store parts of fully defined Samples in structures common
+   Columns, which store parts of fully defined Samples in structures common
    across the full aggregation of Dataset Samples.
 
    This can essentially be represented as a key -> tensor mapping, which can
@@ -211,7 +211,7 @@ Summary
                             |
          -----------------------------------------
          |            |            |             |
-     Arrayset 1   Arrayset 2   Arrayset 3    Arrayset 4
+      Column 1     Column 2     Column 3      Column 4
          |            |            |             |
    ------------------------------------------------------
        image    |  filename  |   label    |  annotation |
@@ -270,7 +270,7 @@ disk in some domain-specific - or custom built - binary format (ie. a ``.jpg``
 image, ``.nii`` neuroimaging informatics study, ``.cvs`` tabular data, etc.),
 and just deal with the hassle of maintaining all the infrastructure around
 reading, writing, transforming, and preprocessing these files into useable
-numerical data every time they want to interact with their Arraysets. Even
+numerical data every time they want to interact with their Columns. Even
 disregarding the computational cost/overhead of preprocessing & transforming
 the data on every read/write, these schemes require significant amounts of
 human capital (developer time) to be spent on building, testing, and
@@ -297,7 +297,7 @@ community over the past few decades.
 
 In a sense, the backend of Hangar serves two functions:
 
-1) Bookkeeping: recording information about about arraysets, samples, commits,
+1) Bookkeeping: recording information about about columns, samples, commits,
    etc.
 2) Data Storage: highly optimized interfaces which store and retrieve data from
    from disk through its backend utility.
@@ -315,7 +315,7 @@ to it. A great deal of care has been taken to optimize parameters in the
 backend interface which affects performance and compression of data samples.
 
 The choice of backend to store a piece of data is selected automatically from
-heuristics based on the arrayset specification, system details, and context of
+heuristics based on the column specification, system details, and context of
 the storage service internal to Hangar. **As a user, this is completely
 transparent to you** in all steps of interacting with the repository. It does
 not require (or even accept) user specified configuration.
@@ -371,19 +371,19 @@ reasonable that they should be the ones to benefit from all that work.
     data collaboration in todays world?
 
 The impetus for developing a tool like Hangar is the belief that if it is
-simple for anyone with domain knowledge to collaboratively curate arraysets
+simple for anyone with domain knowledge to collaboratively curate columns
 containing information they care about, then they will.* Open source software
-development benefits everyone, we believe open source arrayset curation can do
+development benefits everyone, we believe open source column curation can do
 the same.
 
 How To Overcome The "Size" Problem
 ----------------------------------
 
 Even if the greatest tool imaginable existed to version, branch, and merge
-arraysets, it would face one massive problem which if it didn't solve would
+columns, it would face one massive problem which if it didn't solve would
 kill the project: *The size of data can very easily exceeds what can fit on
 (most) contributors laptops or personal workstations*. This section explains
-how Hangar can handle working with arraysets which are prohibitively large to
+how Hangar can handle working with columns which are prohibitively large to
 download or store on a single machine.
 
 As mentioned in `High Performance From Simplicity`_, under the hood Hangar
@@ -392,7 +392,7 @@ covered what exactly we mean by Data in `How Hangar Thinks About Data`_, so
 we'll briefly cover the second major component of Hangar here. In short
 "Bookkeeping" describes everything about the repository. By everything, we do
 mean that the Bookkeeping records describe everything: all commits, parents,
-branches, arraysets, samples, data descriptors, schemas, commit message, etc.
+branches, columns, samples, data descriptors, schemas, commit message, etc.
 Though complete, these records are fairly small (tens of MB in size for
 decently sized repositories with decent history), and are highly compressed for
 fast transfer between a Hangar client/server.
@@ -457,7 +457,7 @@ to the "change author's" intentions. Simply put: the new version is valid and
 what is expected by the authors.
 
 This concept of what it means to merge text does not generally map well to
-changes made in a arrayset we'll explore why through this section, but look
+changes made in a column we'll explore why through this section, but look
 back to the philosophy of Data outlined in `How Hangar Thinks About Data`_ for
 inspiration as we begin. Remember, in the Hangar design a Sample is the
 smallest array which contains useful information. As any smaller selection of
@@ -474,21 +474,21 @@ operations which can occur.
 
 :Addition:
 
-    An operation which creates a arrayset, sample, or some metadata which
+    An operation which creates a column, sample, or some metadata which
     did not previously exist in the relevant branch history.
 
 :Removal:
 
-    An operation which removes some arrayset, a sample, or some metadata which
+    An operation which removes some column, a sample, or some metadata which
     existed in the parent of the commit under consideration. (Note: removing a
-    arrayset also removes all samples contained in it).
+    column also removes all samples contained in it).
 
 :Mutation:
 
     An operation which sets: data to a sample, the value of some metadata key,
-    or a arrayset schema, to a different value than what it had previously been
-    created with (Note: a arrayset schema mutation is observed when a arrayset
-    is removed, and a new arrayset with the same name is created with a
+    or a column schema, to a different value than what it had previously been
+    created with (Note: a column schema mutation is observed when a column
+    is removed, and a new column with the same name is created with a
     different dtype/shape, all in the same commit).
 
 Merging Changes
@@ -559,16 +559,16 @@ Any merge conflicts can be identified and addressed ahead of running a
 Hangar will provide a list of conflicts which it identifies. In general these
 fall into 4 categories:
 
-1) **Additions** in both branches which created new keys (samples / arraysets /
+1) **Additions** in both branches which created new keys (samples / columns /
    metadata) with non-compatible values. For samples & metadata, the hash of
-   the data is compared, for arraysets, the schema specification is checked for
+   the data is compared, for columns, the schema specification is checked for
    compatibility in a method custom to the internal workings of Hangar.
 2) **Removal** in ``Master Commit / Branch`` **& Mutation** in ``Dev Commit /
-   Branch``. Applies for samples, arraysets, and metadata identically.
+   Branch``. Applies for samples, columns, and metadata identically.
 3) **Mutation** in ``Dev Commit / Branch`` **& Removal** in ``Master Commit /
-   Branch``. Applies for samples, arraysets, and metadata identically.
+   Branch``. Applies for samples, columns, and metadata identically.
 4) **Mutations** on keys both branches to non-compatible values. For samples &
-   metadata, the hash of the data is compared, for arraysets, the schema
+   metadata, the hash of the data is compared, for columns, the schema
    specification is checked for compatibility in a method custom to the
    internal workings of Hangar.
 

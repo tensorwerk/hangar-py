@@ -2,20 +2,35 @@ import atexit
 from pathlib import Path
 import weakref
 from contextlib import suppress, ExitStack
-from functools import partial
 from uuid import uuid4
-from typing import Optional
+from typing import Optional, Union
 
+import numpy as np
 import lmdb
 
-from .mixins import GetMixin
-from .columns import Arraysets, MetadataReader, MetadataWriter
+from .mixins import GetMixin, CheckoutDictIteration
+from .columns import (
+    AsetTxn,
+    Columns,
+    MetadataReader,
+    MetadataWriter,
+    generate_nested_column,
+    generate_flat_column,
+)
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
 from .records import commiting, hashs, heads
+from .typesystem import NdarrayFixedShape, NdarrayVariableShape, StringVariableShape
+from .utils import is_suitable_user_key, is_ascii
+from .records import (
+    schema_db_key_from_column,
+    schema_hash_record_db_val_from_spec,
+    schema_hash_db_key_from_digest,
+    schema_record_db_val_from_digest,
+)
 
 
-class ReaderCheckout(GetMixin):
+class ReaderCheckout(GetMixin, CheckoutDictIteration):
     """Checkout the repository as it exists at a particular branch.
 
     This class is instantiated automatically from a repository checkout
@@ -98,7 +113,7 @@ class ReaderCheckout(GetMixin):
             repo_pth=self._repo_path,
             dataenv=self._dataenv,
             labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_commit(
+        self._columns = Columns._from_commit(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             cmtrefenv=self._dataenv)
@@ -115,7 +130,7 @@ class ReaderCheckout(GetMixin):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : False\
                 \n    Commit Hash  : {self._commit_hash}\
-                \n    Num Arraysets : {len(self._arraysets)}\
+                \n    Num Columns  : {len(self)}\
                 \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
@@ -133,7 +148,7 @@ class ReaderCheckout(GetMixin):
         self._verify_alive()
         with ExitStack() as stack:
             if self._enter_count == 0:
-                stack.enter_context(self._arraysets)
+                stack.enter_context(self._columns)
                 stack.enter_context(self._metadata)
             self._enter_count += 1
             self._stack = stack.pop_all()
@@ -151,12 +166,13 @@ class ReaderCheckout(GetMixin):
         PermissionError
             if the checkout was previously close
         """
-        p_hasattr = partial(hasattr, self)
-        if not all(map(p_hasattr, ['_metadata', '_arraysets', '_differ'])):
-            e = PermissionError(
+        try:
+            self._columns
+        except AttributeError:
+            err = PermissionError(
                 f'Unable to operate on past checkout objects which have been '
                 f'closed. No operation occurred. Please use a new checkout.')
-            raise e from None
+            raise err from None
 
     @property
     def _is_conman(self):
@@ -164,21 +180,21 @@ class ReaderCheckout(GetMixin):
         return bool(self._enter_count)
 
     @property
-    def arraysets(self) -> Arraysets:
-        """Provides access to arrayset interaction object.
+    def columns(self) -> Columns:
+        """Provides access to column interaction object.
 
-        Can be used to either return the arraysets accessor for all elements or
-        a single arrayset instance by using dictionary style indexing.
+        Can be used to either return the columns accessor for all elements or
+        a single column instance by using dictionary style indexing.
 
             >>> co = repo.checkout(write=False)
-            >>> len(co.arraysets)
+            >>> len(co.columns)
             1
-            >>> print(co.arraysets.keys())
+            >>> print(co.columns.keys())
             ['foo']
-            >>> fooAset = co.arraysets['foo']
+            >>> fooAset = co.columns['foo']
             >>> fooAset.dtype
             np.fooDtype
-            >>> asets = co.arraysets
+            >>> asets = co.columns
             >>> fooAset = asets['foo']
             >>> fooAset.dtype
             np.fooDtype
@@ -188,18 +204,18 @@ class ReaderCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`~.columns.arrayset.Arraysets` contains all methods
+            The class :class:`~.columns.column.Columns` contains all methods
             accessible by this property accessor
 
         Returns
         -------
-        :class:`~.columns.arrayset.Arraysets`
-            the arraysets object which behaves exactly like a
-            arraysets accessor class but which can be invalidated when the writer
+        :class:`~.columns.column.Columns`
+            the columns object which behaves exactly like a
+            columns accessor class but which can be invalidated when the writer
             lock is released.
         """
         self._verify_alive()
-        return self._arraysets
+        return self._columns
 
     @property
     def metadata(self) -> MetadataReader:
@@ -268,7 +284,7 @@ class ReaderCheckout(GetMixin):
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        self._arraysets._destruct()
+        self._columns._destruct()
         self._metadata._destruct()
         for attr in list(self.__dict__.keys()):
             delattr(self, attr)
@@ -279,7 +295,7 @@ class ReaderCheckout(GetMixin):
 # --------------- Write enabled checkout ---------------------------------------
 
 
-class WriterCheckout(GetMixin):
+class WriterCheckout(GetMixin, CheckoutDictIteration):
     """Checkout the repository at the head of a given branch for writing.
 
     This is the entry point for all writing operations to the repository, the
@@ -312,7 +328,7 @@ class WriterCheckout(GetMixin):
     terminated via non-python SIGKILL, fatal internal python error, or or
     special os exit methods, cleanup will occur on interpreter shutdown and the
     writer lock will be released. If a non-handled termination method does
-    occur, the :py:meth:`~.Repository.force_release_writer_lock` method must be
+    occur, the :meth:`~.Repository.force_release_writer_lock` method must be
     called manually when a new python process wishes to open the writer
     checkout.
     """
@@ -364,7 +380,7 @@ class WriterCheckout(GetMixin):
         self._branchenv = branchenv
         self._stagehashenv = stagehashenv
 
-        self._arraysets: Optional[Arraysets] = None
+        self._columns: Optional[Columns] = None
         self._differ: Optional[WriterUserDiff] = None
         self._metadata: Optional[MetadataWriter] = None
         self._setup()
@@ -377,7 +393,7 @@ class WriterCheckout(GetMixin):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : True\
                 \n    Base Branch  : {self._branch_name}\
-                \n    Num Arraysets : {len(self._arraysets)}\
+                \n    Num Columns  : {len(self)}\
                 \n    Num Metadata : {len(self._metadata)}\n'
         p.text(res)
 
@@ -397,7 +413,7 @@ class WriterCheckout(GetMixin):
         self._verify_alive()
         with ExitStack() as stack:
             if self._enter_count == 0:
-                stack.enter_context(self._arraysets)
+                stack.enter_context(self._columns)
                 stack.enter_context(self._metadata)
             self._enter_count += 1
             self._stack = stack.pop_all()
@@ -418,15 +434,16 @@ class WriterCheckout(GetMixin):
         Raises
         ------
         PermissionError
-            If the checkout was previously closed (no :attr:``_writer_lock``) or if
-            the writer lock value does not match that recorded in the branch db
+            If the checkout was previously closed (no :attr:``_writer_lock``)
+            or if the writer lock value does not match that recorded in the
+            branch db
         """
         try:
             self._writer_lock
         except AttributeError:
             with suppress(AttributeError):
-                self._arraysets._destruct()
-                del self._arraysets
+                self._columns._destruct()
+                del self._columns
             with suppress(AttributeError):
                 self._metadata._destruct()
                 del self._metadata
@@ -438,10 +455,10 @@ class WriterCheckout(GetMixin):
 
         try:
             heads.acquire_writer_lock(self._branchenv, self._writer_lock)
-        except PermissionError as e:
+        except Exception as e:
             with suppress(AttributeError):
-                self._arraysets._destruct()
-                del self._arraysets
+                self._columns._destruct()
+                del self._columns
             with suppress(AttributeError):
                 self._metadata._destruct()
                 del self._metadata
@@ -499,7 +516,7 @@ class WriterCheckout(GetMixin):
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_staging_area(
+        self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -514,21 +531,21 @@ class WriterCheckout(GetMixin):
         """Syntax for setting items.
 
         Checkout object can be thought of as a "dataset" ("dset") mapping a view
-        of samples across arraysets:
+        of samples across columns:
 
             >>> dset = repo.checkout(branch='master', write=True)
-
-            # Add single sample to single arrayset
+            >>>
+            >>> # Add single sample to single column
             >>> dset['foo', 1] = np.array([1])
             >>> dset['foo', 1]
             array([1])
-
-            # Add multiple samples to single arrayset
+            >>>
+            >>> # Add multiple samples to single column
             >>> dset['foo', [1, 2, 3]] = [np.array([1]), np.array([2]), np.array([3])]
             >>> dset['foo', [1, 2, 3]]
             [array([1]), array([2]), array([3])]
-
-            # Add single sample to multiple arraysets
+            >>>
+            >>> # Add single sample to multiple columns
             >>> dset[['foo', 'bar'], 1] = [np.array([1]), np.array([11])]
             >>> dset[:, 1]
             ArraysetData(foo=array([1]), bar=array([11]))
@@ -538,21 +555,21 @@ class WriterCheckout(GetMixin):
         index: Union[Iterable[str], Iterable[str, int]]
             Please see detailed explanation above for full options.The first
             element (or collection) specified must be ``str`` type and correspond
-            to an arrayset name(s). The second element (or collection) are keys
+            to an column name(s). The second element (or collection) are keys
             corresponding to sample names which the data should be written to.
 
-            Unlike the :meth:`__getitem__` method, only ONE of the ``arrayset``
+            Unlike the :meth:`__getitem__` method, only ONE of the ``column``
             name(s) or ``sample`` key(s) can specify multiple elements at the same
-            time. Ie. If multiple ``arraysets`` are specified, only one sample key
+            time. Ie. If multiple ``columns`` are specified, only one sample key
             can be set, likewise if multiple ``samples`` are specified, only one
-            ``arrayset`` can be specified. When specifying multiple ``arraysets``
+            ``column`` can be specified. When specifying multiple ``columns``
             or ``samples``, each data piece to be stored must reside as individual
             elements (``np.ndarray``) in a List or Tuple. The number of keys and
             the number of values must match exactly.
 
         value: Union[:class:`numpy.ndarray`, Iterable[:class:`numpy.ndarray`]]
-            Data to store in the specified arraysets/sample keys. When
-            specifying multiple ``arraysets`` or ``samples``, each data piece
+            Data to store in the specified columns/sample keys. When
+            specifying multiple ``columns`` or ``samples``, each data piece
             to be stored must reside as individual elements (``np.ndarray``) in
             a List or Tuple. The number of keys and the number of values must
             match exactly.
@@ -560,12 +577,11 @@ class WriterCheckout(GetMixin):
         Notes
         -----
 
-        *  No slicing syntax is supported for either arraysets or samples. This
+        *  No slicing syntax is supported for either columns or samples. This
            is in order to ensure explicit setting of values in the desired
            fields/keys
 
-        *  Add multiple samples to multiple arraysets not yet supported.
-
+        *  Add multiple samples to multiple columns not yet supported.
         """
         self._verify_alive()
         with ExitStack() as stack:
@@ -573,18 +589,18 @@ class WriterCheckout(GetMixin):
                 stack.enter_context(self)
 
             if not isinstance(index, (tuple, list)):
-                raise ValueError(f'Idx: {index} does not specify arrayset(s) AND sample(s)')
+                raise ValueError(f'Idx: {index} does not specify column(s) AND sample(s)')
             elif len(index) > 2:
                 raise ValueError(f'Index of len > 2 invalid. To multi-set, pass in lists')
             asetsIdx, sampleNames = index
 
-            # Parse Arraysets
+            # Parse Columns
             if isinstance(asetsIdx, str):
-                asets = [self._arraysets._arraysets[asetsIdx]]
+                asets = [self._columns._columns[asetsIdx]]
             elif isinstance(asetsIdx, (tuple, list)):
-                asets = [self._arraysets._arraysets[aidx] for aidx in asetsIdx]
+                asets = [self._columns._columns[aidx] for aidx in asetsIdx]
             else:
-                raise TypeError(f'Arrayset idx: {asetsIdx} of type: {type(asetsIdx)}')
+                raise TypeError(f'Column idx: {asetsIdx} of type: {type(asetsIdx)}')
             nAsets = len(asets)
 
             # Parse sample names
@@ -598,7 +614,7 @@ class WriterCheckout(GetMixin):
             if (nAsets > 1) and (nSamples > 1):
                 raise SyntaxError(
                     'Not allowed to specify BOTH multiple samples AND multiple'
-                    'arraysets in `set` operation in current Hangar implementation')
+                    'columns in `set` operation in current Hangar implementation')
 
             elif (nAsets == 1) and (nSamples == 1):
                 aset = asets[0]
@@ -609,9 +625,9 @@ class WriterCheckout(GetMixin):
                 if not isinstance(value, (list, tuple)):
                     raise TypeError(f'Value: {value} not list/tuple of np.ndarray')
                 elif not (len(value) == nAsets):
-                    raise ValueError(f'Num values: {len(value)} != num arraysets {nAsets}')
+                    raise ValueError(f'Num values: {len(value)} != num columns {nAsets}')
                 for aset, val in zip(asets, value):
-                    isCompat = aset._verify_array_compatible(val)
+                    isCompat = aset._schema.verify_data_compatible(val)
                     if not isCompat.compatible:
                         raise ValueError(isCompat.reason)
                 for sampleName in sampleNames:
@@ -625,7 +641,7 @@ class WriterCheckout(GetMixin):
                     raise ValueError(f'Num values: {len(value)} != num samples {nSamples}')
                 for aset in asets:
                     for val in value:
-                        isCompat = aset._verify_array_compatible(val)
+                        isCompat = aset._schema.verify_data_compatible(val)
                         if not isCompat.compatible:
                             raise ValueError(isCompat.reason)
                 for aset in asets:
@@ -634,42 +650,50 @@ class WriterCheckout(GetMixin):
                 return None
 
     @property
-    def arraysets(self) -> Arraysets:
-        """Provides access to arrayset interaction object.
+    def columns(self) -> Columns:
+        """Provides access to column interaction object.
 
-        Can be used to either return the arraysets accessor for all elements or
-        a single arrayset instance by using dictionary style indexing.
+        Can be used to either return the columns accessor for all elements or
+        a single column instance by using dictionary style indexing.
 
             >>> co = repo.checkout(write=True)
-            >>> asets = co.arraysets
+            >>> asets = co.columns
             >>> len(asets)
             0
-            >>> fooAset = asets.init_arrayset('foo', shape=(10, 10), dtype=np.uint8)
-            >>> len(co.arraysets)
+            >>> fooAset = co.add_ndarray_column('foo', shape=(10, 10), dtype=np.uint8)
+            >>> len(co.columns)
             1
-            >>> print(co.arraysets.keys())
+            >>> len(co)
+            1
+            >>> list(co.columns.keys())
             ['foo']
-            >>> fooAset = co.arraysets['foo']
+            >>> list(co.keys())
+            ['foo']
+            >>> fooAset = co.columns['foo']
             >>> fooAset.dtype
             np.fooDtype
             >>> fooAset = asets.get('foo')
             >>> fooAset.dtype
             np.fooDtype
+            >>> 'foo' in co.columns
+            True
+            >>> 'bar' in co.columns
+            False
 
         .. seealso::
 
-            The class :class:`~.columns.arrayset.Arraysets` contains all methods accessible
-            by this property accessor
+            The class :class:`~.columns.column.Columns` contains all methods
+            accessible by this property accessor
 
         Returns
         -------
-        :class:`~.columns.arrayset.Arraysets`
-            the arraysets object which behaves exactly like a
-            arraysets accessor class but which can be invalidated when the writer
-            lock is released.
+        :class:`~.columns.column.Columns`
+            the columns object which behaves exactly like a columns accessor
+            class but which can be invalidated when the writer lock is
+            released.
         """
         self._verify_alive()
-        return self._arraysets
+        return self._columns
 
     @property
     def metadata(self) -> MetadataWriter:
@@ -677,15 +701,14 @@ class WriterCheckout(GetMixin):
 
         .. seealso::
 
-            The class :class:`hangar.columns.metadata.MetadataWriter` contains all methods
-            accessible by this property accessor
+            The class :class:`~.columns.metadata.MetadataWriter` contains
+            all methods accessible by this property accessor
 
         Returns
         -------
         MetadataWriter
-            the metadata object which behaves exactly like a
-            metadata class but which can be invalidated when the writer lock is
-            released.
+            the metadata object which behaves exactly like a metadata class but
+            which can be invalidated when the writer lock is released.
         """
         self._verify_alive()
         return self._metadata
@@ -702,9 +725,9 @@ class WriterCheckout(GetMixin):
         Returns
         -------
         WriterUserDiff
-            weakref proxy to the differ object (and contained methods) which behaves
-            exactly like the differ class but which can be invalidated when the
-            writer lock is released.
+            weakref proxy to the differ object (and contained methods) which
+            behaves exactly like the differ class but which can be invalidated
+            when the writer lock is released.
         """
         self._verify_alive()
         wr = weakref.proxy(self._differ)
@@ -736,6 +759,245 @@ class WriterCheckout(GetMixin):
                                            branch_name=self._branch_name)
         return cmt
 
+    def add_str_column(self,
+                       name: str,
+                       contains_subsamples: bool = False,
+                       *,
+                       backend: Optional[str] = None,
+                       backend_options: Optional[dict] = None):
+        """Initializes a :class:`str` container column
+
+        Columns are created in order to store some arbitrary collection of data
+        pieces. In this case, we store :class:`str` data. Items need not be
+        related to each-other in any direct capacity; the only criteria hangar
+        requires is that all pieces of data stored in the column have a
+        compatible schema with each-other (more on this below). Each piece of
+        data is indexed by some key (either user defined or automatically
+        generated depending on the user's preferences). Both single level
+        stores (sample keys mapping to data on disk) and nested stores (where
+        some sample key maps to an arbitrary number of subsamples, in turn each
+        pointing to some piece of store data on disk) are supported.
+
+        All data pieces within a column have the same data type. For
+        :class:`str` columns, there is no distinction between
+        ``'variable_shape'`` and ``'fixed_shape'`` schema types. Values are
+        allowed to take on a value of any size so long as the datatype and
+        contents are valid for the schema definition.
+
+        Parameters
+        ----------
+        name : str
+            Name assigned to the column
+        contains_subsamples : bool, optional
+            True if the column column should store data in a nested structure.
+            In this scheme, a sample key is used to index an arbitrary number
+            of subsamples which map some (sub)key to a piece of data. If False,
+            sample keys map directly to a single piece of data; essentially
+            acting as a single level key/value store. By default, False.
+        backend : Optional[str], optional
+            ADVANCED USERS ONLY, backend format code to use for column data. If
+            None, automatically inferred and set based on data shape and type.
+            by default None
+        backend_options : Optional[dict], optional
+            ADVANCED USERS ONLY, filter opts to apply to column data. If None,
+            automatically inferred and set based on data shape and type.
+            by default None
+
+        Returns
+        -------
+        :class:`~.columns.column.Columns`
+            instance object of the initialized column.
+        """
+        self._verify_alive()
+        if self.columns._any_is_conman() or self._is_conman:
+            raise PermissionError('Not allowed while context manager is used.')
+
+        # ------------- Checks for argument validity --------------------------
+
+        try:
+            if (not is_suitable_user_key(name)) or (not is_ascii(name)):
+                raise ValueError(
+                    f'Column name provided: `{name}` is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace). '
+                    f'Must be <= 64 characters long')
+
+            if name in self._columns:
+                raise LookupError(f'Column already exists with name: {name}.')
+
+            if not isinstance(contains_subsamples, bool):
+                raise ValueError(f'contains_subsamples argument must be bool, '
+                                 f'not type {type(contains_subsamples)}')
+
+        except (ValueError, LookupError) as e:
+            raise e from None
+
+        layout = 'nested' if contains_subsamples else 'flat'
+        schema = StringVariableShape(
+            dtype=str, column_layout=layout, backend=backend, backend_options=backend_options)
+
+        schema_digest = schema.schema_hash_digest()
+        columnSchemaKey = schema_db_key_from_column(name, layout=layout)
+        columnSchemaVal = schema_record_db_val_from_digest(schema_digest)
+        hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
+        hashSchemaVal = schema_hash_record_db_val_from_spec(schema.schema)
+
+        # -------- set vals in lmdb only after schema is sure to exist --------
+
+        txnctx = AsetTxn(self._stageenv, self._hashenv, self._stagehashenv)
+        with txnctx.write() as ctx:
+            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
+
+        if contains_subsamples:
+            setup_args = generate_nested_column(
+                txnctx=txnctx, column_name=name,
+                path=self._repo_path, schema=schema, mode='a')
+        else:
+            setup_args = generate_flat_column(
+                txnctx=txnctx, column_name=name,
+                path=self._repo_path, schema=schema, mode='a')
+        self.columns._columns[name] = setup_args
+        return self[name]
+
+    def add_ndarray_column(self,
+                           name: str,
+                           shape: Optional[Union[int, tuple]] = None,
+                           dtype: Optional[np.dtype] = None,
+                           prototype: Optional[np.ndarray] = None,
+                           variable_shape: bool = False,
+                           contains_subsamples: bool = False,
+                           *,
+                           backend: Optional[str] = None,
+                           backend_options: Optional[dict] = None):
+        """Initializes a :class:`numpy.ndarray` container column.
+
+        Columns are created in order to store some arbitrary collection of data
+        pieces. In this case, we store :class:`numpy.ndarray` data. Items need
+        not be related to each-other in any direct capacity; the only criteria
+        hangar requires is that all pieces of data stored in the column have a
+        compatible schema with each-other (more on this below). Each piece of
+        data is indexed by some key (either user defined or automatically
+        generated depending on the user's preferences). Both single level
+        stores (sample keys mapping to data on disk) and nested stores (where
+        some sample key maps to an arbitrary number of subsamples, in turn each
+        pointing to some piece of store data on disk) are supported.
+
+        All data pieces within a column have the same data type and number of
+        dimensions. The size of each dimension can be either fixed (the default
+        behavior) or variable per sample. For fixed dimension sizes, all data
+        pieces written to the column must have the same shape & size which was
+        specified at the time the column column was initialized. Alternatively,
+        variable sized columns can write data pieces with dimensions of any
+        size (up to a specified maximum).
+
+        Parameters
+        ----------
+        name : str
+            The name assigned to this column.
+        shape : Union[int, Tuple[int]]
+            The shape of the data samples which will be written in this column.
+            This argument and the `dtype` argument are required if a `prototype`
+            is not provided, defaults to None.
+        dtype : :class:`numpy.dtype`
+            The datatype of this column. This argument and the `shape` argument
+            are required if a `prototype` is not provided., defaults to None.
+        prototype : :class:`numpy.ndarray`
+            A sample array of correct datatype and shape which will be used to
+            initialize the column storage mechanisms. If this is provided, the
+            `shape` and `dtype` arguments must not be set, defaults to None.
+        variable_shape : bool, optional
+            If this is a variable sized column. If true, a the maximum shape is
+            set from the provided ``shape`` or ``prototype`` argument. Any sample
+            added to the column can then have dimension sizes <= to this
+            initial specification (so long as they have the same rank as what
+            was specified) defaults to False.
+        contains_subsamples : bool, optional
+            True if the column column should store data in a nested structure.
+            In this scheme, a sample key is used to index an arbitrary number of
+            subsamples which map some (sub)key to some piece of data. If False,
+            sample keys map directly to a single piece of data; essentially
+            acting as a single level key/value store. By default, False.
+        backend : Optional[str], optional
+            ADVANCED USERS ONLY, backend format code to use for column data. If
+            None, automatically inferred and set based on data shape and type.
+            by default None
+        backend_options : Optional[dict], optional
+            ADVANCED USERS ONLY, filter opts to apply to column data. If None,
+            automatically inferred and set based on data shape and type.
+            by default None
+
+        Returns
+        -------
+        :class:`~.columns.column.Columns`
+            instance object of the initialized column.
+        """
+        self._verify_alive()
+        if self.columns._any_is_conman() or self._is_conman:
+            raise PermissionError('Not allowed while context manager is used.')
+
+        # ------------- Checks for argument validity --------------------------
+
+        try:
+            if (not is_suitable_user_key(name)) or (not is_ascii(name)):
+                raise ValueError(
+                    f'Column name provided: `{name}` is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace). '
+                    f'Must be <= 64 characters long')
+            if name in self.columns:
+                raise LookupError(f'Column already exists with name: {name}.')
+
+            if not isinstance(contains_subsamples, bool):
+                raise ValueError(f'contains_subsamples is not bool type')
+
+            if prototype is not None:
+                if (shape is not None) or (dtype is not None):
+                    raise ValueError(f'cannot set both prototype and shape/dtype args.')
+            else:
+                prototype = np.zeros(shape, dtype=dtype)
+
+            # these shape and dtype vars will be used as downstream input
+            # (now that they have been sanitized for really crazy input values).
+            dtype = prototype.dtype
+            shape = prototype.shape
+            if not all([x > 0 for x in shape]):
+                raise ValueError(f'all dimensions must be sized greater than zero')
+
+        except (ValueError, LookupError) as e:
+            raise e from None
+
+        column_layout = 'nested' if contains_subsamples else 'flat'
+        if variable_shape:
+            schema = NdarrayVariableShape(dtype=dtype, shape=shape, column_layout=column_layout,
+                                          backend=backend, backend_options=backend_options)
+        else:
+            schema = NdarrayFixedShape(dtype=dtype, shape=shape, column_layout=column_layout,
+                                       backend=backend, backend_options=backend_options)
+
+        schema_digest = schema.schema_hash_digest()
+        columnSchemaKey = schema_db_key_from_column(name, layout=column_layout)
+        columnSchemaVal = schema_record_db_val_from_digest(schema_digest)
+        hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
+        hashSchemaVal = schema_hash_record_db_val_from_spec(schema.schema)
+
+        # -------- set vals in lmdb only after schema is sure to exist --------
+
+        txnctx = AsetTxn(self._stageenv, self._hashenv, self._stagehashenv)
+        with txnctx.write() as ctx:
+            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
+
+        if contains_subsamples:
+            setup_args = generate_nested_column(
+                txnctx=txnctx, column_name=name,
+                path=self._repo_path, schema=schema, mode='a')
+        else:
+            setup_args = generate_flat_column(
+                txnctx=txnctx, column_name=name,
+                path=self._repo_path, schema=schema, mode='a')
+
+        self.columns._columns[name] = setup_args
+        return self[name]
+
     def merge(self, message: str, dev_branch: str) -> str:
         """Merge the currently checked out commit with the provided branch name.
 
@@ -747,7 +1009,8 @@ class WriterCheckout(GetMixin):
         message : str
             commit message to attach to a three-way merge
         dev_branch : str
-            name of the branch which should be merge into this branch (`master`)
+            name of the branch which should be merge into this branch
+            (ie `master`)
 
         Returns
         -------
@@ -767,7 +1030,7 @@ class WriterCheckout(GetMixin):
             repo_path=self._repo_path,
             writer_uuid=self._writer_lock)
 
-        for asetHandle in self._arraysets.values():
+        for asetHandle in self._columns.values():
             with suppress(KeyError):
                 asetHandle._close()
 
@@ -776,7 +1039,7 @@ class WriterCheckout(GetMixin):
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_staging_area(
+        self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -812,22 +1075,22 @@ class WriterCheckout(GetMixin):
         self._verify_alive()
 
         open_asets = []
-        for arrayset in self._arraysets.values():
-            if arrayset._is_conman:
-                open_asets.append(arrayset.arrayset)
+        for column in self._columns.values():
+            if column._is_conman:
+                open_asets.append(column.column)
         open_meta = self._metadata._is_conman
 
         try:
             if open_meta:
                 self._metadata.__exit__()
             for asetn in open_asets:
-                self._arraysets[asetn].__exit__()
+                self._columns[asetn].__exit__()
 
             if self._differ.status() == 'CLEAN':
                 e = RuntimeError('No changes made in staging area. Cannot commit.')
                 raise e from None
 
-            self._arraysets._close()
+            self._columns._close()
             commit_hash = commiting.commit_records(message=commit_message,
                                                    branchenv=self._branchenv,
                                                    stageenv=self._stageenv,
@@ -836,11 +1099,11 @@ class WriterCheckout(GetMixin):
             # purge recs then reopen file handles so that we don't have to invalidate
             # previous weakproxy references like if we just called :meth:``_setup```
             hashs.clear_stage_hash_records(self._stagehashenv)
-            self._arraysets._open()
+            self._columns._open()
 
         finally:
             for asetn in open_asets:
-                self._arraysets[asetn].__enter__()
+                self._columns[asetn].__enter__()
             if open_meta:
                 self._metadata.__enter__()
 
@@ -850,7 +1113,7 @@ class WriterCheckout(GetMixin):
         """Perform a hard reset of the staging area to the last commit head.
 
         After this operation completes, the writer checkout will automatically
-        close in the typical fashion (any held references to :attr:``arrayset``
+        close in the typical fashion (any held references to :attr:``column``
         or :attr:``metadata`` objects will finalize and destruct as normal), In
         order to perform any further operation, a new checkout needs to be
         opened.
@@ -879,8 +1142,8 @@ class WriterCheckout(GetMixin):
 
         if isinstance(self._stack, ExitStack):
             self._stack.close()
-        if hasattr(self._arraysets, '_destruct'):
-            self._arraysets._destruct()
+        if hasattr(self._columns, '_destruct'):
+            self._columns._destruct()
         if hasattr(self._metadata, '_destruct'):
             self._metadata._destruct()
 
@@ -890,16 +1153,22 @@ class WriterCheckout(GetMixin):
 
         branch_head = heads.get_staging_branch_head(self._branchenv)
         head_commit = heads.get_branch_head_commit(self._branchenv, branch_head)
-        commiting.replace_staging_area_with_commit(refenv=self._refenv,
-                                                   stageenv=self._stageenv,
-                                                   commit_hash=head_commit)
+        if head_commit == '':
+            with suppress(ValueError):
+                commiting.replace_staging_area_with_commit(refenv=self._refenv,
+                                                           stageenv=self._stageenv,
+                                                           commit_hash=head_commit)
+        else:
+            commiting.replace_staging_area_with_commit(refenv=self._refenv,
+                                                       stageenv=self._stageenv,
+                                                       commit_hash=head_commit)
 
         self._metadata = MetadataWriter(
             mode='a',
             repo_pth=self._repo_path,
             dataenv=self._stageenv,
             labelenv=self._labelenv)
-        self._arraysets = Arraysets._from_staging_area(
+        self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
             stageenv=self._stageenv,
@@ -914,19 +1183,26 @@ class WriterCheckout(GetMixin):
     def close(self) -> None:
         """Close all handles to the writer checkout and release the writer lock.
 
-        Failure to call this method after the writer checkout has been used will
-        result in a lock being placed on the repository which will not allow any
-        writes until it has been manually cleared.
+        Failure to call this method after the writer checkout has been used
+        will result in a lock being placed on the repository which will not
+        allow any writes until it has been manually cleared.
         """
-        self._verify_alive()
+        with suppress(lmdb.Error):
+            self._verify_alive()
+
         if isinstance(self._stack, ExitStack):
             self._stack.close()
 
-        if hasattr(self._arraysets, '_destruct'):
-            self._arraysets._destruct()
-        if hasattr(self._metadata, '_destruct'):
-            self._metadata._destruct()
-        heads.release_writer_lock(self._branchenv, self._writer_lock)
+        if hasattr(self, '_columns'):
+            if hasattr(self._columns, '_destruct'):
+                self._columns._destruct()
+        if hasattr(self, '_metadata'):
+            if hasattr(self._metadata, '_destruct'):
+                self._metadata._destruct()
+
+        with suppress(lmdb.Error):
+            heads.release_writer_lock(self._branchenv, self._writer_lock)
+
         for attr in list(self.__dict__.keys()):
             delattr(self, attr)
         atexit.unregister(self.close)

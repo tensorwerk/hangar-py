@@ -63,11 +63,11 @@ class LazyCommandClass(dict):
         from Cython.Compiler.Main import default_options
 
         default_options['language_level'] = 3
-        default_options['emit_linenums'] = True
         default_options['compiler_directives']['embedsignature'] = True
         default_options['compiler_directives']['emit_code_comments'] = True
         if HANGAR_DEBUG_BUILD is True:
             default_options['annotate'] = True
+            default_options['emit_linenums'] = True
             default_options['gdb_debug'] = True
 
         class build_ext(cython_build_ext):
@@ -111,11 +111,16 @@ for arg in args:
 
 # Source files for build
 CYTHON_SOURCES = [
+    join('src', 'hangar', 'optimized_utils.pyx'),
     join('src', 'hangar', 'backends', 'specs.pyx'),
     join('src', 'hangar', 'backends', 'specparse.pyx'),
+    join('src', 'hangar', 'records', 'recordstructs.pyx'),
+    join('src', 'hangar', 'records', 'column_parsers.pyx'),
 ]
 CYTHON_HEADERS = [
+    join('src', 'hangar', 'optimized_utils.pxd'),
     join('src', 'hangar', 'backends', 'specs.pxd'),
+    join('src', 'hangar', 'records', 'recordstructs.pxd'),
 ]
 
 __extensions = []

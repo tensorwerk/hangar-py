@@ -62,11 +62,11 @@ def test_initial_arrayset(managed_tmpdir, randomsizedarray):
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
 
     w_checkout = repo.checkout(write=True)
-    assert len(w_checkout.arraysets) == 0
+    assert len(w_checkout.columns) == 0
     with pytest.raises(KeyError):
-        w_checkout.arraysets['aset']
-    aset = w_checkout.arraysets.init_arrayset('aset', prototype=randomsizedarray)
-    assert aset._asetn == 'aset'
+        w_checkout.columns['aset']
+    aset = w_checkout.add_ndarray_column('aset', prototype=randomsizedarray)
+    assert aset.column == 'aset'
     w_checkout.close()
     repo._env._close_environments()
 
@@ -161,12 +161,12 @@ def test_force_release_writer_lock(managed_tmpdir, monkeypatch):
     co._writer_lock = 'lololol'
     with pytest.raises(RuntimeError):
         monkeypatch.setattr(co, '_verify_alive', mock_true)
-        monkeypatch.setattr(co._arraysets, '_destruct', mock_true)
+        monkeypatch.setattr(co._columns, '_destruct', mock_true)
         monkeypatch.setattr(co._metadata, '_destruct', mock_true)
         co.close()
     # replace, but rest of object is closed
     monkeypatch.setattr(co, '_writer_lock', orig_lock)
-    monkeypatch.delattr(co._arraysets, '_destruct')
+    monkeypatch.delattr(co._columns, '_destruct')
     monkeypatch.delattr(co._metadata, '_destruct')
     co.close()
     repo._env._close_environments()

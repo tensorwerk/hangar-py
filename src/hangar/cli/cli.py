@@ -54,6 +54,30 @@ def init(repo: Repository, name, email, overwrite):
         repo.init(user_name=name, user_email=email, remove_old=overwrite)
 
 
+# -------------------------- Writer Lock -------------------------------------
+
+
+@main.command(name='writer-lock')
+@click.option('--force-release', 'force_release_', is_flag=True, default=False,
+              help='force release writer lock from the CLI.')
+@pass_repo
+def writer_lock_held(repo: Repository, force_release_):
+    """Determine if the writer lock is held for a repository.
+
+    Passing the --force-release flag will instantly release the writer lock,
+    invalidating any process which currently holds it.
+    """
+    if force_release_:
+        repo.force_release_writer_lock()
+        click.echo(f'Success force release of writer lock.')
+    else:
+        if repo.writer_lock_held:
+            click.echo(f'Writer lock is held.')
+        else:
+            click.echo(f'Writer lock is available.')
+
+
+
 # -------------------------- Checkout Writer ----------------------------------
 
 
@@ -92,7 +116,7 @@ def commit(repo: Repository, message):
     try:
         if not message:
             diff = co.diff.staged()
-            status_txt = status(co.branch_name, diff.diff)
+            status_txt = status(co._hashenv, co.branch_name, diff.diff)
             status_txt.seek(0)
             marker = '# Changes To Be committed: \n'
             hint = ['\n', '\n', marker, '# \n']
@@ -120,18 +144,18 @@ def commit(repo: Repository, message):
         co.close()
 
 
-# -------------------------- Arrayset Interactor ------------------------------
+# -------------------------- Column Interactor ------------------------------
 
 
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
-def arrayset(ctx):  # pragma: no cover
-    """Operations for working with arraysets in the writer checkout.
+def column(ctx):  # pragma: no cover
+    """Operations for working with columns in the writer checkout.
     """
     pass
 
 
-@arrayset.command(name='create')
+@column.command(name='create')
 @click.option('--variable-shape', 'variable_', is_flag=True, default=False,
               help='flag indicating sample dimensions can be any size up to max shape.')
 @click.option('--contains-subsamples', 'subsamples_', is_flag=True, default=False,
@@ -140,58 +164,64 @@ def arrayset(ctx):  # pragma: no cover
 @click.argument('name', nargs=1, type=click.STRING, required=True)
 @click.argument('dtype', nargs=1, type=click.Choice([
     'UINT8', 'INT8', 'UINT16', 'INT16', 'UINT32', 'INT32',
-    'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64']), required=True)
-@click.argument('shape', nargs=-1, type=click.INT, required=True)
+    'UINT64', 'INT64', 'FLOAT16', 'FLOAT32', 'FLOAT64', 'STR']), required=True)
+@click.argument('shape', nargs=-1, type=click.INT, required=False)
 @pass_repo
-def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_):
-    """Create an arrayset with NAME and DTYPE of SHAPE.
+def create_column(repo: Repository, name, dtype, shape, variable_, subsamples_):
+    """Create an column with NAME and DTYPE of SHAPE.
 
-    The arrayset will be created in the staging area / branch last used by a
+    The column will be created in the staging area / branch last used by a
     writer-checkout. Valid NAMEs contain only ascii letters and [``'.'``,
     ``'_'``, ``'-'``] (no whitespace). The DTYPE must be one of [``'UINT8'``,
     ``'INT8'``, ``'UINT16'``, ``'INT16'``, ``'UINT32'``, ``'INT32'``,
-    ``'UINT64'``, ``'INT64'``, ``'FLOAT16'``, ``'FLOAT32'``, ``'FLOAT64'``].
-    The SHAPE must be the last argument(s) specified, where each dimension size
-    is identified by a (space seperated) list of numbers.
+    ``'UINT64'``, ``'INT64'``, ``'FLOAT16'``, ``'FLOAT32'``, ``'FLOAT64'``,
+    ``'STR'``].
+
+    If a ndarray dtype is specified (not 'STR'), then the SHAPE must be the
+    last argument(s) specified, where each dimension size is identified by
+    a (space seperated) list of numbers.
 
     Examples:
 
-    To specify, an arrayset for some training images of dtype uint8 and shape
+    To specify, an column for some training images of dtype uint8 and shape
     (256, 256, 3) we should say:
 
        .. code-block:: console
 
-          $ hangar arrayset create train_images UINT8 256 256 3
+          $ hangar column create train_images UINT8 256 256 3
 
     To specify that the samples can be variably shaped (have any dimension size
     up to the maximum SHAPE specified) we would say:
 
        .. code-block:: console
 
-          $ hangar arrayset create train_images UINT8 256 256 3 --variable-shape
+          $ hangar column create train_images UINT8 256 256 3 --variable-shape
 
     or equivalently:
 
        .. code-block:: console
 
-          $ hangar arrayset create --variable-shape train_images UINT8 256 256 3
+          $ hangar column create --variable-shape train_images UINT8 256 256 3
 
     To specify that the column contains a nested set of subsample data under a
     common sample key, the ``--contains-subsamples`` flag can be used.
 
        .. code-block:: console
 
-          $ hangar arrayset create --contains-subsamples train_images UINT8 256 256 3
+          $ hangar column create --contains-subsamples train_images UINT8 256 256 3
 
     """
     try:
         co = repo.checkout(write=True)
-        aset = co.arraysets.init_arrayset(name=name,
-                                          shape=shape,
-                                          dtype=np.typeDict[dtype.lower()],
-                                          variable_shape=variable_,
-                                          contains_subsamples=subsamples_)
-        click.echo(f'Initialized Arrayset: {aset.arrayset}')
+        if dtype == 'STR':
+            col = co.add_str_column(name=name, contains_subsamples=subsamples_)
+        else:
+            col = co.add_ndarray_column(name=name,
+                                        shape=shape,
+                                        dtype=np.typeDict[dtype.lower()],
+                                        variable_shape=variable_,
+                                        contains_subsamples=subsamples_)
+        click.echo(f'Initialized Column: {col.column}')
     except (ValueError, LookupError, PermissionError) as e:
         raise click.ClickException(e)
     finally:
@@ -201,19 +231,19 @@ def create_arrayset(repo: Repository, name, dtype, shape, variable_, subsamples_
             pass
 
 
-@arrayset.command(name='remove')
+@column.command(name='remove')
 @click.argument('name', nargs=1, type=click.STRING, required=True)
 @pass_repo
-def remove_arrayset(repo: Repository, name):
-    """Delete the arrayset NAME (and all samples) from staging area.
+def remove_column(repo: Repository, name):
+    """Delete the column NAME (and all samples) from staging area.
 
-    The arrayset will be removed from the staging area / branch last used by a
+    The column will be removed from the staging area / branch last used by a
     writer-checkout.
     """
     try:
         co = repo.checkout(write=True)
-        removed = co.arraysets.delete(name)
-        click.echo(f'Successfully removed arrayset: {removed}')
+        removed = co.columns.delete(name)
+        click.echo(f'Successfully removed column: {removed}')
     except (ValueError, KeyError, PermissionError) as e:
         raise click.ClickException(e)
     finally:
@@ -262,14 +292,14 @@ def fetch_records(repo: Repository, remote, branch):
 @main.command(name='fetch-data')
 @click.argument('remote', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, required=True)
-@click.option('--aset', '-d', multiple=True, required=False, default=None,
-              help='specify any number of aset keys to fetch data for.')
+@click.option('--column', '-d', multiple=True, required=False, default=None,
+              help='specify any number of column keys to fetch data for.')
 @click.option('--nbytes', '-n', default=None, required=False,
               help='total amount of data to retrieve in MB/GB.')
 @click.option('--all-history', '-a', 'all_', is_flag=True, default=False, required=False,
               help='Retrieve data referenced in every parent commit accessible to the STARTPOINT')
 @pass_repo
-def fetch_data(repo: Repository, remote, startpoint, aset, nbytes, all_):
+def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
     """Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
@@ -293,12 +323,12 @@ def fetch_data(repo: Repository, remote, startpoint, aset, nbytes, all_):
         max_nbytes = parse_bytes(nbytes)
     except AttributeError:
         max_nbytes = None
-    if len(aset) == 0:
-        aset = None
+    if len(column) == 0:
+        column = None
 
     commits = repo.remote.fetch_data(remote=remote,
                                      commit=commit,
-                                     arrayset_names=aset,
+                                     column_names=column,
                                      max_num_bytes=max_nbytes,
                                      retrieve_all_history=all_)
     click.echo(f'completed data for commits: {commits}')
@@ -412,7 +442,7 @@ def status(repo: Repository):
     co = repo.checkout(write=True)
     try:
         diff = co.diff.staged()
-        click.echo(status(co.branch_name, diff.diff).getvalue(), nl=False)
+        click.echo(status(co._hashenv, co.branch_name, diff.diff).getvalue(), nl=False)
     finally:
         co.close()
 
@@ -547,7 +577,7 @@ def server(overwrite, ip, port, timeout):
 
 @main.command(name='import',
               context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
-@click.argument('arrayset', required=True)
+@click.argument('column', required=True)
 @click.argument('path',
                 required=True,
                 type=click.Path(exists=True, dir_okay=True, file_okay=True, readable=True,
@@ -558,8 +588,8 @@ def server(overwrite, ip, port, timeout):
               help='overwrite data samples with the same name as the imported data file ')
 @pass_repo
 @click.pass_context
-def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite):
-    """Import file or directory of files at PATH to ARRAYSET in the staging area.
+def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
+    """Import file or directory of files at PATH to COLUMN in the staging area.
 
     If passing in a directory, all files in the directory will be imported, if
     passing in a file, just that files specified will be
@@ -579,7 +609,7 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 
     co = repo.checkout(write=True, branch=branch)
     try:
-        active_aset = co.arraysets.get(arrayset)
+        active_aset = co.columns.get(column)
         p = Path(path)
         files = [f.resolve() for f in p.iterdir()] if p.is_dir() else [p.resolve()]
         with active_aset as aset, click.progressbar(files) as filesBar:
@@ -603,7 +633,7 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 
 @main.command(name='export',
               context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
-@click.argument('arrayset', nargs=1, required=True)
+@click.argument('column', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
 @click.option('-o', '--out', 'outdir',
               nargs=1,
@@ -617,7 +647,7 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
               default=None,
               type=StrOrIntType(),
               help=('Sample name to export. Default implementation is to interpret all input '
-                    'names as string type. As an arrayset can contain samples with both ``str`` '
+                    'names as string type. As an column can contain samples with both ``str`` '
                     'and ``int`` types, we allow you to specify ``name type`` of the sample. To '
                     'identify a potentially ambiguous name, we allow you to prepend the type of '
                     'sample name followed by a colon and then the sample name (ex. ``str:54`` '
@@ -629,11 +659,11 @@ def import_data(ctx, repo: Repository, arrayset, path, branch, plugin, overwrite
 @click.option('--plugin', required=False, help='override auto-inferred plugin')
 @pass_repo
 @click.pass_context
-def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, format_, plugin):
-    """Export ARRAYSET sample data as it existed a STARTPOINT to some format and path.
+def export_data(ctx, repo: Repository, column, outdir, startpoint, sample, format_, plugin):
+    """Export COLUMN sample data as it existed a STARTPOINT to some format and path.
 
     Specifying which sample to be exported is possible by using the switch
-    ``--sample`` (without this, all the samples in the given arrayset will be
+    ``--sample`` (without this, all the samples in the given column will be
     exported). Since hangar supports both int and str datatype for the sample
     name, specifying that while mentioning the sample name might be necessary
     at times. It is possible to do that by separating the name and type by a
@@ -662,7 +692,7 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
 
     co = repo.checkout(commit=base_commit)
     try:
-        aset = co.arraysets.get(arrayset)
+        aset = co.columns.get(column)
         sampleNames = [sample] if sample is not None else list(aset.keys())
         extension = format_.lstrip('.') if format_ else None
         with aset, click.progressbar(sampleNames) as sNamesBar:
@@ -681,15 +711,15 @@ def export_data(ctx, repo: Repository, arrayset, outdir, startpoint, sample, for
 
 @main.command(name='view',
               context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
-@click.argument('arrayset', nargs=1, type=str, required=True)
+@click.argument('column', nargs=1, type=str, required=True)
 @click.argument('sample', nargs=1, type=StrOrIntType(), required=True)
 @click.argument('startpoint', nargs=1, default=None, required=False)
 @click.option('-f', '--format', 'format_', required=False, help='File format of output file')
 @click.option('--plugin', default=None, help='Plugin name to use instead of auto-inferred plugin')
 @pass_repo
 @click.pass_context
-def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plugin):
-    """Use a plugin to view the data of some SAMPLE in ARRAYSET at STARTPOINT.
+def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin):
+    """Use a plugin to view the data of some SAMPLE in COLUMN at STARTPOINT.
     """
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit, get_staging_branch_head
@@ -706,7 +736,7 @@ def view_data(ctx, repo: Repository, arrayset, sample, startpoint, format_, plug
 
     co = repo.checkout(commit=base_commit)
     try:
-        aset = co.arraysets.get(arrayset)
+        aset = co.columns.get(column)
         extension = format_.lstrip('.') if format_ else None
         data = aset[sample]
         try:

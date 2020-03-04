@@ -57,10 +57,10 @@ Technical Notes
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
-
-from . import REMOTE_50_DataHashSpec
+from .specs import REMOTE_50_DataHashSpec
 from ..op_state import writer_checkout_only, reader_checkout_only
+from ..typesystem import EmptyDict, checkedmeta
+
 
 # -------------------------------- Parser Implementation ----------------------
 
@@ -81,14 +81,33 @@ def remote_50_encode(schema_hash: str = '') -> bytes:
 # ------------------------- Accessor Object -----------------------------------
 
 
+class REMOTE_50_Options(metaclass=checkedmeta):
+    _backend_options = EmptyDict()
+
+    def __init__(self, backend_options, *args, **kwargs):
+        if backend_options is None:
+            backend_options = self.default_options
+        self._backend_options = backend_options
+
+    @property
+    def default_options(self):
+        return {}
+
+    @property
+    def backend_options(self):
+        return self._backend_options
+
+    @property
+    def init_requires(self):
+        return ('repo_path',)
+
+
 class REMOTE_50_Handler(object):
 
-    def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
+    def __init__(self, repo_path: Path, *args, **kwargs):
         self.repo_path = repo_path
-        self.schema_shape = schema_shape
-        self.schema_dtype = schema_dtype
         self._dflt_backend_opts: Optional[dict] = None
-        self.mode: Optional[str] = None
+        self._mode: Optional[str] = None
 
     def __enter__(self):
         return self
@@ -108,7 +127,7 @@ class REMOTE_50_Handler(object):
         """ensure multiprocess operations can pickle relevant data.
         """
         self.__dict__.update(state)
-        self.open(mode=self.mode)
+        self.open(mode=self._mode)
 
     @property
     def backend_opts(self):
@@ -138,7 +157,7 @@ class REMOTE_50_Handler(object):
         return self._backend_opts_set(value)
 
     def open(self, mode, *args, **kwargs):
-        self.mode = mode
+        self._mode = mode
         return
 
     def close(self, *args, **kwargs):

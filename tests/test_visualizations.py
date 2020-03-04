@@ -65,7 +65,7 @@ def test_three_way_merge_graph(capfd):
             'fed88489ab6e59913aee935169b15fe68755d82c': ['0ff3f2ec156ab8e1026b5271630ccae4556cc260']},
         'specs': {
             '074f81d6b9fa5fa856175d47c7cc95cc4a839965': {
-                'commit_message': 'adding in the new testing arraysets',
+                'commit_message': 'adding in the new testing columns',
                 'commit_time': 1562203830.775428, 'commit_user': 'Foo User', 'commit_email': 'foo@bar.com'},
             'e5ea58dd9c7ffacd45fb128ddc00aced08d13889': {
                 'commit_message': 'commit adding validation images and labels',
@@ -101,7 +101,7 @@ def test_three_way_merge_graph(capfd):
         show_time=False,
         show_user=False)
 
-    real = '*   074f81d6b9fa5fa856175d47c7cc95cc4a839965 (master) : adding in the new testing arraysets\n'\
+    real = '*   074f81d6b9fa5fa856175d47c7cc95cc4a839965 (master) : adding in the new testing columns\n'\
            '|\\  \n'\
            '| * 3c9530ac0da1106c0acbe1201900c51548bbcdd9 (add-test) : added testing labels only\n'\
            '| * fed88489ab6e59913aee935169b15fe68755d82c : added testing images only\n'\

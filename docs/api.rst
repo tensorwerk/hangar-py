@@ -17,49 +17,49 @@ Repository
    :members:
    :exclude-members: __init__
 
+
 Write Enabled Checkout
 ======================
 
+Checkout
+--------
+
 .. autoclass:: hangar.checkout.WriterCheckout()
    :members:
-   :special-members: __getitem__, __setitem__
+   :special-members: __getitem__, __setitem__, __len__, __contains__, __iter__
    :exclude-members: __init__
 
-Arraysets
----------
+Columns
+-------
 
-.. autoclass:: hangar.columns.arrayset.Arraysets()
+.. autoclass:: hangar.columns.column.Columns()
    :members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
+Flat Column Layout Container
+----------------------------
 
-Sample Level Arrayset Data
---------------------------
-
-.. autoclass:: hangar.columns.SampleWriterModifier()
-   :members:
-   :inherited-members:
-   :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
-   :exclude-members: __init__
-
-
-Subsample Level Arrayset Data
------------------------------
-
-.. autoclass:: hangar.columns.SubsampleWriterModifier()
+.. autoclass:: hangar.columns.layout_flat.FlatSampleWriter()
    :members:
    :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
+Nested Column Layout Container
+------------------------------
 
-.. autoclass:: hangar.columns.SubsampleWriter()
+.. autoclass:: hangar.columns.layout_nested.NestedSampleWriter()
    :members:
    :inherited-members:
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
+.. autoclass:: hangar.columns.layout_nested.FlatSubsampleWriter()
+   :members:
+   :inherited-members:
+   :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
+   :exclude-members: __init__
 
 Metadata
 --------
@@ -81,41 +81,38 @@ Differ
 Read Only Checkout
 ==================
 
+Checkout
+--------
+
 .. autoclass:: hangar.checkout.ReaderCheckout()
    :members:
-   :special-members: __getitem__
-   :exclude-members: __init__
-
-Arraysets
-----------
-
-.. autoclass:: hangar.columns.arrayset.Arraysets()
-   :members: keys, values, items, get, iswriteable
-   :special-members: __getitem__, __contains__, __len__, __iter__
+   :special-members: __getitem__, __len__, __contains__, __iter__
    :exclude-members: __init__
 
 
-Sample Level Arrayset Data
---------------------------
+Flat Column Layout Container
+----------------------------
 
-.. autoclass:: hangar.columns.SampleReaderModifier()
+.. autoclass:: hangar.columns.layout_flat.FlatSampleWriter()
    :members:
-   :special-members: __getitem__, __contains__, __len__, __iter__
+   :inherited-members:
+   :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
 
-Subsample Level Arrayset Data
------------------------------
+Nested Column Layout Container
+------------------------------
 
-.. autoclass:: hangar.columns.SubsampleReaderModifier()
+.. autoclass:: hangar.columns.layout_nested.NestedSampleReader()
    :members:
+   :inherited-members:
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-
-.. autoclass:: hangar.columns.SubsampleReader()
+.. autoclass:: hangar.columns.layout_nested.FlatSubsampleReader()
    :members:
-   :special-members: __getitem__, __contains__, __len__, __iter__
+   :inherited-members:
+   :special-members: __getitem__,, __contains__, __len__, __iter__
    :exclude-members: __init__
 
 
@@ -124,8 +121,10 @@ Metadata
 
 .. autoclass:: hangar.columns.metadata.MetadataReader()
    :members:
+   :inherited-members:
    :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
+
 
 Differ
 ------

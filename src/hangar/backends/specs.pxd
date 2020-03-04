@@ -29,6 +29,14 @@ cdef class NUMPY_10_DataHashSpec:
     cdef readonly tuple shape
 
 
+cdef class LMDB_30_DataHashSpec:
+
+    cdef readonly str backend
+    cdef readonly str uid
+    cdef readonly str row_idx
+    cdef readonly  str checksum
+
+
 cdef class REMOTE_50_DataHashSpec:
 
     cdef readonly str backend

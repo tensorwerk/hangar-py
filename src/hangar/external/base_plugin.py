@@ -102,7 +102,7 @@ class BasePlugin(object):
         the sample name is `sample1` (and type of sample name is `str`) then
         ``sample_detail`` will be `str:sample1`. This is to avoid the ambiguity that
         could arise by having both integer and string form of numerical as the sample
-        name (ex: if arrayset[123] and arrayset["123"] exist). Formatting
+        name (ex: if column[123] and column["123"] exist). Formatting
         ``sample_detail`` to make a proper filename (not necessary) is upto the
         plugin developer.
         """

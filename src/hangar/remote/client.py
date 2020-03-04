@@ -21,7 +21,7 @@ from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
 from ..records.hashmachine import array_hash_digest, metadata_hash_digest
-from ..records import parsing
+from ..records import hash_data_db_key_from_raw_key, hash_meta_raw_key_from_db_key
 from ..records import queries
 from ..records import summarize
 from ..utils import set_blosc_nthreads
@@ -387,7 +387,7 @@ class HangarClient(object):
             specs = []
             hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
             for digest in digests:
-                hashKey = parsing.hash_data_db_key_from_raw_key(digest)
+                hashKey = hash_data_db_key_from_raw_key(digest)
                 hashVal = hashTxn.get(hashKey, default=False)
                 if not hashVal:
                     raise KeyError(f'No hash record with key: {hashKey}')
@@ -408,7 +408,7 @@ class HangarClient(object):
                 totalSize += len(record)
                 if (totalSize >= self.cfg['push_max_nbytes']) or (len(records) > 2000):
                     # send tensor pack when >= configured max nbytes occupied in memory
-                    pbar.update(2000)
+                    pbar.update(len(records))
                     pack = chunks.serialize_record_pack(records)
                     cIter = chunks.tensorChunkedIterator(
                         buf=pack, uncomp_nbytes=len(pack), itemsize=1,
@@ -418,7 +418,7 @@ class HangarClient(object):
                     totalSize = 0
                     records = []
         except grpc.RpcError as rpc_error:
-            logger.error(rpc_error)
+            logger.error(rpc_error.with_traceback())
             raise rpc_error
         finally:
             for k in self._rFs.keys():
@@ -563,7 +563,7 @@ class HangarClient(object):
 
     def fetch_find_missing_labels(self, commit):
         c_hash_keys = hashs.HashQuery(self.env.labelenv).gen_all_hash_keys_db()
-        c_hashset = set(map(parsing.hash_meta_raw_key_from_db_key, c_hash_keys))
+        c_hashset = set(map(hash_meta_raw_key_from_db_key, c_hash_keys))
         c_hashs_raw = [chunks.serialize_ident(digest, '') for digest in c_hashset]
         raw_pack = chunks.serialize_record_pack(c_hashs_raw)
 
@@ -614,7 +614,7 @@ class HangarClient(object):
         return s_mis_hsh
 
     def fetch_find_missing_schemas(self, commit):
-        c_schemaset = set(hashs.HashQuery(self.env.hashenv).list_all_schema_keys_raw())
+        c_schemaset = set(hashs.HashQuery(self.env.hashenv).list_all_schema_digests())
         c_schemas = list(c_schemaset)
 
         request = hangar_service_pb2.FindMissingSchemasRequest()

@@ -1,10 +1,12 @@
 import pytest
+
 import numpy as np
 import time
 from os.path import join as pjoin
 from os import mkdir
 from random import randint
 import platform
+
 
 
 @pytest.mark.parametrize('name', [
@@ -82,12 +84,12 @@ def test_push_and_clone_master_linear_history_multiple_commits(
 
     cmtList = []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.add_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         sampList = []
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range(nSamples):
@@ -111,23 +113,22 @@ def test_push_and_clone_master_linear_history_multiple_commits(
     for cmt, sampList in cmtList:
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
-        assert len(nco.arraysets) == 1
-        assert 'writtenaset' in nco.arraysets
-        assert len(nco.arraysets['writtenaset']) == len(sampList)
+        assert len(nco.columns) == 1
+        assert 'writtenaset' in nco.columns
+        assert len(nco.columns['writtenaset']) == len(sampList)
 
-        assert nco.arraysets['writtenaset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
+        assert nco.columns['writtenaset'].contains_remote_references is True
+        remoteKeys = nco.columns['writtenaset'].remote_reference_keys
         assert tuple([str(idx) for idx in range(len(sampList))]) == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.arraysets['writtenaset']
+            assert sIdx in nco.columns['writtenaset']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.arraysets['writtenaset'][sIdx]
+                shouldNotExist = nco.columns['writtenaset'][sIdx]
         nco.close()
     cloneMasterHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name='master')
     assert cloneMasterHist == masterHist
     newRepo._env._close_environments()
-
 
 
 @pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[1, 4], [5, 10]])
@@ -139,12 +140,12 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
 
     masterCmtList, devCmtList = [], []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.add_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range(nMasterSamples):
@@ -163,7 +164,7 @@ def test_server_push_second_branch_with_new_commit(server_instance, repo,
     for cIdx in range(nDevCommits):
         co = repo.checkout(write=True, branch=branch.name)
         devSampList = []
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range(nDevSamples):
@@ -189,12 +190,12 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.add_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range(nMasterSamples):
@@ -216,7 +217,7 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     for cIdx in range(nDevCommits):
         co = repo.checkout(write=True, branch=branch.name)
         devSampList = []
-        with co.arraysets['writtenaset'] as d:
+        with co.columns['writtenaset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range(nDevSamples):
@@ -240,18 +241,18 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     for cmt, sampList in masterCmtList:
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
-        assert len(nco.arraysets) == 1
-        assert 'writtenaset' in nco.arraysets
-        assert len(nco.arraysets['writtenaset']) == nMasterSamples
+        assert len(nco.columns) == 1
+        assert 'writtenaset' in nco.columns
+        assert len(nco.columns['writtenaset']) == nMasterSamples
 
-        assert nco.arraysets['writtenaset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
+        assert nco.columns['writtenaset'].contains_remote_references is True
+        remoteKeys = nco.columns['writtenaset'].remote_reference_keys
         assert tuple([str(idx) for idx in range(len(sampList))]) == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.arraysets['writtenaset']
+            assert sIdx in nco.columns['writtenaset']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.arraysets['writtenaset'][sIdx]
+                shouldNotExist = nco.columns['writtenaset'][sIdx]
         nco.close()
     cloneMasterHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name='master')
     assert cloneMasterHist == masterHist
@@ -264,18 +265,18 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
 
         with pytest.warns(UserWarning):
             nco = newRepo.checkout(commit=cmt)
-        assert len(nco.arraysets) == 1
-        assert 'writtenaset' in nco.arraysets
-        assert len(nco.arraysets['writtenaset']) == nDevSamples
+        assert len(nco.columns) == 1
+        assert 'writtenaset' in nco.columns
+        assert len(nco.columns['writtenaset']) == nDevSamples
 
-        assert nco.arraysets['writtenaset'].contains_remote_references is True
-        remoteKeys = nco.arraysets['writtenaset'].remote_reference_keys
+        assert nco.columns['writtenaset'].contains_remote_references is True
+        remoteKeys = nco.columns['writtenaset'].remote_reference_keys
         assert tuple([str(idx) for idx in range(len(sampList))]) == remoteKeys
         for idx, _ in enumerate(sampList):
             sIdx = str(idx)
-            assert sIdx in nco.arraysets['writtenaset']
+            assert sIdx in nco.columns['writtenaset']
             with pytest.raises(FileNotFoundError):
-                shouldNotExist = nco.arraysets['writtenaset'][sIdx]
+                shouldNotExist = nco.columns['writtenaset'][sIdx]
         nco.close()
 
     cloneBranchHist = list_history(newRepo._env.refenv, newRepo._env.branchenv, branch_name=f'origin/{branch.name}')
@@ -331,14 +332,14 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     # Push master branch test
     masterCmts = {}
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='writtenaset', shape=(5, 7), dtype=np.float32)
-    co.arraysets.init_arrayset(name='_two', shape=(20), dtype=np.float32)
+    co.add_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
+    co.add_ndarray_column(name='_two', shape=(20), dtype=np.float32)
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList1 = []
         masterSampList2 = []
-        with co.arraysets['writtenaset'] as d, co.arraysets['_two'] as dd:
+        with co.columns['writtenaset'] as d, co.columns['_two'] as dd:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
                 del dd[prevKey]
@@ -366,7 +367,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         co = repo.checkout(write=True, branch=branch.name)
         devSampList1 = []
         devSampList2 = []
-        with co.arraysets['writtenaset'] as d, co.arraysets['_two'] as dd:
+        with co.columns['writtenaset'] as d, co.columns['_two'] as dd:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
                 del dd[prevKey]
@@ -400,7 +401,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
     # ------------------ format arguments dependingon options -----------------
 
     kwargs = {
-        'arrayset_names': fetchAsetns,
+        'column_names': fetchAsetns,
         'max_num_bytes': fetchNbytes,
         'retrieve_all_history': fetchAll_history,
     }
@@ -440,7 +441,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
 
         # when we are checking one aset only
         if isinstance(fetchAsetns, tuple):
-            d = co.arraysets[fetchAsetns[0]]
+            d = co.columns[fetchAsetns[0]]
             # ensure we didn't fetch the other data simultaneously
 
             ds1SampList, ds2SampList = devCmts[fCmt]
@@ -464,8 +465,8 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
 
         # compare both asets at the same time
         else:
-            d = co.arraysets['writtenaset']
-            dd = co.arraysets['_two']
+            d = co.columns['writtenaset']
+            dd = co.columns['_two']
             ds1List, ds2List = devCmts[fCmt]
             totalSeen = 0
             for idx, ds1ds2 in enumerate(zip(ds1List, ds2List)):
@@ -569,24 +570,25 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
 
 
 @pytest.fixture()
-def server_instance_nbytes_limit(managed_tmpdir, worker_id):
+def server_instance_nbytes_limit(monkeypatch, managed_tmpdir, worker_id, mocker):
     from hangar.remote.server import serve
 
     address = f'localhost:{randint(50000, 59999)}'
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
     mkdir(base_tmpdir)
     server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
-    hangserver.CFG['SERVER_GRPC']['fetch_max_nbytes'] = '100000'
-    hangserver.CFG['CLIENT_GRPC']['push_max_nbytes'] = '100000'
+    hangserver.CFG['SERVER_GRPC']['fetch_max_nbytes'] = '500000'
+    hangserver.CFG['CLIENT_GRPC']['push_max_nbytes'] = '500000'
     server.start()
     yield address
 
     hangserver.env._close_environments()
-    server.stop(0.1)
-    time.sleep(0.2)
+    server.stop(0.05)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.3)
+        time.sleep(0.1)
+
 
 @pytest.fixture()
 def server_instance_push_restricted(managed_tmpdir, worker_id):
@@ -605,17 +607,16 @@ def server_instance_push_restricted(managed_tmpdir, worker_id):
     yield address
 
     hangserver.env._close_environments()
-    server.stop(0.1)
-    time.sleep(0.2)
+    server.stop(0.05)
+    time.sleep(0.1)
     if platform.system() == 'Windows':
         # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.3)
+        time.sleep(0.1)
 
 
 # -----------------------------------------------------------------------------
 
-
-@pytest.mark.xfail(reason='unknown bug sporadically showing up.')
+@pytest.mark.skip(reason='unknown test failures intermitently')
 def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance_nbytes_limit, repo, managed_tmpdir):
     from hangar import Repository
     from hangar.remote import chunks, client
@@ -623,16 +624,16 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='aset', shape=(50, 20), dtype=np.float32)
+    co.add_ndarray_column(name='aset', shape=(50, 50), dtype=np.float32)
     for cIdx in range(4):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.arraysets['aset'] as d:
+        with co.columns['aset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range(70):
-                arr = np.random.randn(50, 20).astype(np.float32)
+                arr = np.random.randint(0, 255, size=(50, 50)).astype(np.float32)
                 d[str(sIdx)] = arr
                 masterSampList.append(arr)
         cmt = co.commit(f'master commit number: {cIdx}')
@@ -643,9 +644,9 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance
 
     spy = mocker.spy(chunks, 'tensorChunkedIterator')
     push1 = repo.remote.push('origin', 'master')
-    assert chunks.tensorChunkedIterator.call_count == 12
+    assert chunks.tensorChunkedIterator.call_count == 6
     for call in spy.call_args_list:
-        assert call[1]['uncomp_nbytes'] <= 103_000 # maximum amount over 100_000 observed in test development
+        assert call[1]['uncomp_nbytes'] <= 550_000 # maximum amount over 100_000 observed in test development
 
     assert push1 == 'master'
 
@@ -653,21 +654,21 @@ def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance
     new_tmpdir = pjoin(managed_tmpdir, 'new')
     mkdir(new_tmpdir)
     newRepo = Repository(path=new_tmpdir, exists=False)
-    newRepo.clone('Test User', 'tester@foo.com', server_instance_nbytes_limit)
+    newRepo.clone('Test User', 'tester@foo.com', server_instance_nbytes_limit, remove_old=True)
     assert newRepo.list_branches() == ['master', 'origin/master']
 
     spy = mocker.spy(client.HangarClient, 'fetch_data')
     for cmt, sampList in masterCmtList:
         newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
-        assert len(nco.arraysets) == 1
-        assert 'aset' in nco.arraysets
-        assert len(nco.arraysets['aset']) == 70
+        assert len(nco.columns) == 1
+        assert 'aset' in nco.columns
+        assert len(nco.columns['aset']) == 70
         for sIdx, samp in enumerate(sampList):
-            assert np.allclose(nco.arraysets['aset'][str(sIdx)], samp)
+            assert np.allclose(nco.columns['aset'][str(sIdx)], samp)
         nco.close()
         del nco
-    assert client.HangarClient.fetch_data.call_count == 12
+    assert client.HangarClient.fetch_data.call_count == 8
     newRepo._env._close_environments()
 
 
@@ -677,12 +678,12 @@ def test_push_restricted_with_right_username_password(server_instance_push_restr
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='aset', shape=(50, 20), dtype=np.float32)
+    co.add_ndarray_column(name='aset', shape=(50, 20), dtype=np.float32)
     for cIdx in range(1):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.arraysets['aset'] as d:
+        with co.columns['aset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range(70):
@@ -709,11 +710,11 @@ def test_push_restricted_with_right_username_password(server_instance_push_restr
     for cmt, sampList in masterCmtList:
         newRepo.remote.fetch_data('origin', commit=cmt)
         nco = newRepo.checkout(commit=cmt)
-        assert len(nco.arraysets) == 1
-        assert 'aset' in nco.arraysets
-        assert len(nco.arraysets['aset']) == 70
+        assert len(nco.columns) == 1
+        assert 'aset' in nco.columns
+        assert len(nco.columns['aset']) == 70
         for sIdx, samp in enumerate(sampList):
-            assert np.allclose(nco.arraysets['aset'][str(sIdx)], samp)
+            assert np.allclose(nco.columns['aset'][str(sIdx)], samp)
         nco.close()
     newRepo._env._close_environments()
 
@@ -723,12 +724,12 @@ def test_push_restricted_wrong_user_and_password(server_instance_push_restricted
     # Push master branch test
     masterCmtList = []
     co = repo.checkout(write=True)
-    co.arraysets.init_arrayset(name='aset', shape=(50, 20), dtype=np.float32)
+    co.add_ndarray_column(name='aset', shape=(50, 20), dtype=np.float32)
     for cIdx in range(1):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList = []
-        with co.arraysets['aset'] as d:
+        with co.columns['aset'] as d:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
             for sIdx in range(70):

@@ -1,7 +1,7 @@
 import warnings
 from collections import namedtuple
 from typing import Sequence
-from .common import GroupedAsets
+from .common import GroupedColumns
 
 
 try:
@@ -12,7 +12,7 @@ except (ImportError, ModuleNotFoundError):
         'installed correctly to use pytorch dataloader functions') from None
 
 
-def make_torch_dataset(arraysets,
+def make_torch_dataset(columns,
                        keys: Sequence[str] = None,
                        index_range: slice = None,
                        field_names: Sequence[str] = None):
@@ -31,19 +31,19 @@ def make_torch_dataset(arraysets,
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.columns.arrayset.Arraysets` or Sequence
-        A arrayset object, a tuple of arrayset object or a list of arrayset
+    columns : :class:`~hangar.columns.column.Columns` or Sequence
+        A column object, a tuple of column object or a list of column
         objects.
     keys : Sequence[str]
         An iterable collection of sample names. If given only those samples will
-        fetched from the arrayset
+        fetched from the column
     index_range : slice
-        A python slice object which will be used to find the subset of arrayset.
+        A python slice object which will be used to find the subset of column.
         Argument `keys` takes priority over `range` i.e. if both are given, keys
         will be used and `range` will be ignored
     field_names : Sequence[str], optional
         An array of field names used as the `field_names` for the returned
-        dict keys. If not given, arrayset names will be used as the field_names.
+        dict keys. If not given, column names will be used as the field_names.
 
     Examples
     --------
@@ -52,7 +52,7 @@ def make_torch_dataset(arraysets,
     >>> from hangar import make_torch_dataset
     >>> repo = Repository('.')
     >>> co = repo.checkout()
-    >>> aset = co.arraysets['dummy_aset']
+    >>> aset = co.columns['dummy_aset']
     >>> torch_dset = make_torch_dataset(aset, index_range=slice(1, 100))
     >>> loader = DataLoader(torch_dset, batch_size=16)
     >>> for batch in loader:
@@ -67,23 +67,23 @@ def make_torch_dataset(arraysets,
         if not isinstance(keys, (list, tuple, set)):
             raise TypeError(f'type(keys): {type(keys)} != (list, tuple, set)')
 
-    gasets = GroupedAsets(arraysets, keys, index_range)
+    gcols = GroupedColumns(columns, keys, index_range)
     if field_names:
         if not isinstance(field_names, (list, tuple, set)):
             raise TypeError(f'type(field_names): {type(field_names)} not collection')
-        if len(field_names) != len(arraysets):
-            err = f'# field_names {len(field_names)} != # arraysets: {len(arraysets)}'
+        if len(field_names) != len(columns):
+            err = f'# field_names {len(field_names)} != # columns: {len(columns)}'
             raise ValueError(err)
         BTName = '_'.join(['BatchTuple', *field_names])
         BTFieldNames = field_names
     else:
-        BTName = '_'.join(['BatchTuple', *gasets.arrayset_names])
-        BTFieldNames = gasets.arrayset_names
+        BTName = '_'.join(['BatchTuple', *gcols.column_names])
+        BTFieldNames = gcols.column_names
 
     wrapper = namedtuple(BTName, field_names=BTFieldNames, rename=True)
     globals()[BTName] = wrapper
-    return TorchDataset(hangar_arraysets=gasets.arrayset_array,
-                        sample_names=gasets.sample_names,
+    return TorchDataset(hangar_columns=gcols.columns_col,
+                        sample_names=gcols.sample_names,
                         wrapper=wrapper)
 
 
@@ -91,7 +91,7 @@ class TorchDataset(torchdata.Dataset):
     """A wrapper around torch Dataset
 
     TorchDataset inherits :class:`torch.utils.data.Dataset` and accepts few
-    convenient arguments to wrap hangar arraysets to be used in
+    convenient arguments to wrap hangar columns to be used in
     :class:`torch.utils.data.DataLoaders`.
 
     .. note::
@@ -101,10 +101,10 @@ class TorchDataset(torchdata.Dataset):
 
     Parameters
     ----------
-    arraysets : :class:`~hangar.columns.arrayset.Arraysets` or Sequence
+    columns : :class:`~hangar.columns.column.Columns` or Sequence
         A list/tuple of hangar_arrayset objects with same length and contains
         same keys. This class doesn't do any explicit check for length or the
-        key names and assumes those all the arraysets are valid as per the
+        key names and assumes those all the columns are valid as per the
         requirement
     sample_names : tuple of allowed sample names/keys
         User can select a subset of all the available samples and pass the
@@ -114,8 +114,8 @@ class TorchDataset(torchdata.Dataset):
         __getitem__
     """
 
-    def __init__(self, hangar_arraysets, sample_names, wrapper):
-        self.hangar_arraysets = hangar_arraysets
+    def __init__(self, hangar_columns, sample_names, wrapper):
+        self.hangar_columns = hangar_columns
         self.sample_names = sample_names
         self.wrapper: namedtuple = wrapper
 
@@ -132,7 +132,7 @@ class TorchDataset(torchdata.Dataset):
 
     def __getitem__(self, index: int):
         """Use data names array to find the sample name at an index and loop
-        through the array of hangar arraysets to return the sample.
+        through the array of hangar columns to return the sample.
 
         Parameters
         ----------
@@ -142,10 +142,10 @@ class TorchDataset(torchdata.Dataset):
         Returns
         -------
         namedtuple[:class:`torch.Tensor`]
-            One sample with the given name from all the provided arraysets
+            One sample with the given name from all the provided columns
         """
         key = self.sample_names[index]
         out = []
-        for aset in self.hangar_arraysets:
+        for aset in self.hangar_columns:
             out.append(aset.get(key))
         return self.wrapper._make(out)

@@ -30,8 +30,8 @@ class TestTorchDataLoader(object):
     def test_warns_experimental(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
         with pytest.warns(UserWarning, match='Dataloaders are experimental'):
             make_torch_dataset([first_aset, second_aset])
         co.close()
@@ -40,15 +40,15 @@ class TestTorchDataLoader(object):
     def test_warns_arrayset_sample_size_mismatch(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout(write=True)
-        second_aset = co.arraysets['second_aset']
+        second_aset = co.columns['second_aset']
         del second_aset['10']
         co.commit('deleting')
         co.close()
 
         co = repo.checkout()
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
-        with pytest.warns(UserWarning, match='Arraysets do not contain equal number of samples'):
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
+        with pytest.warns(UserWarning, match='Columns do not contain equal number of samples'):
             make_torch_dataset([first_aset, second_aset])
         co.close()
 
@@ -56,14 +56,14 @@ class TestTorchDataLoader(object):
     def test_multiple_dataset_loader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout(write=True)
-        second_aset = co.arraysets['second_aset']
+        second_aset = co.columns['second_aset']
         del second_aset['10']
         co.commit('deleting')
         co.close()
 
         co = repo.checkout()
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
         with pytest.raises(ValueError):
             # emtpy list
             make_torch_dataset([])
@@ -71,7 +71,7 @@ class TestTorchDataLoader(object):
             # if more than one dataset, those should be in a list/tuple
             make_torch_dataset(first_aset, first_aset)
 
-        with pytest.warns(UserWarning, match='Arraysets do not contain equal number of samples'):
+        with pytest.warns(UserWarning, match='Columns do not contain equal number of samples'):
             torch_dset = make_torch_dataset([first_aset, second_aset])
         loader = DataLoader(torch_dset, batch_size=6, drop_last=True)
         total_samples = 0
@@ -86,8 +86,8 @@ class TestTorchDataLoader(object):
     def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout(write=True)
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
         with pytest.raises(TypeError):
             make_torch_dataset([first_aset, second_aset])
         co.close()
@@ -96,7 +96,7 @@ class TestTorchDataLoader(object):
     def test_with_keys(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
 
         # with keys
         keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
@@ -123,7 +123,7 @@ class TestTorchDataLoader(object):
     def test_with_index_range(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
 
         # with keys
         bad_tensor0 = aset['0']
@@ -147,8 +147,8 @@ class TestTorchDataLoader(object):
     def test_field_names(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
         with pytest.raises(ValueError):  # number of dsets and field_names are different
             make_torch_dataset([first_aset, second_aset], field_names=('input',))
         with pytest.raises(TypeError):  # field_names's type is wrong
@@ -165,7 +165,7 @@ class TestTorchDataLoader(object):
     def test_lots_of_data_with_multiple_backend(self, repo_300_filled_samples):
         repo = repo_300_filled_samples
         co = repo.checkout()
-        aset = co.arraysets['aset']
+        aset = co.columns['aset']
         torch_dset = make_torch_dataset([aset])
         loader = DataLoader(torch_dset, batch_size=10, drop_last=True)
         for data in loader:
@@ -181,7 +181,7 @@ class TestTorchDataLoader(object):
                                                                            repo_300_filled_samples):
         repo = repo_300_filled_samples
         co = repo.checkout()
-        aset = co.arraysets['aset']
+        aset = co.columns['aset']
         torch_dset = make_torch_dataset([aset])
         loader = DataLoader(torch_dset, batch_size=10, drop_last=True, num_workers=2)
         for data in loader:
@@ -196,8 +196,8 @@ class TestTorchDataLoader(object):
     def test_two_aset_loader_two_worker_dataloader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
         torch_dset = make_torch_dataset([first_aset, second_aset])
         loader = DataLoader(torch_dset, batch_size=2, drop_last=True, num_workers=2)
         count = 0
@@ -213,7 +213,7 @@ class TestTorchDataLoader(object):
         assert count == 10
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -221,14 +221,14 @@ class TestTorchDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(ValueError):
             torch_dset = make_torch_dataset(aset)
         co.close()
         repo._env._close_environments()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -236,14 +236,14 @@ class TestTorchDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(KeyError):
             torch_dset = make_torch_dataset(aset, keys=['1', -1])
         co.close()
         repo._env._close_environments()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -251,7 +251,7 @@ class TestTorchDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(FileNotFoundError):
             torch_dset = make_torch_dataset(aset, keys=['1', '2'])
         co.close()
@@ -283,8 +283,8 @@ class TestTfDataLoader(object):
     def test_warns_experimental(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
         with pytest.warns(UserWarning, match='Dataloaders are experimental'):
             make_tf_dataset([first_aset, second_aset])
         co.close()
@@ -293,15 +293,15 @@ class TestTfDataLoader(object):
     def test_wans_arrayset_sample_size_mismatch(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout(write=True)
-        second_aset = co.arraysets['second_aset']
+        second_aset = co.columns['second_aset']
         del second_aset['10']
         co.commit('deleting')
         co.close()
 
         co = repo.checkout()
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
-        with pytest.warns(UserWarning, match='Arraysets do not contain equal number of samples'):
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
+        with pytest.warns(UserWarning, match='Columns do not contain equal number of samples'):
             make_tf_dataset([first_aset, second_aset])
         co.close()
 
@@ -309,8 +309,8 @@ class TestTfDataLoader(object):
     def test_dataset_loader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
 
         # multiple datasets
         tf_dset = make_tf_dataset([first_aset, second_aset])
@@ -324,7 +324,7 @@ class TestTfDataLoader(object):
     def test_with_keys(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
 
         # with keys
         keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
@@ -351,7 +351,7 @@ class TestTfDataLoader(object):
     def test_with_index_range(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
 
         # with keys
         bad_tensor0 = aset['0']
@@ -375,8 +375,8 @@ class TestTfDataLoader(object):
     def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout(write=True)
-        first_aset = co.arraysets['writtenaset']
-        second_aset = co.arraysets['second_aset']
+        first_aset = co.columns['writtenaset']
+        second_aset = co.columns['second_aset']
         with pytest.raises(TypeError):
             make_tf_dataset([first_aset, second_aset])
         co.close()
@@ -387,14 +387,14 @@ class TestTfDataLoader(object):
         # the way we return the data from generator
         repo = aset_samples_var_shape_initialized_repo
         co = repo.checkout(write=True)
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         for i in range(5, 10):
             aset[i] = np.random.random((2, i))
         co.commit('added data')
         co.close()
 
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         tf_dset = make_tf_dataset(aset)
         shape_obj = tf.TensorShape((2, None))
         tf_dset = tf_dset.padded_batch(5, padded_shapes=(shape_obj,))
@@ -408,7 +408,7 @@ class TestTfDataLoader(object):
     def test_lots_of_data_with_multiple_backend(self, repo_300_filled_samples):
         repo = repo_300_filled_samples
         co = repo.checkout()
-        aset = co.arraysets['aset']
+        aset = co.columns['aset']
         tf_dset = make_tf_dataset([aset])
         tf_dset = tf_dset.batch(10)
         for data in tf_dset:
@@ -416,7 +416,7 @@ class TestTfDataLoader(object):
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -424,14 +424,14 @@ class TestTfDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(ValueError):
             tf_dset = make_tf_dataset(aset)
         co.close()
         repo._env._close_environments()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -439,14 +439,14 @@ class TestTfDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(KeyError):
             tf_dset = make_tf_dataset(aset, keys=['1', -1])
         co.close()
         repo._env._close_environments()
 
     @pytest.mark.filterwarnings("ignore:Dataloaders are experimental")
-    @pytest.mark.filterwarnings("ignore:Arrayset.* writtenaset contains `reference-only` samples")
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
         new_tmpdir = pjoin(managed_tmpdir, 'new')
         mkdir(new_tmpdir)
@@ -454,7 +454,7 @@ class TestTfDataLoader(object):
         repo = Repository(path=new_tmpdir, exists=False)
         repo.clone('name', 'a@b.c', server, remove_old=True)
         co = repo.checkout()
-        aset = co.arraysets['writtenaset']
+        aset = co.columns['writtenaset']
         with pytest.raises(FileNotFoundError):
             tf_dset = make_tf_dataset(aset, keys=['1', '2'])
         co.close()

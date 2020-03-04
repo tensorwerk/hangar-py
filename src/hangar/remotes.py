@@ -1,10 +1,10 @@
 import logging
-from pathlib import Path
 import tempfile
 import time
 import warnings
 from collections import defaultdict
 from contextlib import closing
+from pathlib import Path
 from typing import List, NamedTuple, Optional, Sequence
 
 import grpc
@@ -14,18 +14,16 @@ from tqdm import tqdm
 from .backends import backend_decoder
 from .constants import LMDB_SETTINGS
 from .context import Environments
-from .txnctx import TxnRegister
+from .records import hash_data_db_key_from_raw_key
+from .records import heads, queries, summarize
 from .records.commiting import (
     check_commit_hash_in_history,
     move_process_data_to_store,
     unpack_commit_ref,
 )
-from .records import heads
-from .records import parsing
-from .records import queries
-from .records import summarize
 from .remote.client import HangarClient
 from .remote.content import ContentWriter, ContentReader
+from .txnctx import TxnRegister
 from .utils import is_suitable_user_key
 
 logger = logging.getLogger(__name__)
@@ -286,7 +284,7 @@ class Remotes(object):
                    branch: str = None,
                    commit: str = None,
                    *,
-                   arrayset_names: Optional[Sequence[str]] = None,
+                   column_names: Optional[Sequence[str]] = None,
                    max_num_bytes: int = None,
                    retrieve_all_history: bool = False) -> List[str]:
         """Retrieve the data for some commit which exists in a `partial` state.
@@ -301,10 +299,10 @@ class Remotes(object):
         commit : str, optional
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
-        arrayset_names : Optional[Sequence[str]]
-            Names of the arraysets which should be retrieved for the particular
-            commits, any arraysets not named will not have their data fetched
-            from the server. Default behavior is to retrieve all arraysets
+        column_names : Optional[Sequence[str]]
+            Names of the columns which should be retrieved for the particular
+            commits, any columns not named will not have their data fetched
+            from the server. Default behavior is to retrieve all columns
         max_num_bytes : Optional[int]
             If you wish to limit the amount of data sent to the local machine,
             set a `max_num_bytes` parameter. This will retrieve only this
@@ -372,11 +370,11 @@ class Remotes(object):
                             while notEmpty:
                                 notEmpty = curs.delete()
                     unpack_commit_ref(self._env.refenv, tmpDB, commit)
-                    # handle arrayset_names option
-                    if arrayset_names is None:
-                        arrayset_names = queries.RecordQuery(tmpDB).arrayset_names()
-                    for asetn in arrayset_names:
-                        cmtData_hashs = queries.RecordQuery(tmpDB).arrayset_data_hashes(asetn)
+                    # handle column_names option
+                    if column_names is None:
+                        column_names = queries.RecordQuery(tmpDB).column_names()
+                    for asetn in column_names:
+                        cmtData_hashs = queries.RecordQuery(tmpDB).column_data_hashes(asetn)
                         allHashs.update(cmtData_hashs)
             finally:
                 tmpDB.close()
@@ -384,11 +382,11 @@ class Remotes(object):
         try:
             m_schema_hash_map = defaultdict(list)
             for hashVal in allHashs:
-                hashKey = parsing.hash_data_db_key_from_raw_key(hashVal.data_hash)
+                hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
                 hashRef = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hashRef)
                 if be_loc.backend == '50':
-                    m_schema_hash_map[be_loc.schema_hash].append(hashVal.data_hash)
+                    m_schema_hash_map[be_loc.schema_hash].append(hashVal.digest)
         finally:
             TxnRegister().abort_reader_txn(self._env.hashenv)
 

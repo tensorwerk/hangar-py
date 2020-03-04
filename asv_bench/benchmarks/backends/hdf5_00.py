@@ -9,7 +9,7 @@ from hangar.utils import folder_size
 
 class _WriterSuite_HDF5_00:
 
-    processes = 1
+    processes = 2
     repeat = (2, 4, 20.0)
     # repeat == tuple (min_repeat, max_repeat, max_time)
     number = 2
@@ -42,6 +42,8 @@ class _WriterSuite_HDF5_00:
         except ValueError:
             # marks as skipped benchmark for commits which do not have this backend.
             raise NotImplementedError
+        except AttributeError:
+            self.aset = self.co.add_ndarray_column('aset', prototype=arr, backend='00')
 
         if self.method == 'read':
             with self.aset as cm_aset:
@@ -51,7 +53,10 @@ class _WriterSuite_HDF5_00:
             self.co.commit('first commit')
             self.co.close()
             self.co = self.repo.checkout(write=False)
-            self.aset = self.co.arraysets['aset']
+            try:
+                self.aset = self.co.columns['aset']
+            except AttributeError:
+                self.aset = self.co.arraysets['aset']
         else:
             self.arr = arr
 

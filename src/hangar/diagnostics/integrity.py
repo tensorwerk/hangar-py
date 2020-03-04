@@ -2,9 +2,13 @@ from pathlib import Path
 import warnings
 
 import lmdb
-import numpy as np
 from tqdm import tqdm
 
+from ..records import (
+    hash_data_db_key_from_raw_key,
+    hash_schema_db_key_from_raw_key,
+    hash_meta_db_key_from_raw_key
+)
 from ..backends import BACKEND_ACCESSOR_MAP
 from ..txnctx import TxnRegister
 from ..records import commiting, hashmachine, hashs, parsing, queries, heads
@@ -15,8 +19,8 @@ from ..op_state import report_corruption_risk_on_parsing_error
 def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: Path):
 
     hq = hashs.HashQuery(hashenv)
-    narrays, nremote = hq.num_arrays(), 0
-    array_kvs = hq.gen_all_hash_keys_raw_array_vals_parsed()
+    narrays, nremote = hq.num_data_records(), 0
+    array_kvs = hq.gen_all_data_digests_and_parsed_backend_specs()
     try:
         bes = {}
         for digest, spec in tqdm(array_kvs, total=narrays, desc='verifying arrays'):
@@ -47,19 +51,11 @@ def _verify_array_integrity(hashenv: lmdb.Environment, repo_path: Path):
 def _verify_schema_integrity(hashenv: lmdb.Environment):
 
     hq = hashs.HashQuery(hashenv)
-    schema_kvs = hq.gen_all_schema_keys_raw_vals_parsed()
-    nschemas = hq.num_schemas()
+    schema_kvs = hq.gen_all_schema_digests_and_parsed_specs()
+    nschemas = hq.num_schema_records()
     for digest, val in tqdm(schema_kvs, total=nschemas, desc='verifying schemas'):
         tcode = hashmachine.hash_type_code_from_digest(digest)
-        calc_digest = hashmachine.schema_hash_digest(
-            shape=val.schema_max_shape,
-            size=int(np.prod(val.schema_max_shape)),
-            dtype_num=val.schema_dtype,
-            variable_shape=val.schema_is_var,
-            contains_subsamples=val.schema_contains_subsamples,
-            backend_code=val.schema_default_backend,
-            backend_opts=val.schema_default_backend_opts,
-            tcode=tcode)
+        calc_digest = hashmachine.schema_hash_digest(schema=val, tcode=tcode)
         if calc_digest != digest:
             raise RuntimeError(
                 f'Data corruption detected for schema. Expected digest `{digest}` '
@@ -70,8 +66,8 @@ def _verify_schema_integrity(hashenv: lmdb.Environment):
 def _verify_metadata_integrity(labelenv: lmdb.Environment):
 
     mhq = hashs.HashQuery(labelenv)
-    meta_kvs = mhq.gen_all_hash_keys_raw_meta_vals_parsed()
-    nmeta = mhq.num_meta()
+    meta_kvs = mhq.gen_all_metadata_digests_and_decoded_values()
+    nmeta = mhq.num_metadata_records()
     for digest, val in tqdm(meta_kvs, total=nmeta, desc='verifying metadata'):
         tcode = hashmachine.hash_type_code_from_digest(digest)
         calc_digest = hashmachine.metadata_hash_digest(value=val, tcode=tcode)
@@ -139,7 +135,7 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                     schema_digests = set(rq.schema_hashes())
 
                     for datadigest in array_data_digests:
-                        dbk = parsing.hash_data_db_key_from_raw_key(datadigest)
+                        dbk = hash_data_db_key_from_raw_key(datadigest)
                         exists = cur.set_key(dbk)
                         if exists is False:
                             raise RuntimeError(
@@ -148,7 +144,7 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                                 f'exist in data hash db.')
 
                     for schemadigest in schema_digests:
-                        dbk = parsing.hash_schema_db_key_from_raw_key(schemadigest)
+                        dbk = hash_schema_db_key_from_raw_key(schemadigest)
                         exists = cur.set_key(dbk)
                         if exists is False:
                             raise RuntimeError(
@@ -157,7 +153,7 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                                 f'exist in data hash db.')
 
                     for metadigest in meta_digests:
-                        dbk = parsing.hash_meta_db_key_from_raw_key(metadigest)
+                        dbk = hash_meta_db_key_from_raw_key(metadigest)
                         exists = labcur.set_key(dbk)
                         if exists is False:
                             raise RuntimeError(

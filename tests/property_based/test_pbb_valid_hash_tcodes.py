@@ -36,7 +36,7 @@ def test_verify_schema_hash_typecode(type_code):
 
     assume(type_code != '1')
     with pytest.raises(ValueError):
-        schema_hash_digest(None, None, None, None, None, None, None, tcode=type_code)
+        schema_hash_digest(None, tcode=type_code)
 
 
 

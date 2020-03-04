@@ -725,7 +725,7 @@ class Repository(object):
             1. Every single piece of data in the repositories history must be read
                from disk, cryptographically hashed, and compared to the expected
                value. There is no exception to this rule; regardless of when a piece
-               of data was added / removed from an arrayset, or for how many (or how
+               of data was added / removed from an column, or for how many (or how
                few) commits some sample exists in. The integrity of the commit tree at
                any point after some piece of data is added to the repo can only be
                validated if it - and all earlier data pieces - are proven to be intact

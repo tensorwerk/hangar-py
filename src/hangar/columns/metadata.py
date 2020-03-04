@@ -4,16 +4,16 @@ from typing import Optional, Union, Iterator, Tuple, Dict, Mapping, List, Sequen
 
 import lmdb
 
-from ..records.hashmachine import metadata_hash_digest
-from ..records.parsing import (
+from ..records import (
     hash_meta_db_key_from_raw_key,
     hash_meta_db_val_from_raw_val,
     hash_meta_raw_val_from_db_val,
     metadata_record_db_key_from_raw_key,
-    metadata_record_db_val_from_raw_val,
-    metadata_record_raw_val_from_db_val,
-    generate_sample_name,
+    data_record_db_val_from_digest,
+    data_record_digest_val_from_db_val,
 )
+from ..records.hashmachine import metadata_hash_digest
+from ..records.parsing import generate_sample_name
 from ..records.queries import RecordQuery
 from ..txnctx import TxnRegister
 from ..utils import is_suitable_user_key, is_ascii
@@ -28,7 +28,7 @@ MapKeyValType = Union[KeyValMap, Sequence[KeyValType]]
 class MetadataReader(object):
     """Class implementing get access to the metadata in a repository.
 
-    Unlike the :class:`~.columns.arrayset.Arraysets` and the equivalent
+    Unlike the :class:`~.columns.column.Columns` and the equivalent
     Metadata classes do not need a factory function or class to coordinate
     access through the checkout. This is primarily because the metadata is
     only stored at a single level, and because the long term storage is
@@ -66,7 +66,7 @@ class MetadataReader(object):
             path to the repository on disk.
         dataenv : lmdb.Environment
             the lmdb environment in which the data records are stored. this is
-            the same as the arrayset data record environments.
+            the same as the column data record environments.
         labelenv : lmdb.Environment
             the lmdb environment in which the label hash key / values are stored
             permanently. When opened in by this reader instance, no write access
@@ -84,8 +84,8 @@ class MetadataReader(object):
         self._mspecs: Dict[KeyTypes, bytes] = {}
         metaNamesSpec = RecordQuery(dataenv).metadata_records()
         for metaNames, metaSpec in metaNamesSpec:
-            labelKey = hash_meta_db_key_from_raw_key(metaSpec.meta_hash)
-            self._mspecs[metaNames.meta_name] = labelKey
+            labelKey = hash_meta_db_key_from_raw_key(metaSpec.digest)
+            self._mspecs[metaNames.key] = labelKey
 
     def __enter__(self):
         with ExitStack() as stack:
@@ -285,7 +285,7 @@ class MetadataReader(object):
 class MetadataWriter(MetadataReader):
     """Class implementing write access to repository metadata.
 
-    Similar to the :class:`~.columns.arrayset.ArraysetDataWriter`, this class
+    Similar to the :class:`~.columns.column.ArraysetDataWriter`, this class
     inherits the functionality of the :class:`~.columns.metadata.MetadataReader` for reading. The
     only difference is that the reader will be initialized with data records
     pointing to the staging area, and not a commit which is checked out.
@@ -350,13 +350,13 @@ class MetadataWriter(MetadataReader):
             val_hash = metadata_hash_digest(value=val)
             hashKey = hash_meta_db_key_from_raw_key(val_hash)
             metaRecKey = metadata_record_db_key_from_raw_key(key)
-            metaRecVal = metadata_record_db_val_from_raw_val(val_hash)
+            metaRecVal = data_record_db_val_from_digest(val_hash)
             # check if meta record already exists with same key
             existingMetaRecVal = self._dataTxn.get(metaRecKey, default=False)
             if existingMetaRecVal:
-                existingMetaRec = metadata_record_raw_val_from_db_val(existingMetaRecVal)
+                existingMetaRec = data_record_digest_val_from_db_val(existingMetaRecVal)
                 # check if meta record already exists with same key/val
-                if val_hash == existingMetaRec.meta_hash:
+                if val_hash == existingMetaRec.digest:
                     return
 
             # write new data if label hash does not exist
@@ -442,7 +442,7 @@ class MetadataWriter(MetadataReader):
         Parameters
         ----------
         value: str
-            Piece of data to store in the arrayset.
+            Piece of data to store in the column.
 
         Returns
         -------
@@ -503,7 +503,7 @@ class MetadataWriter(MetadataReader):
         Raises
         ------
         KeyError
-            If there is no sample with some key in the arrayset.
+            If there is no sample with some key in the column.
         """
         value = self[key]
         del self[key]

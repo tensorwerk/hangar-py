@@ -8,7 +8,7 @@ class MakeCommit(object):
 
     params = [(5_000, 20_000), (5_000, 20_000)]
     param_names = ['num_samples', 'num_metadata']
-    processes = 1
+    processes = 2
     repeat = (2, 4, 20)
     number = 1
     warmup_time = 0
@@ -20,11 +20,11 @@ class MakeCommit(object):
         self.co = self.repo.checkout(write=True)
         arr = np.array([0,], dtype=np.uint8)
         try:
-            aset = self.co.arraysets.init_arrayset(
-                'aset', prototype=arr, backend_opts='10')
+            aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend_opts='10')
         except TypeError:
-            aset = self.co.arraysets.init_arrayset(
-                'aset', prototype=arr, backend='10')
+            aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='10')
+        except AttributeError:
+            aset = self.co.add_ndarray_column('aset', prototype=arr, backend='10')
 
         with aset as cm_aset:
             for i in range(num_samples):
@@ -47,7 +47,7 @@ class CheckoutCommit(object):
 
     params = [(5_000, 20_000), (5_000, 20_000)]
     param_names = ['num_samples', 'num_metadata']
-    processes = 1
+    processes = 2
     number = 1
     repeat = (2, 4, 20)
     warmup_time = 0
@@ -59,11 +59,11 @@ class CheckoutCommit(object):
         self.co = self.repo.checkout(write=True)
         arr = np.array([0,], dtype=np.uint8)
         try:
-            aset = self.co.arraysets.init_arrayset(
-                'aset', prototype=arr, backend_opts='10')
+            aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend_opts='10')
         except TypeError:
-            aset = self.co.arraysets.init_arrayset(
-                'aset', prototype=arr, backend='10')
+            aset = self.co.arraysets.init_arrayset('aset', prototype=arr, backend='10')
+        except AttributeError:
+            aset = self.co.add_ndarray_column('aset', prototype=arr, backend='10')
 
         with aset as cm_aset:
             for i in range(num_samples):

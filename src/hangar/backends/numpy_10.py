@@ -86,10 +86,12 @@ import numpy as np
 from numpy.lib.format import open_memmap
 from xxhash import xxh64_hexdigest
 
-from . import NUMPY_10_DataHashSpec
+from .specs import NUMPY_10_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import random_string
+from ..typesystem import Descriptor, OneOf, EmptyDict, checkedmeta
+
 
 # ----------------------------- Configuration ---------------------------------
 
@@ -127,6 +129,39 @@ def numpy_10_encode(uid: str, cksum: str, collection_idx: int, shape: tuple) -> 
 
 
 # ------------------------- Accessor Object -----------------------------------
+
+
+@OneOf(list(map(lambda x: np.dtype(x).name, [
+        np.bool, np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16,
+        np.int32, np.int64, np.float16, np.float32, np.float64, np.longdouble])))
+class AllowedDtypes(Descriptor):
+    # Note. np.longdouble since np.float128 not guaranteed to be available on
+    # all system. this is a particular issue with some windows numpy builds.
+    pass
+
+
+class NUMPY_10_Options(metaclass=checkedmeta):
+    _dtype = AllowedDtypes()
+    _backend_options = EmptyDict()
+
+    def __init__(self, backend_options, dtype, *args, **kwargs):
+        if backend_options is None:
+            backend_options = self.default_options
+
+        self._backend_options = backend_options
+        self._dtype = dtype
+
+    @property
+    def default_options(self):
+        return {}
+
+    @property
+    def backend_options(self):
+        return self._backend_options
+
+    @property
+    def init_requires(self):
+        return ('repo_path', 'schema_shape', 'schema_dtype')
 
 
 class NUMPY_10_FileHandles(object):
@@ -275,7 +310,7 @@ class NUMPY_10_FileHandles(object):
         os.rmdir(process_dir)
 
     def _create_schema(self, *, remote_operation: bool = False):
-        """stores the shape and dtype as the schema of a arrayset.
+        """stores the shape and dtype as the schema of a column.
 
         Parameters
         ----------

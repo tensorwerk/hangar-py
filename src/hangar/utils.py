@@ -47,7 +47,7 @@ def random_string(
     Parameters
     ----------
     n: int, optional
-        The number of characters which the output string will have. Default = 6
+        The number of characters which the output string will have. Default=8
     """
     token = [secrets.choice(_ALPHABET) for i in range(n)]
     return ''.join(token)

@@ -1,95 +1,83 @@
+"""Accessor column containing nested mapping of data under top level keys.
+"""
 from contextlib import ExitStack
 from pathlib import Path
 from typing import (
-    Tuple, List, Union, NamedTuple, Sequence, Dict, Iterable, Any, Type, Optional
+    Tuple, Union, Dict, Iterable, Any, Optional
 )
 from weakref import proxy
 
-import numpy as np
-
+from .common import open_file_handles
+from ..records import (
+    data_record_db_val_from_digest,
+    data_record_digest_val_from_db_val,
+    nested_data_db_key_from_names,
+    hash_data_db_key_from_raw_key,
+    schema_db_key_from_column,
+    schema_hash_db_key_from_digest,
+    schema_hash_record_db_val_from_spec,
+    schema_record_db_val_from_digest,
+)
+from ..records.parsing import generate_sample_name
+from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP
 from ..op_state import reader_checkout_only
 from ..utils import is_suitable_user_key, valfilter, valfilterfalse
-from ..backends import (
-    backend_decoder,
-    parse_user_backend_opts,
-    BACKEND_ACCESSOR_MAP,
-    DataHashSpecsType,
-)
-from ..records.hashmachine import array_hash_digest, schema_hash_digest
-from ..records.parsing import (
-    arrayset_record_schema_db_key_from_raw_key,
-    arrayset_record_schema_db_val_from_raw_val,
-    arrayset_record_schema_raw_val_from_db_val,
-    data_record_db_key_from_raw_key,
-    data_record_db_val_from_raw_val,
-    data_record_raw_val_from_db_val,
-    hash_data_db_key_from_raw_key,
-    hash_schema_db_key_from_raw_key,
-    RawArraysetSchemaVal,
-    generate_sample_name,
-)
 
-AsetTxnType = Type['AsetTxn']
+
 KeyType = Union[str, int]
 EllipsisType = type(Ellipsis)
 GetKeysType = Union[KeyType, EllipsisType, slice]
-KeyArrMap = Dict[KeyType, np.ndarray]
-KeyArrType = Union[Tuple[KeyType, np.ndarray], List[Union[KeyType, np.ndarray]]]
-MapKeyArrType = Union[KeyArrMap, Sequence[KeyArrType]]
 
 
-class CompatibleArray(NamedTuple):
-    compatible: bool
-    reason: str
+class FlatSubsampleReader(object):
 
-
-class SubsampleName(NamedTuple):
-    sample: str
-    subsample: str
-
-
-class SubsampleReader(object):
-
-    __slots__ = ('_asetn', '_samplen', '_be_fs', '_subsamples', '_mode', '_stack')
+    __slots__ = ('_column_name', '_stack', '_be_fs',
+                 '_mode', '_subsamples', '_samplen')
     _attrs = __slots__
 
-    def __init__(self, asetn: str, samplen: str, be_handles: BACKEND_ACCESSOR_MAP,
-                 specs: Dict[KeyType, DataHashSpecsType]):
+    def __init__(self,
+                 columnname: str,
+                 samplen: str,
+                 be_handles: BACKEND_ACCESSOR_MAP,
+                 specs,
+                 mode: str,
+                 *args, **kwargs):
 
-        self._asetn = asetn
+        self._column_name = columnname
         self._samplen = samplen
         self._be_fs = be_handles
         self._subsamples = specs
-        self._mode = 'r'
+        self._mode = mode
         self._stack: Optional[ExitStack] = None
 
     @property
     def _debug_(self):  # pragma: no cover
         return {
             '__class__': self.__class__,
-            '_asetn': self._asetn,
+            '_column_name': self._column_name,
             '_samplen': self._samplen,
             '_be_fs': self._be_fs,
             '_subsamples': self._subsamples,
             '_mode': self._mode,
+            '_stack': self._stack._exit_callbacks if self._stack else self._stack,
         }
 
     def __repr__(self):
         res = f'{self.__class__}('\
-              f'aset_name={self._asetn}, '\
+              f'column_name={self._column_name}, '\
               f'sample_name={self._samplen})'
         return res
 
     def _repr_pretty_(self, p, cycle):
         res = f'Hangar {self.__class__.__name__} \
-                \n    Arrayset Name            : {self._asetn}\
-                \n    Sample Name              : {self._samplen}\
-                \n    Mode (read/write)        : "{self._mode}"\
-                \n    Number of Subsamples     : {self.__len__()}\n'
+                \n    Column Name          : {self._column_name}\
+                \n    Sample Name          : {self._samplen}\
+                \n    Writeable            : "{self.iswriteable}"\
+                \n    Number of Subsamples : {len(self)}\n'
         p.text(res)
 
     def _ipython_key_completions_(self):
-        """Let ipython know that any key based access can use the arrayset keys
+        """Let ipython know that any key based access can use the column keys
 
         Since we don't want to inherit from dict, nor mess with `__dir__` for
         the sanity of developers, this is the best way to ensure users can
@@ -98,7 +86,7 @@ class SubsampleReader(object):
         Returns
         -------
         list
-            list of strings, each being one of the arrayset keys for access.
+            list of strings, each being one of the column keys for access.
         """
         return list(self.keys())
 
@@ -108,7 +96,26 @@ class SubsampleReader(object):
 
     def __exit__(self, *exc):
         self._enter_count -= 1
-        return
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        for attr in self._attrs:
+            delattr(self, attr)
+
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible for
+         deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
 
     @reader_checkout_only
     def __getstate__(self) -> dict:
@@ -135,7 +142,7 @@ class SubsampleReader(object):
     def __iter__(self) -> Iterable[KeyType]:
         yield from self.keys()
 
-    def __getitem__(self, key: GetKeysType) -> Union[np.ndarray, KeyArrMap]:
+    def __getitem__(self, key: GetKeysType) -> Union[Any, Dict[KeyType, Any]]:
         """Retrieve data for some subsample key via dict style access conventions.
 
         .. seealso:: :meth:`get`
@@ -143,7 +150,7 @@ class SubsampleReader(object):
         Parameters
         ----------
         key : GetKeysType
-            Sample key to retrieve from the arrayset. Alternatively, ``slice``
+            Sample key to retrieve from the column. Alternatively, ``slice``
             syntax can be used to retrieve a selection of subsample
             keys/values. An empty slice (``: == slice(None)``) or ``Ellipsis``
             (``...``) will return all subsample keys/values. Passing a
@@ -155,16 +162,14 @@ class SubsampleReader(object):
 
         Returns
         -------
-        Union[:class:`numpy.ndarray`, KeyArrMap]
-            Sample array data corresponding to the provided key. or dictionary
+        Union[Any, Dict[KeyType, Any]]
+            Sample data corresponding to the provided key. or dictionary
             of subsample keys/data if Ellipsis or slice passed in as key.
 
         Raises
         ------
         KeyError
             if no sample with the requested key exists.
-        ValueError
-            If the keys argument if not a valid format.
         """
         # select subsample(s) with regular keys
         if isinstance(key, (str, int)):
@@ -201,23 +206,29 @@ class SubsampleReader(object):
 
     @property
     def sample(self) -> KeyType:
-        """Return name (key) of this sample.
+        """Name of the sample this column subsamples are stured under.
         """
         return self._samplen
 
     @property
-    def arrayset(self) -> str:
-        """Return name (key) of arrayset this sample is contained in.
+    def column(self) -> str:
+        """Name of the column.
         """
-        return self._asetn
+        return self._column_name
 
     @property
-    def data(self) -> KeyArrMap:
+    def iswriteable(self) -> bool:
+        """Bool indicating if this column object is write-enabled.
+        """
+        return False if self._mode == 'r' else True
+
+    @property
+    def data(self) -> Dict[KeyType, Any]:
         """Return dict mapping every subsample key / data value stored in the sample.
 
         Returns
         -------
-        KeyArrMap
+        Dict[KeyType, Any]
             Dictionary mapping subsample name(s) (keys) to their stored values
             as :class:`numpy.ndarray` instances.
         """
@@ -250,7 +261,7 @@ class SubsampleReader(object):
 
     @property
     def contains_remote_references(self) -> bool:
-        """Bool indicating all subsamples in sample arrayset exist on local disk.
+        """Bool indicating all subsamples in sample column exist on local disk.
 
         The data associated with subsamples referencing some remote server will
         need to be downloaded (``fetched`` in the hangar vocabulary) before
@@ -259,7 +270,7 @@ class SubsampleReader(object):
         Returns
         -------
         bool
-            False if at least one subsample in the arrayset references data
+            False if at least one subsample in the column references data
             stored on some remote server. True if all sample data is available
             on the machine's local disk.
         """
@@ -272,7 +283,7 @@ class SubsampleReader(object):
         Returns
         -------
         Tuple[KeyType]
-            list of subsample keys in the arrayset whose data references indicate
+            list of subsample keys in the column whose data references indicate
             they are stored on a remote server.
         """
         return tuple(valfilterfalse(lambda x: x.islocal, self._subsamples).keys())
@@ -293,8 +304,8 @@ class SubsampleReader(object):
         """
         yield from self._mode_local_aware_key_looper(local)
 
-    def values(self, local: bool = False) -> Iterable[np.ndarray]:
-        """Generator yielding the tensor data for every subsample.
+    def values(self, local: bool = False) -> Iterable[Any]:
+        """Generator yielding the data for every subsample.
 
         Parameters
         ----------
@@ -305,14 +316,14 @@ class SubsampleReader(object):
 
         Yields
         ------
-        Iterable[:class:`numpy.ndarray`]
+        Iterable[Any]
             Values of one subsample at a time inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield self[key]
 
-    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, np.ndarray]]:
-        """Generator yielding (name, tensor) tuple for every subsample.
+    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, Any]]:
+        """Generator yielding (name, data) tuple for every subsample.
 
         Parameters
         ----------
@@ -323,13 +334,13 @@ class SubsampleReader(object):
 
         Yields
         ------
-        Iterable[Tuple[KeyType, np.ndarray]]
+        Iterable[Tuple[KeyType, Any]]
             Name and stored value for every subsample inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    def get(self, key: KeyType, default: Any = None) -> np.ndarray:
+    def get(self, key: KeyType, default=None):
         """Retrieve the data associated with some subsample key
 
         Parameters
@@ -337,78 +348,40 @@ class SubsampleReader(object):
         key : GetKeysType
             The name of the subsample(s) to retrieve. Passing a single
             subsample key will return the stored :class:`numpy.ndarray`
-        default : Any
+        default
             if a `key` parameter is not found, then return this value instead.
             By default, None.
 
         Returns
         -------
-        np.ndarray
-            :class:`numpy.ndarray` array data stored under subsample key
-            if key exists, else default value if not found.
+        value
+            data stored under subsample key if key exists, else default
+            value if not found.
         """
         try:
             return self[key]
         except KeyError:
             return default
 
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-        for attr in self._attrs:
-            delattr(self, attr)
 
-    def __getattr__(self, name):
-        """Raise permission error after checkout is closed.
-
-         Only runs after a call to :meth:`_destruct`, which is responsible for
-         deleting all attributes from the object instance.
-        """
-        try:
-            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
-        except AttributeError:
-            err = (f'Unable to operate on past checkout objects which have been '
-                   f'closed. No operation occurred. Please use a new checkout.')
-            raise PermissionError(err) from None
-        return self.__getattribute__(name)
+# ---------------- writer methods only after this point -------------------
 
 
-class SubsampleWriter(SubsampleReader):
+class FlatSubsampleWriter(FlatSubsampleReader):
 
-    __slots__ = ('_txnctx',)
-    _attrs = __slots__ + SubsampleReader.__slots__
+    __slots__ = ('_schema', '_txnctx', '_path')
+    _attrs = __slots__ + FlatSubsampleReader.__slots__
 
-    def __init__(self, aset_txn_ctx, *args, **kwargs):
+    def __init__(self,
+                 schema,
+                 repo_path: Path,
+                 aset_ctx=None,
+                 *args, **kwargs):
+
         super().__init__(*args, **kwargs)
-        self._mode = 'a'
-        self._txnctx = aset_txn_ctx
-        self._stack: Optional[ExitStack] = None
-
-    @property
-    def _debug_(self):  # pragma: no cover
-        return {
-            '__class__': self.__class__,
-            '__bases__': self.__class__.__bases__,
-            '_txnctx': self._txnctx._debug_,
-            '_stack': self._stack._exit_callbacks if self._stack else self._stack,
-            'base_debug': super()._debug_
-        }
-
-    def __repr__(self):
-        res = f'{self.__class__}('\
-              f'aset_name={self._asetn}, '\
-              f'sample_name={self._samplen}, '\
-              f'default_backend={self._schema_spec.schema_default_backend})'
-        return res
-
-    def _repr_pretty_(self, p, cycle):
-        res = f'Hangar {self.__class__.__name__} \
-                \n    Arrayset Name            : {self._asetn}\
-                \n    Sample Name              : {self._samplen}\
-                \n    Mode (read/write)        : "{self._mode}"\
-                \n    Default Backend          : {self._schema_spec.schema_default_backend}\
-                \n    Number of Subsamples     : {self.__len__()}\n'
-        p.text(res)
+        self._path = repo_path
+        self._schema = schema
+        self._txnctx = aset_ctx
 
     def __enter__(self):
         with ExitStack() as stack:
@@ -429,100 +402,73 @@ class SubsampleWriter(SubsampleReader):
         if self._enter_count == 0:
             self._stack = None
 
-    @property
-    def _schema_spec(self) -> RawArraysetSchemaVal:
-        return self._be_fs['schema_spec']
-
-    def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
-        """Determine if an array is compatible with the arraysets schema
-
-        Parameters
-        ----------
-        data : :class:`numpy.ndarray`
-            array to check compatibility for
-
-        Returns
-        -------
-        CompatibleArray
-            compatible and reason field
-        """
-        SCHEMA_DTYPE = self._schema_spec.schema_dtype
-        MAX_SHAPE = self._schema_spec.schema_max_shape
-
-        reason = ''
-        if not isinstance(data, np.ndarray):
-            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
-        elif data.dtype.num != SCHEMA_DTYPE:
-            reason = f'dtype: {data.dtype} != aset: {np.typeDict[SCHEMA_DTYPE]}.'
-        elif not data.flags.c_contiguous:
-            reason = f'`data` must be "C" contiguous array.'
-
-        if reason == '':
-            if self._schema_spec.schema_is_var is True:
-                if data.ndim != len(MAX_SHAPE):
-                    reason = f'data rank {data.ndim} != aset rank {len(MAX_SHAPE)}'
-                for dDimSize, schDimSize in zip(data.shape, MAX_SHAPE):
-                    if dDimSize > schDimSize:
-                        reason = f'shape {data.shape} exceeds schema max {MAX_SHAPE}'
-            elif data.shape != MAX_SHAPE:
-                reason = f'data shape {data.shape} != fixed schema {MAX_SHAPE}'
-
-        compatible = True if reason == '' else False
-        res = CompatibleArray(compatible=compatible, reason=reason)
-        return res
-
-    def _set_arg_validate(self, key: KeyType, value: np.ndarray) -> bool:
-
+    def _set_arg_validate(self, key, value):
         if not is_suitable_user_key(key):
             raise ValueError(f'Sample name `{key}` is not suitable.')
-        isCompat = self._verify_array_compatible(value)
+        isCompat = self._schema.verify_data_compatible(value)
         if not isCompat.compatible:
             raise ValueError(isCompat.reason)
 
-    def _perform_set(self, key: KeyType, value: np.ndarray) -> None:
-        """Internal write method. Assumes all arguments validated and context is open
+    def _perform_set(self, key, value):
+        """Internal write method. Assumes all arguments validated and cm open.
 
         Parameters
         ----------
-        key : KeyType
+        key
             subsample key to store
-        value : np.ndarray
-            tensor data to store
+        value
+            data to store
         """
-        full_hash = array_hash_digest(value)
+        # full_hash = array_hash_digest(value)
+        full_hash = self._schema.data_hash_digest(value)
         hashKey = hash_data_db_key_from_raw_key(full_hash)
 
         # check if data record already exists with given key
-        dataRecKey = data_record_db_key_from_raw_key(self._asetn, self._samplen, subsample=key)
+        dataRecKey = nested_data_db_key_from_names(self._column_name, self._samplen, key)
         existingDataRecVal = self._txnctx.dataTxn.get(dataRecKey, default=False)
         if existingDataRecVal:
             # check if data record already with same key & hash value
-            existingDataRec = data_record_raw_val_from_db_val(existingDataRecVal)
-            if full_hash == existingDataRec.data_hash:
+            existingDataRec = data_record_digest_val_from_db_val(existingDataRecVal)
+            if full_hash == existingDataRec.digest:
                 return
 
         # write new data if data hash does not exist
         existingHashVal = self._txnctx.hashTxn.get(hashKey, default=False)
         if existingHashVal is False:
-            backendCode = self._schema_spec.schema_default_backend
+            backendCode = self._schema.backend
             hashVal = self._be_fs[backendCode].write_data(value)
             self._txnctx.hashTxn.put(hashKey, hashVal)
             self._txnctx.stageHashTxn.put(hashKey, hashVal)
             hash_spec = backend_decoder(hashVal)
         else:
             hash_spec = backend_decoder(existingHashVal)
+            if hash_spec.backend not in self._be_fs:
+                # when adding data which is already stored in the repository, the
+                # backing store for the existing data location spec may not be the
+                # same as the backend which the data piece would have been saved in here.
+                #
+                # As only the backends actually referenced by a columns samples are
+                # initialized (accessible by the column), there is no guarantee that
+                # an accessor exists for such a sample. In order to prevent internal
+                # errors from occurring due to an uninitialized backend if a previously
+                # existing data piece is "saved" here and subsequently read back from
+                # the same writer checkout, we perform an existence check and backend
+                # initialization, if appropriate.
+                fh = open_file_handles(backends=(hash_spec.backend,),
+                                       path=self._path,
+                                       mode='a',
+                                       schema=self._schema)
+                self._be_fs[hash_spec.backend] = fh[hash_spec.backend]
 
         # add the record to the db
-        dataRecVal = data_record_db_val_from_raw_val(full_hash)
+        dataRecVal = data_record_db_val_from_digest(full_hash)
         self._txnctx.dataTxn.put(dataRecKey, dataRecVal)
         self._subsamples[key] = hash_spec
 
-    def __setitem__(self, key: KeyType, value: np.ndarray) -> None:
-        """Store a piece of data as a subsample. Convenience method to :meth:`add`.
+    def __setitem__(self, key, value):
+        """Store data as a subsample. Convenience method to :meth:`add`.
 
         .. seealso::
-
-            :meth:`add` for the actual method called.
 
             :meth:`update` for an implementation analogous to python's built
             in :meth:`dict.update` method which accepts a dict or iterable of
@@ -530,10 +476,10 @@ class SubsampleWriter(SubsampleReader):
 
         Parameters
         ----------
-        key : KeyType
-            Key (name) of the subsample to add to the arrayset.
-        value : :class:`numpy.ndarray`
-            Tensor data to add as the sample.
+        key
+            Key (name) of the subsample to add to the column.
+        value
+            Data to add as the sample.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -541,7 +487,7 @@ class SubsampleWriter(SubsampleReader):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
-    def append(self, value: np.ndarray) -> KeyType:
+    def append(self, value) -> KeyType:
         """Store some data in a subsample with an automatically generated key.
 
         This method should only be used if the context some piece of data is
@@ -558,8 +504,8 @@ class SubsampleWriter(SubsampleReader):
 
         Parameters
         ----------
-        value: :class:`numpy.ndarray`
-            Piece of data to store in the arrayset.
+        value
+            Piece of data to store in the column.
 
         Returns
         -------
@@ -570,11 +516,13 @@ class SubsampleWriter(SubsampleReader):
             if not self._is_conman:
                 stack.enter_context(self)
             key = generate_sample_name()
+            while key in self._subsamples:
+                key = generate_sample_name()
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
             return key
 
-    def update(self, other: Union[None, MapKeyArrType] = None, **kwargs) -> None:
+    def update(self, other=None, **kwargs):
         """Store data with the key/value pairs, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
@@ -583,12 +531,12 @@ class SubsampleWriter(SubsampleReader):
 
         Parameters
         ----------
-        other : Union[None, MapKeyArrType], optional
-            Accepts either another dictionary object or an iterable of key/value
-            pairs (as tuples or other iterables of length two). mapping sample
-            names to :class:`np.ndarray` instances, If sample name is string type,
-            can only contain alpha-numeric ascii characters (in addition to '-',
-            '.', '_'). Int key must be >= 0. By default, None.
+        other
+            Accepts either another dictionary object or an iterable of
+            key/value pairs (as tuples or other iterables of length two).
+            mapping sample names to data values, If sample name is string type,
+            can only contain alpha-numeric ascii characters (in addition to
+            '-', '.', '_'). Int key must be >= 0. By default, None.
         **kwargs
             keyword arguments provided will be saved with keywords as subsample
             keys (string type only) and values as np.array instances.
@@ -614,20 +562,17 @@ class SubsampleWriter(SubsampleReader):
             for key, val in other.items():
                 self._perform_set(key, val)
 
-    def __delitem__(self, key: KeyType) -> None:
-        """Remove a subsample from the arrayset. Convenience method to :meth:`delete`.
+    def __delitem__(self, key: KeyType):
+        """Remove a subsample from the column.`.
 
         .. seealso::
 
-            :meth:`delete` (the analogous named operation for this method)
-
-            :meth:`pop` to return a records value and then delete it in the same
-            operation
+            :meth:`pop` to simultaneously get a keys value and delete it.
 
         Parameters
         ----------
         key : KeyType
-            Name of the sample to remove from the arrayset.
+            Name of the sample to remove from the column.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -636,7 +581,7 @@ class SubsampleWriter(SubsampleReader):
             if key not in self._subsamples:
                 raise KeyError(key)
 
-            dbKey = data_record_db_key_from_raw_key(self._asetn, self._samplen, subsample=key)
+            dbKey = nested_data_db_key_from_names(self._column_name, self._samplen, key)
             isRecordDeleted = self._txnctx.dataTxn.delete(dbKey)
             if isRecordDeleted is False:
                 raise RuntimeError(
@@ -647,7 +592,7 @@ class SubsampleWriter(SubsampleReader):
                     f'isRecordDeleted: <{isRecordDeleted}>', f'DEBUG STRING: {self._debug_}')
             del self._subsamples[key]
 
-    def pop(self, key: KeyType) -> np.ndarray:
+    def pop(self, key: KeyType):
         """Retrieve some value for some key(s) and delete it in the same operation.
 
         Parameters
@@ -657,81 +602,62 @@ class SubsampleWriter(SubsampleReader):
 
         Returns
         -------
-        :class:`np.ndarray`
+        value
             Upon success, the value of the removed key.
-
-        Raises
-        ------
-        KeyError
-            If there is no sample with some key in the arrayset.
         """
         value = self[key]
         del self[key]
         return value
 
 
-SubsampleTypes = Union[SubsampleReader, SubsampleWriter]
+class NestedSampleReader:
 
-
-class SubsampleReaderModifier(object):
-
-    __slots__ = ('_mode', '_asetn', '_samples', '_be_fs', '_path', '_stack',
-                 '_schema_spec', '_schema_variable', '_schema_dtype_num',
-                 '_schema_max_shape', '_dflt_schema_hash', '_dflt_backend',
-                 '_dflt_backend_opts', '_contains_subsamples')
+    __slots__ = ('_mode', '_column_name', '_samples',
+                 '_be_fs', '_path', '_stack', '_schema')
     _attrs = __slots__
 
     def __init__(self,
-                 aset_name: str,
-                 samples: Dict[KeyType, SubsampleTypes],
+                 columnname: str,
+                 samples: Dict[KeyType, FlatSubsampleReader],
                  backend_handles: Dict[str, Any],
-                 schema_spec: RawArraysetSchemaVal,
                  repo_path: Path,
+                 mode: str,
+                 schema=None,
                  *args, **kwargs):
 
-        self._mode = 'r'
-        self._asetn = aset_name
+        self._mode = mode
+        self._column_name = columnname
         self._samples = samples
         self._be_fs = backend_handles
         self._path = repo_path
         self._stack: Optional[ExitStack] = None
-
-        self._schema_spec = schema_spec
-        self._schema_variable = schema_spec.schema_is_var
-        self._schema_dtype_num = schema_spec.schema_dtype
-        self._schema_max_shape = tuple(schema_spec.schema_max_shape)
-        self._dflt_schema_hash = schema_spec.schema_hash
-        self._dflt_backend = schema_spec.schema_default_backend
-        self._dflt_backend_opts = schema_spec.schema_default_backend_opts
-        self._contains_subsamples = schema_spec.schema_contains_subsamples
+        self._schema = schema
 
     def __repr__(self):
-        res = f'{self.__class__}('\
-              f'repo_pth={self._path}, '\
-              f'aset_name={self._asetn}, '\
-              f'default_schema_hash={self._dflt_schema_hash}, '\
-              f'isVar={self._schema_variable}, '\
-              f'varMaxShape={self._schema_max_shape}, '\
-              f'varDtypeNum={self._schema_dtype_num}, '\
-              f'mode={self._mode})'
+        res = (
+            f'{self.__class__.__qualname__}('
+            f'repo_pth={self._path}, '
+            f'columnname={self._column_name}, '
+            f"{[f'{key}={val}, ' for key, val in self._schema.schema.items()]}, "
+            f'mode={self._mode})')
         return res
 
     def _repr_pretty_(self, p, cycle):
-        res = f'Hangar Subsample Arrayset \
-                \n    Arrayset Name            : {self._asetn}\
-                \n    Schema Hash              : {self._dflt_schema_hash}\
-                \n    Variable Shape           : {bool(int(self._schema_variable))}\
-                \n    (max) Shape              : {self._schema_max_shape}\
-                \n    Datatype                 : {np.typeDict[self._schema_dtype_num]}\
-                \n    Access Mode              : {self._mode}\
-                \n    Number of Samples        : {self.__len__()}\
-                \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\
-                \n    Contains Subsamples      : True\
-                \n    Number of Subsamples     : {self.num_subsamples}\n'
+        res = f'Hangar {self.__class__.__qualname__} \
+                \n    Column Name              : {self.column}\
+                \n    Writeable                : {self.iswriteable}\
+                \n    Column Type              : {self.column_type}\
+                \n    Column Layout            : {self.column_layout}\
+                \n    Schema Type              : {self.schema_type}\
+                \n    DType                    : {self.dtype}\
+                \n    Shape                    : {self.shape}\
+                \n    Number of Samples        : {len(self)}\
+                \n    Number of Subsamples     : {self.num_subsamples}\
+                \n    Partial Remote Data Refs : {bool(self.contains_remote_references)}\n'
         p.text(res)
 
     def _ipython_key_completions_(self):
-        """Let ipython know that any key based access can use the arrayset keys
+        """Let ipython know that any key based access can use the column keys
 
         Since we don't want to inherit from dict, nor mess with `__dir__` for
         the sanity of developers, this is the best way to ensure users can
@@ -740,7 +666,7 @@ class SubsampleReaderModifier(object):
         Returns
         -------
         list
-            list of strings, each being one of the arrayset keys for access.
+            list of strings, each being one of the column keys for access.
         """
         return list(self.keys())
 
@@ -750,7 +676,29 @@ class SubsampleReaderModifier(object):
 
     def __exit__(self, *exc):
         self._enter_count -= 1
-        return
+
+    def _destruct(self):
+        if isinstance(self._stack, ExitStack):
+            self._stack.close()
+        self._close()
+        for sample in self._samples.values():
+            sample._destruct()
+        for attr in self._attrs:
+            delattr(self, attr)
+
+    def __getattr__(self, name):
+        """Raise permission error after checkout is closed.
+
+         Only runs after a call to :meth:`_destruct`, which is responsible
+         for deleting all attributes from the object instance.
+        """
+        try:
+            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
+        except AttributeError:
+            err = (f'Unable to operate on past checkout objects which have been '
+                   f'closed. No operation occurred. Please use a new checkout.')
+            raise PermissionError(err) from None
+        return self.__getattribute__(name)
 
     @reader_checkout_only
     def __getstate__(self) -> dict:
@@ -762,13 +710,14 @@ class SubsampleReaderModifier(object):
         """ensure multiprocess operations can pickle relevant data.
 
         Technically should be decorated with @reader_checkout_only, but since
-        at instance creation that is not an attribute, the decorator won't
-        know. Since only readers can be pickled, This isn't much of an issue.
+        at instance creation the '_mode' is not a set attribute, the decorator
+        won't know how to process. Since only readers can be pickled, This
+        isn't much of an issue.
         """
         for slot, value in state.items():
             setattr(self, slot, value)
 
-    def __getitem__(self, key: KeyType) -> SubsampleTypes:
+    def __getitem__(self, key: KeyType) -> FlatSubsampleReader:
         """Get the sample access class for some sample key.
 
         Parameters
@@ -778,38 +727,33 @@ class SubsampleReaderModifier(object):
 
         Returns
         -------
-        SubsampleTypes
+        FlatSubsampleReader
             Sample accessor corresponding to the given key
+
+        Raises
+        ------
+        KeyError
+            If no sample with the provided key exists.
         """
         return self._samples[key]
 
     def __iter__(self) -> Iterable[KeyType]:
-        """Create iterator yielding an arrayset sample keys.
+        """Create iterator yielding an column sample keys.
 
         Yields
         -------
         Iterable[KeyType]
-            Sample key contained in the arrayset.
+            Sample key contained in the column.
         """
         yield from self.keys()
 
     def __len__(self) -> int:
-        """Find number of samples in the arrayset
+        """Find number of samples in the column
         """
         return len(self._samples)
 
     def __contains__(self, key: KeyType) -> bool:
-        """Determine if some sample key exists in the arrayset.
-
-        Parameters
-        ----------
-        key : KeyType
-            Key to check for existence as sample in arrayset.
-
-        Returns
-        -------
-        bool
-            True if sample key exists, otherwise False
+        """Determine if some sample key exists in the column.
         """
         return key in self._samples
 
@@ -846,32 +790,59 @@ class SubsampleReaderModifier(object):
         return bool(self._enter_count)
 
     @property
-    def arrayset(self) -> str:
-        """Name of the arrayset.
+    def column(self) -> str:
+        """Name of the column.
         """
-        return self._asetn
+        return self._column_name
 
     @property
-    def dtype(self) -> np.dtype:
-        """Datatype of the arrayset schema.
+    def column_type(self):
+        """Data container type of the column ('ndarray', 'str', etc).
         """
-        return np.typeDict[self._schema_dtype_num]
+        return self._schema.column_type
 
     @property
-    def shape(self) -> Tuple[int]:
-        """Shape (or `max_shape`) of the arrayset sample tensors.
+    def column_layout(self):
+        """Column layout type ('nested', 'flat', etc).
         """
-        return self._schema_max_shape
+        return self._schema.column_layout
 
     @property
-    def variable_shape(self) -> bool:
-        """Bool indicating if arrayset schema is variable sized.
+    def schema_type(self):
+        """Schema type of the contained data ('variable_shape', 'fixed_shape', etc).
         """
-        return self._schema_variable
+        return self._schema.schema_type
+
+    @property
+    def dtype(self):
+        """Dtype of the columns data (np.float, str, etc).
+        """
+        return self._schema.dtype
+
+    @property
+    def shape(self):
+        """(Max) shape of data that can (is) written in the column.
+        """
+        try:
+            return self._schema.shape
+        except AttributeError:
+            return None
+
+    @property
+    def backend(self) -> str:
+        """Code indicating which backing store is used when writing data.
+        """
+        return self._schema.backend
+
+    @property
+    def backend_options(self):
+        """Filter / Compression options applied to backend when writing data.
+        """
+        return self._schema.backend_options
 
     @property
     def iswriteable(self) -> bool:
-        """Bool indicating if this arrayset object is write-enabled.
+        """Bool indicating if this column object is write-enabled.
         """
         return False if self._mode == 'r' else True
 
@@ -902,7 +873,7 @@ class SubsampleReaderModifier(object):
 
     @property
     def contains_remote_references(self) -> bool:
-        """Bool indicating all subsamples in sample arrayset exist on local disk.
+        """Bool indicating all subsamples in sample column exist on local disk.
 
         The data associated with subsamples referencing some remote server will
         need to be downloaded (``fetched`` in the hangar vocabulary) before
@@ -911,7 +882,7 @@ class SubsampleReaderModifier(object):
         Returns
         -------
         bool
-            False if at least one subsample in the arrayset references data
+            False if at least one subsample in the column references data
             stored on some remote server. True if all sample data is available
             on the machine's local disk.
         """
@@ -924,48 +895,20 @@ class SubsampleReaderModifier(object):
         Returns
         -------
         Tuple[KeyType]
-            list of subsample keys in the arrayset whose data references indicate
+            list of subsample keys in the column whose data references indicate
             they are stored on a remote server.
         """
         return tuple(valfilter(lambda x: x.contains_remote_references, self._samples).keys())
 
     @property
-    def backend(self) -> str:
-        """The default backend for the arrayset.
-
-        Returns
-        -------
-        str
-            numeric format code of the default backend.
-        """
-        return self._dflt_backend
-
-    @property
-    def backend_opts(self):
-        """The opts applied to the default backend.
-
-        Returns
-        -------
-        dict
-            config settings used to set up filters
-        """
-        return self._dflt_backend_opts
-
-    @property
     def contains_subsamples(self) -> bool:
-        """Bool indicating if sub-samples are contained in this arrayset container.
-
-        Returns
-        -------
-        bool
-            True if subsamples are included, False otherwise. For this arrayset
-            class, subsamples are stored; the result will always be True
+        """Bool indicating if sub-samples are contained in this column container.
         """
         return True
 
     @property
     def num_subsamples(self) -> int:
-        """Calculate total number of subsamples existing in all samples in arrayset
+        """Calculate total number of subsamples existing in all samples in column
         """
         total = 0
         for sample in self._samples.values():
@@ -988,7 +931,7 @@ class SubsampleReaderModifier(object):
         """
         yield from self._mode_local_aware_key_looper(local)
 
-    def values(self, local: bool = False) -> Iterable[np.ndarray]:
+    def values(self, local: bool = False) -> Iterable[Any]:
         """Generator yielding the tensor data for every subsample.
 
         Parameters
@@ -1000,14 +943,14 @@ class SubsampleReaderModifier(object):
 
         Yields
         ------
-        Iterable[:class:`numpy.ndarray`]
+        Iterable[Any]
             Values of one subsample at a time inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield self[key]
 
-    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, np.ndarray]]:
-        """Generator yielding (name, tensor) tuple for every subsample.
+    def items(self, local: bool = False) -> Iterable[Tuple[KeyType, Any]]:
+        """Generator yielding (name, data) tuple for every subsample.
 
         Parameters
         ----------
@@ -1018,14 +961,14 @@ class SubsampleReaderModifier(object):
 
         Yields
         ------
-        Iterable[Tuple[KeyType, np.ndarray]]
+        Iterable[Tuple[KeyType, Any]]
             Name and stored value for every subsample inside the sample.
         """
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    def get(self, key: GetKeysType, default: Any = None) -> SubsampleTypes:
-        """Retrieve tensor data for some sample key(s) in the arrayset.
+    def get(self, key: GetKeysType, default: Any = None) -> FlatSubsampleReader:
+        """Retrieve data for some sample key(s) in the column.
 
         Parameters
         ----------
@@ -1037,54 +980,28 @@ class SubsampleReaderModifier(object):
 
         Returns
         -------
-        SubsampleTypes:
+        FlatSubsampleReader:
             Sample accessor class given by name ``key`` which can be used to
             access subsample data.
-
-        Raises
-        ------
-        KeyError
-            if the arrayset does not contain a sample with the provided key.
         """
         try:
             return self[key]
         except KeyError:
             return default
 
-    def _destruct(self):
-        if isinstance(self._stack, ExitStack):
-            self._stack.close()
-        self._close()
-        for sample in self._samples.values():
-            sample._destruct()
-        for attr in self._attrs:
-            delattr(self, attr)
 
-    def __getattr__(self, name):
-        """Raise permission error after checkout is closed.
-
-         Only runs after a call to :meth:`_destruct`, which is responsible
-         for deleting all attributes from the object instance.
-        """
-        try:
-            self.__getattribute__('_mode')  # once checkout is closed, this won't exist.
-        except AttributeError:
-            err = (f'Unable to operate on past checkout objects which have been '
-                   f'closed. No operation occurred. Please use a new checkout.')
-            raise PermissionError(err) from None
-        return self.__getattribute__(name)
+# ---------------- writer methods only after this point -------------------
 
 
-class SubsampleWriterModifier(SubsampleReaderModifier):
+class NestedSampleWriter(NestedSampleReader):
 
     __slots__ = ('_txnctx',)
-    _attrs = __slots__ + SubsampleReaderModifier.__slots__
+    _attrs = __slots__ + NestedSampleReader.__slots__
 
-    def __init__(self, aset_txn_ctx: AsetTxnType, *args, **kwargs):
+    def __init__(self, aset_ctx=None, *args, **kwargs):
+
         super().__init__(*args, **kwargs)
-        self._mode = 'a'
-        self._txnctx = aset_txn_ctx
-        self._stack: ExitStack = ExitStack()
+        self._txnctx = aset_ctx
 
     def __enter__(self):
         with ExitStack() as stack:
@@ -1102,82 +1019,43 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
     def __exit__(self, *exc):
         self._stack.close()
         self._enter_count -= 1
-        return
 
-    def _verify_array_compatible(self, data: np.ndarray) -> CompatibleArray:
-        """Determine if an array is compatible with the arraysets schema
-
-        Parameters
-        ----------
-        data : :class:`numpy.ndarray`
-            array to check compatibility for
-
-        Returns
-        -------
-        CompatibleArray
-            compatible and reason field
-        """
-        SCHEMA_DTYPE = self._schema_dtype_num
-        MAX_SHAPE = self._schema_max_shape
-
-        reason = ''
-        if not isinstance(data, np.ndarray):
-            reason = f'`data` argument type: {type(data)} != `np.ndarray`'
-        elif data.dtype.num != SCHEMA_DTYPE:
-            reason = f'dtype: {data.dtype} != aset: {np.typeDict[SCHEMA_DTYPE]}.'
-        elif not data.flags.c_contiguous:
-            reason = f'`data` must be "C" contiguous array.'
-
-        if reason == '':
-            if self._schema_spec.schema_is_var is True:
-                if data.ndim != len(MAX_SHAPE):
-                    reason = f'data rank {data.ndim} != aset rank {len(MAX_SHAPE)}'
-                for dDimSize, schDimSize in zip(data.shape, MAX_SHAPE):
-                    if dDimSize > schDimSize:
-                        reason = f'shape {data.shape} exceeds schema max {MAX_SHAPE}'
-            elif data.shape != MAX_SHAPE:
-                reason = f'data shape {data.shape} != fixed schema {MAX_SHAPE}'
-
-        compatible = True if reason == '' else False
-        res = CompatibleArray(compatible=compatible, reason=reason)
-        return res
-
-    def _set_arg_validate(self, sample_key: KeyType, subsample_map: MapKeyArrType):
-
+    def _set_arg_validate(self, sample_key, subsample_map):
         if not is_suitable_user_key(sample_key):
             raise ValueError(f'Sample name `{sample_key}` is not suitable.')
 
         for subsample_key, subsample_val in subsample_map.items():
             if not is_suitable_user_key(subsample_key):
                 raise ValueError(f'Sample name `{sample_key}` is not suitable.')
-            isCompat = self._verify_array_compatible(subsample_val)
+            isCompat = self._schema.verify_data_compatible(subsample_val)
             if not isCompat.compatible:
                 raise ValueError(isCompat.reason)
 
-    def _perform_set(self, key: KeyType, value: MapKeyArrType) -> None:
+    def _perform_set(self, key, value) -> None:
         if key in self._samples:
             self._samples[key].update(value)
         else:
-            self._samples[key] = SubsampleWriter(
-                aset_txn_ctx=proxy(self._txnctx),
-                asetn=self._asetn,
+            self._samples[key] = FlatSubsampleWriter(
+                schema=proxy(self._schema),
+                aset_ctx=proxy(self._txnctx),
+                repo_path=self._path,
+                columnname=self._column_name,
                 samplen=key,
                 be_handles=proxy(self._be_fs),
-                specs={})
+                specs={},
+                mode='a')
             try:
-                # TODO: class method to eliminate double validation check?
                 self._samples[key].update(value)
             except Exception as e:
                 del self._samples[key]
                 raise e
 
-    def __setitem__(self, key: KeyType, value: MapKeyArrType) -> None:
+    def __setitem__(self, key, value) -> None:
         """Store some subsample key / subsample data map, overwriting existing keys.
 
         .. seealso::
 
-            :meth:`add` for the actual implementation of the method and docstring
-            for this methods parameters
+            :meth:`update` for alternative syntax for setting values.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -1186,10 +1064,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             self._set_arg_validate(key, value)
             self._perform_set(key, value)
 
-    def update(self,
-               other: Union[None, Dict[KeyType, MapKeyArrType],
-                            Sequence[Sequence[Union[KeyType, MapKeyArrType]]]] = None,
-               **kwargs) -> None:
+    def update(self, other=None, **kwargs) -> None:
         """Store some data with the key/value pairs, overwriting existing keys.
 
         :meth:`update` implements functionality similar to python's builtin
@@ -1198,34 +1073,29 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
 
         Parameters
         ----------
-        other : Union[None, Dict[KeyType, MapKeyArrType],
-                      Sequence[Sequence[Union[KeyType, MapKeyArrType]]]]
-
+        other
             Dictionary mapping sample names to subsample data maps. Or Sequence
             (list or tuple) where element one is the sample name and element
             two is a subsample data map.
-
-        **kwargs :
+        **kwargs
             keyword arguments provided will be saved with keywords as sample
             keys (string type only) and values as a mapping of subarray keys
-            to :class:`np.ndarray` instances.
+            to data values.
         """
         with ExitStack() as stack:
             if not self._is_conman:
                 stack.enter_context(self)
 
-            if other:
-                if not isinstance(other, dict):
-                    other = dict(other)
-                else:
-                    other = other.copy()
-            elif other is None:
+            if isinstance(other, dict):
+                other = other.copy()
+            elif other:
+                other = dict(other)
+            else:
                 other = {}
             if kwargs:
                 # we merge kwargs dict with `other` before operating on either
                 # so all necessary validation and writing occur atomically
                 other.update(kwargs)
-
             for sample in tuple(other.keys()):
                 other[sample] = dict(other[sample])
 
@@ -1234,13 +1104,13 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             for key, val in other.items():
                 self._perform_set(key, val)
 
-    def __delitem__(self, key: KeyType) -> None:
-        """Remove a sample (including all contained subsamples) from the arrayset.
+    def __delitem__(self, key: KeyType):
+        """Remove a sample (including all contained subsamples) from the column.
 
         .. seealso::
 
-            :meth:`delete` for the actual implementation of the method and
-            docstring for this methods parameters
+            :meth:`pop` for alternative implementing a simultaneous get value
+            and delete operation.
         """
         with ExitStack() as stack:
             if not self._is_conman:
@@ -1254,7 +1124,7 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             self._samples[key]._destruct()
             del self._samples[key]
 
-    def pop(self, key: KeyType) -> Dict[KeyType, KeyArrMap]:
+    def pop(self, key: KeyType) -> Dict[KeyType, Any]:
         """Retrieve some value for some key(s) and delete it in the same operation.
 
         Parameters
@@ -1268,17 +1138,12 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
             Upon success, a nested dictionary mapping sample names to a dict of
             subsample names and subsample values for every sample key passed
             into this method.
-
-        Raises
-        ------
-        KeyError
-            If there is no sample with some key in the arrayset.
         """
         res = self._samples[key].data
         del self[key]
         return res
 
-    def change_backend(self, backend_opts: Union[str, dict]):
+    def change_backend(self, backend: str, backend_options: Optional[dict] = None):
         """Change the default backend and filters applied to future data writes.
 
         .. warning::
@@ -1289,66 +1154,48 @@ class SubsampleWriterModifier(SubsampleReaderModifier):
 
         Parameters
         ----------
-        backend_opts : Union[str, dict]
-            If str, backend format code to specify, opts are automatically
-            inferred. If dict, key ``backend`` must have a valid backend format
-            code value, and the rest of the items are assumed to be valid specs
-            for that particular backend. If none, both backend and opts are
-            inferred from the array prototype
+        backend : str
+            Backend format code to swtich to.
+        backend_options
+            Backend option specification to use (if specified). If left to
+            default value of None, then default options for backend are
+            automatically used.
 
         Raises
         ------
         RuntimeError
-            If this method was called while this arrayset is invoked in a
+            If this method was called while this column is invoked in a
             context manager
         ValueError
             If the backend format code is not valid.
         """
         if self._is_conman:
-            raise RuntimeError('Cannot call method inside arrayset context manager.')
+            raise RuntimeError('Cannot call method inside column context manager.')
 
-        proto = np.zeros(self.shape, dtype=self.dtype)
-        beopts = parse_user_backend_opts(backend_opts=backend_opts,
-                                         prototype=proto,
-                                         variable_shape=self.variable_shape)
+        self._schema.change_backend(backend, backend_options=backend_options)
 
-        # ----------- Determine schema format details -------------------------
+        new_schema_digest = self._schema.schema_hash_digest()
+        columnSchemaKey = schema_db_key_from_column(self._column_name, layout=self.column_layout)
+        columnSchemaVal = schema_record_db_val_from_digest(new_schema_digest)
+        hashSchemaKey = schema_hash_db_key_from_digest(new_schema_digest)
+        hashSchemaVal = schema_hash_record_db_val_from_spec(self._schema.schema)
 
-        schema_hash = schema_hash_digest(shape=proto.shape,
-                                         size=proto.size,
-                                         dtype_num=proto.dtype.num,
-                                         variable_shape=self.variable_shape,
-                                         contains_subsamples=self.contains_subsamples,
-                                         backend_code=beopts.backend,
-                                         backend_opts=beopts.opts)
-        asetSchemaKey = arrayset_record_schema_db_key_from_raw_key(self.arrayset)
-        asetSchemaVal = arrayset_record_schema_db_val_from_raw_val(
-            schema_hash=schema_hash,
-            schema_is_var=self.variable_shape,
-            schema_max_shape=proto.shape,
-            schema_dtype=proto.dtype.num,
-            schema_default_backend=beopts.backend,
-            schema_default_backend_opts=beopts.opts,
-            schema_contains_subsamples=self._contains_subsamples)
+        # -------- set vals in lmdb only after schema is sure to exist --------
 
-        hashSchemaKey = hash_schema_db_key_from_raw_key(schema_hash)
         with self._txnctx.write() as ctx:
-            ctx.dataTxn.put(asetSchemaKey, asetSchemaVal)
-            ctx.hashTxn.put(hashSchemaKey, asetSchemaVal, overwrite=False)
-        rawAsetSchema = arrayset_record_schema_raw_val_from_db_val(asetSchemaVal)
+            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
+            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
 
-        if beopts.backend not in self._be_fs:
-            self._be_fs[beopts.backend] = BACKEND_ACCESSOR_MAP[beopts.backend](
-                repo_path=self._path,
-                schema_shape=self._schema_max_shape,
-                schema_dtype=np.typeDict[self._schema_dtype_num])
+        new_backend = self._schema.backend
+        if new_backend not in self._be_fs:
+            fhands = open_file_handles(
+                backends=[new_backend],
+                path=self._path,
+                mode='a',
+                schema=self._schema)
+            self._be_fs[new_backend] = fhands[new_backend]
         else:
-            self._be_fs[beopts.backend].close()
-        self._be_fs[beopts.backend].open(mode=self._mode)
-        self._be_fs[beopts.backend].backend_opts = beopts.opts
-        self._be_fs['schema_spec'] = rawAsetSchema
-        self._dflt_backend = beopts.backend
-        self._dflt_backend_opts = beopts.opts
-        self._dflt_schema_hash = schema_hash
-        self._schema_spec = rawAsetSchema
+            self._be_fs[new_backend].close()
+        self._be_fs[new_backend].open(mode='a')
+        self._be_fs[new_backend].backend_opts = self._schema.backend_options
         return

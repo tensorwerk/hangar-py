@@ -14,7 +14,7 @@
 Backend selection
 =================
 
-.. automodule:: hangar.backends.selection
+.. automodule:: hangar.backends.__init__
 
 
 Backend Specifications
@@ -27,4 +27,5 @@ Backend Specifications
    ./backends/hdf5_00
    ./backends/hdf5_01
    ./backends/numpy_10
+   ./backends/lmdb_30
    ./backends/remote_50

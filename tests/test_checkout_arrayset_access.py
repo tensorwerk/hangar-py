@@ -8,7 +8,7 @@ import numpy as np
 @pytest.mark.parametrize('write', [True, False])
 def test_arrayset_getattr_does_not_raise_permission_error_if_alive(write, aset_samples_initialized_repo):
     co = aset_samples_initialized_repo.checkout(write=write)
-    asets = co.arraysets
+    asets = co.columns
 
     assert hasattr(asets, 'doesnotexist') is False  # does not raise error
     assert hasattr(asets, '_mode') is True
@@ -27,13 +27,13 @@ def test_arrayset_getattr_does_not_raise_permission_error_if_alive(write, aset_s
 def test_write_single_arrayset_single_sample(aset_samples_initialized_repo, array5by7, samplename):
     wco = aset_samples_initialized_repo.checkout(write=True)
     wco['writtenaset', samplename] = array5by7
-    assert np.allclose(array5by7, wco.arraysets['writtenaset'][samplename])
+    assert np.allclose(array5by7, wco.columns['writtenaset'][samplename])
     wco.commit('init')
-    assert np.allclose(array5by7, wco.arraysets['writtenaset'][samplename])
+    assert np.allclose(array5by7, wco.columns['writtenaset'][samplename])
     wco.close()
 
     rco = aset_samples_initialized_repo.checkout()
-    assert np.allclose(array5by7, rco.arraysets['writtenaset'][samplename])
+    assert np.allclose(array5by7, rco.columns['writtenaset'][samplename])
     rco.close()
 
 
@@ -52,15 +52,15 @@ def test_write_single_arrayset_multiple_samples(aset_samples_initialized_repo, a
     wco['writtenaset', samplenames] = values
 
     for val, name in zip(values, samplenames):
-        assert np.allclose(val, wco.arraysets['writtenaset'][name])
+        assert np.allclose(val, wco.columns['writtenaset'][name])
     wco.commit('init')
     for val, name in zip(values, samplenames):
-        assert np.allclose(val, wco.arraysets['writtenaset'][name])
+        assert np.allclose(val, wco.columns['writtenaset'][name])
     wco.close()
 
     rco = aset_samples_initialized_repo.checkout()
     for val, name in zip(values, samplenames):
-        assert np.allclose(val, rco.arraysets['writtenaset'][name])
+        assert np.allclose(val, rco.columns['writtenaset'][name])
     rco.close()
 
 
@@ -68,18 +68,18 @@ def test_write_multiple_arrayset_single_samples(aset_samples_initialized_repo, a
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
-    assert np.allclose(array5by7, wco.arraysets['writtenaset']['0'])
-    assert np.allclose(array10, wco.arraysets['newaset']['0'])
+    assert np.allclose(array5by7, wco.columns['writtenaset']['0'])
+    assert np.allclose(array10, wco.columns['newaset']['0'])
     wco.commit('init')
-    assert np.allclose(array5by7, wco.arraysets['writtenaset']['0'])
-    assert np.allclose(array10, wco.arraysets['newaset']['0'])
+    assert np.allclose(array5by7, wco.columns['writtenaset']['0'])
+    assert np.allclose(array10, wco.columns['newaset']['0'])
     wco.close()
 
     rco = aset_samples_initialized_repo.checkout()
-    assert np.allclose(array5by7, rco.arraysets['writtenaset']['0'])
-    assert np.allclose(array10, rco.arraysets['newaset']['0'])
+    assert np.allclose(array5by7, rco.columns['writtenaset']['0'])
+    assert np.allclose(array10, rco.columns['newaset']['0'])
     rco.close()
 
 
@@ -87,22 +87,22 @@ def test_write_in_context_manager_no_loop(aset_samples_initialized_repo, array5b
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     with wco:
         assert wco._is_conman is True
         wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
     assert wco._is_conman is False
 
-    assert np.allclose(array5by7, wco.arraysets['writtenaset']['0'])
-    assert np.allclose(array10, wco.arraysets['newaset']['0'])
+    assert np.allclose(array5by7, wco.columns['writtenaset']['0'])
+    assert np.allclose(array10, wco.columns['newaset']['0'])
     wco.commit('init')
-    assert np.allclose(array5by7, wco.arraysets['writtenaset']['0'])
-    assert np.allclose(array10, wco.arraysets['newaset']['0'])
+    assert np.allclose(array5by7, wco.columns['writtenaset']['0'])
+    assert np.allclose(array10, wco.columns['newaset']['0'])
     wco.close()
 
     rco = aset_samples_initialized_repo.checkout()
-    assert np.allclose(array5by7, rco.arraysets['writtenaset']['0'])
-    assert np.allclose(array10, rco.arraysets['newaset']['0'])
+    assert np.allclose(array5by7, rco.columns['writtenaset']['0'])
+    assert np.allclose(array10, rco.columns['newaset']['0'])
     rco.close()
 
 
@@ -110,7 +110,7 @@ def test_write_in_context_manager_many_samples_looping(aset_samples_initialized_
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     with wco:
         assert wco._is_conman is True
         for idx in range(100):
@@ -122,46 +122,46 @@ def test_write_in_context_manager_many_samples_looping(aset_samples_initialized_
     for idx in range(100):
         array10[:] = idx
         array5by7[:] = idx
-        assert np.allclose(array5by7, wco.arraysets['writtenaset'][idx])
-        assert np.allclose(array10, wco.arraysets['newaset'][idx])
+        assert np.allclose(array5by7, wco.columns['writtenaset'][idx])
+        assert np.allclose(array10, wco.columns['newaset'][idx])
     wco.commit('init')
     for idx in range(100):
         array10[:] = idx
         array5by7[:] = idx
-        assert np.allclose(array5by7, wco.arraysets['writtenaset'][idx])
-        assert np.allclose(array10, wco.arraysets['newaset'][idx])
+        assert np.allclose(array5by7, wco.columns['writtenaset'][idx])
+        assert np.allclose(array10, wco.columns['newaset'][idx])
     wco.close()
 
     rco = aset_samples_initialized_repo.checkout()
     for idx in range(100):
         array10[:] = idx
         array5by7[:] = idx
-        assert np.allclose(array5by7, rco.arraysets['writtenaset'][idx])
-        assert np.allclose(array10, rco.arraysets['newaset'][idx])
+        assert np.allclose(array5by7, rco.columns['writtenaset'][idx])
+        assert np.allclose(array10, rco.columns['newaset'][idx])
     rco.close()
 
 
 def test_write_fails_if_checkout_closed(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], 0] = [array5by7, array10]
     wco.close()
     with pytest.raises((PermissionError, UnboundLocalError)):
         wco[['writtenaset', 'newaset'], 1] = [array5by7, array10]
 
     wco2 = aset_samples_initialized_repo.checkout(write=True)
-    assert 0 in wco2.arraysets['writtenaset']
-    assert 0 in wco2.arraysets['newaset']
-    assert 1 not in wco2.arraysets['writtenaset']
-    assert 1 not in wco2.arraysets['newaset']
+    assert 0 in wco2.columns['writtenaset']
+    assert 0 in wco2.columns['newaset']
+    assert 1 not in wco2.columns['writtenaset']
+    assert 1 not in wco2.columns['newaset']
     wco2.close()
 
 
 def test_write_context_manager_fails_if_checkout_closed(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], 0] = [array5by7, array10]
     wco.close()
     with pytest.raises(PermissionError):
@@ -169,9 +169,9 @@ def test_write_context_manager_fails_if_checkout_closed(aset_samples_initialized
             wco['writtenaset', 1] = array5by7
 
     wco2 = aset_samples_initialized_repo.checkout(write=True)
-    assert 0 in wco2.arraysets['writtenaset']
-    assert 0 in wco2.arraysets['newaset']
-    assert 1 not in wco2.arraysets['writtenaset']
+    assert 0 in wco2.columns['writtenaset']
+    assert 0 in wco2.columns['newaset']
+    assert 1 not in wco2.columns['writtenaset']
     wco2.close()
 
 
@@ -179,7 +179,7 @@ def test_write_fails_multiple_arrayset_multiple_samples(aset_samples_initialized
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     with pytest.raises(SyntaxError):
         wco[['writtenaset', 'newaset'], ['0', 1]] = [[array5by7, array5by7], [array10, array10]]
     wco.close()
@@ -189,7 +189,7 @@ def test_write_fails_nonmatching_multiple_asets_single_sample(aset_samples_initi
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     with pytest.raises(ValueError):
         wco[['writtenaset', 'newaset'], '0'] = [array5by7]
     with pytest.raises(TypeError):
@@ -215,7 +215,7 @@ def test_write_fails_nonmatching_single_aset_multiple_samples(aset_samples_initi
 def test_write_fails_multiple_asets_single_sample_not_compatible(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
 
     with pytest.raises(ValueError):
         wco[['writtenaset', 'newaset'], 0] = [array10, array5by7]
@@ -231,9 +231,9 @@ def test_writer_co_read_single_aset_single_sample(aset_samples_initialized_repo,
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     assert np.allclose(wco['writtenaset', 0], array5by7)
     assert np.allclose(wco['writtenaset', 1], array5by7 + 1)
@@ -246,9 +246,9 @@ def test_writer_co_read_single_aset_multiple_samples(aset_samples_initialized_re
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     res = wco['writtenaset', [0, 1, 2]]
     assert np.allclose(res[0], array5by7)
@@ -261,16 +261,16 @@ def test_writer_co_read_multiple_aset_single_samples(aset_samples_initialized_re
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
 
     res = wco[['writtenaset', 'newaset'], 0]
     assert 'writtenaset' in res._fields
@@ -294,16 +294,16 @@ def test_writer_co_read_multtiple_aset_multiple_samples(aset_samples_initialized
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
 
     res = wco[['writtenaset', 'newaset'], [0, 1]]
     assert isinstance(res, list)
@@ -327,7 +327,7 @@ def test_writer_co_read_fails_nonexistant_aset_name(aset_samples_initialized_rep
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][0] = array5by7
     with pytest.raises(KeyError):
         _ = wco['doesnotexist', 0]
     wco.close()
@@ -337,7 +337,7 @@ def test_writer_co_read_fails_nonexistant_sample_name(aset_samples_initialized_r
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][0] = array5by7
     with pytest.raises(KeyError):
         _ = wco['doesnotexist', 124]
     wco.close()
@@ -347,7 +347,7 @@ def test_writer_co_get_returns_none_on_nonexistant_sample_name(aset_samples_init
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][0] = array5by7
     out = wco.get('writtenaset', 124)
     assert out is None
     wco.close()
@@ -357,7 +357,7 @@ def test_writer_co_read_in_context_manager_no_loop(aset_samples_initialized_repo
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
     with wco:
         assert wco._is_conman is True
@@ -369,7 +369,7 @@ def test_writer_co_read_in_context_manager_many_samples_looping(aset_samples_ini
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     with wco:
         for idx in range(100):
             array10[:] = idx
@@ -398,16 +398,16 @@ def test_writer_co_read_ellipses_select_aset_single_sample(aset_samples_initiali
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
 
     o = wco[..., 0]
     assert 'writtenaset' in o._fields
@@ -421,16 +421,16 @@ def test_writer_co_read_slice_select_aset_single_sample(aset_samples_initialized
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
 
     o = wco[:, 0]
     assert 'writtenaset' in o._fields
@@ -444,16 +444,16 @@ def test_writer_co_read_ellipses_select_aset_multiple_samples(aset_samples_initi
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
 
     out = wco[..., [0, 1]]
     assert len(out) == 2
@@ -476,16 +476,16 @@ def test_writer_co_read_slice_select_aset_multiple_samples(aset_samples_initiali
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
 
     out = wco[:, [0, 1]]
     assert len(out) == 2
@@ -504,13 +504,13 @@ def test_writer_co_read_slice_select_aset_multiple_samples(aset_samples_initiali
     wco.close()
 
 
-@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
+@pytest.mark.filterwarnings("ignore:Column names contains characters")
 @pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 def test_writer_co_read_two_asets_one_invalid_fieldname_is_renamed(aset_samples_initialized_repo, array5by7, invalid_name):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.arraysets.init_arrayset(invalid_name, prototype=array10)
+    wco.add_ndarray_column(invalid_name, prototype=array10)
     wco['writtenaset', (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
 
@@ -532,15 +532,15 @@ def test_writer_co_read_two_asets_one_invalid_fieldname_is_renamed(aset_samples_
     wco.close()
 
 
-@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
+@pytest.mark.filterwarnings("ignore:Column names contains characters")
 @pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 @pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
 def test_writer_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
     wco = repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.arraysets.init_arrayset(invalid_name1, prototype=array5by7)
-    wco.arraysets.init_arrayset(invalid_name2, prototype=array10)
+    wco.add_ndarray_column(invalid_name1, prototype=array5by7)
+    wco.add_ndarray_column(invalid_name2, prototype=array10)
     wco[invalid_name1, (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name2, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
 
@@ -562,19 +562,19 @@ def test_writer_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array
     wco.close()
 
 
-@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
+@pytest.mark.filterwarnings("ignore:Column names contains characters")
 @pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 @pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
 def test_writer_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
     """
     Uses Slice Syntax (:) instead of specifying names directly. We don't know
-    which order the arraysets will come out in the namedtuple.
+    which order the columns will come out in the namedtuple.
     """
     wco = repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.arraysets.init_arrayset(invalid_name1, prototype=array5by7)
-    wco.arraysets.init_arrayset(invalid_name2, prototype=array10)
+    wco.add_ndarray_column(invalid_name1, prototype=array5by7)
+    wco.add_ndarray_column(invalid_name2, prototype=array10)
     wco[invalid_name1, (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name2, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
 
@@ -605,37 +605,64 @@ def test_writer_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array
 
 @pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 def test_writer_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(
-    aset_samples_initialized_repo, array5by7, invalid_name):
+    aset_samples_initialized_repo, array5by7, invalid_name
+):
     wco = aset_samples_initialized_repo.checkout(write=True)
-    wco.arraysets['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][0] = array5by7
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset(invalid_name, prototype=array10)
-    wco.arraysets[invalid_name][0] = array10
+    wco.add_ndarray_column(invalid_name, prototype=array10)
+    wco.columns[invalid_name][0] = array10
 
-    with pytest.warns(UserWarning, match='Arrayset names contains characters'):
+    with pytest.warns(UserWarning, match='Column names contains characters'):
         wco[('writtenaset', invalid_name), 0]
-    with pytest.warns(UserWarning, match='Arrayset names contains characters'):
+    with pytest.warns(UserWarning, match='Column names contains characters'):
         wco[(invalid_name, 'writtenaset'), 0]
     wco.close()
 
 
+@pytest.mark.parametrize('write', [True, False])
+def test_co_read_dunder_getitem_excepts_missing_sample(aset_samples_initialized_repo, write):
+    co = aset_samples_initialized_repo.checkout(write=write)
+    with pytest.raises(KeyError):
+        res = co['writtenaset', 0]
+    co.close()
+
+
+@pytest.mark.parametrize('write', [True, False])
+def test_co_read_get_except_missing_true_excepts_missing_sample(aset_samples_initialized_repo, write):
+    co = aset_samples_initialized_repo.checkout(write=write)
+    with pytest.raises(KeyError):
+        res = co.get('writtenaset', 0, except_missing=True)
+    co.close()
+
+
+@pytest.mark.parametrize('write', [True, False])
+def test_co_read_get_except_missing_false_returns_none_on_missing_sample(aset_samples_initialized_repo, write):
+    co = aset_samples_initialized_repo.checkout(write=write)
+    res_1 = co.get('writtenaset', 0)
+    assert res_1 is None
+    res_2 = co.get('writtenaset', 0, except_missing=False)
+    assert res_2 is None
+    co.close()
+
+
 def test_writer_co_aset_finds_connection_manager_of_any_aset_in_cm(aset_samples_initialized_repo):
     wco = aset_samples_initialized_repo.checkout(write=True)
-    wco.arraysets.init_arrayset('second', shape=(20,), dtype=np.uint8)
-    asets = wco.arraysets
+    wco.add_ndarray_column('second', shape=(20,), dtype=np.uint8)
+    asets = wco.columns
 
-    with wco.arraysets['second'] as second_aset:
-        assert wco.arraysets['second']._is_conman is True
+    with wco.columns['second'] as second_aset:
+        assert wco.columns['second']._is_conman is True
         assert second_aset._is_conman is True
         assert asets._any_is_conman() is True
 
-    with wco.arraysets['writtenaset'] as written_aset:
-        assert wco.arraysets['writtenaset']._is_conman is True
+    with wco.columns['writtenaset'] as written_aset:
+        assert wco.columns['writtenaset']._is_conman is True
         assert written_aset._is_conman is True
         assert asets._any_is_conman() is True
 
-    assert wco.arraysets['writtenaset']._is_conman is False
-    assert wco.arraysets['second']._is_conman is False
+    assert wco.columns['writtenaset']._is_conman is False
+    assert wco.columns['second']._is_conman is False
     assert asets._any_is_conman() is False
     wco.close()
 
@@ -645,25 +672,25 @@ def test_writer_co_aset_cm_not_allow_remove_aset(aset_samples_initialized_repo, 
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
-    asets = wco.arraysets
+    asets = wco.columns
     with asets as cm_asets:
         with pytest.raises(PermissionError):
             cm_asets.delete('writtenaset')
         with pytest.raises(PermissionError):
             asets.delete('writtenaset')
         with pytest.raises(PermissionError):
-            wco.arraysets.delete('writtenaset')
+            wco.columns.delete('writtenaset')
 
         with pytest.raises(PermissionError):
             del cm_asets['writtenaset']
         with pytest.raises(PermissionError):
             del asets['writtenaset']
         with pytest.raises(PermissionError):
-            del wco.arraysets['writtenaset']
+            del wco.columns['writtenaset']
 
     assert len(wco['writtenaset']) == 3
     assert np.allclose(wco['writtenaset', 0], array5by7)
@@ -675,9 +702,9 @@ def test_writer_co_aset_cm_not_allow_remove_aset(aset_samples_initialized_repo, 
 def test_writer_co_aset_instance_cm_not_allow_any_aset_removal(repo_20_filled_samples):
 
     wco = repo_20_filled_samples.checkout(write=True)
-    asets = wco.arraysets
-    writtenaset = wco.arraysets['writtenaset']
-    second_aset = wco.arraysets['second_aset']
+    asets = wco.columns
+    writtenaset = wco.columns['writtenaset']
+    second_aset = wco.columns['second_aset']
 
     with second_aset:
         with pytest.raises(PermissionError):
@@ -685,17 +712,17 @@ def test_writer_co_aset_instance_cm_not_allow_any_aset_removal(repo_20_filled_sa
         with pytest.raises(PermissionError):
             asets.delete('second_aset')
         with pytest.raises(PermissionError):
-            wco.arraysets.delete('writtenaset')
+            wco.columns.delete('writtenaset')
         with pytest.raises(PermissionError):
-            wco.arraysets.delete('second_aset')
+            wco.columns.delete('second_aset')
         with pytest.raises(PermissionError):
             del asets['writtenaset']
         with pytest.raises(PermissionError):
             del asets['second_aset']
         with pytest.raises(PermissionError):
-            del wco.arraysets['second_aset']
+            del wco.columns['second_aset']
         with pytest.raises(PermissionError):
-            del wco.arraysets['written_aset']
+            del wco.columns['written_aset']
 
     with writtenaset:
         with pytest.raises(PermissionError):
@@ -703,17 +730,17 @@ def test_writer_co_aset_instance_cm_not_allow_any_aset_removal(repo_20_filled_sa
         with pytest.raises(PermissionError):
             asets.delete('second_aset')
         with pytest.raises(PermissionError):
-            wco.arraysets.delete('writtenaset')
+            wco.columns.delete('writtenaset')
         with pytest.raises(PermissionError):
-            wco.arraysets.delete('second_aset')
+            wco.columns.delete('second_aset')
         with pytest.raises(PermissionError):
             del asets['writtenaset']
         with pytest.raises(PermissionError):
             del asets['second_aset']
         with pytest.raises(PermissionError):
-            del wco.arraysets['second_aset']
+            del wco.columns['second_aset']
         with pytest.raises(PermissionError):
-            del wco.arraysets['written_aset']
+            del wco.columns['written_aset']
 
     with asets:
         with pytest.raises(PermissionError):
@@ -721,17 +748,17 @@ def test_writer_co_aset_instance_cm_not_allow_any_aset_removal(repo_20_filled_sa
         with pytest.raises(PermissionError):
             asets.delete('second_aset')
         with pytest.raises(PermissionError):
-            wco.arraysets.delete('writtenaset')
+            wco.columns.delete('writtenaset')
         with pytest.raises(PermissionError):
-            wco.arraysets.delete('second_aset')
+            wco.columns.delete('second_aset')
         with pytest.raises(PermissionError):
             del asets['writtenaset']
         with pytest.raises(PermissionError):
             del asets['second_aset']
         with pytest.raises(PermissionError):
-            del wco.arraysets['second_aset']
+            del wco.columns['second_aset']
         with pytest.raises(PermissionError):
-            del wco.arraysets['written_aset']
+            del wco.columns['written_aset']
 
     wco.close()
 
@@ -739,26 +766,26 @@ def test_writer_co_aset_instance_cm_not_allow_any_aset_removal(repo_20_filled_sa
 def test_writer_co_aset_removes_all_samples_and_arrayset_still_exists(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
-    assert len(wco.arraysets) == 1
-    assert len(wco.arraysets['writtenaset']) == 3
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
+    assert len(wco.columns) == 1
+    assert len(wco.columns['writtenaset']) == 3
 
-    with wco.arraysets['writtenaset'] as wset:
+    with wco.columns['writtenaset'] as wset:
         del wset[0]
         del wset[1]
         del wset[2]
         # Removed all samples, now the aset's gone
         assert len(wset) == 0
-        assert len(wco.arraysets) == 1
-    assert len(wco.arraysets) == 1
+        assert len(wco.columns) == 1
+    assert len(wco.columns) == 1
 
-    del wco.arraysets['writtenaset']
+    del wco.columns['writtenaset']
 
-    assert len(wco.arraysets) == 0
+    assert len(wco.columns) == 0
     with pytest.raises(KeyError):
-        len(wco.arraysets['writtenaset'])
+        len(wco.columns['writtenaset'])
     wco.close()
 
 
@@ -769,9 +796,9 @@ def test_reader_co_read_single_aset_single_sample(aset_samples_initialized_repo,
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
     wco.commit('first')
     wco.close()
 
@@ -786,9 +813,9 @@ def test_reader_co_read_single_aset_multiple_samples(aset_samples_initialized_re
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
     wco.commit('first')
     wco.close()
 
@@ -804,16 +831,16 @@ def test_reader_co_read_multiple_aset_single_samples(aset_samples_initialized_re
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
     wco.commit('first')
     wco.close()
 
@@ -840,16 +867,16 @@ def test_reader_co_read_multtiple_aset_multiple_samples(aset_samples_initialized
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
     wco.commit('first')
     wco.close()
 
@@ -883,7 +910,7 @@ def test_reader_co_read_fails_nonexistant_aset_name(aset_samples_initialized_rep
 def test_reader_co_read_fails_nonexistant_sample_name(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][0] = array5by7
     wco.commit('first')
     wco.close()
 
@@ -896,7 +923,7 @@ def test_reader_co_read_fails_nonexistant_sample_name(aset_samples_initialized_r
 def test_reader_co_get_read_returns_none_nonexistant_sample_name(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][0] = array5by7
     wco.commit('first')
     wco.close()
 
@@ -910,7 +937,7 @@ def test_reader_co_read_in_context_manager_no_loop(aset_samples_initialized_repo
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
     wco.commit('first')
     wco.close()
@@ -926,7 +953,7 @@ def test_reader_co_read_in_context_manager_many_samples_looping(aset_samples_ini
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     with wco:
         for idx in range(100):
             array10[:] = idx
@@ -958,16 +985,16 @@ def test_reader_co_read_ellipses_select_aset_single_sample(aset_samples_initiali
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
     wco.commit('first')
     wco.close()
 
@@ -984,16 +1011,16 @@ def test_reader_co_read_slice_select_aset_single_sample(aset_samples_initialized
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
     wco.commit('first')
     wco.close()
 
@@ -1010,16 +1037,16 @@ def test_reader_co_read_ellipses_select_aset_multiple_samples(aset_samples_initi
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
     wco.commit('first')
     wco.close()
 
@@ -1045,16 +1072,16 @@ def test_reader_co_read_slice_select_aset_multiple_samples(aset_samples_initiali
     wco = aset_samples_initialized_repo.checkout(write=True)
 
     array5by7[:] = 0
-    wco.arraysets['writtenaset'][0] = array5by7
-    wco.arraysets['writtenaset'][1] = array5by7 + 1
-    wco.arraysets['writtenaset'][2] = array5by7 + 2
+    wco.columns['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][1] = array5by7 + 1
+    wco.columns['writtenaset'][2] = array5by7 + 2
 
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset('newaset', prototype=array10)
+    wco.add_ndarray_column('newaset', prototype=array10)
     array10[:] = 0
-    wco.arraysets['newaset'][0] = array10
-    wco.arraysets['newaset'][1] = array10 + 1
-    wco.arraysets['newaset'][2] = array10 + 2
+    wco.columns['newaset'][0] = array10
+    wco.columns['newaset'][1] = array10 + 1
+    wco.columns['newaset'][2] = array10 + 2
     wco.commit('first')
     wco.close()
 
@@ -1076,13 +1103,13 @@ def test_reader_co_read_slice_select_aset_multiple_samples(aset_samples_initiali
     rco.close()
 
 
-@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
+@pytest.mark.filterwarnings("ignore:Column names contains characters")
 @pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 def test_reader_co_read_two_asets_one_invalid_fieldname_is_renamed(aset_samples_initialized_repo, array5by7, invalid_name):
     wco = aset_samples_initialized_repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.arraysets.init_arrayset(invalid_name, prototype=array10)
+    wco.add_ndarray_column(invalid_name, prototype=array10)
     wco['writtenaset', (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
     wco.commit('yo')
@@ -1107,15 +1134,15 @@ def test_reader_co_read_two_asets_one_invalid_fieldname_is_renamed(aset_samples_
     rco.close()
 
 
-@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
+@pytest.mark.filterwarnings("ignore:Column names contains characters")
 @pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 @pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
 def test_reader_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
     wco = repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.arraysets.init_arrayset(invalid_name1, prototype=array5by7)
-    wco.arraysets.init_arrayset(invalid_name2, prototype=array10)
+    wco.add_ndarray_column(invalid_name1, prototype=array5by7)
+    wco.add_ndarray_column(invalid_name2, prototype=array10)
     wco[invalid_name1, (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name2, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
     wco.commit('yo')
@@ -1140,19 +1167,19 @@ def test_reader_co_read_two_asets_two_invalid_fieldname_both_renamed(repo, array
     rco.close()
 
 
-@pytest.mark.filterwarnings("ignore:Arrayset names contains characters")
+@pytest.mark.filterwarnings("ignore:Column names contains characters")
 @pytest.mark.parametrize('invalid_name1', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 @pytest.mark.parametrize('invalid_name2', ['foo.bar2', '_helloworld2', 'fail-again2', '.lol2'])
 def test_reader_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array5by7, invalid_name1, invalid_name2):
     """
     Uses Slice Syntax (:) instead of specifying names directly. We don't know
-    which order the arraysets will come out in the namedtuple.
+    which order the columns will come out in the namedtuple.
     """
     wco = repo.checkout(write=True)
     array5by7 = np.zeros_like(array5by7)
     array10 = np.zeros((10,), dtype=np.float32)
-    wco.arraysets.init_arrayset(invalid_name1, prototype=array5by7)
-    wco.arraysets.init_arrayset(invalid_name2, prototype=array10)
+    wco.add_ndarray_column(invalid_name1, prototype=array5by7)
+    wco.add_ndarray_column(invalid_name2, prototype=array10)
     wco[invalid_name1, (0, 1, 2)] = (array5by7, array5by7 + 1, array5by7 + 2)
     wco[invalid_name2, (0, 1, 2)] = (array10, array10 + 1, array10 + 2)
     wco.commit('yo')
@@ -1188,16 +1215,16 @@ def test_reader_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array
 def test_reader_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(aset_samples_initialized_repo, array5by7, invalid_name):
 
     wco = aset_samples_initialized_repo.checkout(write=True)
-    wco.arraysets['writtenaset'][0] = array5by7
+    wco.columns['writtenaset'][0] = array5by7
     array10 = np.arange(10, dtype=np.float32)
-    wco.arraysets.init_arrayset(invalid_name, prototype=array10)
-    wco.arraysets[invalid_name][0] = array10
+    wco.add_ndarray_column(invalid_name, prototype=array10)
+    wco.columns[invalid_name][0] = array10
     wco.commit('commit message')
     wco.close()
 
     rco = aset_samples_initialized_repo.checkout()
-    with pytest.warns(UserWarning, match='Arrayset names contains characters'):
+    with pytest.warns(UserWarning, match='Column names contains characters'):
         rco[('writtenaset', invalid_name), 0]
-    with pytest.warns(UserWarning, match='Arrayset names contains characters'):
+    with pytest.warns(UserWarning, match='Column names contains characters'):
         rco[(invalid_name, 'writtenaset'), 0]
     rco.close()

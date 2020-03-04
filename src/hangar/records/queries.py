@@ -2,25 +2,28 @@ from typing import Dict, Iterable, Iterator, List, Set, Tuple, Union
 
 import lmdb
 
-from .parsing import (
-    arrayset_record_count_range_key,
-    arrayset_record_schema_raw_key_from_db_key,
-    arrayset_record_schema_raw_val_from_db_val,
-    data_record_raw_key_from_db_key,
-    data_record_raw_val_from_db_val,
+from .column_parsers import (
+    data_record_digest_val_from_db_val,
+    dynamic_layout_data_record_db_start_range_key,
+    dynamic_layout_data_record_from_db_key,
     metadata_range_key,
     metadata_record_raw_key_from_db_key,
-    metadata_record_raw_val_from_db_val,
-    MetadataRecordKey, MetadataRecordVal,
-    RawArraysetSchemaVal, RawDataRecordKey, RawDataRecordVal,
+    schema_column_record_from_db_key,
+    schema_db_range_key_from_column_unknown_layout,
+    schema_record_count_start_range_key,
 )
-from ..constants import K_SCHEMA
+from .recordstructs import (
+    FlatColumnDataKey,
+    NestedColumnDataKey,
+    DataRecordVal,
+    MetadataRecordKey,
+)
 from ..txnctx import TxnRegister
 from ..utils import ilen
 from ..mixins import CursorRangeIterator
 
-RawDataTuple = Tuple[RawDataRecordKey, RawDataRecordVal]
-RawMetaTuple = Tuple[MetadataRecordKey, MetadataRecordVal]
+RawDataTuple = Tuple[Union[FlatColumnDataKey, NestedColumnDataKey], DataRecordVal]
+RawMetaTuple = Tuple[MetadataRecordKey, DataRecordVal]
 
 
 class RecordQuery(CursorRangeIterator):
@@ -74,8 +77,8 @@ class RecordQuery(CursorRangeIterator):
         finally:
             TxnRegister().abort_reader_txn(self._dataenv)
 
-    def _traverse_arrayset_schema_records(self, keys: bool = True, values: bool = True
-                                          ) -> Iterable[Union[Tuple[bytes], Tuple[bytes, bytes]]]:
+    def _traverse_column_schema_records(self, keys: bool = True, values: bool = True
+                                        ) -> Iterable[Union[Tuple[bytes], Tuple[bytes, bytes]]]:
         """Internal method to traverse all schema records and pull out k/v db pairs.
 
         Parameters
@@ -92,27 +95,29 @@ class RecordQuery(CursorRangeIterator):
         Iterable[Union[Tuple[bytes], Tuple[bytes, bytes]]]:
             db schema keys and db_values
         """
-        startSchemaRangeKey = f'{K_SCHEMA}'.encode()
+        startSchemaRangeKey = schema_record_count_start_range_key()
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             yield from self.cursor_range_iterator(datatxn, startSchemaRangeKey, keys, values)
         finally:
             TxnRegister().abort_reader_txn(self._dataenv)
 
-    def _traverse_arrayset_data_records(self, arrayset_name, *,
-                                        keys: bool = True, values: bool = True
-                                        ) -> Iterable[Union[bytes, Tuple[bytes, bytes]]]:
-        """Internal method to traverse arrayset data records and get keys/db_values
+    def _traverse_column_data_records(self,
+                                      column_name: str,
+                                      *,
+                                      keys: bool = True,
+                                      values: bool = True) -> Iterable[Union[bytes, Tuple[bytes, bytes]]]:
+        """Internal method to traverse column data records and get keys/db_values
 
-        The arrayset name is required because this method controls the cursor
-        movement by first setting it's position on the arrayset record count
+        The column name is required because this method controls the cursor
+        movement by first setting it's position on the column record count
         key, reading it's value "N" and then sequentially pulling records out of
         the db for N loops.
 
         Parameters
         ----------
-        arrayset_name : str
-            name of the arrayset to traverse records for.
+        column_name : str
+            name of the column to traverse records for.
         keys : bool, optional
             If True, yield metadata keys encountered, if False only values are returned.
             By default, True.
@@ -125,38 +130,44 @@ class RecordQuery(CursorRangeIterator):
         Iterable[Union[bytes, Tuple[bytes, bytes]]]:
             dict of db_key/db_values for each record traversed
         """
-        startAsetRecCountRngK = arrayset_record_count_range_key(arrayset_name)
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
-            yield from self.cursor_range_iterator(datatxn, startAsetRecCountRngK, keys, values)
+            schemaColumnRangeKey = schema_db_range_key_from_column_unknown_layout(column_name)
+            with datatxn.cursor() as cur:
+                cur.set_range(schemaColumnRangeKey)
+                schemaColumnKey = cur.key()
+            column_record = schema_column_record_from_db_key(schemaColumnKey)
+            startRangeKey = dynamic_layout_data_record_db_start_range_key(column_record)
+            yield from self.cursor_range_iterator(datatxn, startRangeKey, keys, values)
         finally:
             TxnRegister().abort_reader_txn(self._dataenv)
 
-# ------------------------- process arraysets --------------------------------------------
+# ------------------------- process columns --------------------------------------------
 
-    def arrayset_names(self) -> List[str]:
-        """Find all named arraysets in the checkout
+    def column_names(self) -> List[str]:
+        """Find all named columns in the checkout
 
         Returns
         -------
         List[str]
-            list of all arrayset names
+            list of all column names
         """
-        recs = self._traverse_arrayset_schema_records(keys=True, values=False)
-        return [arrayset_record_schema_raw_key_from_db_key(rec) for rec in recs]
+        recs = self._traverse_column_schema_records(keys=True, values=False)
+        column_recs = map(schema_column_record_from_db_key, recs)
+        return [x.column for x in column_recs]
 
-    def arrayset_count(self) -> int:
-        """Return number of arraysets/schemas in the commit
+    def column_count(self) -> int:
+        """Return number of columns/schemas in the commit
 
         Returns
         -------
         int
-            len of arraysets
+            len of columns
         """
-        return ilen(self._traverse_arrayset_schema_records(keys=True, values=False))
+        return ilen(self._traverse_column_schema_records(keys=True, values=False))
 
     def data_hashes(self) -> List[str]:
-        """Find all data hashes contained within all arraysets
+        """Find all data hashes contained within all columns
 
         Note: this method does not deduplicate values
 
@@ -166,84 +177,84 @@ class RecordQuery(CursorRangeIterator):
             all hash values for all data pieces in the commit
         """
         all_hashes = []
-        arraysets = self.arrayset_names()
-        for arrayset in arraysets:
-            recs = self._traverse_arrayset_data_records(arrayset, keys=False, values=True)
-            data_rec = map(data_record_raw_val_from_db_val, recs)
-            data_val_rec = [x.data_hash for x in data_rec]
+        columns = self.column_names()
+        for column in columns:
+            recs = self._traverse_column_data_records(column, keys=False, values=True)
+            data_rec = map(data_record_digest_val_from_db_val, recs)
+            data_val_rec = [x.digest for x in data_rec]
             all_hashes.extend(data_val_rec)
         return all_hashes
 
-# ------------------------ process arrayset data records ----------------------
+# ------------------------ process column data records ----------------------
 
-    def arrayset_data_records(self, arrayset_name: str) -> Iterable[RawDataTuple]:
-        """Returns the raw data record key and record values for a specific arrayset.
+    def column_data_records(self, column_name: str) -> Iterable[RawDataTuple]:
+        """Returns the raw data record key and record values for a specific column.
 
         Parameters
         ----------
-        arrayset_name : str
-            name of the arrayset to pull records for
+        column_name : str
+            name of the column to pull records for
 
         Yields
         ------
         Iterable[RawDataTuple]
             generator of key and value data record specs
         """
-        for data_key, data_val in self._traverse_arrayset_data_records(arrayset_name):
-            data_rec_key = data_record_raw_key_from_db_key(data_key)
-            data_rec_val = data_record_raw_val_from_db_val(data_val)
+        for data_key, data_val in self._traverse_column_data_records(column_name):
+            data_rec_key = dynamic_layout_data_record_from_db_key(data_key)
+            data_rec_val = data_record_digest_val_from_db_val(data_val)
             yield (data_rec_key, data_rec_val)
 
-    def arrayset_data_hashes(self, arrayset_name: str) -> Set[RawDataRecordVal]:
-        """Find all data hashes contained within a particular arrayset
+    def column_data_hashes(self, column_name: str) -> Set[DataRecordVal]:
+        """Find all data hashes contained within a particular column
 
         Note: this method does not remove any duplicates which may be present,
         if dedup is required, process it downstream
 
         Parameters
         ----------
-        arrayset_name : str
-            name of the arrayset to find the hashes contained in
+        column_name : str
+            name of the column to find the hashes contained in
 
         Returns
         -------
-        Set[RawArraysetSchemaVal]
-            all hash values for all data pieces in the arrayset
+        Set[DataRecordVal]
+            all hash values for all data pieces in the column
         """
-        recs = self._traverse_arrayset_data_records(arrayset_name, keys=False, values=True)
-        return set(map(data_record_raw_val_from_db_val, recs))
+        recs = self._traverse_column_data_records(column_name, keys=False, values=True)
+        return set(map(data_record_digest_val_from_db_val, recs))
 
-    def arrayset_data_count(self, arrayset_name: str) -> int:
-        """Return the number of samples in an arrayset with the provided name
+    def column_data_count(self, column_name: str) -> int:
+        """Return the number of samples in an column with the provided name
 
         Parameters
         ----------
-        arrayset_name : str
-            name of the arrayset to query
+        column_name : str
+            name of the column to query
 
         Returns
         -------
         int
-            number of samples in the arrayset with given name
+            number of samples in the column with given name
         """
-        recs = self._traverse_arrayset_data_records(arrayset_name, keys=True, values=False)
+        recs = self._traverse_column_data_records(column_name, keys=True, values=False)
         return ilen(recs)  # regular len method not defined for generator iterable
 
 # ------------------------- process schema ----------------------------------------------
 
-    def schema_specs(self) -> Dict[str, RawArraysetSchemaVal]:
-        """Return the all schema specs defined by all arraysets.
+    def schema_specs(self):
+        """Return the all schema specs defined by all columns.
 
         Returns
         -------
-        Dict[str, RawDataSchemaVal]
-            dict of arrayset names: raw schema spec for each arrayset schema
+        dict
+            dict of column spec key and digest for each column schema
         """
         recs = {}
-        for schema_key, schema_val in self._traverse_arrayset_schema_records():
-            schKey = arrayset_record_schema_raw_key_from_db_key(schema_key)
-            schVal = arrayset_record_schema_raw_val_from_db_val(schema_val)
-            recs[schKey] = schVal
+        for schema_key, schema_val in self._traverse_column_schema_records():
+            schema_record = schema_column_record_from_db_key(schema_key)
+            schema_val = data_record_digest_val_from_db_val(schema_val)
+            recs[schema_record] = schema_val
         return recs
 
     def schema_hashes(self) -> List[str]:
@@ -252,12 +263,12 @@ class RecordQuery(CursorRangeIterator):
         Returns
         -------
         List[str]
-            list of all schema hash digests
+            list of all schema hash digests in the commit
         """
         all_schema_hashes = []
-        for schema_rec_val in self._traverse_arrayset_schema_records(keys=False, values=True):
-            schema_rec = arrayset_record_schema_raw_val_from_db_val(schema_rec_val)
-            all_schema_hashes.append(schema_rec.schema_hash)
+        for schema_rec_val in self._traverse_column_schema_records(keys=False, values=True):
+            digest = data_record_digest_val_from_db_val(schema_rec_val)
+            all_schema_hashes.append(digest.digest)
         return all_schema_hashes
 
     def data_hash_to_schema_hash(self) -> Dict[str, str]:
@@ -269,13 +280,14 @@ class RecordQuery(CursorRangeIterator):
             mapping of sample hash to aset_schema_hash
         """
         odict = {}
-        aset_names = self.arrayset_names()
+        aset_names = self.column_names()
         aset_schema_specs = self.schema_specs()
+        col_names_schema_digests = {k.column: v.digest for k, v in aset_schema_specs.items()}
         for asetn in aset_names:
-            aset_hash_vals = self.arrayset_data_hashes(asetn)
-            aset_schema_hash = aset_schema_specs[asetn].schema_hash
+            aset_hash_vals = self.column_data_hashes(asetn)
+            aset_schema_hash = col_names_schema_digests[asetn]
             for aset_hash_val in aset_hash_vals:
-                odict[aset_hash_val.data_hash] = aset_schema_hash
+                odict[aset_hash_val.digest] = aset_schema_hash
         return odict
 
 # --------------------------- process metadata ------------------------------------------
@@ -290,7 +302,7 @@ class RecordQuery(CursorRangeIterator):
         """
         for meta_key, meta_hash in self._traverse_metadata_records(keys=True, values=True):
             meta_rec_key = metadata_record_raw_key_from_db_key(meta_key)
-            meta_rec_val = metadata_record_raw_val_from_db_val(meta_hash)
+            meta_rec_val = data_record_digest_val_from_db_val(meta_hash)
             yield (meta_rec_key, meta_rec_val)
 
     def metadata_hashes(self) -> List[str]:
@@ -305,8 +317,8 @@ class RecordQuery(CursorRangeIterator):
             list of all hashes in the commit
         """
         recs = self._traverse_metadata_records(keys=False, values=True)
-        meta_rec_vals = map(metadata_record_raw_val_from_db_val, recs)
-        meta_hashs = [x.meta_hash for x in meta_rec_vals]
+        meta_rec_vals = map(data_record_digest_val_from_db_val, recs)
+        meta_hashs = [x.digest for x in meta_rec_vals]
         return meta_hashs
 
     def metadata_count(self) -> int:

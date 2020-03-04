@@ -198,16 +198,17 @@ Technical Notes
    are accepted by this method.
 """
 import logging
-import os
 import math
-from contextlib import suppress
+import os
 from collections import ChainMap
+from contextlib import suppress
 from functools import partial
 from pathlib import Path
 from typing import MutableMapping, Tuple, Optional, Union, Callable
 
 import h5py
 import numpy as np
+
 try:
     # hdf5plugin warns if a filter is already loaded.
     _logger = logging.getLogger('hdf5plugin')
@@ -221,12 +222,14 @@ finally:
 from xxhash import xxh64_hexdigest
 
 
-from . import HDF5_01_DataHashSpec
 from .chunk import calc_chunkshape
+from .specs import HDF5_01_DataHashSpec
 from .. import __version__
+from ..optimized_utils import SizedDict
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import writer_checkout_only, reader_checkout_only
 from ..utils import find_next_prime, random_string, set_blosc_nthreads
+from ..typesystem import Descriptor, OneOf, DictItems, SizedIntegerTuple, checkedmeta
 
 set_blosc_nthreads()
 
@@ -236,7 +239,7 @@ _FmtCode = '01'
 
 # contents of a single hdf5 file
 COLLECTION_SIZE = 100
-COLLECTION_COUNT = 200
+COLLECTION_COUNT = 100
 CHUNK_MAX_RDCC_NBYTES = 250_000_000
 CHUNK_RDCC_W0 = 0.75
 
@@ -274,6 +277,99 @@ def hdf5_01_encode(uid: str, cksum: str, dset: int, dset_idx: int,
 # ------------------------- Accessor Object -----------------------------------
 
 
+@DictItems(
+    expected_keys_required={'complib': True, 'complevel': True, 'shuffle': True},
+    expected_values={
+        'complib': ['blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:zlib', 'blosc:zstd'],
+        'complevel': [i for i in range(10)],
+        'shuffle': [None, 'none', 'byte', 'bit']})
+class BloscCompressionOptions(Descriptor):
+    pass
+
+
+@DictItems(
+    expected_keys_required={'complib': True, 'complevel': True, 'shuffle': True},
+    expected_values={
+        'complib': ['gzip'], 'complevel': [i for i in range(10)], 'shuffle': [True, False]})
+class GzipCompressionOptions(Descriptor):
+    pass
+
+
+@DictItems(
+    expected_keys_required={'complib': True, 'complevel': False, 'shuffle': True},
+    expected_values={
+        'complib': ['lzf'], 'complevel': ['none', None], 'shuffle': [True, False]})
+class LzfCompressionOptions(Descriptor):
+    pass
+
+
+@OneOf(list(map(lambda x: np.dtype(x).name, [
+        np.bool, np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16,
+        np.int32, np.int64, np.float16, np.float32, np.float64, np.longdouble])))
+class AllowedDtypes(Descriptor):
+    # Note. np.longdouble since np.float128 not guaranteed to be available on
+    # all system. this is a particular issue with some windows numpy builds.
+    pass
+
+
+class HDF5_01_Options(metaclass=checkedmeta):
+    _shape = SizedIntegerTuple(size=32)
+    _dtype = AllowedDtypes()
+    _lzf = LzfCompressionOptions()
+    _gzip = GzipCompressionOptions()
+    _blosc = BloscCompressionOptions()
+    _avail_filters = ('_lzf', '_gzip', '_blosc')
+
+    def __init__(self, backend_options, dtype, shape, *args, **kwargs):
+        self._shape = shape
+        self._dtype = dtype
+        self._selected_filter = None
+        if backend_options is None:
+            backend_options = self.default_options
+
+        for filter_attr in self._avail_filters:
+            with suppress((KeyError, ValueError)):
+                setattr(self, filter_attr, backend_options)
+                self._selected_filter = filter_attr
+                break
+        else:  # N.B. for-else loop (ie. "no-break")
+            raise ValueError(f'Invalid backend_options {backend_options}')
+        self._verify_data_nbytes_larger_than_clib_min()
+
+    def _verify_data_nbytes_larger_than_clib_min(self):
+        """blosc clib should not be used if data buffer size < 16 bytes.
+
+        Raises
+        ------
+        ValueError:
+            if the data size is not valid for the clib
+        """
+        if self._selected_filter in ['_blosc', None]:
+            num_items = np.prod(self._shape)
+            itemsize = np.dtype(self._dtype).itemsize
+            nbytes = itemsize * num_items
+            if nbytes <= 16:
+                raise ValueError(f'blosc clib requires data buffer size > 16 bytes')
+
+    @property
+    def default_options(self):
+        if 'blosc' in hdf5plugin.FILTERS:
+            try:
+                self._verify_data_nbytes_larger_than_clib_min()
+                return {'complib': 'blosc:lz4hc', 'complevel': 5, 'shuffle': 'byte'}
+            except ValueError:
+                pass
+        return {'complib': 'lzf', 'complevel': None, 'shuffle': True}
+
+    @property
+    def backend_options(self):
+        return getattr(self, self._selected_filter)
+
+    @property
+    def init_requires(self):
+        return ('repo_path', 'schema_shape', 'schema_dtype')
+
+
 HDF5_01_MapTypes = MutableMapping[str, Union[h5py.File, Callable[[], h5py.File]]]
 
 
@@ -281,12 +377,12 @@ class HDF5_01_FileHandles(object):
     """Manage HDF5 file handles.
 
     When in SWMR-write mode, no more than a single file handle can be in the
-    "writeable" state. This is an issue where multiple arraysets may need to
-    write to the same arrayset schema.
+    "writeable" state. This is an issue where multiple columns may need to
+    write to the same column schema.
     """
 
     def __init__(self, repo_path: Path, schema_shape: tuple, schema_dtype: np.dtype):
-        self.path: os.PathLike = repo_path
+        self.path: Path = repo_path
         self.schema_shape: tuple = schema_shape
         self.schema_dtype: np.dtype = schema_dtype
         self._dflt_backend_opts: Optional[dict] = None
@@ -294,7 +390,7 @@ class HDF5_01_FileHandles(object):
         self.rFp: HDF5_01_MapTypes = {}
         self.wFp: HDF5_01_MapTypes = {}
         self.Fp: HDF5_01_MapTypes = ChainMap(self.rFp, self.wFp)
-        self.rDatasets = {}
+        self.rDatasets = SizedDict(maxsize=100)
         self.wdset: h5py.Dataset = None
 
         self.mode: Optional[str] = None
@@ -533,7 +629,7 @@ class HDF5_01_FileHandles(object):
         return args
 
     def _create_schema(self, *, remote_operation: bool = False):
-        """stores the shape and dtype as the schema of a arrayset.
+        """stores the shape and dtype as the schema of a column.
 
         Parameters
         ----------
