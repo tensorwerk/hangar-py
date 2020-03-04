@@ -294,15 +294,15 @@ class GetMixin:
             else:
                 raise TypeError(f'Columns index {columns} of type {type(columns)} invalid.')
             nAsets = len(columns)
-            aset_names = [aset.column for aset in columns]
+            column_names = [col.column for col in columns]
             try:
-                ColumnData = namedtuple('ColumnData', aset_names)
+                ColumnData = namedtuple('ColumnData', column_names)
             except ValueError:
                 warnings.warn(
                     'Column names contains characters which are invalid as namedtuple fields. '
                     'All suspect field names will be replaced by their positional names '
                     '(ie "_0" for element 0, "_4" for element 4)', UserWarning)
-                ColumnData = namedtuple('ColumnData', aset_names, rename=True)
+                ColumnData = namedtuple('ColumnData', column_names, rename=True)
 
             # Sample Parsing
             if isinstance(samples, (str, int)):
@@ -312,28 +312,28 @@ class GetMixin:
             nSamples = len(samples)
 
             # Data Retrieval
-            asetsSamplesData = []
-            for aset in columns:
-                aset_samples = []
+            columnsData = []
+            for col in columns:
+                column_samples = []
                 for sample in samples:
                     try:
-                        arr = aset.get(sample)
+                        arr = col[sample]
                     except KeyError as e:
                         if except_missing:
                             raise e
                         arr = None
-                    aset_samples.append(arr)
+                    column_samples.append(arr)
                 if nAsets == 1:
-                    asetsSamplesData = aset_samples
+                    columnsData = column_samples
                     if nSamples == 1:
-                        asetsSamplesData = asetsSamplesData[0]
+                        columnsData = columnsData[0]
                     break
-                asetsSamplesData.append(aset_samples)
+                columnsData.append(column_samples)
             else:  # N.B. for-else conditional (ie. 'no break')
                 # noinspection PyUnresolvedReferences
-                tmp = map(ColumnData._make, zip(*asetsSamplesData))
-                asetsSamplesData = list(tmp)
-                if len(asetsSamplesData) == 1:
-                    asetsSamplesData = asetsSamplesData[0]
+                tmp = map(ColumnData._make, zip(*columnsData))
+                columnsData = list(tmp)
+                if len(columnsData) == 1:
+                    columnsData = columnsData[0]
 
-            return asetsSamplesData
+            return columnsData

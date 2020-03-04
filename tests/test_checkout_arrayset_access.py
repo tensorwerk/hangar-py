@@ -605,7 +605,8 @@ def test_writer_co_read_all_asets_all_invalid_fieldname_both_renamed(repo, array
 
 @pytest.mark.parametrize('invalid_name', ['foo.bar', '_helloworld', 'fail-again', '.lol'])
 def test_writer_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(
-    aset_samples_initialized_repo, array5by7, invalid_name):
+    aset_samples_initialized_repo, array5by7, invalid_name
+):
     wco = aset_samples_initialized_repo.checkout(write=True)
     wco.columns['writtenaset'][0] = array5by7
     array10 = np.arange(10, dtype=np.float32)
@@ -617,6 +618,32 @@ def test_writer_co_read_two_asets_one_invalid_fieldname_warns_of_field_rename(
     with pytest.warns(UserWarning, match='Column names contains characters'):
         wco[(invalid_name, 'writtenaset'), 0]
     wco.close()
+
+
+@pytest.mark.parametrize('write', [True, False])
+def test_co_read_dunder_getitem_excepts_missing_sample(aset_samples_initialized_repo, write):
+    co = aset_samples_initialized_repo.checkout(write=write)
+    with pytest.raises(KeyError):
+        res = co['writtenaset', 0]
+    co.close()
+
+
+@pytest.mark.parametrize('write', [True, False])
+def test_co_read_get_except_missing_true_excepts_missing_sample(aset_samples_initialized_repo, write):
+    co = aset_samples_initialized_repo.checkout(write=write)
+    with pytest.raises(KeyError):
+        res = co.get('writtenaset', 0, except_missing=True)
+    co.close()
+
+
+@pytest.mark.parametrize('write', [True, False])
+def test_co_read_get_except_missing_false_returns_none_on_missing_sample(aset_samples_initialized_repo, write):
+    co = aset_samples_initialized_repo.checkout(write=write)
+    res_1 = co.get('writtenaset', 0)
+    assert res_1 is None
+    res_2 = co.get('writtenaset', 0, except_missing=False)
+    assert res_2 is None
+    co.close()
 
 
 def test_writer_co_aset_finds_connection_manager_of_any_aset_in_cm(aset_samples_initialized_repo):
