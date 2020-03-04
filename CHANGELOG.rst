@@ -8,6 +8,15 @@ Change Log
 Improvements
 ------------
 
+* Column and backend classes are now fully serializable (pickleable) for ``read-only`` checkouts.
+  (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Modularized internal structure of API classes to easily allow new columnn layouts / data types
+  to be added in the future.
+  (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Improved type / value checking of manual specification for column ``backend`` and ``backend_options``.
+  (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Standardized column data access API to follow python standard library ``dict`` methods API.
+  (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Memory usage of arrayset checkouts has been reduced by ~70% by using C-structs for allocating
   sample record locating info.
   (`#179 <https://github.com/tensorwerk/hangar-py/pull/179>`__) `@rlizzo <https://github.com/rlizzo>`__
@@ -22,6 +31,10 @@ Improvements
 New Features
 ------------
 
+* "string" type columns now supported alongside "ndarray" column type.
+  (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
+* New "column" API, which replaces "arrayset" name.
+  (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Arraysets can now contain "nested subsamples" under a common sample key.
   (`#179 <https://github.com/tensorwerk/hangar-py/pull/179>`__) `@rlizzo <https://github.com/rlizzo>`__
 * New API to add and remove samples from and arrayset.
