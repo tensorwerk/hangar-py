@@ -1,5 +1,5 @@
 from .column import Columns, ModifierTypes
-from .common import AsetTxn
+from .common import ColumnTxn
 from .constructors import (
     generate_flat_column,
     generate_nested_column,
@@ -15,5 +15,5 @@ __all__ = (
     'generate_flat_column',
     'generate_nested_column',
     'column_type_object_from_schema',
-    'AsetTxn',
+    'ColumnTxn',
 )

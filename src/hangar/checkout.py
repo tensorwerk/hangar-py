@@ -10,7 +10,7 @@ import lmdb
 
 from .mixins import GetMixin, CheckoutDictIteration
 from .columns import (
-    AsetTxn,
+    ColumnTxn,
     Columns,
     MetadataReader,
     MetadataWriter,
@@ -19,7 +19,7 @@ from .columns import (
 )
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
-from .records import commiting, hashs, heads
+from .records import commiting, hashs, heads, summarize
 from .typesystem import NdarrayFixedShape, NdarrayVariableShape, StringVariableShape
 from .utils import is_suitable_user_key, is_ascii
 from .records import (
@@ -271,6 +271,57 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         """
         self._verify_alive()
         return self._commit_hash
+
+    def log(self,
+            branch: str = None,
+            commit: str = None,
+            *,
+            return_contents: bool = False,
+            show_time: bool = False,
+            show_user: bool = False) -> Optional[dict]:
+        """Displays a pretty printed commit log graph to the terminal.
+
+        .. note::
+
+            For programatic access, the return_contents value can be set to true
+            which will retrieve relevant commit specifications as dictionary
+            elements.
+
+        if Neither `branch` nor `commit` arguments are supplied, the commit
+        digest of the currently reader checkout will be used as default.
+
+        Parameters
+        ----------
+        branch : str, optional
+            The name of the branch to start the log process from. (Default value
+            = None)
+        commit : str, optional
+            The commit hash to start the log process from. (Default value = None)
+        return_contents : bool, optional, kwarg only
+            If true, return the commit graph specifications in a dictionary
+            suitable for programatic access/evaluation.
+        show_time : bool, optional, kwarg only
+            If true and return_contents is False, show the time of each commit
+            on the printed log graph
+        show_user : bool, optional, kwarg only
+            If true and return_contents is False, show the committer of each
+            commit on the printed log graph
+        Returns
+        -------
+        Optional[dict]
+            Dict containing the commit ancestor graph, and all specifications.
+        """
+        self._verify_alive()
+        if (branch is None) and (commit is None):
+            commit = self.commit_hash
+        res = summarize.log(branchenv=self._branchenv,
+                            refenv=self._refenv,
+                            branch=branch,
+                            commit=commit,
+                            return_contents=return_contents,
+                            show_time=show_time,
+                            show_user=show_user)
+        return res
 
     def close(self) -> None:
         """Gracefully close the reader checkout object.
@@ -759,6 +810,57 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                                            branch_name=self._branch_name)
         return cmt
 
+    def log(self,
+            branch: str = None,
+            commit: str = None,
+            *,
+            return_contents: bool = False,
+            show_time: bool = False,
+            show_user: bool = False) -> Optional[dict]:
+        """Displays a pretty printed commit log graph to the terminal.
+
+        .. note::
+
+            For programatic access, the return_contents value can be set to true
+            which will retrieve relevant commit specifications as dictionary
+            elements.
+
+        if Neither `branch` nor `commit` arguments are supplied, the branch which
+        is currently checked out for writing will be used as default.
+
+        Parameters
+        ----------
+        branch : str, optional
+            The name of the branch to start the log process from. (Default value
+            = None)
+        commit : str, optional
+            The commit hash to start the log process from. (Default value = None)
+        return_contents : bool, optional, kwarg only
+            If true, return the commit graph specifications in a dictionary
+            suitable for programatic access/evaluation.
+        show_time : bool, optional, kwarg only
+            If true and return_contents is False, show the time of each commit
+            on the printed log graph
+        show_user : bool, optional, kwarg only
+            If true and return_contents is False, show the committer of each
+            commit on the printed log graph
+        Returns
+        -------
+        Optional[dict]
+            Dict containing the commit ancestor graph, and all specifications.
+        """
+        self._verify_alive()
+        if (branch is None) and (commit is None):
+            branch = self.branch_name
+        res = summarize.log(branchenv=self._branchenv,
+                            refenv=self._refenv,
+                            branch=branch,
+                            commit=commit,
+                            return_contents=return_contents,
+                            show_time=show_time,
+                            show_user=show_user)
+        return res
+
     def add_str_column(self,
                        name: str,
                        contains_subsamples: bool = False,
@@ -843,7 +945,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
-        txnctx = AsetTxn(self._stageenv, self._hashenv, self._stagehashenv)
+        txnctx = ColumnTxn(self._stageenv, self._hashenv, self._stagehashenv)
         with txnctx.write() as ctx:
             ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
             ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
@@ -981,7 +1083,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         # -------- set vals in lmdb only after schema is sure to exist --------
 
-        txnctx = AsetTxn(self._stageenv, self._hashenv, self._stagehashenv)
+        txnctx = ColumnTxn(self._stageenv, self._hashenv, self._stagehashenv)
         with txnctx.write() as ctx:
             ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
             ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
@@ -1074,17 +1176,17 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         """
         self._verify_alive()
 
-        open_asets = []
+        open_columns = []
         for column in self._columns.values():
             if column._is_conman:
-                open_asets.append(column.column)
+                open_columns.append(column.column)
         open_meta = self._metadata._is_conman
 
         try:
             if open_meta:
                 self._metadata.__exit__()
-            for asetn in open_asets:
-                self._columns[asetn].__exit__()
+            for column_name in open_columns:
+                self._columns[column_name].__exit__()
 
             if self._differ.status() == 'CLEAN':
                 e = RuntimeError('No changes made in staging area. Cannot commit.')
@@ -1102,8 +1204,8 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             self._columns._open()
 
         finally:
-            for asetn in open_asets:
-                self._columns[asetn].__enter__()
+            for column_name in open_columns:
+                self._columns[column_name].__enter__()
             if open_meta:
                 self._metadata.__enter__()
 

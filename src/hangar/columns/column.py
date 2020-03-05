@@ -6,7 +6,7 @@ from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
 
 import lmdb
 
-from .common import AsetTxn
+from .common import ColumnTxn
 from .constructors import (
     generate_flat_column, generate_nested_column, column_type_object_from_schema
 )
@@ -42,7 +42,7 @@ class Columns:
                  hashenv: Optional[lmdb.Environment] = None,
                  dataenv: Optional[lmdb.Environment] = None,
                  stagehashenv: Optional[lmdb.Environment] = None,
-                 txnctx: Optional[AsetTxn] = None):
+                 txnctx: Optional[ColumnTxn] = None):
         """Developer documentation for init method.
 
         .. warning::
@@ -68,7 +68,7 @@ class Columns:
             cmtrefenv for read-only checkouts.
         stagehashenv : Optional[lmdb.Environment]
             environment handle for newly added staged data hash records.
-        txnctx: Optional[AsetTxn]
+        txnctx: Optional[ColumnTxn]
             class implementing context managers to handle lmdb transactions
         """
         self._stack: Optional[ExitStack] = None
@@ -415,7 +415,7 @@ class Columns:
             live column data accessors in `write` mode.
         """
         columns = {}
-        txnctx = AsetTxn(stageenv, hashenv, stagehashenv)
+        txnctx = ColumnTxn(stageenv, hashenv, stagehashenv)
         query = RecordQuery(stageenv)
         stagedSchemaSpecs = query.schema_specs()
 
@@ -474,7 +474,7 @@ class Columns:
             contains live column data accessors in `read-only` mode.
         """
         columns = {}
-        txnctx = AsetTxn(cmtrefenv, hashenv, None)
+        txnctx = ColumnTxn(cmtrefenv, hashenv, None)
         query = RecordQuery(cmtrefenv)
         cmtSchemaSpecs = query.schema_specs()
 

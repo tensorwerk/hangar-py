@@ -392,6 +392,36 @@ def remove_remote(repo: Repository, name):
 
 
 @main.command()
+@click.argument('dev', nargs=1, required=True)
+@click.argument('master', nargs=1, required=False, default=None)
+@pass_repo
+def diff(repo: Repository, dev, master):
+    """Display diff of DEV commit/branch to MASTER commit/branch
+
+    If no MASTER is specified, then the staging area branch HEAD will
+    will be used as the commit digest for MASTER. This operation will
+    return a diff which could be interpreted as if you were merging
+    the changes in DEV into MASTER.
+
+    TODO: VERIFY ORDER OF OUTPUT IS CORRECT.
+    """
+    from hangar.records.commiting import expand_short_commit_digest
+    from hangar.records.commiting import get_staging_branch_head
+    from hangar.records.summarize import status
+
+    if dev not in repo.list_branches():
+        dev = expand_short_commit_digest(repo._env.refenv, dev)
+
+    if master is None:
+        master = get_staging_branch_head(repo._env.branchenv)
+    elif master not in repo.list_branches():
+        master = expand_short_commit_digest(repo._env.refenv, master)
+
+    diff_spec = repo.diff(master, dev)
+    buf = status(hashenv=repo._env.hashenv, branch_name=dev, diff=diff_spec.diff)
+    click.echo(buf.getvalue())
+
+@main.command()
 @click.argument('startpoint', nargs=1, required=False)
 @pass_repo
 def summary(repo: Repository, startpoint):
