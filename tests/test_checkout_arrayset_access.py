@@ -348,7 +348,7 @@ def test_writer_co_get_returns_none_on_nonexistant_sample_name(aset_samples_init
 
     array5by7[:] = 0
     wco.columns['writtenaset'][0] = array5by7
-    out = wco.get('writtenaset', 124)
+    out = wco.get(('writtenaset', 124))
     assert out is None
     wco.close()
 
@@ -632,16 +632,16 @@ def test_co_read_dunder_getitem_excepts_missing_sample(aset_samples_initialized_
 def test_co_read_get_except_missing_true_excepts_missing_sample(aset_samples_initialized_repo, write):
     co = aset_samples_initialized_repo.checkout(write=write)
     with pytest.raises(KeyError):
-        res = co.get('writtenaset', 0, except_missing=True)
+        res = co.get(('writtenaset', 0), except_missing=True)
     co.close()
 
 
 @pytest.mark.parametrize('write', [True, False])
 def test_co_read_get_except_missing_false_returns_none_on_missing_sample(aset_samples_initialized_repo, write):
     co = aset_samples_initialized_repo.checkout(write=write)
-    res_1 = co.get('writtenaset', 0)
+    res_1 = co.get(('writtenaset', 0))
     assert res_1 is None
-    res_2 = co.get('writtenaset', 0, except_missing=False)
+    res_2 = co.get(('writtenaset', 0), except_missing=False)
     assert res_2 is None
     co.close()
 
@@ -699,26 +699,26 @@ def test_writer_co_aset_cm_not_allow_remove_aset(aset_samples_initialized_repo, 
     wco.close()
 
 
-def test_writer_co_aset_instance_cm_not_allow_any_aset_removal(repo_20_filled_samples):
+def test_writer_co_column_instance_cm_not_allow_any_column_removal(repo_20_filled_samples):
 
     wco = repo_20_filled_samples.checkout(write=True)
-    asets = wco.columns
+    columns = wco.columns
     writtenaset = wco.columns['writtenaset']
     second_aset = wco.columns['second_aset']
 
     with second_aset:
         with pytest.raises(PermissionError):
-            asets.delete('writtenaset')
+            columns.delete('writtenaset')
         with pytest.raises(PermissionError):
-            asets.delete('second_aset')
+            columns.delete('second_aset')
         with pytest.raises(PermissionError):
             wco.columns.delete('writtenaset')
         with pytest.raises(PermissionError):
             wco.columns.delete('second_aset')
         with pytest.raises(PermissionError):
-            del asets['writtenaset']
+            del columns['writtenaset']
         with pytest.raises(PermissionError):
-            del asets['second_aset']
+            del columns['second_aset']
         with pytest.raises(PermissionError):
             del wco.columns['second_aset']
         with pytest.raises(PermissionError):
@@ -726,35 +726,35 @@ def test_writer_co_aset_instance_cm_not_allow_any_aset_removal(repo_20_filled_sa
 
     with writtenaset:
         with pytest.raises(PermissionError):
-            asets.delete('writtenaset')
+            columns.delete('writtenaset')
         with pytest.raises(PermissionError):
-            asets.delete('second_aset')
+            columns.delete('second_aset')
         with pytest.raises(PermissionError):
             wco.columns.delete('writtenaset')
         with pytest.raises(PermissionError):
             wco.columns.delete('second_aset')
         with pytest.raises(PermissionError):
-            del asets['writtenaset']
+            del columns['writtenaset']
         with pytest.raises(PermissionError):
-            del asets['second_aset']
+            del columns['second_aset']
         with pytest.raises(PermissionError):
             del wco.columns['second_aset']
         with pytest.raises(PermissionError):
             del wco.columns['written_aset']
 
-    with asets:
+    with columns:
         with pytest.raises(PermissionError):
-            asets.delete('writtenaset')
+            columns.delete('writtenaset')
         with pytest.raises(PermissionError):
-            asets.delete('second_aset')
+            columns.delete('second_aset')
         with pytest.raises(PermissionError):
             wco.columns.delete('writtenaset')
         with pytest.raises(PermissionError):
             wco.columns.delete('second_aset')
         with pytest.raises(PermissionError):
-            del asets['writtenaset']
+            del columns['writtenaset']
         with pytest.raises(PermissionError):
-            del asets['second_aset']
+            del columns['second_aset']
         with pytest.raises(PermissionError):
             del wco.columns['second_aset']
         with pytest.raises(PermissionError):
@@ -928,7 +928,7 @@ def test_reader_co_get_read_returns_none_nonexistant_sample_name(aset_samples_in
     wco.close()
 
     rco = aset_samples_initialized_repo.checkout()
-    out = rco.get('writtenaset', 124)
+    out = rco.get(('writtenaset', 124))
     assert out is None
     rco.close()
 
