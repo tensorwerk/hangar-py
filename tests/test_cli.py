@@ -27,6 +27,8 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  clone        Initialize a repository at the current path and fetch updated...\n'\
            '  column       Operations for working with columns in the writer checkout.\n'\
            '  commit       Commits outstanding changes.\n'\
+           '  diff         Display diff of DEV commit/branch to MASTER commit/branch If\n'\
+           '               no...\n'\
            '  export       Export COLUMN sample data as it existed a STARTPOINT to some...\n'\
            '  fetch        Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data   Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
