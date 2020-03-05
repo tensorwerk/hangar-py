@@ -26,6 +26,7 @@ Checkout
 
 .. autoclass:: hangar.checkout.WriterCheckout()
    :members:
+   :inherited-members:
    :special-members: __getitem__, __setitem__, __len__, __contains__, __iter__
    :exclude-members: __init__
 
@@ -86,6 +87,7 @@ Checkout
 
 .. autoclass:: hangar.checkout.ReaderCheckout()
    :members:
+   :inherited-members:
    :special-members: __getitem__, __len__, __contains__, __iter__
    :exclude-members: __init__
 

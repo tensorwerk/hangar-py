@@ -590,17 +590,17 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
             >>> dset = repo.checkout(branch='master', write=True)
             >>>
-            >>> # Add single sample to single column
+            # Add single sample to single column
             >>> dset['foo', 1] = np.array([1])
             >>> dset['foo', 1]
             array([1])
             >>>
-            >>> # Add multiple samples to single column
+            # Add multiple samples to single column
             >>> dset['foo', [1, 2, 3]] = [np.array([1]), np.array([2]), np.array([3])]
             >>> dset['foo', [1, 2, 3]]
             [array([1]), array([2]), array([3])]
             >>>
-            >>> # Add single sample to multiple columns
+            # Add single sample to multiple columns
             >>> dset[['foo', 'bar'], 1] = [np.array([1]), np.array([11])]
             >>> dset[:, 1]
             ArraysetData(foo=array([1]), bar=array([11]))
