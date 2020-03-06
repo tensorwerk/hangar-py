@@ -15,19 +15,6 @@ cdef class SizedDict:
     def maxsize(self):
         return self._maxsize
 
-    def __getstate__(self):
-        state = {
-            '_stack_size': self._stack_size,
-            '_maxsize': self._maxsize,
-            '_stack': self._stack,
-            '_data': self._data,
-        }
-        return state
-
-    def __setstate__(self, state):
-        for attr_name, attr_val in state.items():
-            setattr(self, attr_name, attr_val)
-
     def __repr__(self):
         return repr(self._data)
 
@@ -66,8 +53,6 @@ cdef class SizedDict:
     def __setitem__(self, key, value):
         """Set d[key] to value
         """
-        cdef object k_pop
-
         if self._stack_size >= self._maxsize:
             k_pop = self._stack.popleft()
             del self._data[k_pop]
@@ -134,7 +119,7 @@ cdef class SizedDict:
         self._stack_size = self._stack_size - 1
         return lifo_key, lifo_val
 
-    def update(self, object other):
+    def update(self, other):
         """Update the dictionary with the key/value pairs from other, overwriting
         existing keys. Return None.
 
@@ -148,12 +133,12 @@ cdef class SizedDict:
         for k, v in other.items():
             self[k] = v
 
-    def setdefault(self, object key, default=None):
+    def setdefault(self, key, default=None):
         """If key is in the dictionary, return its value. If not, insert key
         with a value of default and return default. default defaults to None.
         """
         try:
-            return self[key]
+            return self._data[key]
         except KeyError:
             self[key] = default
             return default
