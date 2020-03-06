@@ -31,6 +31,15 @@ Improvements
 New Features
 ------------
 
+* Added ``.diff()`` method to ``Repository`` class to enable diffing changes between any pair of
+  commits / branches without needing to open the diff base in a checkout.
+  (`#183 <https://github.com/tensorwerk/hangar-py/pull/183>`__) `@rlizzo <https://github.com/rlizzo>`__
+* New CLI command ``hangar diff`` which reports a summary view of changes made between any pair of
+  commits / branches.
+  (`#183 <https://github.com/tensorwerk/hangar-py/pull/183>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Added ``.log()`` method to ``Checkout`` objects so graphical commit graph or machine readable
+  commit details / DAG can be queried when operating on a particular commit.
+  (`#183 <https://github.com/tensorwerk/hangar-py/pull/183>`__) `@rlizzo <https://github.com/rlizzo>`__
 * "string" type columns now supported alongside "ndarray" column type.
   (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
 * New "column" API, which replaces "arrayset" name.
@@ -43,6 +52,23 @@ New Features
   (`#174 <https://github.com/tensorwerk/hangar-py/pull/174>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added method to traverse the entire repository history and cryptographically verify integrity.
   (`#173 <https://github.com/tensorwerk/hangar-py/pull/173>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+Changes
+-------
+
+* Argument syntax of ``__getitem__()`` and ``get()`` methods of ``ReaderCheckout`` and
+  ``WriterCheckout`` classes. The new format supports handeling arbitrary arguments specific
+  to retrieval of data from any column type.
+  (`#183 <https://github.com/tensorwerk/hangar-py/pull/183>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+Removed
+-------
+
+* ``__setitem__()`` method in ``WriterCheckout`` objects.  Writing data to columns via a checkout object
+  is no longer supported.
+  (`#183 <https://github.com/tensorwerk/hangar-py/pull/183>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
 Bug Fixes

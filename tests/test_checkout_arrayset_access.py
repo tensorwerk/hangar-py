@@ -23,66 +23,6 @@ def test_arrayset_getattr_does_not_raise_permission_error_if_alive(write, aset_s
         hasattr(asets, '_mode')
 
 
-@pytest.mark.parametrize("samplename", ['0', '-1', 1, 0, 1000, 'alkea'])
-def test_write_single_arrayset_single_sample(aset_samples_initialized_repo, array5by7, samplename):
-    wco = aset_samples_initialized_repo.checkout(write=True)
-    wco['writtenaset', samplename] = array5by7
-    assert np.allclose(array5by7, wco.columns['writtenaset'][samplename])
-    wco.commit('init')
-    assert np.allclose(array5by7, wco.columns['writtenaset'][samplename])
-    wco.close()
-
-    rco = aset_samples_initialized_repo.checkout()
-    assert np.allclose(array5by7, rco.columns['writtenaset'][samplename])
-    rco.close()
-
-
-@pytest.mark.parametrize("samplenames,samplevals", [
-    [('0', 1, '22', 23), (0, 1, 22, 23)],
-    [('0', 1), (0, 1)],
-    [('aeaaee', 1, 2, 3, 4, 5, 6, 7), (0, 1, 2, 3, 4, 5, 6, 7)]
-])
-def test_write_single_arrayset_multiple_samples(aset_samples_initialized_repo, array5by7, samplenames, samplevals):
-    wco = aset_samples_initialized_repo.checkout(write=True)
-
-    values = []
-    for val in samplevals:
-        array5by7[:] = val
-        values.append(array5by7)
-    wco['writtenaset', samplenames] = values
-
-    for val, name in zip(values, samplenames):
-        assert np.allclose(val, wco.columns['writtenaset'][name])
-    wco.commit('init')
-    for val, name in zip(values, samplenames):
-        assert np.allclose(val, wco.columns['writtenaset'][name])
-    wco.close()
-
-    rco = aset_samples_initialized_repo.checkout()
-    for val, name in zip(values, samplenames):
-        assert np.allclose(val, rco.columns['writtenaset'][name])
-    rco.close()
-
-
-def test_write_multiple_arrayset_single_samples(aset_samples_initialized_repo, array5by7):
-    wco = aset_samples_initialized_repo.checkout(write=True)
-
-    array10 = np.arange(10, dtype=np.float32)
-    wco.add_ndarray_column('newaset', prototype=array10)
-    wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
-    assert np.allclose(array5by7, wco.columns['writtenaset']['0'])
-    assert np.allclose(array10, wco.columns['newaset']['0'])
-    wco.commit('init')
-    assert np.allclose(array5by7, wco.columns['writtenaset']['0'])
-    assert np.allclose(array10, wco.columns['newaset']['0'])
-    wco.close()
-
-    rco = aset_samples_initialized_repo.checkout()
-    assert np.allclose(array5by7, rco.columns['writtenaset']['0'])
-    assert np.allclose(array10, rco.columns['newaset']['0'])
-    rco.close()
-
-
 def test_write_in_context_manager_no_loop(aset_samples_initialized_repo, array5by7):
     wco = aset_samples_initialized_repo.checkout(write=True)
 
@@ -90,7 +30,8 @@ def test_write_in_context_manager_no_loop(aset_samples_initialized_repo, array5b
     wco.add_ndarray_column('newaset', prototype=array10)
     with wco:
         assert wco._is_conman is True
-        wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
+        wco['writtenaset']['0'] = array5by7
+        wco['newaset']['0'] = array10
     assert wco._is_conman is False
 
     assert np.allclose(array5by7, wco.columns['writtenaset']['0'])
@@ -116,7 +57,8 @@ def test_write_in_context_manager_many_samples_looping(aset_samples_initialized_
         for idx in range(100):
             array10[:] = idx
             array5by7[:] = idx
-            wco[['writtenaset', 'newaset'], idx] = [array5by7, array10]
+            wco['writtenaset'][idx] = array5by7
+            wco['newaset'][idx] = array10
     assert wco._is_conman is False
 
     for idx in range(100):
@@ -145,10 +87,12 @@ def test_write_fails_if_checkout_closed(aset_samples_initialized_repo, array5by7
     wco = aset_samples_initialized_repo.checkout(write=True)
     array10 = np.arange(10, dtype=np.float32)
     wco.add_ndarray_column('newaset', prototype=array10)
-    wco[['writtenaset', 'newaset'], 0] = [array5by7, array10]
+    wco['writtenaset'][0] = array5by7
+    wco['newaset'][0] = array10
     wco.close()
     with pytest.raises((PermissionError, UnboundLocalError)):
-        wco[['writtenaset', 'newaset'], 1] = [array5by7, array10]
+        wco['writtenaset'][1] = array5by7
+        wco['newaset'][1] = array10
 
     wco2 = aset_samples_initialized_repo.checkout(write=True)
     assert 0 in wco2.columns['writtenaset']
@@ -162,69 +106,22 @@ def test_write_context_manager_fails_if_checkout_closed(aset_samples_initialized
     wco = aset_samples_initialized_repo.checkout(write=True)
     array10 = np.arange(10, dtype=np.float32)
     wco.add_ndarray_column('newaset', prototype=array10)
-    wco[['writtenaset', 'newaset'], 0] = [array5by7, array10]
+    wco['writtenaset'][0] = array5by7
+    wco['newaset'][0] = array10
     wco.close()
     with pytest.raises(PermissionError):
         with wco:
-            wco['writtenaset', 1] = array5by7
+            wco['writtenaset'][1] = array5by7
+    with pytest.raises(PermissionError):
+        with wco:
+            wco['newaset'][1] = array10
 
     wco2 = aset_samples_initialized_repo.checkout(write=True)
     assert 0 in wco2.columns['writtenaset']
     assert 0 in wco2.columns['newaset']
     assert 1 not in wco2.columns['writtenaset']
+    assert 1 not in wco2.columns['newaset']
     wco2.close()
-
-
-def test_write_fails_multiple_arrayset_multiple_samples(aset_samples_initialized_repo, array5by7):
-    wco = aset_samples_initialized_repo.checkout(write=True)
-
-    array10 = np.arange(10, dtype=np.float32)
-    wco.add_ndarray_column('newaset', prototype=array10)
-    with pytest.raises(SyntaxError):
-        wco[['writtenaset', 'newaset'], ['0', 1]] = [[array5by7, array5by7], [array10, array10]]
-    wco.close()
-
-
-def test_write_fails_nonmatching_multiple_asets_single_sample(aset_samples_initialized_repo, array5by7):
-    wco = aset_samples_initialized_repo.checkout(write=True)
-
-    array10 = np.arange(10, dtype=np.float32)
-    wco.add_ndarray_column('newaset', prototype=array10)
-    with pytest.raises(ValueError):
-        wco[['writtenaset', 'newaset'], '0'] = [array5by7]
-    with pytest.raises(TypeError):
-        wco[['writtenaset', 'newaset'], '0'] = array5by7
-    wco.close()
-
-
-def test_write_fails_nonmatching_single_aset_multiple_samples(aset_samples_initialized_repo, array5by7):
-    wco = aset_samples_initialized_repo.checkout(write=True)
-
-    with pytest.raises(TypeError):
-        wco['writtenaset', [i for i in range(10)]] = array5by7
-    with pytest.raises(ValueError):
-        wco['writtenaset', [i for i in range(10)]] = [array5by7 for i in range(4)]
-    with pytest.raises(ValueError):
-        wco['writtenaset', [i for i in range(10)]] = [array5by7 for i in range(14)]
-
-    with pytest.raises(ValueError):
-        wco['writtenaset', []] = [array5by7 for i in range(1)]
-    wco.close()
-
-
-def test_write_fails_multiple_asets_single_sample_not_compatible(aset_samples_initialized_repo, array5by7):
-    wco = aset_samples_initialized_repo.checkout(write=True)
-    array10 = np.arange(10, dtype=np.float32)
-    wco.add_ndarray_column('newaset', prototype=array10)
-
-    with pytest.raises(ValueError):
-        wco[['writtenaset', 'newaset'], 0] = [array10, array5by7]
-    with pytest.raises(ValueError):
-        wco[['writtenaset', 'newaset'], 0] = [array10, array5by7.astype(np.float16)]
-    with pytest.raises(ValueError):
-        fortran5by7 = np.zeros(shape=array5by7.shape, dtype=array5by7.dtype, order='F')
-        wco[['writtenaset', 'newaset'], 0] = [array10, fortran5by7]
-    wco.close()
 
 
 def test_writer_co_read_single_aset_single_sample(aset_samples_initialized_repo, array5by7):
@@ -238,7 +135,6 @@ def test_writer_co_read_single_aset_single_sample(aset_samples_initialized_repo,
     assert np.allclose(wco['writtenaset', 0], array5by7)
     assert np.allclose(wco['writtenaset', 1], array5by7 + 1)
     assert np.allclose(wco['writtenaset', 2], array5by7 + 2)
-
     wco.close()
 
 
@@ -341,7 +237,8 @@ def test_writer_co_read_in_context_manager_no_loop(aset_samples_initialized_repo
 
     array10 = np.arange(10, dtype=np.float32)
     wco.add_ndarray_column('newaset', prototype=array10)
-    wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
+    wco['writtenaset']['0'] = array5by7
+    wco['newaset']['0'] = array10
     with wco:
         assert wco._is_conman is True
         assert np.allclose(wco['writtenaset', '0'], array5by7)
@@ -357,7 +254,8 @@ def test_writer_co_read_in_context_manager_many_samples_looping(aset_samples_ini
         for idx in range(100):
             array10[:] = idx
             array5by7[:] = idx
-            wco[['writtenaset', 'newaset'], idx] = [array5by7, array10]
+            wco['writtenaset'][idx] = array5by7
+            wco['newaset'][idx] = array10
 
     with wco:
         waset_keys = [('writtenaset', i) for i in range(100)]
@@ -679,7 +577,8 @@ def test_reader_co_read_in_context_manager_no_loop(aset_samples_initialized_repo
 
     array10 = np.arange(10, dtype=np.float32)
     wco.add_ndarray_column('newaset', prototype=array10)
-    wco[['writtenaset', 'newaset'], '0'] = [array5by7, array10]
+    wco['writtenaset']['0'] = array5by7
+    wco['newaset']['0'] = array10
     wco.commit('first')
     wco.close()
 
@@ -699,7 +598,8 @@ def test_reader_co_read_in_context_manager_many_samples_looping(aset_samples_ini
         for idx in range(100):
             array10[:] = idx
             array5by7[:] = idx
-            wco[['writtenaset', 'newaset'], idx] = [array5by7, array10]
+            wco['writtenaset'][idx] = array5by7
+            wco['newaset'][idx] = array10
     wco.commit('first')
     wco.close()
 

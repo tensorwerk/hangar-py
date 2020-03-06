@@ -2,10 +2,6 @@ from functools import reduce
 from operator import getitem as op_getitem
 from contextlib import ExitStack
 
-from collections import namedtuple
-import warnings
-
-
 # noinspection PyUnresolvedReferences
 class GetMixin:
     """Mixin methods for the checkout object classes.
@@ -185,11 +181,11 @@ class GetMixin:
             returned in same order sample keys are received.
         """
         with ExitStack() as stack:
-            if not bool(self._enter_count):
+            if not self._is_conman:
                 stack.enter_context(self)
 
             if isinstance(keys, str):
-                return self._columns[keys]
+                return self.columns[keys]
 
             _COLUMNS = self._columns
             if len(keys) >= 2 and any([isinstance(k, (list, tuple)) for k in keys]):

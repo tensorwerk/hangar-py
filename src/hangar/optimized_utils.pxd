@@ -1,4 +1,6 @@
 
 cdef class SizedDict(dict):
-    cdef public int _maxsize
-    cdef public object _stack
+    cdef int _maxsize
+    cdef object _stack
+    cdef dict _data
+    cdef int _stack_size

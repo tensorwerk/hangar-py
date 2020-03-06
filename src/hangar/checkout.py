@@ -170,16 +170,14 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         PermissionError
             if the checkout was previously close
         """
-        try:
-            self._columns
-        except AttributeError:
+        if not hasattr(self, '_columns'):
             err = PermissionError(
                 f'Unable to operate on past checkout objects which have been '
                 f'closed. No operation occurred. Please use a new checkout.')
             raise err from None
 
     @property
-    def _is_conman(self):
+    def _is_conman(self) -> bool:
         self._verify_alive()
         return bool(self._enter_count)
 
@@ -493,9 +491,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             or if the writer lock value does not match that recorded in the
             branch db
         """
-        try:
-            self._writer_lock
-        except AttributeError:
+        if not hasattr(self, '_writer_lock'):
             with suppress(AttributeError):
                 self._columns._destruct()
                 del self._columns
@@ -581,127 +577,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             refenv=self._refenv,
             branchenv=self._branchenv,
             branch_name=self._branch_name)
-
-    def __setitem__(self, index, value):
-        """Syntax for setting items.
-
-        Checkout object can be thought of as a "dataset" ("dset") mapping a view
-        of samples across columns:
-
-            >>> dset = repo.checkout(branch='master', write=True)
-            >>>
-            # Add single sample to single column
-            >>> dset['foo', 1] = np.array([1])
-            >>> dset['foo', 1]
-            array([1])
-            >>>
-            # Add multiple samples to single column
-            >>> dset['foo', [1, 2, 3]] = [np.array([1]), np.array([2]), np.array([3])]
-            >>> dset['foo', [1, 2, 3]]
-            [array([1]), array([2]), array([3])]
-            >>>
-            # Add single sample to multiple columns
-            >>> dset[['foo', 'bar'], 1] = [np.array([1]), np.array([11])]
-            >>> dset[:, 1]
-            ArraysetData(foo=array([1]), bar=array([11]))
-
-        Parameters
-        ----------
-        index: Union[Iterable[str], Iterable[str, int]]
-            Please see detailed explanation above for full options.The first
-            element (or collection) specified must be ``str`` type and correspond
-            to an column name(s). The second element (or collection) are keys
-            corresponding to sample names which the data should be written to.
-
-            Unlike the :meth:`__getitem__` method, only ONE of the ``column``
-            name(s) or ``sample`` key(s) can specify multiple elements at the same
-            time. Ie. If multiple ``columns`` are specified, only one sample key
-            can be set, likewise if multiple ``samples`` are specified, only one
-            ``column`` can be specified. When specifying multiple ``columns``
-            or ``samples``, each data piece to be stored must reside as individual
-            elements (``np.ndarray``) in a List or Tuple. The number of keys and
-            the number of values must match exactly.
-
-        value: Union[Any, Iterable[Any]]
-            Data to store in the specified columns/sample keys. When
-            specifying multiple ``columns`` or ``samples``, each data piece
-            to be stored must reside as individual elements in a List or Tuple.
-            The number of keys and the number of values must match exactly.
-
-        Notes
-        -----
-
-        *  No slicing syntax is supported for either columns or samples. This
-           is in order to ensure explicit setting of values in the desired
-           fields/keys
-
-        *  Add multiple samples to multiple columns not yet supported.
-        """
-        self._verify_alive()
-        with ExitStack() as stack:
-            if not self._is_conman:
-                stack.enter_context(self)
-
-            if not isinstance(index, (tuple, list)):
-                raise ValueError(f'Idx: {index} does not specify column(s) AND sample(s)')
-            elif len(index) > 2:
-                raise ValueError(f'Index of len > 2 invalid. To multi-set, pass in lists')
-            columnIdx, sampleNames = index
-
-            # Parse Columns
-            if isinstance(columnIdx, str):
-                cols = [self._columns._columns[columnIdx]]
-            elif isinstance(columnIdx, (tuple, list)):
-                cols = [self._columns._columns[aidx] for aidx in columnIdx]
-            else:
-                raise TypeError(f'Column idx: {columnIdx} of type: {type(columnIdx)}')
-            nCols = len(cols)
-
-            # Parse sample names
-            if isinstance(sampleNames, (str, int)):
-                sampleNames = [sampleNames]
-            elif not isinstance(sampleNames, (list, tuple)):
-                raise TypeError(f'Sample names: {sampleNames} type: {type(sampleNames)}')
-            nSamples = len(sampleNames)
-
-            # Verify cols
-            if (nCols > 1) and (nSamples > 1):
-                raise SyntaxError(
-                    'Not allowed to specify BOTH multiple samples AND multiple'
-                    'columns in `set` operation in current Hangar implementation')
-
-            elif (nCols == 1) and (nSamples == 1):
-                col = cols[0]
-                sampleName = sampleNames[0]
-                col[sampleName] = value
-
-            elif nCols >= 2:
-                if not isinstance(value, (list, tuple)):
-                    raise TypeError(f'Value: {value} not list/tuple of np.ndarray')
-                elif not (len(value) == nCols):
-                    raise ValueError(f'Num values: {len(value)} != num columns {nCols}')
-                for col, val in zip(cols, value):
-                    isCompat = col._schema.verify_data_compatible(val)
-                    if not isCompat.compatible:
-                        raise ValueError(isCompat.reason)
-                for sampleName in sampleNames:
-                    for col, val in zip(cols, value):
-                        col[sampleName] = val
-
-            else:  # nSamples >= 2
-                if not isinstance(value, (list, tuple)):
-                    raise TypeError(f'Value: {value} not list/tuple of data')
-                elif not (len(value) == nSamples):
-                    raise ValueError(f'Num values: {len(value)} != num samples {nSamples}')
-                for col in cols:
-                    for val in value:
-                        isCompat = col._schema.verify_data_compatible(val)
-                        if not isCompat.compatible:
-                            raise ValueError(isCompat.reason)
-                for col in cols:
-                    for sampleName, val in zip(sampleNames, value):
-                        col[sampleName] = val
-                return None
 
     @property
     def columns(self) -> Columns:
