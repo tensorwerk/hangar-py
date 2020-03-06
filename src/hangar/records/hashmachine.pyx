@@ -63,7 +63,8 @@ def ndarray_hasher_tcode_0(array not None):
     other_info = ser_int_list(shape)
 
     hasher = blake2b(array, digest_size=20)
-    digest = hasher.update(other_info).hexdigest()
+    hasher.update(other_info)
+    digest = hasher.hexdigest()
     return f'0={digest}'
 
 
