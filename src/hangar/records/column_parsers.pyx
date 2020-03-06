@@ -1,13 +1,11 @@
 from .recordstructs cimport ColumnSchemaKey, \
     FlatColumnDataKey, \
     NestedColumnDataKey, \
-    MetadataRecordKey, \
     DataRecordVal
 
 from .recordstructs import ColumnSchemaKey, \
     FlatColumnDataKey, \
     NestedColumnDataKey, \
-    MetadataRecordKey, \
     DataRecordVal
 
 import ast
@@ -28,19 +26,12 @@ __all__ = [
     'nested_data_column_record_start_range_key',
     'nested_data_db_key_from_names',
     'nested_data_record_from_db_key',
-    'metadata_range_key',
-    'metadata_record_raw_key_from_db_key',
-    'metadata_record_db_key_from_raw_key',
     'dynamic_layout_data_record_from_db_key',
     'dynamic_layout_data_record_db_start_range_key',
     'hash_schema_db_key_from_raw_key',
     'hash_data_db_key_from_raw_key',
     'hash_schema_raw_key_from_db_key',
     'hash_data_raw_key_from_db_key',
-    'hash_meta_db_key_from_raw_key',
-    'hash_meta_db_val_from_raw_val',
-    'hash_meta_raw_key_from_db_key',
-    'hash_meta_raw_val_from_db_val',
     'schema_record_db_val_from_digest',
 ]
 
@@ -207,37 +198,6 @@ cpdef NestedColumnDataKey nested_data_record_from_db_key(bytes raw):
     return NestedColumnDataKey(column, sample, subsample)
 
 
-# ------------------------- Metadata Tag Parsers ------------------------------
-
-
-cpdef bytes metadata_range_key():
-    """return the metadata db range counter key
-    """
-    return 'l:'.encode()
-
-
-cpdef MetadataRecordKey metadata_record_raw_key_from_db_key(bytes raw):
-    """Convert and split a lmdb record key & value into python objects
-    """
-    cdef str serial, key
-
-    serial = raw.decode()
-    _, key = serial.split(':')
-    return MetadataRecordKey(key)
-
-
-cpdef bytes metadata_record_db_key_from_raw_key(key):
-    """converts a python metadata name into the appropriate lmdb key
-    """
-    cdef str serial
-
-    if isinstance(key, int):
-        serial = f'l:#{key}'
-    else:
-        serial = f'l:{key}'
-    return serial.encode()
-
-
 # ----------------------- dynamic parser selection ----------------------------
 
 
@@ -246,8 +206,6 @@ cpdef object dynamic_layout_data_record_from_db_key(bytes raw):
         res = flat_data_record_from_db_key(raw)
     elif raw[0:2] == b'n:':
         res = nested_data_record_from_db_key(raw)
-    elif raw[0:2] == b'l:':
-        res = metadata_record_raw_key_from_db_key(raw)
     elif raw[0:2] == b's:':
         res = schema_column_record_from_db_key(raw)
     else:
@@ -290,24 +248,3 @@ cpdef str hash_schema_raw_key_from_db_key(bytes db_key):
 
 cpdef str hash_data_raw_key_from_db_key(bytes db_key):
     return db_key[2:].decode()
-
-
-#
-# Metadata/Label Hash parsing functions used to convert db key/val to raw pyhon obj
-# ---------------------------------------------------------------------------------
-#
-
-cpdef bytes hash_meta_db_key_from_raw_key(str meta_hash):
-    return f'h:{meta_hash}'.encode()
-
-
-cpdef bytes hash_meta_db_val_from_raw_val(str meta_val):
-    return meta_val.encode()
-
-
-cpdef str hash_meta_raw_key_from_db_key(bytes db_key):
-    return db_key.decode()[2:]
-
-
-cpdef str hash_meta_raw_val_from_db_val(bytes db_val):
-    return db_val.decode()

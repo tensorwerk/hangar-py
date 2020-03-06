@@ -12,8 +12,6 @@ from .mixins import GetMixin, CheckoutDictIteration
 from .columns import (
     ColumnTxn,
     Columns,
-    MetadataReader,
-    MetadataWriter,
     generate_nested_column,
     generate_flat_column,
 )
@@ -112,11 +110,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         self._enter_count = 0
         self._stack: Optional[ExitStack] = None
 
-        self._metadata = MetadataReader(
-            mode='r',
-            repo_pth=self._repo_path,
-            dataenv=self._dataenv,
-            labelenv=self._labelenv)
         self._columns = Columns._from_commit(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
@@ -134,8 +127,7 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : False\
                 \n    Commit Hash  : {self._commit_hash}\
-                \n    Num Columns  : {len(self)}\
-                \n    Num Metadata : {len(self._metadata)}\n'
+                \n    Num Columns  : {len(self)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -153,7 +145,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         with ExitStack() as stack:
             if self._enter_count == 0:
                 stack.enter_context(self._columns)
-                stack.enter_context(self._metadata)
             self._enter_count += 1
             self._stack = stack.pop_all()
         return self
@@ -218,25 +209,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         """
         self._verify_alive()
         return self._columns
-
-    @property
-    def metadata(self) -> MetadataReader:
-        """Provides access to metadata interaction object.
-
-        .. seealso::
-
-            The class :class:`~hangar.columns.metadata.MetadataReader` contains all methods
-            accessible by this property accessor
-
-        Returns
-        -------
-        MetadataReader
-            weakref proxy to the metadata object which behaves exactly like a
-            metadata class but which can be invalidated when the writer lock is
-            released.
-        """
-        self._verify_alive()
-        return self._metadata
 
     @property
     def diff(self) -> ReaderUserDiff:
@@ -338,7 +310,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
             self._stack.close()
 
         self._columns._destruct()
-        self._metadata._destruct()
         for attr in list(self.__dict__.keys()):
             delattr(self, attr)
         atexit.unregister(self.close)
@@ -435,7 +406,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         self._columns: Optional[Columns] = None
         self._differ: Optional[WriterUserDiff] = None
-        self._metadata: Optional[MetadataWriter] = None
         self._setup()
         atexit.register(self.close)
 
@@ -446,8 +416,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : True\
                 \n    Base Branch  : {self._branch_name}\
-                \n    Num Columns  : {len(self)}\
-                \n    Num Metadata : {len(self._metadata)}\n'
+                \n    Num Columns  : {len(self)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -467,7 +436,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         with ExitStack() as stack:
             if self._enter_count == 0:
                 stack.enter_context(self._columns)
-                stack.enter_context(self._metadata)
             self._enter_count += 1
             self._stack = stack.pop_all()
         return self
@@ -496,9 +464,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                 self._columns._destruct()
                 del self._columns
             with suppress(AttributeError):
-                self._metadata._destruct()
-                del self._metadata
-            with suppress(AttributeError):
                 del self._differ
             err = f'Unable to operate on past checkout objects which have been '\
                   f'closed. No operation occurred. Please use a new checkout.'
@@ -510,9 +475,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             with suppress(AttributeError):
                 self._columns._destruct()
                 del self._columns
-            with suppress(AttributeError):
-                self._metadata._destruct()
-                del self._metadata
             with suppress(AttributeError):
                 del self._differ
             raise e from None
@@ -562,11 +524,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                 heads.set_staging_branch_head(
                     branchenv=self._branchenv, branch_name=self._branch_name)
 
-        self._metadata = MetadataWriter(
-            mode='a',
-            repo_pth=self._repo_path,
-            dataenv=self._stageenv,
-            labelenv=self._labelenv)
         self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
@@ -623,24 +580,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         """
         self._verify_alive()
         return self._columns
-
-    @property
-    def metadata(self) -> MetadataWriter:
-        """Provides access to metadata interaction object.
-
-        .. seealso::
-
-            The class :class:`~.columns.metadata.MetadataWriter` contains
-            all methods accessible by this property accessor
-
-        Returns
-        -------
-        MetadataWriter
-            the metadata object which behaves exactly like a metadata class but
-            which can be invalidated when the writer lock is released.
-        """
-        self._verify_alive()
-        return self._metadata
 
     @property
     def diff(self) -> WriterUserDiff:
@@ -1028,11 +967,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             with suppress(KeyError):
                 asetHandle._close()
 
-        self._metadata = MetadataWriter(
-            mode='a',
-            repo_pth=self._repo_path,
-            dataenv=self._stageenv,
-            labelenv=self._labelenv)
         self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
@@ -1072,11 +1006,8 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         for column in self._columns.values():
             if column._is_conman:
                 open_columns.append(column.column)
-        open_meta = self._metadata._is_conman
 
         try:
-            if open_meta:
-                self._metadata.__exit__()
             for column_name in open_columns:
                 self._columns[column_name].__exit__()
 
@@ -1098,8 +1029,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         finally:
             for column_name in open_columns:
                 self._columns[column_name].__enter__()
-            if open_meta:
-                self._metadata.__enter__()
 
         return commit_hash
 
@@ -1138,8 +1067,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             self._stack.close()
         if hasattr(self._columns, '_destruct'):
             self._columns._destruct()
-        if hasattr(self._metadata, '_destruct'):
-            self._metadata._destruct()
 
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
@@ -1157,11 +1084,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                                                        stageenv=self._stageenv,
                                                        commit_hash=head_commit)
 
-        self._metadata = MetadataWriter(
-            mode='a',
-            repo_pth=self._repo_path,
-            dataenv=self._stageenv,
-            labelenv=self._labelenv)
         self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
@@ -1190,9 +1112,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         if hasattr(self, '_columns'):
             if hasattr(self._columns, '_destruct'):
                 self._columns._destruct()
-        if hasattr(self, '_metadata'):
-            if hasattr(self._metadata, '_destruct'):
-                self._metadata._destruct()
 
         with suppress(lmdb.Error):
             heads.release_writer_lock(self._branchenv, self._writer_lock)

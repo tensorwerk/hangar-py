@@ -419,7 +419,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         value
             data to store
         """
-        # full_hash = array_hash_digest(value)
+        # full_hash = ndarray_hasher_tcode_0(value)
         full_hash = self._schema.data_hash_digest(value)
         hashKey = hash_data_db_key_from_raw_key(full_hash)
 

@@ -1,7 +1,6 @@
 from .base import ColumnBase
 from .descriptors import OneOf, Descriptor, String, OptionalString, OptionalDict
 from ..records import CompatibleData
-from ..records.hashmachine import metadata_hash_digest
 from ..utils import is_ascii
 
 
@@ -25,11 +24,25 @@ class StrColumnType(String):
     pass
 
 
+@OneOf(['2'])
+class DataHasherTcode(String):
+    pass
+
+
 class StringSchemaBase(ColumnBase):
     _schema_type = StringSchemaType()
     _column_type = StrColumnType()
+    _data_hasher_tcode = DataHasherTcode()
 
-    def __init__(self, dtype, backend=None, backend_options=None, *args, **kwargs):
+    def __init__(
+            self,
+            dtype,
+            backend=None,
+            backend_options=None,
+            *args, **kwargs
+    ):
+        if 'data_hasher_tcode' not in kwargs:
+            kwargs['data_hasher_tcode'] = '2'
         super().__init__(*args, **kwargs)
 
         if backend_options is not None and backend is None:
@@ -65,8 +78,8 @@ class StringSchemaBase(ColumnBase):
     def backend_options(self):
         return self._backend_options
 
-    def data_hash_digest(self, data, *, tcode='2') -> str:
-        return metadata_hash_digest(data, tcode=tcode)
+    def data_hash_digest(self, data: str) -> str:
+        return self._data_hasher_func(data)
 
     def change_backend(self, backend, backend_options=None):
         old_backend = self._backend

@@ -6,14 +6,14 @@ from hangar import Repository
 
 class MakeCommit(object):
 
-    params = [(5_000, 20_000), (5_000, 20_000)]
-    param_names = ['num_samples', 'num_metadata']
+    params = (5_000, 20_000, 50_000)
+    param_names = ['num_samples']
     processes = 2
     repeat = (2, 4, 20)
     number = 1
     warmup_time = 0
 
-    def setup(self, num_samples, num_metadata):
+    def setup(self, num_samples):
         self.tmpdir = mkdtemp()
         self.repo = Repository(path=self.tmpdir, exists=False)
         self.repo.init('tester', 'foo@test.bar', remove_old=True)
@@ -30,29 +30,26 @@ class MakeCommit(object):
             for i in range(num_samples):
                 arr[:] = i % 255
                 cm_aset[i] = arr
-        with self.co.metadata as cm_meta:
-            for i in range(num_metadata):
-                cm_meta[i] = f'{i % 500} data'
 
-    def teardown(self, num_samples, num_metadata):
+    def teardown(self, num_samples):
         self.co.close()
         self.repo._env._close_environments()
         rmtree(self.tmpdir)
 
-    def time_commit(self, num_samples, num_metadata):
+    def time_commit(self, num_samples):
         self.co.commit('hello')
 
 
 class CheckoutCommit(object):
 
-    params = [(5_000, 20_000), (5_000, 20_000)]
-    param_names = ['num_samples', 'num_metadata']
+    params = (5_000, 20_000, 50_000)
+    param_names = ['num_samples']
     processes = 2
     number = 1
     repeat = (2, 4, 20)
     warmup_time = 0
 
-    def setup(self, num_samples, num_metadata):
+    def setup(self, num_samples):
         self.tmpdir = mkdtemp()
         self.repo = Repository(path=self.tmpdir, exists=False)
         self.repo.init('tester', 'foo@test.bar', remove_old=True)
@@ -69,14 +66,11 @@ class CheckoutCommit(object):
             for i in range(num_samples):
                 arr[:] = i % 255
                 cm_aset[i] = arr
-        with self.co.metadata as cm_meta:
-            for i in range(num_metadata):
-                cm_meta[i] = f'{i % 500} data'
         self.co.commit('first')
         self.co.close()
         self.co = None
 
-    def teardown(self, num_samples, num_metadata):
+    def teardown(self, num_samples):
         try:
             self.co.close()
         except PermissionError:
@@ -84,9 +78,9 @@ class CheckoutCommit(object):
         self.repo._env._close_environments()
         rmtree(self.tmpdir)
 
-    def time_checkout_read_only(self, num_samples, num_metadata):
+    def time_checkout_read_only(self, num_samples):
         self.co = self.repo.checkout(write=False)
 
-    def time_checkout_write_enabled(self, num_samples, num_metadata):
+    def time_checkout_write_enabled(self, num_samples):
         self.co = self.repo.checkout(write=True)
         self.co.close()

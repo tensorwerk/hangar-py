@@ -509,7 +509,8 @@ def test_fetch_unchanged_repo_makes_no_modifications(written_two_cmt_server_repo
 def test_fetch_newer_disk_repo_makes_no_modifications(written_two_cmt_server_repo):
     _, repo = written_two_cmt_server_repo
     co = repo.checkout(write=True)
-    co.metadata['new_foo_abc'] = 'bar'
+    co.add_ndarray_column('test_meta')
+    co['test_meta'][0] = 'lol'
     co.commit('newer commit')
     co.close()
     with pytest.warns(UserWarning):

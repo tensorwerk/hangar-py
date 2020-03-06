@@ -85,74 +85,74 @@ def test_init_repo(managed_tmpdir):
             repo._env._close_environments()
 
 
-def test_writer_lock_is_held_check(repo_20_filled_samples_meta):
+def test_writer_lock_is_held_check(repo_20_filled_samples2):
     runner = CliRunner()
-    res = runner.invoke(cli.writer_lock_held, obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.writer_lock_held, obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Writer lock is available.\n'
-    co = repo_20_filled_samples_meta.checkout(write=True)
-    res = runner.invoke(cli.writer_lock_held, obj=repo_20_filled_samples_meta)
+    co = repo_20_filled_samples2.checkout(write=True)
+    res = runner.invoke(cli.writer_lock_held, obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Writer lock is held.\n'
     co.close()
 
 
-def test_writer_lock_force_release(repo_20_filled_samples_meta):
+def test_writer_lock_force_release(repo_20_filled_samples2):
     runner = CliRunner()
-    res = runner.invoke(cli.writer_lock_held, ['--force-release'], obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.writer_lock_held, ['--force-release'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Success force release of writer lock.\n'
-    co = repo_20_filled_samples_meta.checkout(write=True)
-    res = runner.invoke(cli.writer_lock_held, ['--force-release'], obj=repo_20_filled_samples_meta)
+    co = repo_20_filled_samples2.checkout(write=True)
+    res = runner.invoke(cli.writer_lock_held, ['--force-release'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Success force release of writer lock.\n'
-    assert repo_20_filled_samples_meta.writer_lock_held is False
-    nco = repo_20_filled_samples_meta.checkout(write=True)
+    assert repo_20_filled_samples2.writer_lock_held is False
+    nco = repo_20_filled_samples2.checkout(write=True)
     with pytest.raises(PermissionError):
         print(co.columns)
     nco.close()
 
 
-def test_checkout_writer_branch_works(repo_20_filled_samples_meta):
+def test_checkout_writer_branch_works(repo_20_filled_samples2):
     from hangar.records.heads import get_staging_branch_head
-    repo_20_filled_samples_meta.create_branch('dev')
+    repo_20_filled_samples2.create_branch('dev')
     runner = CliRunner()
-    res = runner.invoke(cli.checkout, ['dev'], obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.checkout, ['dev'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Writer checkout head set to branch: dev\n'
-    recorded_branch = get_staging_branch_head(repo_20_filled_samples_meta._env.branchenv)
+    recorded_branch = get_staging_branch_head(repo_20_filled_samples2._env.branchenv)
     assert recorded_branch == 'dev'
-    assert repo_20_filled_samples_meta.writer_lock_held is False
+    assert repo_20_filled_samples2.writer_lock_held is False
 
 
-def test_checkout_writer_branch_nonexistant_branch_errors(repo_20_filled_samples_meta):
+def test_checkout_writer_branch_nonexistant_branch_errors(repo_20_filled_samples2):
     from hangar.records.heads import get_staging_branch_head
     runner = CliRunner()
-    res = runner.invoke(cli.checkout, ['doesnotexist'], obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.checkout, ['doesnotexist'], obj=repo_20_filled_samples2)
     assert res.exit_code == 1
     assert res.stdout == 'Error: branch with name: doesnotexist does not exist. cannot get head.\n'
-    recorded_branch = get_staging_branch_head(repo_20_filled_samples_meta._env.branchenv)
+    recorded_branch = get_staging_branch_head(repo_20_filled_samples2._env.branchenv)
     assert recorded_branch == 'master'
-    assert repo_20_filled_samples_meta.writer_lock_held is False
+    assert repo_20_filled_samples2.writer_lock_held is False
 
 
-def test_checkout_writer_branch_lock_held_errors(repo_20_filled_samples_meta):
+def test_checkout_writer_branch_lock_held_errors(repo_20_filled_samples2):
     from hangar.records.heads import get_staging_branch_head
-    repo_20_filled_samples_meta.create_branch('testbranch')
-    co = repo_20_filled_samples_meta.checkout(write=True, branch='master')
+    repo_20_filled_samples2.create_branch('testbranch')
+    co = repo_20_filled_samples2.checkout(write=True, branch='master')
     try:
         runner = CliRunner()
-        res = runner.invoke(cli.checkout, ['testbranch'], obj=repo_20_filled_samples_meta)
+        res = runner.invoke(cli.checkout, ['testbranch'], obj=repo_20_filled_samples2)
         assert res.exit_code == 1
         msg = res.stdout
         assert msg.startswith('Error: Cannot acquire the writer lock.') is True
-        recorded_branch = get_staging_branch_head(repo_20_filled_samples_meta._env.branchenv)
+        recorded_branch = get_staging_branch_head(repo_20_filled_samples2._env.branchenv)
         assert recorded_branch == 'master'
-        assert repo_20_filled_samples_meta.writer_lock_held is True
+        assert repo_20_filled_samples2.writer_lock_held is True
         assert co.branch_name == 'master'
     finally:
         co.close()
-    assert repo_20_filled_samples_meta.writer_lock_held is False
+    assert repo_20_filled_samples2.writer_lock_held is False
 
 
 def test_diff_command(repo_2_br_no_conf):
@@ -161,23 +161,23 @@ def test_diff_command(repo_2_br_no_conf):
     assert res.exit_code == 0
 
 
-def test_commit_cli_message(repo_20_filled_samples_meta):
-    co = repo_20_filled_samples_meta.checkout(write=True)
-    co.metadata['newkeyhere'] = 'somevaluehere'
+def test_commit_cli_message(repo_20_filled_samples2):
+    co = repo_20_filled_samples2.checkout(write=True)
+    co.add_str_column('test_meta')
     base_digest = co.commit_hash
     base_branch = co.branch_name
     co.close()
     assert base_branch == 'master'
 
     runner = CliRunner()
-    res = runner.invoke(cli.commit, ['-m', 'this is my commit message'], obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.commit, ['-m', 'this is my commit message'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     out = res.stdout
     assert out.startswith('Commit message:\nthis is my commit message\nCommit Successful') is True
     new_digest = out.split(' ')[-1].rstrip('\n')
     assert new_digest != base_digest
 
-    nco = repo_20_filled_samples_meta.checkout(write=True)
+    nco = repo_20_filled_samples2.checkout(write=True)
     try:
         assert nco.commit_hash == new_digest
         assert nco.branch_name == base_branch
@@ -185,19 +185,19 @@ def test_commit_cli_message(repo_20_filled_samples_meta):
         nco.close()
 
 
-def test_commit_cli_message_with_no_changes(repo_20_filled_samples_meta):
-    co = repo_20_filled_samples_meta.checkout(write=True)
+def test_commit_cli_message_with_no_changes(repo_20_filled_samples2):
+    co = repo_20_filled_samples2.checkout(write=True)
     base_digest = co.commit_hash
     base_branch = co.branch_name
     co.close()
     assert base_branch == 'master'
 
     runner = CliRunner()
-    res = runner.invoke(cli.commit, ['-m', 'this is my commit message'], obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.commit, ['-m', 'this is my commit message'], obj=repo_20_filled_samples2)
     assert res.exit_code == 1
     assert res.stdout.endswith('Error: No changes made in staging area. Cannot commit.\n')
 
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
         assert co.branch_name == base_branch
         assert co.commit_hash == base_digest
@@ -209,26 +209,26 @@ def substitute_editor_commit_message(hint):
     return 'this is my commit message\n' + hint
 
 
-def test_commit_editor_message(monkeypatch, repo_20_filled_samples_meta):
+def test_commit_editor_message(monkeypatch, repo_20_filled_samples2):
     import click
     monkeypatch.setattr(click, 'edit', substitute_editor_commit_message)
 
-    co = repo_20_filled_samples_meta.checkout(write=True)
-    co.metadata['newkeyhere'] = 'somevaluehere'
+    co = repo_20_filled_samples2.checkout(write=True)
+    co.add_str_column('test_meta')
     base_digest = co.commit_hash
     base_branch = co.branch_name
     co.close()
     assert base_branch == 'master'
 
     runner = CliRunner()
-    res = runner.invoke(cli.commit, obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.commit, obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     out = res.stdout
     assert out.startswith('Commit message:\nthis is my commit message\nCommit Successful') is True
     new_digest = out.split(' ')[-1].rstrip('\n')
     assert new_digest != base_digest
 
-    nco = repo_20_filled_samples_meta.checkout(write=True)
+    nco = repo_20_filled_samples2.checkout(write=True)
     try:
         assert nco.commit_hash == new_digest
         assert nco.branch_name == base_branch
@@ -240,22 +240,22 @@ def substitute_editor_empty_commit_message(hint):
     return hint
 
 
-def test_commit_editor_empty_message(monkeypatch, repo_20_filled_samples_meta):
+def test_commit_editor_empty_message(monkeypatch, repo_20_filled_samples2):
     import click
     monkeypatch.setattr(click, 'edit', substitute_editor_empty_commit_message)
 
-    co = repo_20_filled_samples_meta.checkout(write=True)
-    co.metadata['newkeyhere'] = 'somevaluehere'
+    co = repo_20_filled_samples2.checkout(write=True)
+    co.add_str_column('test_meta')
     base_digest = co.commit_hash
     base_branch = co.branch_name
     co.close()
     assert base_branch == 'master'
 
     runner = CliRunner()
-    res = runner.invoke(cli.commit, obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.commit, obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Aborted! Empty commit message\n'
-    nco = repo_20_filled_samples_meta.checkout(write=True)
+    nco = repo_20_filled_samples2.checkout(write=True)
     try:
         assert nco.commit_hash == base_digest
         assert nco.branch_name == base_branch
@@ -298,9 +298,7 @@ def test_push_fetch_records(server_instance, backend):
             for idx in range(10):
                 dummyData[:] = idx
                 co1.columns['dummy'][str(idx)] = dummyData
-            co1.metadata['hello'] = 'world'
-            co1.metadata['somemetadatakey'] = 'somemetadatavalue'
-            cmt1 = co1.commit('first commit adding dummy data and hello meta')
+            cmt1 = co1.commit('first commit adding dummy data')
             co1.close()
 
             repo.create_branch('testbranch')
@@ -308,8 +306,7 @@ def test_push_fetch_records(server_instance, backend):
             for idx in range(10, 20):
                 dummyData[:] = idx
                 co2.columns['dummy'][str(idx)] = dummyData
-            co2.metadata['foo'] = 'bar'
-            cmt2 = co2.commit('first commit on test branch adding non-conflict data and meta')
+            cmt2 = co2.commit('first commit on test branch adding non-conflict data')
             co2.close()
 
             repo.remote.add('origin', server_instance)
@@ -347,9 +344,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
             for idx in range(10):
                 dummyData[:] = idx
                 co1.columns['dummy'][str(idx)] = dummyData
-            co1.metadata['hello'] = 'world'
-            co1.metadata['somemetadatakey'] = 'somemetadatavalue'
-            cmt1 = co1.commit('first commit adding dummy data and hello meta')
+            cmt1 = co1.commit('first commit adding dummy data')
             co1.close()
 
             repo.create_branch('testbranch')
@@ -357,8 +352,7 @@ def test_fetch_records_and_data(server_instance, backend, options):
             for idx in range(10, 20):
                 dummyData[:] = idx
                 co2.columns['dummy'][str(idx)] = dummyData
-            co2.metadata['foo'] = 'bar'
-            cmt2 = co2.commit('first commit on test branch adding non-conflict data and meta')
+            cmt2 = co2.commit('first commit on test branch adding non-conflict data')
             co2.close()
 
             repo.remote.add('origin', server_instance)
@@ -516,9 +510,9 @@ def test_log(written_two_cmt_server_repo, capsys):
             new_repo._env._close_environments()
 
 
-def test_status(repo_20_filled_samples_meta):
+def test_status(repo_20_filled_samples2):
     from hangar.records.summarize import status
-    repo = repo_20_filled_samples_meta
+    repo = repo_20_filled_samples2
 
     dummyData = np.arange(50).astype(np.int64)
     co2 = repo.checkout(write=True)
@@ -526,7 +520,6 @@ def test_status(repo_20_filled_samples_meta):
         dummyData[:] = idx
         co2.columns['dummy'][str(idx)] = dummyData
         co2.columns['dummy'][idx] = dummyData
-    co2.metadata['foo'] = 'bar'
     df = co2.diff.staged()
     co2.close()
     expected = status(repo._env.hashenv, 'master', df.diff).getvalue()
@@ -536,14 +529,14 @@ def test_status(repo_20_filled_samples_meta):
     assert res.stdout == expected
 
 
-def test_arrayset_create_uint8(repo_20_filled_samples_meta):
+def test_arrayset_create_uint8(repo_20_filled_samples2):
     runner = CliRunner()
     res = runner.invoke(
         cli.create_column,
-        ['train_images', 'UINT8', '256', '256', '3'], obj=repo_20_filled_samples_meta)
+        ['train_images', 'UINT8', '256', '256', '3'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Initialized Column: train_images\n'
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
         assert 'train_images' in co.columns
         assert co.columns['train_images'].shape == (256, 256, 3)
@@ -554,14 +547,14 @@ def test_arrayset_create_uint8(repo_20_filled_samples_meta):
         co.close()
 
 
-def test_arrayset_create_float32(repo_20_filled_samples_meta):
+def test_arrayset_create_float32(repo_20_filled_samples2):
     runner = CliRunner()
     res = runner.invoke(
         cli.create_column,
-        ['train_images', 'FLOAT32', '256'], obj=repo_20_filled_samples_meta)
+        ['train_images', 'FLOAT32', '256'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Initialized Column: train_images\n'
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
         assert 'train_images' in co.columns
         assert co.columns['train_images'].shape == (256,)
@@ -572,31 +565,31 @@ def test_arrayset_create_float32(repo_20_filled_samples_meta):
         co.close()
 
 
-def test_arrayset_create_invalid_dtype_fails(repo_20_filled_samples_meta):
+def test_arrayset_create_invalid_dtype_fails(repo_20_filled_samples2):
     runner = CliRunner()
     res = runner.invoke(
         cli.create_column,
-        ['train_images', 'FLOAT7', '256'], obj=repo_20_filled_samples_meta)
+        ['train_images', 'FLOAT7', '256'], obj=repo_20_filled_samples2)
     assert res.exit_code == 2
     expected = ('Error: Invalid value for "[UINT8|INT8|UINT16|INT16|UINT32|INT32|'
                 'UINT64|INT64|FLOAT16|FLOAT32|FLOAT64|STR]": invalid choice: FLOAT7. '
                 '(choose from UINT8, INT8, UINT16, INT16, UINT32, INT32, UINT64, '
                 'INT64, FLOAT16, FLOAT32, FLOAT64, STR)\n')
     assert res.stdout.endswith(expected) is True
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
         assert 'train_images' not in co.columns
     finally:
         co.close()
 
 
-def test_arrayset_create_invalid_name_fails(repo_20_filled_samples_meta):
+def test_arrayset_create_invalid_name_fails(repo_20_filled_samples2):
     runner = CliRunner()
-    res = runner.invoke(cli.create_column, ['tra#in', 'FLOAT32', '256'], obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.create_column, ['tra#in', 'FLOAT32', '256'], obj=repo_20_filled_samples2)
     assert res.exit_code == 1
     msg = res.stdout
     assert msg.startswith('Error: Column name provided: `tra#in` is invalid.') is True
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
         assert 'tra#in' not in co.columns
         assert 'dummy' in co.columns
@@ -605,14 +598,14 @@ def test_arrayset_create_invalid_name_fails(repo_20_filled_samples_meta):
         co.close()
 
 
-def test_arrayset_create_variable_shape(repo_20_filled_samples_meta):
+def test_arrayset_create_variable_shape(repo_20_filled_samples2):
     runner = CliRunner()
     res = runner.invoke(
         cli.create_column,
-        ['train_images', 'FLOAT32', '256', '--variable-shape'], obj=repo_20_filled_samples_meta)
+        ['train_images', 'FLOAT32', '256', '--variable-shape'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Initialized Column: train_images\n'
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
         assert 'train_images' in co.columns
         assert co.columns['train_images'].shape == (256,)
@@ -624,14 +617,14 @@ def test_arrayset_create_variable_shape(repo_20_filled_samples_meta):
         co.close()
 
 
-def test_arrayset_create_contains_subsamples(repo_20_filled_samples_meta):
+def test_arrayset_create_contains_subsamples(repo_20_filled_samples2):
     runner = CliRunner()
     res = runner.invoke(
         cli.create_column,
-        ['train_images', 'FLOAT32', '256', '--contains-subsamples'], obj=repo_20_filled_samples_meta)
+        ['train_images', 'FLOAT32', '256', '--contains-subsamples'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Initialized Column: train_images\n'
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
         assert 'train_images' in co.columns
         assert co.columns['train_images'].shape == (256,)
@@ -643,32 +636,30 @@ def test_arrayset_create_contains_subsamples(repo_20_filled_samples_meta):
         co.close()
 
 
-def test_remove_arrayset(repo_20_filled_samples_meta):
+def test_remove_arrayset(repo_20_filled_samples2):
     runner = CliRunner()
-    res = runner.invoke(cli.remove_column, ['dummy'], obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.remove_column, ['dummy'], obj=repo_20_filled_samples2)
     assert res.exit_code == 0
     assert res.stdout == 'Successfully removed column: dummy\n'
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
-        assert 'repo_20_filled_samples_meta' not in co.columns
+        assert 'repo_20_filled_samples2' not in co.columns
         assert len(co.columns) == 0
-        assert len(co.metadata) == 2
     finally:
         co.close()
 
 
-def test_remove_non_existing_arrayset(repo_20_filled_samples_meta):
+def test_remove_non_existing_arrayset(repo_20_filled_samples2):
     runner = CliRunner()
-    res = runner.invoke(cli.remove_column, ['doesnotexist'], obj=repo_20_filled_samples_meta)
+    res = runner.invoke(cli.remove_column, ['doesnotexist'], obj=repo_20_filled_samples2)
     assert res.exit_code == 1
     assert res.stdout == "Error: 'Cannot remove: doesnotexist. Key does not exist.'\n"
-    co = repo_20_filled_samples_meta.checkout(write=True)
+    co = repo_20_filled_samples2.checkout(write=True)
     try:
         assert 'doesnotexist' not in co.columns
         assert 'dummy' in co.columns
         assert len(co.columns) == 1
         assert len(co.columns['dummy']) == 10
-        assert len(co.metadata) == 2
     finally:
         co.close()
 
@@ -738,7 +729,7 @@ def test_branch_create_and_delete(written_two_cmt_server_repo):
 
             new_repo.create_branch('secondtest')
             co = new_repo.checkout(write=True, branch='secondtest')
-            co.metadata['foodadaa'] = '34a345'
+            co.add_str_column('test_meta')
             newDigest = co.commit('dummy commit')
             co.close()
 

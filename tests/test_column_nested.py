@@ -47,8 +47,6 @@ class TestArraysetSetup:
         asetOldPath = asetOld._path
         asetOldAsetn = asetOld.column
         asetOldDefaultSchemaHash = asetOld._schema.schema_hash_digest()
-        co.metadata['foo'] = 'bar'
-        co.commit('this is a commit message')
         co.close()
 
         co = aset_subsamples_initialized_repo.checkout()

@@ -366,9 +366,10 @@ def test_octopus_large_merge_graph(capfd):
 def test_repo_log_return_contents_correct_default_args(repo):
 
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co['test_meta']['foo'] = 'bar'
     ancestor_digest = co.commit('first')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     master_head = co.commit('second')
     co.close()
 
@@ -376,7 +377,7 @@ def test_repo_log_return_contents_correct_default_args(repo):
     dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
 
     co = repo.checkout(write=True, branch=dev_branch.name)
-    co.metadata['zen'] = 'of python'
+    co['test_meta']['zen'] = 'of python'
     dev_head = co.commit('third on test')
     co.close()
 
@@ -406,9 +407,10 @@ def test_repo_log_return_contents_correct_default_args(repo):
 def test_repo_log_return_contents_correct_when_specify_branch_name(repo):
 
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co['test_meta']['foo'] = 'bar'
     ancestor_digest = co.commit('first')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     master_head = co.commit('second')
     co.close()
 
@@ -416,7 +418,7 @@ def test_repo_log_return_contents_correct_when_specify_branch_name(repo):
     dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
 
     co = repo.checkout(write=True, branch=dev_branch.name)
-    co.metadata['zen'] = 'of python'
+    co['test_meta']['zen'] = 'of python'
     dev_head = co.commit('third on test')
     co.close()
 
@@ -446,9 +448,10 @@ def test_repo_log_return_contents_correct_when_specify_branch_name(repo):
 def test_repo_log_return_contents_correct_when_specify_digest(repo):
 
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co['test_meta']['foo'] = 'bar'
     ancestor_digest = co.commit('first')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     master_head = co.commit('second')
     co.close()
 
@@ -456,7 +459,7 @@ def test_repo_log_return_contents_correct_when_specify_digest(repo):
     dev_branch = repo.create_branch('dev', base_commit=ancestor_digest)
 
     co = repo.checkout(write=True, branch=dev_branch.name)
-    co.metadata['zen'] = 'of python'
+    co['test_meta']['zen'] = 'of python'
     dev_head = co.commit('third on test')
     co.close()
 

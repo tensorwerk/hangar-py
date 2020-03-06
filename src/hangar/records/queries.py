@@ -6,8 +6,6 @@ from .column_parsers import (
     data_record_digest_val_from_db_val,
     dynamic_layout_data_record_db_start_range_key,
     dynamic_layout_data_record_from_db_key,
-    metadata_range_key,
-    metadata_record_raw_key_from_db_key,
     schema_column_record_from_db_key,
     schema_db_range_key_from_column_unknown_layout,
     schema_record_count_start_range_key,
@@ -16,14 +14,12 @@ from .recordstructs import (
     FlatColumnDataKey,
     NestedColumnDataKey,
     DataRecordVal,
-    MetadataRecordKey,
 )
 from ..txnctx import TxnRegister
 from ..utils import ilen
 from ..mixins import CursorRangeIterator
 
 RawDataTuple = Tuple[Union[FlatColumnDataKey, NestedColumnDataKey], DataRecordVal]
-RawMetaTuple = Tuple[MetadataRecordKey, DataRecordVal]
 
 
 class RecordQuery(CursorRangeIterator):
@@ -47,33 +43,6 @@ class RecordQuery(CursorRangeIterator):
                 cursor.first()
                 for db_kv in cursor.iternext(keys=True, values=True):
                     yield db_kv
-        finally:
-            TxnRegister().abort_reader_txn(self._dataenv)
-
-    def _traverse_metadata_records(self, keys: bool = True, values: bool = True
-                                   ) -> Iterable[Union[Tuple[bytes], Tuple[bytes, bytes]]]:
-        """Internal method to traverse all metadata records and pull out keys/db_values
-
-        Both `keys` and `values` parameters cannot be simultaneously set to False.
-
-        Parameters
-        ----------
-        keys : bool, optional
-            If True, yield metadata keys encountered, if False only values are returned.
-            By default, True.
-        values : bool, optional
-            If True, yield metadata hash values encountered, if False only keys are returned.
-            By default, True.
-
-        Yields
-        ------
-        Iterable[Union[Tuple[bytes], Tuple[bytes, bytes]]]
-            Iterable of metadata keys, values, or items tuple
-        """
-        metadataRangeKey = metadata_range_key()
-        try:
-            datatxn = TxnRegister().begin_reader_txn(self._dataenv)
-            yield from self.cursor_range_iterator(datatxn, metadataRangeKey, keys, values)
         finally:
             TxnRegister().abort_reader_txn(self._dataenv)
 
@@ -289,45 +258,3 @@ class RecordQuery(CursorRangeIterator):
             for aset_hash_val in aset_hash_vals:
                 odict[aset_hash_val.digest] = aset_schema_hash
         return odict
-
-# --------------------------- process metadata ------------------------------------------
-
-    def metadata_records(self) -> Iterable[RawMetaTuple]:
-        """returns all the metadata record specs for all metadata keys
-
-        Returns
-        -------
-        Iterable[RawMetaTuple]
-            dict of metadata names: metadata record spec for all metadata pieces
-        """
-        for meta_key, meta_hash in self._traverse_metadata_records(keys=True, values=True):
-            meta_rec_key = metadata_record_raw_key_from_db_key(meta_key)
-            meta_rec_val = data_record_digest_val_from_db_val(meta_hash)
-            yield (meta_rec_key, meta_rec_val)
-
-    def metadata_hashes(self) -> List[str]:
-        """Find all hashs for all metadata in a commit
-
-        This method does not deduplicate identical hash records. if needed, postprocess
-        downstream
-
-        Returns
-        -------
-        List[str]
-            list of all hashes in the commit
-        """
-        recs = self._traverse_metadata_records(keys=False, values=True)
-        meta_rec_vals = map(data_record_digest_val_from_db_val, recs)
-        meta_hashs = [x.digest for x in meta_rec_vals]
-        return meta_hashs
-
-    def metadata_count(self) -> int:
-        """Find the number of metadata samples in the commit
-
-        Returns
-        -------
-        int
-            number of metadata samples
-        """
-        # regular len method not defined on generator
-        return ilen(self._traverse_metadata_records(keys=True, values=False))

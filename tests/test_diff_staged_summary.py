@@ -2,9 +2,9 @@ import pytest
 import numpy as np
 
 
-def test_add_metadata_and_samples_to_existing_aset(repo_20_filled_samples_meta):
+def test_add_samples_to_existing_aset(repo_20_filled_samples2):
     from hangar.records.summarize import status
-    repo = repo_20_filled_samples_meta
+    repo = repo_20_filled_samples2
     expected = '============ \n'\
                '| Branch: master \n'\
                ' \n'\
@@ -15,8 +15,6 @@ def test_add_metadata_and_samples_to_existing_aset(repo_20_filled_samples_meta):
                '|---------- \n'\
                '| Samples: 20 \n'\
                '|  - "dummy": 20 \n'\
-               '|---------- \n'\
-               '| Metadata: 1 \n'\
                ' \n'\
                '============ \n'\
                '| DELETED \n'\
@@ -24,8 +22,6 @@ def test_add_metadata_and_samples_to_existing_aset(repo_20_filled_samples_meta):
                '| Schema: 0 \n'\
                '|---------- \n'\
                '| Samples: 0 \n'\
-               '|---------- \n'\
-               '| Metadata: 0 \n'\
                ' \n'\
                '============ \n'\
                '| MUTATED \n'\
@@ -33,8 +29,6 @@ def test_add_metadata_and_samples_to_existing_aset(repo_20_filled_samples_meta):
                '| Schema: 0 \n'\
                '|---------- \n'\
                '| Samples: 0 \n'\
-               '|---------- \n'\
-               '| Metadata: 0 \n'\
                ' \n'
     dummyData = np.arange(50).astype(np.int64)
     co2 = repo.checkout(write=True)
@@ -42,15 +36,14 @@ def test_add_metadata_and_samples_to_existing_aset(repo_20_filled_samples_meta):
         dummyData[:] = idx
         co2.columns['dummy'][str(idx)] = dummyData
         co2.columns['dummy'][idx] = dummyData
-    co2.metadata['foo'] = 'bar'
     df = co2.diff.staged()
     co2.close()
     assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
 
 
-def test_mutate_metadata_and_sample_values(repo_20_filled_samples_meta):
+def test_mutate_sample_values(repo_20_filled_samples2):
     from hangar.records.summarize import status
-    repo = repo = repo_20_filled_samples_meta
+    repo = repo = repo_20_filled_samples2
     expected = '============ \n'\
                '| Branch: master \n'\
                ' \n'\
@@ -60,8 +53,6 @@ def test_mutate_metadata_and_sample_values(repo_20_filled_samples_meta):
                '| Schema: 0 \n'\
                '|---------- \n'\
                '| Samples: 0 \n'\
-               '|---------- \n'\
-               '| Metadata: 0 \n'\
                ' \n'\
                '============ \n'\
                '| DELETED \n'\
@@ -69,8 +60,6 @@ def test_mutate_metadata_and_sample_values(repo_20_filled_samples_meta):
                '| Schema: 0 \n'\
                '|---------- \n'\
                '| Samples: 0 \n'\
-               '|---------- \n'\
-               '| Metadata: 0 \n'\
                ' \n'\
                '============ \n'\
                '| MUTATED \n'\
@@ -79,8 +68,6 @@ def test_mutate_metadata_and_sample_values(repo_20_filled_samples_meta):
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "dummy": 5 \n'\
-               '|---------- \n'\
-               '| Metadata: 1 \n'\
                ' \n'
 
     dummyData = np.arange(50).astype(np.int64)
@@ -88,15 +75,14 @@ def test_mutate_metadata_and_sample_values(repo_20_filled_samples_meta):
     for idx in range(5, 10):
         dummyData[:] = idx + 10
         co2.columns['dummy'][idx] = dummyData
-    co2.metadata['hello'] = 'bar'
     df = co2.diff.staged()
     co2.close()
     assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
 
 
-def test_delete_metadata_and_samples(repo_20_filled_samples_meta):
+def test_delete_samples(repo_20_filled_samples2):
     from hangar.records.summarize import status
-    repo = repo_20_filled_samples_meta
+    repo = repo_20_filled_samples2
     expected = '============ \n'\
                '| Branch: master \n'\
                ' \n'\
@@ -106,8 +92,6 @@ def test_delete_metadata_and_samples(repo_20_filled_samples_meta):
                '| Schema: 0 \n'\
                '|---------- \n'\
                '| Samples: 0 \n'\
-               '|---------- \n'\
-               '| Metadata: 0 \n'\
                ' \n'\
                '============ \n'\
                '| DELETED \n'\
@@ -116,8 +100,6 @@ def test_delete_metadata_and_samples(repo_20_filled_samples_meta):
                '|---------- \n'\
                '| Samples: 5 \n'\
                '|  - "dummy": 5 \n'\
-               '|---------- \n'\
-               '| Metadata: 1 \n'\
                ' \n'\
                '============ \n'\
                '| MUTATED \n'\
@@ -125,22 +107,19 @@ def test_delete_metadata_and_samples(repo_20_filled_samples_meta):
                '| Schema: 0 \n'\
                '|---------- \n'\
                '| Samples: 0 \n'\
-               '|---------- \n'\
-               '| Metadata: 0 \n'\
                ' \n'
 
     co2 = repo.checkout(write=True)
     for idx in range(5, 10):
         del co2.columns['dummy'][idx]
-    del co2.metadata['hello']
     df = co2.diff.staged()
     co2.close()
     assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
 
 
-def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
+def test_add_new_aset_schema_and_samples(repo_20_filled_samples2):
     from hangar.records.summarize import status
-    repo = repo_20_filled_samples_meta
+    repo = repo_20_filled_samples2
     expected = (
         '============ \n'
         '| Branch: master \n'
@@ -161,8 +140,6 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
         '|---------- \n'
         '| Samples: 5 \n'
         '|  - "new_aset": 5 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
         '============ \n'
         '| DELETED \n'
@@ -170,8 +147,6 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
         '| Schema: 0 \n'
         '|---------- \n'
         '| Samples: 0 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
         '============ \n'
         '| MUTATED \n'
@@ -179,8 +154,6 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
         '| Schema: 0 \n'
         '|---------- \n'
         '| Samples: 0 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
     )
     co2 = repo.checkout(write=True)
@@ -193,9 +166,9 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples_meta):
     assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
 
 
-def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_samples_meta):
+def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_samples2):
     from hangar.records.summarize import status
-    repo = repo_20_filled_samples_meta
+    repo = repo_20_filled_samples2
     expected = (
         '============ \n'
         '| Branch: master \n'
@@ -216,8 +189,6 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
         '|---------- \n'
         '| Samples: 5 \n'
         '|  - "new_aset": 5 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
         '============ \n'
         '| DELETED \n'
@@ -235,8 +206,6 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
         '|---------- \n'
         '| Samples: 10 \n'
         '|  - "dummy": 10 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
         '============ \n'
         '| MUTATED \n'
@@ -244,8 +213,6 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
         '| Schema: 0 \n'
         '|---------- \n'
         '| Samples: 0 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
     )
     co2 = repo.checkout(write=True)
@@ -259,9 +226,9 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
     assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
 
 
-def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_samples_meta):
+def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_samples2):
     from hangar.records.summarize import status
-    repo = repo_20_filled_samples_meta
+    repo = repo_20_filled_samples2
     expected = (
         '============ \n'
         '| Branch: master \n'
@@ -282,8 +249,6 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
         '|---------- \n'
         '| Samples: 5 \n'
         '|  - "new_aset": 5 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
         '============ \n'
         '| DELETED \n'
@@ -291,8 +256,6 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
         '| Schema: 0 \n'
         '|---------- \n'
         '| Samples: 0 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
         '============ \n'
         '| MUTATED \n'
@@ -310,8 +273,6 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
         '|---------- \n'
         '| Samples: 5 \n'
         '|  - "dummy": 5 \n'
-        '|---------- \n'
-        '| Metadata: 0 \n'
         ' \n'
     )
     co2 = repo.checkout(write=True)

@@ -243,12 +243,6 @@ class Remotes(object):
             mCmtResponse = client.fetch_find_missing_commits(branch)
             m_cmts = mCmtResponse.commits
             for commit in tqdm(m_cmts, desc='fetching commit data refs'):
-                # Get missing label (metadata) digest & values
-                m_labels = set(client.fetch_find_missing_labels(commit))
-                for label in m_labels:
-                    received_hash, labelVal = client.fetch_label(label)
-                    CW.label(received_hash, labelVal)
-                # Get missing data schema digests & values
                 mSchemaResponse = client.fetch_find_missing_schemas(commit)
                 for schema in mSchemaResponse.schema_digests:
                     schema_hash, schemaVal = client.fetch_schema(schema)
@@ -499,7 +493,7 @@ class Remotes(object):
                 else:
                     raise rpc_error
 
-            m_labels, m_schemas = set(), set()
+            m_schemas = set()
             m_schema_hashs = defaultdict(set)
             with tempfile.TemporaryDirectory() as tempD:
                 tmpDF = Path(tempD, 'test.lmdb')
@@ -522,9 +516,6 @@ class Remotes(object):
                         m_cmt_schema_hashs[schema].append(hsh)
                     for schema, hashes in m_cmt_schema_hashs.items():
                         m_schema_hashs[schema].update(hashes)
-                    # labels / metadata
-                    missing_labels = client.push_find_missing_labels(commit, tmpDB=tmpDB)
-                    m_labels.update(missing_labels)
                 tmpDB.close()
 
             # ------------------------- send data -----------------------------
@@ -541,12 +532,6 @@ class Remotes(object):
                 for dataSchema, dataHashes in m_schema_hashs.items():
                     client.push_data(dataSchema, dataHashes, pbar=p)
                     p.update(1)
-            # labels/metadata
-            for label in tqdm(m_labels, desc='pushing metadata'):
-                labelVal = CR.label(label)
-                if not labelVal:
-                    raise KeyError(f'no label with hash: {label} exists')
-                client.push_label(label, labelVal)
             # commit refs
             for commit in tqdm(m_commits, desc='pushing commit refs'):
                 cmtContent = CR.commit(commit)

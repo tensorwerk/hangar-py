@@ -22,29 +22,29 @@ def test_verify_commit_ref_typecode(type_code):
 @given(type_code=st_type_codes)
 @settings(max_examples=1000)
 def test_verify_array_hash_typecode(type_code):
-    from hangar.records.hashmachine import array_hash_digest
+    from hangar.records.hashmachine import ndarray_hasher_tcode_0
 
     assume(type_code != '0')
     with pytest.raises(ValueError):
-        array_hash_digest(None, tcode=type_code)
+        ndarray_hasher_tcode_0(None, tcode=type_code)
 
 
 @given(type_code=st_type_codes)
 @settings(max_examples=1000)
 def test_verify_schema_hash_typecode(type_code):
-    from hangar.records.hashmachine import schema_hash_digest
+    from hangar.records.hashmachine import schema_hasher_tcode_1
 
     assume(type_code != '1')
     with pytest.raises(ValueError):
-        schema_hash_digest(None, tcode=type_code)
+        schema_hasher_tcode_1(None, tcode=type_code)
 
 
 
 @given(type_code=st_type_codes)
 @settings(max_examples=1000)
 def test_verify_metadata_hash_typecode(type_code):
-    from hangar.records.hashmachine import metadata_hash_digest
+    from hangar.records.hashmachine import pystr_hasher_tcode_2
 
     assume(type_code != '2')
     with pytest.raises(ValueError):
-        metadata_hash_digest(None, tcode=type_code)
+        pystr_hasher_tcode_2(None, tcode=type_code)

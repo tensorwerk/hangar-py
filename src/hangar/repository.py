@@ -566,7 +566,6 @@ class Repository(object):
             >>> repo.list_branches()
                 ['master', 'testbranch']
             >>> co = repo.checkout(write=True, branch='testbranch')
-            >>> co.metadata['foo'] = 'bar'
             >>> # add data ...
             >>> newDigest = co.commit('added some stuff')
 
@@ -636,7 +635,7 @@ class Repository(object):
             ['master', 'first-testbranch', 'second-testbranch']
             >>> # Make a commit to advance a branch
             >>> co = repo.checkout(write=True, branch='first-testbranch')
-            >>> co.metadata['foo'] = 'bar'
+            >>> # add data ...
             >>> co.commit('added some stuff')
             '3l253la5hna3k3a553256nak35hq5q534kq35532'
             >>> co.close()

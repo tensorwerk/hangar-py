@@ -264,12 +264,6 @@ def summary(env, *, branch='', commit='') -> StringIO:
             for k, v in schema_dict.items():
                 buf.write(f'|    - {k}: {v} \n')
 
-        buf.write(f' \n')
-        buf.write(f'================== \n')
-        buf.write(f'| Metadata: \n')
-        buf.write(f'|----------------- \n')
-        buf.write(f'|  Number of Keys: {query.metadata_count()} \n')
-
     return buf
 
 
@@ -317,9 +311,6 @@ def status(hashenv: lmdb.Environment, branch_name: str, diff: DiffOut) -> String
             count = sum((1 for k in df.samples if k.column == un))
             buf.write(f'|  - "{un}": {count} \n')
 
-        buf.write('|---------- \n')
-        buf.write(f'| Metadata: {len(df.metadata)} \n')
-        buf.write(' \n')
         return buf
 
     buf = StringIO()
