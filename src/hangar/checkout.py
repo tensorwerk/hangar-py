@@ -10,7 +10,7 @@ import lmdb
 
 from .mixins import GetMixin, CheckoutDictIteration
 from .columns import (
-    AsetTxn,
+    ColumnTxn,
     Columns,
     MetadataReader,
     MetadataWriter,
@@ -19,8 +19,12 @@ from .columns import (
 )
 from .diff import ReaderUserDiff, WriterUserDiff
 from .merger import select_merge_algorithm
-from .records import commiting, hashs, heads
-from .typesystem import NdarrayFixedShape, NdarrayVariableShape, StringVariableShape
+from .records import commiting, hashs, heads, summarize
+from .typesystem import (
+    NdarrayFixedShape,
+    NdarrayVariableShape,
+    StringVariableShape,
+)
 from .utils import is_suitable_user_key, is_ascii
 from .records import (
     schema_db_key_from_column,
@@ -166,16 +170,14 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         PermissionError
             if the checkout was previously close
         """
-        try:
-            self._columns
-        except AttributeError:
+        if not hasattr(self, '_columns'):
             err = PermissionError(
                 f'Unable to operate on past checkout objects which have been '
                 f'closed. No operation occurred. Please use a new checkout.')
             raise err from None
 
     @property
-    def _is_conman(self):
+    def _is_conman(self) -> bool:
         self._verify_alive()
         return bool(self._enter_count)
 
@@ -191,15 +193,15 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
             1
             >>> print(co.columns.keys())
             ['foo']
-            >>> fooAset = co.columns['foo']
-            >>> fooAset.dtype
+            >>> fooCol = co.columns['foo']
+            >>> fooCol.dtype
             np.fooDtype
-            >>> asets = co.columns
-            >>> fooAset = asets['foo']
-            >>> fooAset.dtype
+            >>> cols = co.columns
+            >>> fooCol = cols['foo']
+            >>> fooCol.dtype
             np.fooDtype
-            >>> fooAset = asets.get('foo')
-            >>> fooAset.dtype
+            >>> fooCol = cols.get('foo')
+            >>> fooCol.dtype
             np.fooDtype
 
         .. seealso::
@@ -271,6 +273,57 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         """
         self._verify_alive()
         return self._commit_hash
+
+    def log(self,
+            branch: str = None,
+            commit: str = None,
+            *,
+            return_contents: bool = False,
+            show_time: bool = False,
+            show_user: bool = False) -> Optional[dict]:
+        """Displays a pretty printed commit log graph to the terminal.
+
+        .. note::
+
+            For programatic access, the return_contents value can be set to true
+            which will retrieve relevant commit specifications as dictionary
+            elements.
+
+        if Neither `branch` nor `commit` arguments are supplied, the commit
+        digest of the currently reader checkout will be used as default.
+
+        Parameters
+        ----------
+        branch : str, optional
+            The name of the branch to start the log process from. (Default value
+            = None)
+        commit : str, optional
+            The commit hash to start the log process from. (Default value = None)
+        return_contents : bool, optional, kwarg only
+            If true, return the commit graph specifications in a dictionary
+            suitable for programatic access/evaluation.
+        show_time : bool, optional, kwarg only
+            If true and return_contents is False, show the time of each commit
+            on the printed log graph
+        show_user : bool, optional, kwarg only
+            If true and return_contents is False, show the committer of each
+            commit on the printed log graph
+        Returns
+        -------
+        Optional[dict]
+            Dict containing the commit ancestor graph, and all specifications.
+        """
+        self._verify_alive()
+        if (branch is None) and (commit is None):
+            commit = self.commit_hash
+        res = summarize.log(branchenv=self._branchenv,
+                            refenv=self._refenv,
+                            branch=branch,
+                            commit=commit,
+                            return_contents=return_contents,
+                            show_time=show_time,
+                            show_user=show_user)
+        return res
 
     def close(self) -> None:
         """Gracefully close the reader checkout object.
@@ -438,9 +491,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             or if the writer lock value does not match that recorded in the
             branch db
         """
-        try:
-            self._writer_lock
-        except AttributeError:
+        if not hasattr(self, '_writer_lock'):
             with suppress(AttributeError):
                 self._columns._destruct()
                 del self._columns
@@ -527,128 +578,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             branchenv=self._branchenv,
             branch_name=self._branch_name)
 
-    def __setitem__(self, index, value):
-        """Syntax for setting items.
-
-        Checkout object can be thought of as a "dataset" ("dset") mapping a view
-        of samples across columns:
-
-            >>> dset = repo.checkout(branch='master', write=True)
-            >>>
-            >>> # Add single sample to single column
-            >>> dset['foo', 1] = np.array([1])
-            >>> dset['foo', 1]
-            array([1])
-            >>>
-            >>> # Add multiple samples to single column
-            >>> dset['foo', [1, 2, 3]] = [np.array([1]), np.array([2]), np.array([3])]
-            >>> dset['foo', [1, 2, 3]]
-            [array([1]), array([2]), array([3])]
-            >>>
-            >>> # Add single sample to multiple columns
-            >>> dset[['foo', 'bar'], 1] = [np.array([1]), np.array([11])]
-            >>> dset[:, 1]
-            ArraysetData(foo=array([1]), bar=array([11]))
-
-        Parameters
-        ----------
-        index: Union[Iterable[str], Iterable[str, int]]
-            Please see detailed explanation above for full options.The first
-            element (or collection) specified must be ``str`` type and correspond
-            to an column name(s). The second element (or collection) are keys
-            corresponding to sample names which the data should be written to.
-
-            Unlike the :meth:`__getitem__` method, only ONE of the ``column``
-            name(s) or ``sample`` key(s) can specify multiple elements at the same
-            time. Ie. If multiple ``columns`` are specified, only one sample key
-            can be set, likewise if multiple ``samples`` are specified, only one
-            ``column`` can be specified. When specifying multiple ``columns``
-            or ``samples``, each data piece to be stored must reside as individual
-            elements (``np.ndarray``) in a List or Tuple. The number of keys and
-            the number of values must match exactly.
-
-        value: Union[:class:`numpy.ndarray`, Iterable[:class:`numpy.ndarray`]]
-            Data to store in the specified columns/sample keys. When
-            specifying multiple ``columns`` or ``samples``, each data piece
-            to be stored must reside as individual elements (``np.ndarray``) in
-            a List or Tuple. The number of keys and the number of values must
-            match exactly.
-
-        Notes
-        -----
-
-        *  No slicing syntax is supported for either columns or samples. This
-           is in order to ensure explicit setting of values in the desired
-           fields/keys
-
-        *  Add multiple samples to multiple columns not yet supported.
-        """
-        self._verify_alive()
-        with ExitStack() as stack:
-            if not self._is_conman:
-                stack.enter_context(self)
-
-            if not isinstance(index, (tuple, list)):
-                raise ValueError(f'Idx: {index} does not specify column(s) AND sample(s)')
-            elif len(index) > 2:
-                raise ValueError(f'Index of len > 2 invalid. To multi-set, pass in lists')
-            asetsIdx, sampleNames = index
-
-            # Parse Columns
-            if isinstance(asetsIdx, str):
-                asets = [self._columns._columns[asetsIdx]]
-            elif isinstance(asetsIdx, (tuple, list)):
-                asets = [self._columns._columns[aidx] for aidx in asetsIdx]
-            else:
-                raise TypeError(f'Column idx: {asetsIdx} of type: {type(asetsIdx)}')
-            nAsets = len(asets)
-
-            # Parse sample names
-            if isinstance(sampleNames, (str, int)):
-                sampleNames = [sampleNames]
-            elif not isinstance(sampleNames, (list, tuple)):
-                raise TypeError(f'Sample names: {sampleNames} type: {type(sampleNames)}')
-            nSamples = len(sampleNames)
-
-            # Verify asets
-            if (nAsets > 1) and (nSamples > 1):
-                raise SyntaxError(
-                    'Not allowed to specify BOTH multiple samples AND multiple'
-                    'columns in `set` operation in current Hangar implementation')
-
-            elif (nAsets == 1) and (nSamples == 1):
-                aset = asets[0]
-                sampleName = sampleNames[0]
-                aset[sampleName] = value
-
-            elif nAsets >= 2:
-                if not isinstance(value, (list, tuple)):
-                    raise TypeError(f'Value: {value} not list/tuple of np.ndarray')
-                elif not (len(value) == nAsets):
-                    raise ValueError(f'Num values: {len(value)} != num columns {nAsets}')
-                for aset, val in zip(asets, value):
-                    isCompat = aset._schema.verify_data_compatible(val)
-                    if not isCompat.compatible:
-                        raise ValueError(isCompat.reason)
-                for sampleName in sampleNames:
-                    for aset, val in zip(asets, value):
-                        aset[sampleName] = val
-
-            else:  # nSamples >= 2
-                if not isinstance(value, (list, tuple)):
-                    raise TypeError(f'Value: {value} not list/tuple of np.ndarray')
-                elif not (len(value) == nSamples):
-                    raise ValueError(f'Num values: {len(value)} != num samples {nSamples}')
-                for aset in asets:
-                    for val in value:
-                        isCompat = aset._schema.verify_data_compatible(val)
-                        if not isCompat.compatible:
-                            raise ValueError(isCompat.reason)
-                for aset in asets:
-                    for sampleName, val in zip(sampleNames, value):
-                        aset[sampleName] = val
-                return None
-
     @property
     def columns(self) -> Columns:
         """Provides access to column interaction object.
@@ -657,10 +586,10 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         a single column instance by using dictionary style indexing.
 
             >>> co = repo.checkout(write=True)
-            >>> asets = co.columns
-            >>> len(asets)
+            >>> cols = co.columns
+            >>> len(cols)
             0
-            >>> fooAset = co.add_ndarray_column('foo', shape=(10, 10), dtype=np.uint8)
+            >>> fooCol = co.add_ndarray_column('foo', shape=(10, 10), dtype=np.uint8)
             >>> len(co.columns)
             1
             >>> len(co)
@@ -669,11 +598,11 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             ['foo']
             >>> list(co.keys())
             ['foo']
-            >>> fooAset = co.columns['foo']
-            >>> fooAset.dtype
+            >>> fooCol = co.columns['foo']
+            >>> fooCol.dtype
             np.fooDtype
-            >>> fooAset = asets.get('foo')
-            >>> fooAset.dtype
+            >>> fooCol = cols.get('foo')
+            >>> fooCol.dtype
             np.fooDtype
             >>> 'foo' in co.columns
             True
@@ -759,6 +688,57 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                                            branch_name=self._branch_name)
         return cmt
 
+    def log(self,
+            branch: str = None,
+            commit: str = None,
+            *,
+            return_contents: bool = False,
+            show_time: bool = False,
+            show_user: bool = False) -> Optional[dict]:
+        """Displays a pretty printed commit log graph to the terminal.
+
+        .. note::
+
+            For programatic access, the return_contents value can be set to true
+            which will retrieve relevant commit specifications as dictionary
+            elements.
+
+        if Neither `branch` nor `commit` arguments are supplied, the branch which
+        is currently checked out for writing will be used as default.
+
+        Parameters
+        ----------
+        branch : str, optional
+            The name of the branch to start the log process from. (Default value
+            = None)
+        commit : str, optional
+            The commit hash to start the log process from. (Default value = None)
+        return_contents : bool, optional, kwarg only
+            If true, return the commit graph specifications in a dictionary
+            suitable for programatic access/evaluation.
+        show_time : bool, optional, kwarg only
+            If true and return_contents is False, show the time of each commit
+            on the printed log graph
+        show_user : bool, optional, kwarg only
+            If true and return_contents is False, show the committer of each
+            commit on the printed log graph
+        Returns
+        -------
+        Optional[dict]
+            Dict containing the commit ancestor graph, and all specifications.
+        """
+        self._verify_alive()
+        if (branch is None) and (commit is None):
+            branch = self.branch_name
+        res = summarize.log(branchenv=self._branchenv,
+                            refenv=self._refenv,
+                            branch=branch,
+                            commit=commit,
+                            return_contents=return_contents,
+                            show_time=show_time,
+                            show_user=show_user)
+        return res
+
     def add_str_column(self,
                        name: str,
                        contains_subsamples: bool = False,
@@ -820,44 +800,25 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                     f'Column name provided: `{name}` is invalid. Can only contain '
                     f'alpha-numeric or "." "_" "-" ascii characters (no whitespace). '
                     f'Must be <= 64 characters long')
-
             if name in self._columns:
                 raise LookupError(f'Column already exists with name: {name}.')
-
             if not isinstance(contains_subsamples, bool):
                 raise ValueError(f'contains_subsamples argument must be bool, '
                                  f'not type {type(contains_subsamples)}')
-
         except (ValueError, LookupError) as e:
             raise e from None
+
+        # ---------- schema validation handled automatically by typesystem ----
 
         layout = 'nested' if contains_subsamples else 'flat'
         schema = StringVariableShape(
             dtype=str, column_layout=layout, backend=backend, backend_options=backend_options)
 
-        schema_digest = schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column(name, layout=layout)
-        columnSchemaVal = schema_record_db_val_from_digest(schema_digest)
-        hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
-        hashSchemaVal = schema_hash_record_db_val_from_spec(schema.schema)
+        # ------------------ create / return new column -----------------------
 
-        # -------- set vals in lmdb only after schema is sure to exist --------
-
-        txnctx = AsetTxn(self._stageenv, self._hashenv, self._stagehashenv)
-        with txnctx.write() as ctx:
-            ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
-            ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
-
-        if contains_subsamples:
-            setup_args = generate_nested_column(
-                txnctx=txnctx, column_name=name,
-                path=self._repo_path, schema=schema, mode='a')
-        else:
-            setup_args = generate_flat_column(
-                txnctx=txnctx, column_name=name,
-                path=self._repo_path, schema=schema, mode='a')
-        self.columns._columns[name] = setup_args
-        return self[name]
+        col = self._initialize_new_column(
+            column_name=name, column_layout=layout, schema=schema)
+        return col
 
     def add_ndarray_column(self,
                            name: str,
@@ -894,14 +855,14 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         ----------
         name : str
             The name assigned to this column.
-        shape : Union[int, Tuple[int]]
+        shape : Optional[Union[int, Tuple[int]]]
             The shape of the data samples which will be written in this column.
             This argument and the `dtype` argument are required if a `prototype`
             is not provided, defaults to None.
-        dtype : :class:`numpy.dtype`
+        dtype : Optional[:class:`numpy.dtype`]
             The datatype of this column. This argument and the `shape` argument
             are required if a `prototype` is not provided., defaults to None.
-        prototype : :class:`numpy.ndarray`
+        prototype : Optional[:class:`numpy.ndarray`]
             A sample array of correct datatype and shape which will be used to
             initialize the column storage mechanisms. If this is provided, the
             `shape` and `dtype` arguments must not be set, defaults to None.
@@ -945,25 +906,27 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                     f'Must be <= 64 characters long')
             if name in self.columns:
                 raise LookupError(f'Column already exists with name: {name}.')
-
             if not isinstance(contains_subsamples, bool):
                 raise ValueError(f'contains_subsamples is not bool type')
 
+            # If shape/dtype is passed instead of a prototype arg, we use those values
+            # to initialize a numpy array prototype. Using a :class:`numpy.ndarray`
+            # for specification of dtype / shape params lets us offload much of the
+            # required type checking / sanitization of userspace input to libnumpy,
+            # rather than attempting to cover all possible cases here.
             if prototype is not None:
                 if (shape is not None) or (dtype is not None):
                     raise ValueError(f'cannot set both prototype and shape/dtype args.')
             else:
                 prototype = np.zeros(shape, dtype=dtype)
-
-            # these shape and dtype vars will be used as downstream input
-            # (now that they have been sanitized for really crazy input values).
             dtype = prototype.dtype
             shape = prototype.shape
             if not all([x > 0 for x in shape]):
                 raise ValueError(f'all dimensions must be sized greater than zero')
-
         except (ValueError, LookupError) as e:
             raise e from None
+
+        # ---------- schema validation handled automatically by typesystem ----
 
         column_layout = 'nested' if contains_subsamples else 'flat'
         if variable_shape:
@@ -973,30 +936,61 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             schema = NdarrayFixedShape(dtype=dtype, shape=shape, column_layout=column_layout,
                                        backend=backend, backend_options=backend_options)
 
+        # ------------------ create / return new column -----------------------
+
+        col = self._initialize_new_column(
+            column_name=name, column_layout=column_layout, schema=schema)
+        return col
+
+    def _initialize_new_column(self,
+                               column_name: str,
+                               column_layout: str,
+                               schema) -> Columns:
+        """Initialize a column and write spec to record db.
+
+        Parameters
+        ----------
+        column_name: str
+            name of the column
+        column_layout: str
+            One of ['flat', 'nested'] indicating column layout class to use
+            during generation.
+        schema: ColumnBase
+            schema class instance providing column data spec, schema/column digest,
+            data validator / hashing methods, and backend ID / options; all of which
+            are needed to successfully create & save the column instance
+
+        Returns
+        -------
+        Columns
+            initialized column class instance.
+        """
+        # -------- set vals in lmdb only after schema is sure to exist --------
+
         schema_digest = schema.schema_hash_digest()
-        columnSchemaKey = schema_db_key_from_column(name, layout=column_layout)
+        columnSchemaKey = schema_db_key_from_column(column_name, layout=column_layout)
         columnSchemaVal = schema_record_db_val_from_digest(schema_digest)
         hashSchemaKey = schema_hash_db_key_from_digest(schema_digest)
         hashSchemaVal = schema_hash_record_db_val_from_spec(schema.schema)
 
-        # -------- set vals in lmdb only after schema is sure to exist --------
-
-        txnctx = AsetTxn(self._stageenv, self._hashenv, self._stagehashenv)
+        txnctx = ColumnTxn(self._stageenv, self._hashenv, self._stagehashenv)
         with txnctx.write() as ctx:
             ctx.dataTxn.put(columnSchemaKey, columnSchemaVal)
             ctx.hashTxn.put(hashSchemaKey, hashSchemaVal, overwrite=False)
 
-        if contains_subsamples:
+        # ------------- create column instance and return to user -------------
+
+        if column_layout == 'nested':
             setup_args = generate_nested_column(
-                txnctx=txnctx, column_name=name,
+                txnctx=txnctx, column_name=column_name,
                 path=self._repo_path, schema=schema, mode='a')
         else:
             setup_args = generate_flat_column(
-                txnctx=txnctx, column_name=name,
+                txnctx=txnctx, column_name=column_name,
                 path=self._repo_path, schema=schema, mode='a')
 
-        self.columns._columns[name] = setup_args
-        return self[name]
+        self.columns._columns[column_name] = setup_args
+        return self.columns[column_name]
 
     def merge(self, message: str, dev_branch: str) -> str:
         """Merge the currently checked out commit with the provided branch name.
@@ -1074,17 +1068,17 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         """
         self._verify_alive()
 
-        open_asets = []
+        open_columns = []
         for column in self._columns.values():
             if column._is_conman:
-                open_asets.append(column.column)
+                open_columns.append(column.column)
         open_meta = self._metadata._is_conman
 
         try:
             if open_meta:
                 self._metadata.__exit__()
-            for asetn in open_asets:
-                self._columns[asetn].__exit__()
+            for column_name in open_columns:
+                self._columns[column_name].__exit__()
 
             if self._differ.status() == 'CLEAN':
                 e = RuntimeError('No changes made in staging area. Cannot commit.')
@@ -1102,8 +1096,8 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             self._columns._open()
 
         finally:
-            for asetn in open_asets:
-                self._columns[asetn].__enter__()
+            for column_name in open_columns:
+                self._columns[column_name].__enter__()
             if open_meta:
                 self._metadata.__enter__()
 

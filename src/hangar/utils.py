@@ -8,11 +8,15 @@ from collections import deque
 from io import StringIO
 from itertools import tee, filterfalse, count
 from typing import Union
+import sys
 
 import blosc
 
-from . import __version__
-from .constants import DIR_HANGAR
+
+def is_64bits():
+    """bool indicating if running on atleast a 64 bit machine
+    """
+    return sys.maxsize > 2 ** 32
 
 
 def set_blosc_nthreads() -> int:  # pragma: no cover
@@ -409,6 +413,9 @@ def readme_contents(user_name: str, user_email: str) -> StringIO:
     StringIO
         Buffered string text ready to be sent to a file writer.
     """
+    from . import __version__
+    from .constants import DIR_HANGAR
+
     buf = StringIO()
     buf.write(f'This directory has been used to initialize a Hangar Repository\n')
     buf.write(f'\n')

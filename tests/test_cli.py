@@ -27,6 +27,8 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  clone        Initialize a repository at the current path and fetch updated...\n'\
            '  column       Operations for working with columns in the writer checkout.\n'\
            '  commit       Commits outstanding changes.\n'\
+           '  diff         Display diff of DEV commit/branch to MASTER commit/branch If\n'\
+           '               no...\n'\
            '  export       Export COLUMN sample data as it existed a STARTPOINT to some...\n'\
            '  fetch        Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data   Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
@@ -151,6 +153,12 @@ def test_checkout_writer_branch_lock_held_errors(repo_20_filled_samples_meta):
     finally:
         co.close()
     assert repo_20_filled_samples_meta.writer_lock_held is False
+
+
+def test_diff_command(repo_2_br_no_conf):
+    runner = CliRunner()
+    res = runner.invoke(cli.diff, ['master', 'testbranch'], obj=repo_2_br_no_conf)
+    assert res.exit_code == 0
 
 
 def test_commit_cli_message(repo_20_filled_samples_meta):
@@ -761,6 +769,25 @@ def test_start_server(managed_tmpdir):
         assert time.time() - startTime <= 1.8  # buffer to give it time to stop
         assert res.exit_code == 0
         assert 'Hangar Server Started' in res.stdout
+
+
+# ------------------------ Developer Commands --------------------------------
+
+
+def test_db_view_command(repo_20_filled_samples_meta):
+    repo = repo_20_filled_samples_meta
+    runner = CliRunner()
+    res = runner.invoke(cli.lmdb_record_details, ['-a'], obj=repo)
+
+    dbs_queried = 0
+    assert res.exit_code == 0
+    for line in res.stdout.splitlines():
+        if '.lmdb' in line:
+            dbs_queried += 1
+    assert dbs_queried == 6
+
+    res = runner.invoke(cli.lmdb_record_details, ['-a', '--limit', '10'], obj=repo)
+    assert res.exit_code == 0
 
 
 # =========================== External Plugin =================================

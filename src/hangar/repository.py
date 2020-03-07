@@ -7,9 +7,10 @@ from .merger import select_merge_algorithm
 from .constants import DIR_HANGAR
 from .remotes import Remotes
 from .context import Environments
-from .diagnostics import graphing, ecosystem, integrity
-from .records import heads, parsing, summarize, vcompat
+from .diagnostics import ecosystem, integrity
+from .records import heads, parsing, summarize, vcompat, commiting
 from .checkout import ReaderCheckout, WriterCheckout
+from .diff import DiffAndConflicts, ReaderUserDiff
 from .utils import (
     is_valid_directory_path,
     is_suitable_user_key,
@@ -412,28 +413,14 @@ class Repository(object):
             Dict containing the commit ancestor graph, and all specifications.
         """
         self.__verify_repo_initialized()
-        res = summarize.list_history(
-            refenv=self._env.refenv,
-            branchenv=self._env.branchenv,
-            branch_name=branch,
-            commit_hash=commit)
-        branchMap = dict(heads.commit_hash_to_branch_name_map(branchenv=self._env.branchenv))
-
-        if return_contents:
-            for digest in list(branchMap.keys()):
-                if digest not in res['order']:
-                    del branchMap[digest]
-            res['branch_heads'] = branchMap
-            return res
-        else:
-            g = graphing.Graph()
-            g.show_nodes(dag=res['ancestors'],
-                         spec=res['specs'],
-                         branch=branchMap,
-                         start=res['head'],
-                         order=res['order'],
-                         show_time=show_time,
-                         show_user=show_user)
+        res = summarize.log(branchenv=self._env.branchenv,
+                            refenv=self._env.refenv,
+                            branch=branch,
+                            commit=commit,
+                            return_contents=return_contents,
+                            show_time=show_time,
+                            show_user=show_user)
+        return res
 
     def summary(self, *, branch: str = '', commit: str = '') -> None:
         """Print a summary of the repository contents to the terminal
@@ -477,6 +464,59 @@ class Repository(object):
         """
         eco = ecosystem.get_versions()
         return eco
+
+    def diff(self, master: str, dev: str) -> DiffAndConflicts:
+        """Calculate diff between master and dev branch/commits.
+
+        Diff is calculated as if we are to merge "dev" into "master"
+
+        Parameters
+        ----------
+        master: str
+            branch name or commit hash digest to use as the "master" which
+            changes made in "dev" are compared to.
+        dev: str
+            branch name or commit hash digest to use as the "dev"
+            (ie. "feature") branch which changes have been made to
+            which are to be compared to the contents of "master".
+
+        Returns
+        -------
+        DiffAndConflicts
+            Standard output diff structure.
+        """
+        current_branches = self.list_branches()
+
+        # assert branch / commit specified by "master" exists and
+        # standardize into "digest" rather than "branch name" arg type
+        if master in current_branches:
+            masterHEAD = heads.get_branch_head_commit(
+                branchenv=self._env.branchenv, branch_name=master)
+        else:
+            cmtExists = commiting.check_commit_hash_in_history(
+                refenv=self._env.refenv, commit_hash=master)
+            if not cmtExists:
+                raise ValueError(f'`master` {master} is not valid branch/commit.')
+            masterHEAD = master
+
+        # same check & transform for "dev" branch/commit arg.
+        if dev in current_branches:
+            devHEAD = heads.get_branch_head_commit(
+                branchenv=self._env.branchenv, branch_name=dev)
+        else:
+            cmtExists = commiting.check_commit_hash_in_history(
+                refenv=self._env.refenv, commit_hash=dev)
+            if not cmtExists:
+                raise ValueError(f'`dev` {dev} is not valid branch/commit.')
+            devHEAD = dev
+
+        # create differ object and generate results...
+        diff = ReaderUserDiff(commit_hash=masterHEAD,
+                              branchenv=self._env.branchenv,
+                              refenv=self._env.refenv)
+        res = diff.commit(dev_commit_hash=devHEAD)
+        return res
+
 
     def merge(self, message: str, master_branch: str, dev_branch: str) -> str:
         """Perform a merge of the changes made on two branches.

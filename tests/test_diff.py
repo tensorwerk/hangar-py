@@ -410,3 +410,95 @@ class TestWriterDiff(object):
         co.commit('init aset')
         assert co.diff.status() == 'CLEAN'
         co.close()
+
+
+def test_repo_diff_method_branch_names(aset_samples_initialized_repo):
+    # t3
+    repo = aset_samples_initialized_repo
+    co = repo.checkout(write=True, branch='master')
+    co.add_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
+    co.commit('added aset')
+    co.close()
+    repo.create_branch('testbranch')
+
+    co = repo.checkout(write=True, branch='master')
+    del co.columns['testing_aset']
+    co.add_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
+    masterHEAD = co.commit('mutation from master')
+    co.close()
+
+    co = repo.checkout(write=True, branch='testbranch')
+    del co.columns['testing_aset']
+    co.add_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float32)
+    devHEAD = co.commit('mutation from dev')
+    co.close()
+
+    co = repo.checkout(write=False, branch='master')
+    co_diff = co.diff.branch('testbranch')
+    co.close()
+
+    repo_diff = repo.diff('master', 'testbranch')
+    assert co_diff == repo_diff
+
+
+def test_repo_diff_method_commit_digests(aset_samples_initialized_repo):
+    # t3
+    repo = aset_samples_initialized_repo
+    co = repo.checkout(write=True, branch='master')
+    co.add_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
+    co.commit('added aset')
+    co.close()
+    repo.create_branch('testbranch')
+
+    co = repo.checkout(write=True, branch='master')
+    del co.columns['testing_aset']
+    co.add_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
+    masterHEAD = co.commit('mutation from master')
+    co.close()
+
+    co = repo.checkout(write=True, branch='testbranch')
+    del co.columns['testing_aset']
+    co.add_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float32)
+    devHEAD = co.commit('mutation from dev')
+    co.close()
+
+    co = repo.checkout(write=False, branch='master')
+    co_diff = co.diff.commit(devHEAD)
+    co.close()
+
+    repo_diff = repo.diff(masterHEAD, devHEAD)
+    assert co_diff == repo_diff
+
+
+
+
+def test_repo_diff_method_one_branch_one_commit_digest(aset_samples_initialized_repo):
+    # t3
+    repo = aset_samples_initialized_repo
+    co = repo.checkout(write=True, branch='master')
+    co.add_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float64)
+    co.commit('added aset')
+    co.close()
+    repo.create_branch('testbranch')
+
+    co = repo.checkout(write=True, branch='master')
+    del co.columns['testing_aset']
+    co.add_ndarray_column(name='testing_aset', shape=(7, 7), dtype=np.float64)
+    masterHEAD = co.commit('mutation from master')
+    co.close()
+
+    co = repo.checkout(write=True, branch='testbranch')
+    del co.columns['testing_aset']
+    co.add_ndarray_column(name='testing_aset', shape=(5, 7), dtype=np.float32)
+    devHEAD = co.commit('mutation from dev')
+    co.close()
+
+    co = repo.checkout(write=False, branch='master')
+    co_diff = co.diff.commit(devHEAD)
+    co.close()
+
+    repo_diff1 = repo.diff('master', devHEAD)
+    assert co_diff == repo_diff1
+
+    repo_diff2 = repo.diff(masterHEAD, 'testbranch')
+    assert co_diff == repo_diff2

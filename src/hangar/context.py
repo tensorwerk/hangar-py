@@ -38,7 +38,7 @@ from .records.vcompat import (
     set_repository_software_version,
     startup_check_repo_version,
 )
-from .utils import readme_contents
+from .utils import readme_contents, is_64bits
 
 
 class Environments(object):
@@ -93,6 +93,9 @@ class Environments(object):
             msg = f'No repository exists at {self.repo_path}, please use `repo.init()` method'
             warnings.warn(msg, UserWarning)
             return False
+
+        if not is_64bits():
+            raise OSError(f'Hangar cannot run on 32 bit machines')
 
         repo_ver = startup_check_repo_version(self.repo_path)
         curr_ver = repo_version_raw_spec_from_raw_string(v_str=__version__)

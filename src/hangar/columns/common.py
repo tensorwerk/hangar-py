@@ -6,7 +6,7 @@ import lmdb
 from ..txnctx import TxnRegister
 
 
-class AsetTxn(object):
+class ColumnTxn(object):
     """Provides context manager ready methods to handle lmdb transactions.
 
     In order to prevent passing around lmdb.Environment objects, we instantiate

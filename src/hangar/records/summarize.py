@@ -4,13 +4,87 @@ from io import StringIO
 
 import lmdb
 
-from .commiting import get_commit_ancestors_graph, get_commit_spec, tmp_cmt_env
-from .heads import get_staging_branch_head, get_branch_head_commit
+from .commiting import (
+    get_commit_ancestors_graph,
+    get_commit_spec,
+    tmp_cmt_env,
+)
+from .heads import (
+    get_staging_branch_head,
+    get_branch_head_commit,
+    commit_hash_to_branch_name_map,
+)
 from .queries import RecordQuery
 from .hashs import HashQuery
 from ..diff import DiffOut, Changes
 from ..txnctx import TxnRegister
 from ..utils import format_bytes, file_size, folder_size, unique_everseen
+from ..diagnostics import graphing
+
+
+def log(branchenv: lmdb.Environment,
+        refenv: lmdb.Environment,
+        branch: str = None,
+        commit: str = None,
+        *,
+        return_contents: bool = False,
+        show_time: bool = False,
+        show_user: bool = False):
+    """Displays a pretty printed commit log graph to the terminal.
+
+    .. note::
+
+        For programatic access, the return_contents value can be set to true
+        which will retrieve relevant commit specifications as dictionary
+        elements.
+
+    Parameters
+    ----------
+    branchenv : lmdb.Environment
+        db storing information on named branch HEADS
+    refenv : lmdb.Environment
+        db storing full commit history refs (compressed).
+    branch : str, optional
+        The name of the branch to start the log process from. (Default value
+        = None)
+    commit : str, optional
+        The commit hash to start the log process from. (Default value = None)
+    return_contents : bool, optional, kwarg only
+        If true, return the commit graph specifications in a dictionary
+        suitable for programatic access/evaluation.
+    show_time : bool, optional, kwarg only
+        If true and return_contents is False, show the time of each commit
+        on the printed log graph
+    show_user : bool, optional, kwarg only
+        If true and return_contents is False, show the committer of each
+        commit on the printed log graph
+    Returns
+    -------
+    Optional[dict]
+        Dict containing the commit ancestor graph, and all specifications.
+    """
+    res = list_history(
+        refenv=refenv,
+        branchenv=branchenv,
+        branch_name=branch,
+        commit_hash=commit)
+    branchMap = dict(commit_hash_to_branch_name_map(branchenv=branchenv))
+
+    if return_contents:
+        for digest in list(branchMap.keys()):
+            if digest not in res['order']:
+                del branchMap[digest]
+        res['branch_heads'] = branchMap
+        return res
+    else:
+        g = graphing.Graph()
+        g.show_nodes(dag=res['ancestors'],
+                     spec=res['specs'],
+                     branch=branchMap,
+                     start=res['head'],
+                     order=res['order'],
+                     show_time=show_time,
+                     show_user=show_user)
 
 
 def list_history(refenv, branchenv, branch_name=None, commit_hash=None):
@@ -87,7 +161,7 @@ def details(env: lmdb.Environment, line_limit=100, line_length=100) -> StringIO:
     """
     buf = StringIO()
     buf.write('\n======================\n')
-    buf.write(f'{Path(env.path()).name}')
+    buf.write(f'{Path(env.path()).name}\n')
     try:
         buf.write(f'File Size: {format_bytes(file_size(Path(env.path())))}\n')
     except FileNotFoundError:

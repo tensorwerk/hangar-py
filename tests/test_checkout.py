@@ -486,6 +486,13 @@ class TestCheckout(object):
         assert icount == 2
         co.close()
 
+    @pytest.mark.parametrize('write', [True, False])
+    def test_checkout_log_method(self, repo_20_filled_samples, write):
+        repo_log = repo_20_filled_samples.log(return_contents=True)
+        co = repo_20_filled_samples.checkout(write=write)
+        co_log = co.log(return_contents=True)
+        co.close()
+        assert repo_log == co_log
 
 
 class TestBranchingMergingInCheckout(object):

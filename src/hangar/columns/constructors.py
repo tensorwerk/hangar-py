@@ -55,7 +55,7 @@ def _flat_load_sample_keys_and_specs(column_name, txnctx):
     ----------
     column_name: str
         name of the column to load.
-    txnctx: AsetTxn
+    txnctx: ColumnTxn
         transaction context object used to access commit ref info on disk
 
     Returns
@@ -84,7 +84,7 @@ def generate_flat_column(txnctx, column_name, path, schema, mode):
 
     Parameters
     ----------
-    txnctx : AsetTxn
+    txnctx : ColumnTxn
         transaction context object used to access commit ref info on disk
     column_name : str
         name of the column that the reader constructors are being
@@ -141,7 +141,7 @@ def _nested_load_sample_keys_and_specs(column_name, txnctx):
     ----------
     column_name : str
         name of the column to load.
-    txnctx : AsetTxn
+    txnctx : ColumnTxn
         transaction context object used to access commit ref info on disk
 
     Returns
@@ -171,7 +171,7 @@ def generate_nested_column(txnctx, column_name, path, schema, mode):
 
     Parameters
     ----------
-    txnctx : AsetTxn
+    txnctx : ColumnTxn
         transaction context object used to access commit ref info on disk
     column_name : str
         name of the column that the reader constructors are being

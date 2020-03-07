@@ -1,3 +1,5 @@
+from .utils import is_64bits, parse_bytes
+
 # parsing constants
 
 SEP_KEY = ':'
@@ -39,8 +41,10 @@ CONFIG_SERVER_NAME = 'config_server.ini'
 
 # LMDB database names and settings.
 
+
 LMDB_SETTINGS = {
-    'map_size': 2_000_000_000,
+    # lmdb cannot open map larger than 2GB on 32 bit machines.
+    'map_size': 50_000_000_000,
     'meminit': False,
     'subdir': False,
     'lock': False,
