@@ -77,9 +77,11 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
     """
 
     def __init__(self,
-                 base_path: Path, labelenv: lmdb.Environment,
-                 dataenv: lmdb.Environment, hashenv: lmdb.Environment,
-                 branchenv: lmdb.Environment, refenv: lmdb.Environment,
+                 base_path: Path,
+                 dataenv: lmdb.Environment,
+                 hashenv: lmdb.Environment,
+                 branchenv: lmdb.Environment,
+                 refenv: lmdb.Environment,
                  commit: str):
         """Developer documentation of init method.
 
@@ -87,8 +89,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         ----------
         base_path : Path
             directory path to the Hangar repository on disk
-        labelenv : lmdb.Environment
-            db where the label dat is stored
         dataenv : lmdb.Environment
             db where the checkout record data is unpacked and stored.
         hashenv : lmdb.Environment
@@ -102,7 +102,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         """
         self._commit_hash = commit
         self._repo_path = base_path
-        self._labelenv = labelenv
         self._dataenv = dataenv
         self._hashenv = hashenv
         self._branchenv = branchenv
@@ -134,7 +133,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         self._verify_alive()
         res = f'{self.__class__}('\
               f'base_path={self._repo_path} '\
-              f'labelenv={self._labelenv} '\
               f'dataenv={self._dataenv} '\
               f'hashenv={self._hashenv} '\
               f'commit={self._commit_hash})'
@@ -360,7 +358,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
     def __init__(self,
                  repo_pth: Path,
                  branch_name: str,
-                 labelenv: lmdb.Environment,
                  hashenv: lmdb.Environment,
                  refenv: lmdb.Environment,
                  stageenv: lmdb.Environment,
@@ -376,8 +373,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         branch_name : str
             name of the branch whose ``HEAD`` commit will for the starting state
             of the staging area.
-        labelenv : lmdb.Environment
-            db where the label dat is stored
         hashenv lmdb.Environment
             db where the hash records are stored.
         refenv : lmdb.Environment
@@ -399,7 +394,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         self._refenv = refenv
         self._hashenv = hashenv
-        self._labelenv = labelenv
         self._stageenv = stageenv
         self._branchenv = branchenv
         self._stagehashenv = stagehashenv
@@ -424,7 +418,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         res = f'{self.__class__}('\
               f'base_path={self._repo_path} '\
               f'branch_name={self._branch_name} ' \
-              f'labelenv={self._labelenv} '\
               f'hashenv={self._hashenv} '\
               f'refenv={self._refenv} '\
               f'stageenv={self._stageenv} '\

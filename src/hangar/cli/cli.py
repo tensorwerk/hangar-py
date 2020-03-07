@@ -787,7 +787,6 @@ def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin
 @click.option('-b', is_flag=True, help='display the branch/heads db')
 @click.option('-r', is_flag=True, help='display the references db')
 @click.option('-d', is_flag=True, help='display the data hash db')
-@click.option('-m', is_flag=True, help='display the metadata hash db')
 @click.option('-s', is_flag=True, help='display the stage record db')
 @click.option('-z', is_flag=True, help='display the staged hash record db')
 @click.option('--limit', default=30, help='limit the amount of records displayed before truncation')
@@ -812,15 +811,13 @@ def lmdb_record_details(repo: Repository, a, b, r, d, m, s, z, limit):
     envs = Environments(pth=repo_path)
     try:
         if a:
-            b, r, d, m, s, z = True, True, True, True, True, True
+            b, r, d, s, z = True, True, True, True, True, True
         if b:
             click.echo(details(envs.branchenv, line_limit=limit).getvalue())
         if r:
             click.echo(details(envs.refenv, line_limit=limit).getvalue())
         if d:
             click.echo(details(envs.hashenv, line_limit=limit).getvalue())
-        if m:
-            click.echo(details(envs.labelenv, line_limit=limit).getvalue())
         if s:
             click.echo(details(envs.stageenv, line_limit=limit).getvalue())
         if z:

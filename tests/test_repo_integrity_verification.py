@@ -92,30 +92,9 @@ class TestVerifyCommitRefDigests(object):
 
             with pytest.raises(RuntimeError):
                 _verify_commit_ref_digests_exist(hashenv=diverse_repo._env.hashenv,
-                                                 labelenv=diverse_repo._env.labelenv,
                                                  refenv=diverse_repo._env.refenv)
 
             with diverse_repo._env.hashenv.begin(write=True) as txn:
-                txn.put(key_removed, val_removed)
-
-    def test_remove_metadata_digest_is_caught(self, diverse_repo):
-        from hangar.records import hashs
-        from hangar.diagnostics.integrity import _verify_commit_ref_digests_exist
-
-        hq = hashs.HashQuery(diverse_repo._env.labelenv)
-        keys_to_remove = list(hq.gen_all_hash_keys_db())
-
-        for key_removed in keys_to_remove:
-            with diverse_repo._env.labelenv.begin(write=True) as txn:
-                val_removed = txn.get(key_removed)
-                txn.delete(key_removed)
-
-            with pytest.raises(RuntimeError):
-                _verify_commit_ref_digests_exist(hashenv=diverse_repo._env.hashenv,
-                                                 labelenv=diverse_repo._env.labelenv,
-                                                 refenv=diverse_repo._env.refenv)
-
-            with diverse_repo._env.labelenv.begin(write=True) as txn:
                 txn.put(key_removed, val_removed)
 
     def test_remove_schema_digest_is_caught(self, diverse_repo):
@@ -131,7 +110,6 @@ class TestVerifyCommitRefDigests(object):
 
             with pytest.raises(RuntimeError):
                 _verify_commit_ref_digests_exist(hashenv=diverse_repo._env.hashenv,
-                                                 labelenv=diverse_repo._env.labelenv,
                                                  refenv=diverse_repo._env.refenv)
 
             with diverse_repo._env.hashenv.begin(write=True) as txn:

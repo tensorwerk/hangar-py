@@ -310,7 +310,7 @@ def status(hashenv: lmdb.Environment, branch_name: str, diff: DiffOut) -> String
             un = u.column
             count = sum((1 for k in df.samples if k.column == un))
             buf.write(f'|  - "{un}": {count} \n')
-
+        buf.write(' \n')
         return buf
 
     buf = StringIO()

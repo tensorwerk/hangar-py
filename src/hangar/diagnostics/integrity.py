@@ -105,15 +105,12 @@ def _verify_commit_tree_integrity(refenv: lmdb.Environment):
 
 
 @report_corruption_risk_on_parsing_error
-def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
-                                     labelenv: lmdb.Environment,
-                                     refenv: lmdb.Environment):
+def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment, refenv: lmdb.Environment):
 
     all_commits = commiting.list_all_commits(refenv)
     datatxn = TxnRegister().begin_reader_txn(hashenv, buffer=True)
-    labeltxn = TxnRegister().begin_reader_txn(labelenv, buffer=True)
     try:
-        with datatxn.cursor() as cur, labeltxn.cursor() as labcur:
+        with datatxn.cursor() as cur:
             for cmt in tqdm(all_commits, desc='verifying commit ref digests'):
                 with commiting.tmp_cmt_env(refenv, cmt) as tmpDB:
                     rq = queries.RecordQuery(tmpDB)
@@ -139,7 +136,6 @@ def _verify_commit_ref_digests_exist(hashenv: lmdb.Environment,
                                 f'exist in data hash db.')
 
     finally:
-        TxnRegister().abort_reader_txn(labelenv)
         TxnRegister().abort_reader_txn(hashenv)
 
 
@@ -169,12 +165,11 @@ def _verify_branch_integrity(branchenv: lmdb.Environment, refenv: lmdb.Environme
 
 def run_verification(branchenv: lmdb.Environment,
                      hashenv: lmdb.Environment,
-                     labelenv: lmdb.Environment,
                      refenv: lmdb.Environment,
                      repo_path: Path):
 
     _verify_branch_integrity(branchenv, refenv)
     _verify_commit_tree_integrity(refenv)
-    _verify_commit_ref_digests_exist(hashenv, labelenv, refenv)
+    _verify_commit_ref_digests_exist(hashenv, refenv)
     _verify_schema_integrity(hashenv)
     _verify_column_integrity(hashenv, repo_path)

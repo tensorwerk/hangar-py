@@ -18,7 +18,6 @@ from .constants import (
     DIR_DATA,
     LMDB_BRANCH_NAME,
     LMDB_HASH_NAME,
-    LMDB_META_NAME,
     LMDB_REF_NAME,
     LMDB_SETTINGS,
     LMDB_STAGE_HASH_NAME,
@@ -50,7 +49,6 @@ class Environments(object):
         self.hashenv: Optional[lmdb.Environment] = None
         self.stageenv: Optional[lmdb.Environment] = None
         self.branchenv: Optional[lmdb.Environment] = None
-        self.labelenv: Optional[lmdb.Environment] = None
         self.stagehashenv: Optional[lmdb.Environment] = None
         self.cmtenv: MutableMapping[str, lmdb.Environment] = {}
         self._startup()
@@ -222,14 +220,12 @@ class Environments(object):
         hash_pth = str(self.repo_path.joinpath(LMDB_HASH_NAME))
         stage_pth = str(self.repo_path.joinpath(LMDB_STAGE_REF_NAME))
         branch_pth = str(self.repo_path.joinpath(LMDB_BRANCH_NAME))
-        label_pth = str(self.repo_path.joinpath(LMDB_META_NAME))
         stagehash_pth = str(self.repo_path.joinpath(LMDB_STAGE_HASH_NAME))
 
         self.refenv = lmdb.open(path=ref_pth, **LMDB_SETTINGS)
         self.hashenv = lmdb.open(path=hash_pth, **LMDB_SETTINGS)
         self.stageenv = lmdb.open(path=stage_pth, **LMDB_SETTINGS)
         self.branchenv = lmdb.open(path=branch_pth, **LMDB_SETTINGS)
-        self.labelenv = lmdb.open(path=label_pth, **LMDB_SETTINGS)
         self.stagehashenv = lmdb.open(path=stagehash_pth, **LMDB_SETTINGS)
 
     def _close_environments(self):
@@ -238,7 +234,6 @@ class Environments(object):
         self.hashenv.close()
         self.stageenv.close()
         self.branchenv.close()
-        self.labelenv.close()
         self.stagehashenv.close()
         for env in self.cmtenv.values():
             if platform.system() == 'Windows':

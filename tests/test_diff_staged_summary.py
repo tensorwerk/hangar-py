@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 
 
-def test_add_samples_to_existing_aset(repo_20_filled_samples2):
+def test_add_samples_to_existing_column(repo_20_filled_samples2):
     from hangar.records.summarize import status
     repo = repo_20_filled_samples2
     expected = '============ \n'\
@@ -117,7 +117,7 @@ def test_delete_samples(repo_20_filled_samples2):
     assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
 
 
-def test_add_new_aset_schema_and_samples(repo_20_filled_samples2):
+def test_add_new_column_schema_and_samples(repo_20_filled_samples2):
     from hangar.records.summarize import status
     repo = repo_20_filled_samples2
     expected = (
@@ -129,9 +129,11 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples2):
         '|---------- \n'
         '| Schema: 1 \n'
         '|  - "new_aset": \n'
-        '|       digest="1=e53031b54b57" \n'
+        '|       digest="1=555a833b66ab" \n'
         '|       column_layout: flat \n'
         '|       column_type: ndarray \n'
+        '|       schema_hasher_tcode: 1 \n'
+        '|       data_hasher_tcode: 0 \n'
         '|       schema_type: fixed_shape \n'
         '|       shape: (10, 10) \n'
         '|       dtype: float32 \n'
@@ -163,10 +165,11 @@ def test_add_new_aset_schema_and_samples(repo_20_filled_samples2):
         co2.columns['new_aset'][idx] = dummyData
     df = co2.diff.staged()
     co2.close()
-    assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
+    result = status(repo._env.hashenv, 'master', df.diff).getvalue()
+    assert result == expected
 
 
-def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_samples2):
+def test_add_new_column_schema_and_sample_and_delete_old_column(repo_20_filled_samples2):
     from hangar.records.summarize import status
     repo = repo_20_filled_samples2
     expected = (
@@ -178,9 +181,11 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
         '|---------- \n'
         '| Schema: 1 \n'
         '|  - "new_aset": \n'
-        '|       digest="1=e53031b54b57" \n'
+        '|       digest="1=555a833b66ab" \n'
         '|       column_layout: flat \n'
         '|       column_type: ndarray \n'
+        '|       schema_hasher_tcode: 1 \n'
+        '|       data_hasher_tcode: 0 \n'
         '|       schema_type: fixed_shape \n'
         '|       shape: (10, 10) \n'
         '|       dtype: float32 \n'
@@ -195,9 +200,11 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
         '|---------- \n'
         '| Schema: 1 \n'
         '|  - "dummy": \n'
-        '|       digest="1=5d7dbb103b6e" \n'
+        '|       digest="1=18599cd5ea25" \n'
         '|       column_layout: flat \n'
         '|       column_type: ndarray \n'
+        '|       schema_hasher_tcode: 1 \n'
+        '|       data_hasher_tcode: 0 \n'
         '|       schema_type: fixed_shape \n'
         '|       shape: (50,) \n'
         '|       dtype: int64 \n'
@@ -223,7 +230,8 @@ def test_add_new_aset_schema_and_sample_and_delete_old_aset(repo_20_filled_sampl
     del co2.columns['dummy']
     df = co2.diff.staged()
     co2.close()
-    assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
+    result = status(repo._env.hashenv, 'master', df.diff).getvalue()
+    assert result == expected
 
 
 def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_samples2):
@@ -238,9 +246,11 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
         '|---------- \n'
         '| Schema: 1 \n'
         '|  - "new_aset": \n'
-        '|       digest="1=e53031b54b57" \n'
+        '|       digest="1=555a833b66ab" \n'
         '|       column_layout: flat \n'
         '|       column_type: ndarray \n'
+        '|       schema_hasher_tcode: 1 \n'
+        '|       data_hasher_tcode: 0 \n'
         '|       schema_type: fixed_shape \n'
         '|       shape: (10, 10) \n'
         '|       dtype: float32 \n'
@@ -262,9 +272,11 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
         '|---------- \n'
         '| Schema: 1 \n'
         '|  - "dummy": \n'
-        '|       digest="1=56ff74fbf134" \n'
+        '|       digest="1=5d6cc8241705" \n'
         '|       column_layout: flat \n'
         '|       column_type: ndarray \n'
+        '|       schema_hasher_tcode: 1 \n'
+        '|       data_hasher_tcode: 0 \n'
         '|       schema_type: fixed_shape \n'
         '|       shape: (50,) \n'
         '|       dtype: int64 \n'
@@ -284,4 +296,5 @@ def test_add_new_schema_and_samples_and_change_old_backend(repo_20_filled_sample
         co2.columns['dummy'][idx] = np.arange(50).astype(np.int64) + idx
     df = co2.diff.staged()
     co2.close()
-    assert status(repo._env.hashenv, 'master', df.diff).getvalue() == expected
+    result = status(repo._env.hashenv, 'master', df.diff).getvalue()
+    assert result == expected

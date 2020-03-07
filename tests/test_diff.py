@@ -90,10 +90,6 @@ class TestReaderWriterDiff(object):
         assert len(diffs.mutated.samples) == 1
         assert len(diffs.deleted.samples) == 1
 
-        assert len(diffs.added.metadata) == 1
-        assert len(diffs.deleted.metadata) == 0
-        assert len(diffs.mutated.metadata) == 0
-
         assert len(diffs.added.schema) == 0
         assert len(diffs.deleted.schema) == 0
         assert len(diffs.mutated.schema) == 0

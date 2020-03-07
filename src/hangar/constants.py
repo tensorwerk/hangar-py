@@ -53,7 +53,6 @@ LMDB_SETTINGS = {
 
 LMDB_REF_NAME = 'ref.lmdb'
 LMDB_HASH_NAME = 'hash.lmdb'
-LMDB_META_NAME = 'meta.lmdb'
 LMDB_BRANCH_NAME = 'branch.lmdb'
 LMDB_STAGE_REF_NAME = 'stage_ref.lmdb'
 LMDB_STAGE_HASH_NAME = 'stage_hash.lmdb'

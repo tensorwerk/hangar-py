@@ -275,7 +275,6 @@ class Repository(object):
                 co = WriterCheckout(
                     repo_pth=self._repo_path,
                     branch_name=branch,
-                    labelenv=self._env.labelenv,
                     hashenv=self._env.hashenv,
                     refenv=self._env.refenv,
                     stageenv=self._env.stageenv,
@@ -287,7 +286,6 @@ class Repository(object):
                     branch_name=branch, commit=commit)
                 co = ReaderCheckout(
                     base_path=self._repo_path,
-                    labelenv=self._env.labelenv,
                     dataenv=self._env.cmtenv[commit_hash],
                     hashenv=self._env.hashenv,
                     branchenv=self._env.branchenv,
@@ -448,8 +446,6 @@ class Repository(object):
             self._env.refenv, line_limit=line_limit, line_length=line_length).getvalue())
         print(summarize.details(
             self._env.hashenv, line_limit=line_limit, line_length=line_length).getvalue())
-        print(summarize.details(
-            self._env.labelenv, line_limit=line_limit, line_length=line_length).getvalue())
         print(summarize.details(
             self._env.stageenv, line_limit=line_limit, line_length=line_length).getvalue())
         print(summarize.details(
@@ -803,7 +799,6 @@ class Repository(object):
             integrity.run_verification(
                 branchenv=self._env.branchenv,
                 hashenv=self._env.hashenv,
-                labelenv=self._env.labelenv,
                 refenv=self._env.refenv,
                 repo_path=self._env.repo_path)
         finally:

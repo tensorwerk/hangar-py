@@ -18,9 +18,9 @@ from ..utils import ilen
 
 
 class HashQuery(CursorRangeIterator):
-    """Traverse and query contents contained in ``hashenv`` and ``labelenv`` dbs
+    """Traverse and query contents contained in ``hashenv`` db
 
-    These methods operate on the databases which store the mapping of some data
+    These methods operate on the database which store the mapping of some data
     digest to it's location on disk (or value in the case of metadata and
     schemas). These databases are not specific to a particular commit; the
     records are for every piece of data stored in every commit across history.

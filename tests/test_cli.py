@@ -765,8 +765,8 @@ def test_start_server(managed_tmpdir):
 # ------------------------ Developer Commands --------------------------------
 
 
-def test_db_view_command(repo_20_filled_samples_meta):
-    repo = repo_20_filled_samples_meta
+def test_db_view_command(repo_20_filled_samples):
+    repo = repo_20_filled_samples
     runner = CliRunner()
     res = runner.invoke(cli.lmdb_record_details, ['-a'], obj=repo)
 
