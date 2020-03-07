@@ -62,14 +62,6 @@ Nested Column Layout Container
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-Metadata
---------
-
-.. autoclass:: hangar.columns.metadata.MetadataWriter()
-   :members:
-   :inherited-members:
-   :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
-   :exclude-members: __init__
 
 Differ
 ------
@@ -115,16 +107,6 @@ Nested Column Layout Container
    :members:
    :inherited-members:
    :special-members: __getitem__,, __contains__, __len__, __iter__
-   :exclude-members: __init__
-
-
-Metadata
---------
-
-.. autoclass:: hangar.columns.metadata.MetadataReader()
-   :members:
-   :inherited-members:
-   :special-members: __getitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
 

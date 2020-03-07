@@ -775,7 +775,7 @@ def test_db_view_command(repo_20_filled_samples):
     for line in res.stdout.splitlines():
         if '.lmdb' in line:
             dbs_queried += 1
-    assert dbs_queried == 6
+    assert dbs_queried == 5
 
     res = runner.invoke(cli.lmdb_record_details, ['-a', '--limit', '10'], obj=repo)
     assert res.exit_code == 0
