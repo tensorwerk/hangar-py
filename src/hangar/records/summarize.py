@@ -161,7 +161,7 @@ def details(env: lmdb.Environment, line_limit=100, line_length=100) -> StringIO:
     """
     buf = StringIO()
     buf.write('\n======================\n')
-    buf.write(f'{Path(env.path()).name}')
+    buf.write(f'{Path(env.path()).name}\n')
     try:
         buf.write(f'File Size: {format_bytes(file_size(Path(env.path())))}\n')
     except FileNotFoundError:

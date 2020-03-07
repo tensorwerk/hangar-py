@@ -791,7 +791,8 @@ def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin
 @click.option('-s', is_flag=True, help='display the stage record db')
 @click.option('-z', is_flag=True, help='display the staged hash record db')
 @click.option('--limit', default=30, help='limit the amount of records displayed before truncation')
-def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
+@pass_repo
+def lmdb_record_details(repo: Repository, a, b, r, d, m, s, z, limit):
     """DEVELOPER TOOL ONLY
 
     display key/value pairs making up the dbs
@@ -800,27 +801,29 @@ def lmdb_record_details(a, b, r, d, m, s, z, limit):  # pragma: no cover
     from hangar.records.summarize import details
     from hangar import constants as c
 
-    P = os.getcwd()
-    if os.path.isdir(os.path.join(P, c.DIR_HANGAR_SERVER)):
-        repo_path = os.path.join(P, c.DIR_HANGAR_SERVER)
-    elif os.path.isdir(os.path.join(P, c.DIR_HANGAR)):
-        repo_path = os.path.join(P, c.DIR_HANGAR)
+    if repo._repo_path.is_dir():
+        repo_path = repo._repo_path
+    elif repo._repo_path.parent.joinpath(c.DIR_HANGAR_SERVER).is_dir():
+        repo_path = repo._repo_path.parent.joinpath(c.DIR_HANGAR_SERVER)
     else:
-        click.echo(f'NO HANGAR INSTALLATION AT PATH: {P}')
+        click.echo(f'NO HANGAR INSTALLATION AT PATH: {repo._repo_path.parent}')
         return
 
     envs = Environments(pth=repo_path)
-    if a:
-        b, r, d, m, s, z = True, True, True, True, True, True
-    if b:
-        click.echo(details(envs.branchenv, line_limit=limit).getvalue())
-    if r:
-        click.echo(details(envs.refenv, line_limit=limit).getvalue())
-    if d:
-        click.echo(details(envs.hashenv, line_limit=limit).getvalue())
-    if m:
-        click.echo(details(envs.labelenv, line_limit=limit).getvalue())
-    if s:
-        click.echo(details(envs.stageenv, line_limit=limit).getvalue())
-    if z:
-        click.echo(details(envs.stagehashenv, line_limit=limit).getvalue())
+    try:
+        if a:
+            b, r, d, m, s, z = True, True, True, True, True, True
+        if b:
+            click.echo(details(envs.branchenv, line_limit=limit).getvalue())
+        if r:
+            click.echo(details(envs.refenv, line_limit=limit).getvalue())
+        if d:
+            click.echo(details(envs.hashenv, line_limit=limit).getvalue())
+        if m:
+            click.echo(details(envs.labelenv, line_limit=limit).getvalue())
+        if s:
+            click.echo(details(envs.stageenv, line_limit=limit).getvalue())
+        if z:
+            click.echo(details(envs.stagehashenv, line_limit=limit).getvalue())
+    finally:
+        envs._close_environments()
