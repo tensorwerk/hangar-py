@@ -186,7 +186,8 @@ from .specs import HDF5_00_DataHashSpec
 from .. import __version__
 from ..optimized_utils import SizedDict
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
-from ..utils import find_next_prime, random_string, set_blosc_nthreads
+from ..utils import random_string, set_blosc_nthreads
+from ..optimized_utils import find_next_prime
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..typesystem import Descriptor, OneOf, DictItems, SizedIntegerTuple, checkedmeta
 

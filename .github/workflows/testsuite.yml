@@ -43,14 +43,14 @@ jobs:
         python -m pip install tox-gh-actions
     - name: Run Tests Without Coverage Report
       if: matrix.testcover == 'no'
-      run: tox -- -p no:sugar
+      run: tox
       env:
         PYTEST_XDIST_PROC_NR: 2
         TESTCOVER: ${{ matrix.testcover }}
         TESTML: ${{ matrix.testml }}
     - name: Run Tests With Coverage Report
       if: matrix.testcover == 'yes'
-      run: tox -- --cov-report xml -p no:sugar
+      run: tox -- --cov-report xml
       env:
         PYTEST_XDIST_PROC_NR: 2
         TESTCOVER: ${{ matrix.testcover }}

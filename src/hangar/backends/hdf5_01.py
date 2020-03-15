@@ -228,7 +228,8 @@ from .. import __version__
 from ..optimized_utils import SizedDict
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import writer_checkout_only, reader_checkout_only
-from ..utils import find_next_prime, random_string, set_blosc_nthreads
+from ..utils import random_string, set_blosc_nthreads
+from ..optimized_utils import find_next_prime
 from ..typesystem import Descriptor, OneOf, DictItems, SizedIntegerTuple, checkedmeta
 
 set_blosc_nthreads()

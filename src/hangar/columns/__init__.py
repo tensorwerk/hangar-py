@@ -5,6 +5,7 @@ from .constructors import (
     generate_nested_column,
     column_type_object_from_schema
 )
+from .introspection import is_column, is_writer_column
 
 __all__ = (
     'Columns',
@@ -13,4 +14,6 @@ __all__ = (
     'generate_nested_column',
     'column_type_object_from_schema',
     'ColumnTxn',
+    'is_column',
+    'is_writer_column'
 )
