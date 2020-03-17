@@ -1,28 +1,33 @@
 from functools import partial
+import random
+
 import tensorflow as tf
+from .common import Dataset
 
 
-def yield_data(accessors, keys):
-    for name in keys:
-        yield tuple([acc.get_by_name(name) for acc in accessors])
+def yield_data(dataset, shuffle):
+    if shuffle:
+        random.shuffle(dataset.keys)
+    for name in dataset.keys:
+        yield dataset[name]
 
 
-def make_tf_dataset(accessors, keys):
-    generator = partial(yield_data, accessors, keys)
+def make_tensorflow_dataset(columns, keys=None, shuffle=False):
+    dataset = Dataset(columns, keys)
+    generator = partial(yield_data, dataset, shuffle)
     types = []
     shapes = []
-    for acc in accessors:
-        sample = acc.get_by_name(keys[0])
+    for col in dataset.columns:
 
         # get shape
-        if acc.schema_type == 'variable_shape':
-            shape = (None,) * len(sample.shape)
+        if col.schema_type == 'variable_shape':
+            shape = (None,) * len(col.shape)
         else:
-            shape = sample.shape
+            shape = col.shape
         shapes.append(tf.TensorShape(shape))
 
         # get type
-        types.append(tf.as_dtype(sample.dtype))
+        types.append(tf.as_dtype(col.dtype))
     shapes, types = tuple(shapes), tuple(types)
     return tf.data.Dataset.from_generator(generator=generator, output_types=types,
                                           output_shapes=shapes)
