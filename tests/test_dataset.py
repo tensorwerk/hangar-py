@@ -8,24 +8,126 @@ from hangar import Repository
 
 
 from hangar import make_numpy_dataset
+from hangar.dataset.common import Dataset
+
+try:
+    import torch
+    from torch.utils.data import DataLoader
+    from hangar import make_torch_dataset
+    torchExists = True
+except ImportError:
+    torchExists = False
+
+try:
+    import tensorflow as tf
+    tf.compat.v1.enable_eager_execution()
+    from hangar import make_tensorflow_dataset
+    tfExists = True
+except ImportError:
+    tfExists = False
 
 
+class TestInternalDatasetClass:
+
+    def test_column_without_wrapping_list(self, repo_20_filled_samples, array5by7):
+        co = repo_20_filled_samples.checkout()
+        first_col = co.columns['writtenaset']
+        second_col = co.columns['second_aset']
+        dataset = Dataset(first_col)
+        key = dataset.keys[0]
+        target = array5by7[:] = int(key)
+        assert np.allclose(dataset[key], target)
+        with pytest.raises(TypeError):
+            Dataset(first_col, second_col)
+
+    def test_no_column(self):
+        with pytest.raises(ValueError):
+            dataset = Dataset([])
+
+    def test_fails_on_write_enabled_columns(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
+        co = repo.checkout(write=True)
+        first_aset = co.columns['writtenaset']
+        with pytest.raises(TypeError):
+            Dataset(first_aset)
+
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
+    def test_columns_without_local_data_and_without_key_argument(self,
+                                                                 written_two_cmt_server_repo,
+                                                                 managed_tmpdir):
+        new_tmpdir = pjoin(managed_tmpdir, 'new')
+        mkdir(new_tmpdir)
+        server, _ = written_two_cmt_server_repo
+        repo = Repository(path=new_tmpdir, exists=False)
+        repo.clone('name', 'a@b.c', server, remove_old=True)
+        repo.remote.fetch_data('origin', branch='master', max_num_bytes=1000)
+        co = repo.checkout()
+        aset = co.columns['writtenaset']
+        dataset = Dataset(aset)
+        available_keys = len(dataset.keys)
+        all_keys = len(list(aset.keys()))
+        assert available_keys != all_keys
+
+    def test_columns_without_common_keys_and_without_key_argument(self, repo_20_filled_samples):
+        co = repo_20_filled_samples.checkout(write=True)
+        first_col = co.columns['writtenaset']
+        first_col['AnExtraKey'] = first_col['0']
+        co.commit('added an extra key')
+        co = repo_20_filled_samples.checkout()
+        first_col = co.columns['writtenaset']
+        second_col = co.columns['second_aset']
+        dataset = Dataset((first_col, second_col))
+        assert '0' in dataset.keys
+        assert 'AnExtraKey' in first_col
+        assert 'AnExtraKey' not in dataset.keys
+
+    def test_keys_success(self, repo_20_filled_samples):
+        co = repo_20_filled_samples.checkout()
+        first_col = co.columns['writtenaset']
+        keys = ['1', '2', '3']
+        dataset = Dataset(first_col, keys=keys)
+        assert dataset.keys == keys
+
+    def test_keys_non_common(self, repo_20_filled_samples):
+        co = repo_20_filled_samples.checkout()
+        first_col = co.columns['writtenaset']
+        keys = ['w', 'r', 'o', 'n', 'g']
+        with pytest.raises(KeyError):
+            Dataset(first_col, keys=keys)
+
+    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
+    def test_keys_non_local(self,
+                            written_two_cmt_server_repo,
+                            managed_tmpdir):
+        new_tmpdir = pjoin(managed_tmpdir, 'new')
+        mkdir(new_tmpdir)
+        server, _ = written_two_cmt_server_repo
+        repo = Repository(path=new_tmpdir, exists=False)
+        repo.clone('name', 'a@b.c', server, remove_old=True)
+        repo.remote.fetch_data('origin', branch='master', max_num_bytes=1000)
+        co = repo.checkout()
+        aset = co.columns['writtenaset']
+        keys = aset.remote_reference_keys
+        with pytest.raises(FileNotFoundError):
+            Dataset(aset, keys=keys)
+
+
+# ====================================   Numpy    ====================================
+# ====================================================================================
+
+
+@pytest.mark.filterwarnings("ignore:.* is experimental in the current release")
 class TestNumpyDataset:
-    def test_warns_experimental(self):
-        with pytest.warns(UserWarning, match='Dataloaders are experimental'):
-            from hangar import make_numpy_dataset
+    def test_warns_experimental(self, repo_20_filled_samples):
+        co = repo_20_filled_samples.checkout()
+        first_aset = co.columns['writtenaset']
+        with pytest.warns(UserWarning, match='make_numpy_dataset is experimental'):
+            make_numpy_dataset([first_aset])
 
-    def test_multiple_dataset_loader(self, repo_20_filled_samples):
+    def test_multiple_dataset_batched_loader(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
         first_aset = co.columns['writtenaset']
         second_aset = co.columns['second_aset']
-        with pytest.raises(ValueError):
-            # emtpy list
-            make_numpy_dataset([])
-        with pytest.raises(TypeError):
-            # if more than one dataset, those should be in a list/tuple
-            make_numpy_dataset(first_aset, first_aset)
-
         dset = make_numpy_dataset([first_aset, second_aset], batch_size=6, drop_last=True)
         total_samples = 0
         for dset1, dset2 in dset:
@@ -33,40 +135,6 @@ class TestNumpyDataset:
             assert dset1.shape == (6, 5, 7)
             assert dset2.shape == (6, 5, 7)
         assert total_samples == 18  # drop last is True
-        co.close()
-
-    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_20_filled_samples):
-        repo = repo_20_filled_samples
-        co = repo.checkout(write=True)
-        first_aset = co.columns['writtenaset']
-        second_aset = co.columns['second_aset']
-        with pytest.raises(TypeError):
-            make_numpy_dataset([first_aset, second_aset])
-        co.close()
-
-    def test_with_keys(self, repo_20_filled_samples):
-        repo = repo_20_filled_samples
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-
-        # with keys
-        keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
-        bad_tensor0 = aset['0']
-        bad_tensor1 = aset['1']
-        bad_tensor3 = aset['3']
-        bad_tensor8 = aset['8']
-
-        np_dset = make_numpy_dataset(aset, keys=keys, batch_size=3)
-        total_batches = 0
-        for batch in np_dset:
-            assert batch[0].shape[0] == 3
-            total_batches += 1
-            for sample in batch:
-                assert not np.allclose(sample, bad_tensor0)
-                assert not np.allclose(sample, bad_tensor1)
-                assert not np.allclose(sample, bad_tensor3)
-                assert not np.allclose(sample, bad_tensor8)
-        assert total_batches == 3
         co.close()
 
     def test_lots_of_data_with_multiple_backend(self, repo_300_filled_samples):
@@ -79,56 +147,27 @@ class TestNumpyDataset:
             assert data[0].shape == (10, 5, 7)
         co.close()
 
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
+    def test_shuffle(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(ValueError):
-            make_numpy_dataset(aset)
-        co.close()
-        repo._env._close_environments()
-
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(KeyError):
-            make_numpy_dataset(aset, keys=['1', -1])
-        co.close()
-        repo._env._close_environments()
-
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(FileNotFoundError):
-            make_numpy_dataset(aset, keys=['1', '2'])
-        co.close()
-        repo._env._close_environments()
+        first_aset = co.columns['writtenaset']
+        dataset = make_numpy_dataset(first_aset, keys=('0', '1', '2', '3', '4'),
+                                     shuffle=False)
+        one_point_from_each = []
+        ordered = [0, 1, 2, 3, 4]
+        for data in dataset:
+            one_point_from_each.append(int(data[0][0][0]))
+        assert one_point_from_each == ordered
+        dataset = make_numpy_dataset(first_aset, keys=('0', '1', '2', '3', '4'),
+                                     shuffle=True)
+        one_point_from_each = []
+        for data in dataset:
+            one_point_from_each.append(int(data[0][0][0]))
+        assert one_point_from_each != ordered
 
 
-try:
-    import torch
-    from torch.utils.data import DataLoader
-    from hangar import make_torch_dataset
-    torchExists = True
-except (ImportError, ModuleNotFoundError):
-    torchExists = False
+# ====================================   PyTorch  ====================================
+# ====================================================================================
 
 
 @pytest.mark.skipif(torchExists,
@@ -139,26 +178,22 @@ def test_no_torch_installed_raises_error_on_dataloader_import():
         make_torch_dataset(None)
 
 
+@pytest.mark.filterwarnings("ignore:.* is experimental in the current release")
 @pytest.mark.skipif(not torchExists,
                     reason='pytorch is not installed in the test environment.')
 class TestTorchDataset(object):
 
-    def test_warns_experimental(self):
-        with pytest.warns(UserWarning, match='Dataloaders are experimental'):
-            from hangar import make_torch_dataset
+    def test_warns_experimental(self, repo_20_filled_samples):
+        co = repo_20_filled_samples.checkout()
+        first_aset = co.columns['writtenaset']
+        with pytest.warns(UserWarning, match='make_torch_dataset is experimental'):
+            make_torch_dataset([first_aset])
 
     def test_multiple_dataset_loader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.columns['writtenaset']
         second_aset = co.columns['second_aset']
-        with pytest.raises(ValueError):
-            # emtpy list
-            make_torch_dataset([])
-        with pytest.raises(TypeError):
-            # if more than one dataset, those should be in a list/tuple
-            make_torch_dataset(first_aset, first_aset)
-
         torch_dset = make_torch_dataset([first_aset, second_aset])
         loader = DataLoader(torch_dset, batch_size=6, drop_last=True)
         total_samples = 0
@@ -167,41 +202,6 @@ class TestTorchDataset(object):
             assert dset1.shape == (6, 5, 7)
             assert dset2.shape == (6, 5, 7)
         assert total_samples == 18  # drop last is True
-        co.close()
-
-    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_20_filled_samples):
-        repo = repo_20_filled_samples
-        co = repo.checkout(write=True)
-        first_aset = co.columns['writtenaset']
-        second_aset = co.columns['second_aset']
-        with pytest.raises(TypeError):
-            make_torch_dataset([first_aset, second_aset])
-        co.close()
-
-    def test_with_keys(self, repo_20_filled_samples):
-        repo = repo_20_filled_samples
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-
-        # with keys
-        keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
-        bad_tensor0 = aset['0']
-        bad_tensor1 = aset['1']
-        bad_tensor3 = aset['3']
-        bad_tensor8 = aset['8']
-
-        torch_dset = make_torch_dataset(aset, keys=keys)
-        loader = DataLoader(torch_dset, batch_size=3)
-        total_batches = 0
-        for batch in loader:
-            assert batch[0].size(0) == 3
-            total_batches += 1
-            for sample in batch:
-                assert not np.allclose(sample, bad_tensor0)
-                assert not np.allclose(sample, bad_tensor1)
-                assert not np.allclose(sample, bad_tensor3)
-                assert not np.allclose(sample, bad_tensor8)
-        assert total_batches == 3
         co.close()
 
     def test_wrapper(self, repo_20_filled_samples):
@@ -273,60 +273,8 @@ class TestTorchDataset(object):
             count += 1
         assert count == 10
 
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(ValueError):
-            torch_dset = make_torch_dataset(aset)
-        co.close()
-        repo._env._close_environments()
-
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(KeyError):
-            torch_dset = make_torch_dataset(aset, keys=['1', -1])
-        co.close()
-        repo._env._close_environments()
-
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(FileNotFoundError):
-            torch_dset = make_torch_dataset(aset, keys=['1', '2'])
-        co.close()
-        repo._env._close_environments()
-
-
-try:
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', category=DeprecationWarning)
-        import tensorflow as tf
-    tf.compat.v1.enable_eager_execution()
-    from hangar import make_tensorflow_dataset
-    tfExists = True
-except (ImportError, ModuleNotFoundError):
-    tfExists = False
-
+# ==================================== Tensorflow ====================================
+# ====================================================================================
 
 @pytest.mark.skipif(tfExists,
                     reason='tensorflow is installed in the test environment.')
@@ -336,13 +284,18 @@ def test_no_tf_installed_raises_error_on_dataloader_import():
         make_tensorflow_dataset(None)
 
 
-@pytest.mark.skipif(not tfExists,
-                    reason='tensorflow is not installed in the test environment.')
+@pytest.mark.filterwarnings("ignore:.* is experimental in the current release")
+@pytest.mark.skipif(
+    not tfExists,
+    reason='tensorflow is not installed in the test environment.')
 class TestTfDataset(object):
+    # TODO: Add TF2.0 and 1.0 test cases
 
-    def test_warns_experimental(self):
-        with pytest.warns(UserWarning, match='Dataloaders are experimental'):
-            from hangar import make_tensorflow_dataset
+    def test_warns_experimental(self, repo_20_filled_samples):
+        co = repo_20_filled_samples.checkout()
+        first_aset = co.columns['writtenaset']
+        with pytest.warns(UserWarning, match='make_tensorflow_dataset is experimental'):
+            make_tensorflow_dataset([first_aset])
 
     def test_dataset_loader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
@@ -356,41 +309,6 @@ class TestTfDataset(object):
         for dset1, dset2 in tf_dset.take(2):
             assert dset1.shape == tf.TensorShape((6, 5, 7))
             assert dset2.shape == tf.TensorShape((6, 5, 7))
-        co.close()
-
-    def test_with_keys(self, repo_20_filled_samples):
-        repo = repo_20_filled_samples
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-
-        # with keys
-        keys = ['2', '4', '5', '6', '7', '9', '15', '18', '19']
-        bad_tensor0 = aset['0']
-        bad_tensor1 = aset['1']
-        bad_tensor3 = aset['3']
-        bad_tensor8 = aset['8']
-
-        tf_dset = make_tensorflow_dataset(aset, keys=keys)
-        tf_dset = tf_dset.batch(3)
-        total_batches = 0
-        for dset1 in tf_dset:
-            total_batches += 1
-            assert dset1[0].shape == tf.TensorShape((3, 5, 7))
-            for sample in dset1[0]:
-                assert not np.allclose(sample, bad_tensor0)
-                assert not np.allclose(sample, bad_tensor1)
-                assert not np.allclose(sample, bad_tensor3)
-                assert not np.allclose(sample, bad_tensor8)
-        assert total_batches == 3
-        co.close()
-
-    def test_dataset_loader_fails_with_write_enabled_checkout(self, repo_20_filled_samples):
-        repo = repo_20_filled_samples
-        co = repo.checkout(write=True)
-        first_aset = co.columns['writtenaset']
-        second_aset = co.columns['second_aset']
-        with pytest.raises(TypeError):
-            make_tensorflow_dataset([first_aset, second_aset])
         co.close()
 
     def test_variably_shaped(self, aset_samples_var_shape_initialized_repo):
@@ -425,44 +343,20 @@ class TestTfDataset(object):
             assert data[0].shape == (10, 5, 7)
         co.close()
 
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_no_common_no_local(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
+    def test_shuffle(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(ValueError):
-            tf_dset = make_tensorflow_dataset(aset)
-        co.close()
-        repo._env._close_environments()
-
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_no_common(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(KeyError):
-            tf_dset = make_tensorflow_dataset(aset, keys=['1', -1])
-        co.close()
-        repo._env._close_environments()
-
-    @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_local_without_data_fails_data_unavailable(self, written_two_cmt_server_repo, managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        co = repo.checkout()
-        aset = co.columns['writtenaset']
-        with pytest.raises(FileNotFoundError):
-            tf_dset = make_tensorflow_dataset(aset, keys=['1', '2'])
-        co.close()
-        repo._env._close_environments()
+        first_aset = co.columns['writtenaset']
+        dataset = make_tensorflow_dataset(first_aset, keys=('0', '1', '2', '3', '4'),
+                                          shuffle=False)
+        one_point_from_each = []
+        ordered = [0, 1, 2, 3, 4]
+        for data in dataset:
+            one_point_from_each.append(int(data[0][0][0]))
+        assert one_point_from_each == ordered
+        dataset = make_tensorflow_dataset(first_aset, keys=('0', '1', '2', '3', '4'),
+                                          shuffle=True)
+        one_point_from_each = []
+        for data in dataset:
+            one_point_from_each.append(int(data[0][0][0]))
+        assert one_point_from_each != ordered

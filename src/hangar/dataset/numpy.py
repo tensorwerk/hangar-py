@@ -1,10 +1,39 @@
+import typing
+from typing import Sequence
 import random
 import numpy as np
 from .common import Dataset
+from ..utils import experimental
+
+
+if typing.TYPE_CHECKING:
+    from hangar.columns.column import ModifierTypes as Columns
 
 
 class NumpyDataset:
-    def __init__(self, dataset, batch_size, drop_last, shuffle):
+    """NumpyDataset class provides interfaces for users to iterate over the batches of
+    data from different columns. The only user facing APIs it exposes are ``__len__`` and
+    ``__iter__``. Batch and shuffle operations are handled by `:func:`make_numpy_dataset`
+    based on the arguments it gets and hence user should not interact with this class for
+    such operations. Note that, user would never instantiate this class directly. Instead
+    `:func:`make_numpy_dataset` act as the entry point and return an object of this class
+    to the user
+
+
+    Parameters
+    ----------
+    dataset : :class:`~hangar.dataset.common.Dataset` object
+        Hangar's Dataset object that groups columns for downstream processing
+    batch_size : int
+        Size of the individual batch. If specified batches of this size will be returned
+        on each iteration
+    drop_last : bool
+        Should drop the last incomplete batch
+    shuffle : bool
+        Should shuffle the batch on each epoch
+    """
+    def __init__(self, dataset: Dataset, batch_size: int,
+                 drop_last: bool, shuffle: bool):
         self.dataset = dataset
         self.num_batches = None
         self.batch_size = None
@@ -13,9 +42,22 @@ class NumpyDataset:
         self.shuffle = shuffle
 
     def __len__(self):
-        return len(self.keys)
+        return len(self.dataset.keys)
 
-    def _batch(self, batch_size, drop_last=True):
+    def _batch(self, batch_size, drop_last=True) -> None:
+        """Private function to this class to calculate the batch parameters. These
+        calculated parameters will be considered by the ``__iter__`` method while
+        fetching the batches for downstream process. This function will be called at
+        the time of object instantiation and should not be triggered independently
+
+        Parameters
+        ----------
+        batch_size : int
+            Size of the individual batch. If specified batches of this size will be returned
+            on each iteration
+        drop_last : bool
+            Should drop the last incomplete batch
+        """
         num_batches, has_last = divmod(len(self.dataset.keys), batch_size)
         if num_batches == 0:
             raise RuntimeError("Batch size exceeded the number of samples")
@@ -46,7 +88,48 @@ class NumpyDataset:
                 yield tuple([np.stack(d) for d in zip(*out)])
 
 
-def make_numpy_dataset(columns, keys=None, batch_size=None, drop_last=False, shuffle=True):
+@experimental
+def make_numpy_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
+                       batch_size: int = None, drop_last: bool = False,
+                       shuffle: bool = True) -> NumpyDataset:
+    """Groups the column objects into a single numpy dataset and provide iterator to loop
+    over the data. This API also provides the options to batch the data which is a major
+    difference between other dataset APIs. In traditional Machine learning applications,
+    it's quite natural to load the whole dataset as a single batch because it's possible
+    to fit into the system memory. Passing the size of the dataset as the batch size
+    would make it possible here to do just that. This API also acts as an entry point
+    for other non-supported frameworks to load data from hangar as batches into the
+    training loop
+
+    .. Note::
+
+        Column with layouts ``str`` or ``ndarray nested`` are not compatible with the
+        dataset APIs in the current release. So making dataset is only possible for
+        columns with layout ``ndarray flat``
+
+
+    Parameters
+    ----------
+    columns : :class:`~hangar.columns.column.Columns` or Sequence
+        A column object, a tuple of column object or a list of column
+        objects.
+    keys : Sequence[str]
+        An sequence collection of sample names. If given only those samples will
+        fetched from the column
+    batch_size : int
+        Size of the batch. This will batch the dataset on the zeroth dimension. For
+        example, if the data is of the shape (H x W x C) the batched data will be shaped
+        as (B x H x W x C) where B is the batch size
+    drop_last : bool
+        Should the last uncompleted batch be dropped
+    shuffle : bool
+        Should the data be shuffled on each epoch
+
+    Returns
+    -------
+        :class: `.NumpyDataset`
+    """
+
     dataset = Dataset(columns, keys)
     dataset = NumpyDataset(dataset, batch_size, drop_last, shuffle)
     return dataset

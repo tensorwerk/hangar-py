@@ -2,7 +2,6 @@ __version__ = '0.5.0'
 __all__ = ('Repository', 'make_numpy_dataset', 'make_torch_dataset', 'make_tensorflow_dataset')
 
 from .repository import Repository
-import warnings
 
 
 def __dir__():
@@ -12,7 +11,8 @@ def __dir__():
 
 
 def __getattr__(name):
-    warnings.warn("Dataloaders are experimental in the current release.", UserWarning)
+    """Lazy Loader that defers the loading of heavy packages such as tensorflow & pytorch
+    """
     if name == 'make_numpy_dataset':
         from .dataset import make_numpy_dataset
         return make_numpy_dataset

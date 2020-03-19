@@ -9,8 +9,25 @@ from io import StringIO
 from itertools import tee, filterfalse, count
 from typing import Union
 import sys
+import warnings
+from functools import wraps
 
 import blosc
+
+
+def experimental(func):
+    """
+    A decorator function that makes the input function experimental
+    """
+    notice = "\n.. Note:: Experimental: This functionality is experimental in the " \
+             "current release. It may change in a future release without any notice"
+    func.__doc__ = func.__doc__ + notice
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        warning_msg = notice.replace("\n.. Note:: Experimental: This functionality", func.__name__)
+        warnings.warn(warning_msg, UserWarning)
+        return func(*args, **kwargs)
+    return wrapper
 
 
 def is_64bits():
