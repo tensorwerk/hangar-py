@@ -2,7 +2,7 @@ import typing
 from typing import Sequence
 import random
 import numpy as np
-from .common import Dataset
+from .common import HangarDataset
 from ..utils import experimental
 
 
@@ -32,7 +32,7 @@ class NumpyDataset:
     shuffle : bool
         Should shuffle the batch on each epoch
     """
-    def __init__(self, dataset: Dataset, batch_size: int,
+    def __init__(self, dataset: HangarDataset, batch_size: int,
                  drop_last: bool, shuffle: bool):
         self.dataset = dataset
         self.num_batches = None
@@ -130,7 +130,7 @@ def make_numpy_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
         :class: `.NumpyDataset`
     """
 
-    dataset = Dataset(columns, keys)
+    dataset = HangarDataset(columns, keys)
     dataset = NumpyDataset(dataset, batch_size, drop_last, shuffle)
     return dataset
 

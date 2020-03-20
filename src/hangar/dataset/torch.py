@@ -1,14 +1,14 @@
 from typing import Sequence, Callable, TYPE_CHECKING
 
-from torch.utils.data.dataset import Dataset
-from .common import Dataset as HangarDataset
+import torch
+from .common import HangarDataset
 from ..utils import experimental
 
 if TYPE_CHECKING:
     from hangar.columns.column import ModifierTypes as Columns
 
 
-class TorchDataset(Dataset):
+class TorchDataset(torch.utils.data.Dataset):
     """TorchDataset inherits :class:`torch.utils.data.Dataset` and accepts few convenient
     arguments to wrap hangar columns to be used in :class:`torch.utils.data.DataLoaders`.
     It accepts a hangar Dataset object which exposes all the user requested columns and

@@ -4,7 +4,7 @@ from functools import partial
 import random
 
 import tensorflow as tf
-from .common import Dataset
+from .common import HangarDataset
 from ..utils import experimental
 
 if typing.TYPE_CHECKING:
@@ -14,7 +14,7 @@ if typing.TYPE_CHECKING:
     from hangar.columns.column import ModifierTypes as Columns
 
 
-def yield_data(dataset: Dataset, shuffle: bool) -> Tuple['np.ndarray']:
+def yield_data(dataset: HangarDataset, shuffle: bool) -> Tuple['np.ndarray']:
     if shuffle:
         random.shuffle(dataset.keys)
     for name in dataset.keys:
@@ -84,7 +84,7 @@ def make_tensorflow_dataset(columns: Sequence['Columns'], keys: Sequence[str] = 
     :class:`tf.data.Dataset`
     """
 
-    dataset = Dataset(columns, keys)
+    dataset = HangarDataset(columns, keys)
     generator: Callable = partial(yield_data, dataset, shuffle)
     types: List[tf_TensorType] = []
     shapes: List[tf_TensorShape] = []

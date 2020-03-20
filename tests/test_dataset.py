@@ -8,7 +8,7 @@ from hangar import Repository
 
 
 from hangar import make_numpy_dataset
-from hangar.dataset.common import Dataset
+from hangar.dataset.common import HangarDataset
 
 try:
     import torch
@@ -33,23 +33,23 @@ class TestInternalDatasetClass:
         co = repo_20_filled_samples.checkout()
         first_col = co.columns['writtenaset']
         second_col = co.columns['second_aset']
-        dataset = Dataset(first_col)
+        dataset = HangarDataset((first_col,))
         key = dataset.keys[0]
         target = array5by7[:] = int(key)
         assert np.allclose(dataset[key], target)
         with pytest.raises(TypeError):
-            Dataset(first_col, second_col)
+            HangarDataset(first_col)
 
     def test_no_column(self):
         with pytest.raises(ValueError):
-            dataset = Dataset([])
+            dataset = HangarDataset([])
 
     def test_fails_on_write_enabled_columns(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout(write=True)
         first_aset = co.columns['writtenaset']
         with pytest.raises(TypeError):
-            Dataset(first_aset)
+            HangarDataset((first_aset,))
 
     @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_columns_without_local_data_and_without_key_argument(self,
@@ -63,7 +63,7 @@ class TestInternalDatasetClass:
         repo.remote.fetch_data('origin', branch='master', max_num_bytes=1000)
         co = repo.checkout()
         aset = co.columns['writtenaset']
-        dataset = Dataset(aset)
+        dataset = HangarDataset((aset,))
         available_keys = len(dataset.keys)
         all_keys = len(list(aset.keys()))
         assert available_keys != all_keys
@@ -76,7 +76,7 @@ class TestInternalDatasetClass:
         co = repo_20_filled_samples.checkout()
         first_col = co.columns['writtenaset']
         second_col = co.columns['second_aset']
-        dataset = Dataset((first_col, second_col))
+        dataset = HangarDataset((first_col, second_col))
         assert '0' in dataset.keys
         assert 'AnExtraKey' in first_col
         assert 'AnExtraKey' not in dataset.keys
@@ -85,7 +85,7 @@ class TestInternalDatasetClass:
         co = repo_20_filled_samples.checkout()
         first_col = co.columns['writtenaset']
         keys = ['1', '2', '3']
-        dataset = Dataset(first_col, keys=keys)
+        dataset = HangarDataset((first_col,), keys=keys)
         assert dataset.keys == keys
 
     def test_keys_non_common(self, repo_20_filled_samples):
@@ -93,7 +93,7 @@ class TestInternalDatasetClass:
         first_col = co.columns['writtenaset']
         keys = ['w', 'r', 'o', 'n', 'g']
         with pytest.raises(KeyError):
-            Dataset(first_col, keys=keys)
+            HangarDataset((first_col,), keys=keys)
 
     @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
     def test_keys_non_local(self,
@@ -109,7 +109,7 @@ class TestInternalDatasetClass:
         aset = co.columns['writtenaset']
         keys = aset.remote_reference_keys
         with pytest.raises(FileNotFoundError):
-            Dataset(aset, keys=keys)
+            HangarDataset((aset,), keys=keys)
 
 
 # ====================================   Numpy    ====================================
@@ -151,14 +151,14 @@ class TestNumpyDataset:
         repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.columns['writtenaset']
-        dataset = make_numpy_dataset(first_aset, keys=('0', '1', '2', '3', '4'),
+        dataset = make_numpy_dataset((first_aset,), keys=('0', '1', '2', '3', '4'),
                                      shuffle=False)
         one_point_from_each = []
         ordered = [0, 1, 2, 3, 4]
         for data in dataset:
             one_point_from_each.append(int(data[0][0][0]))
         assert one_point_from_each == ordered
-        dataset = make_numpy_dataset(first_aset, keys=('0', '1', '2', '3', '4'),
+        dataset = make_numpy_dataset((first_aset,), keys=('0', '1', '2', '3', '4'),
                                      shuffle=True)
         one_point_from_each = []
         for data in dataset:
@@ -324,7 +324,7 @@ class TestTfDataset(object):
 
         co = repo.checkout()
         aset = co.columns['writtenaset']
-        tf_dset = make_tensorflow_dataset(aset)
+        tf_dset = make_tensorflow_dataset((aset,))
         shape_obj = tf.TensorShape((2, None))
         tf_dset = tf_dset.padded_batch(5, padded_shapes=(shape_obj,))
         for val in tf_dset:
@@ -347,14 +347,14 @@ class TestTfDataset(object):
         repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.columns['writtenaset']
-        dataset = make_tensorflow_dataset(first_aset, keys=('0', '1', '2', '3', '4'),
+        dataset = make_tensorflow_dataset((first_aset,), keys=('0', '1', '2', '3', '4'),
                                           shuffle=False)
         one_point_from_each = []
         ordered = [0, 1, 2, 3, 4]
         for data in dataset:
             one_point_from_each.append(int(data[0][0][0]))
         assert one_point_from_each == ordered
-        dataset = make_tensorflow_dataset(first_aset, keys=('0', '1', '2', '3', '4'),
+        dataset = make_tensorflow_dataset((first_aset,), keys=('0', '1', '2', '3', '4'),
                                           shuffle=True)
         one_point_from_each = []
         for data in dataset:

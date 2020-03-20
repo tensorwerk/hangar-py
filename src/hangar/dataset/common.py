@@ -6,7 +6,7 @@ if typing.TYPE_CHECKING:
     from hangar.columns.column import ModifierTypes as Columns
 
 
-class Dataset:
+class HangarDataset:
     """Dataset class that does the initial checks to verify whether the provided
     columns can be arranged together as a dataset. These verifications are done on the
     keys of each column. If ``keys`` argument is ``None``, initializer of this class
@@ -26,8 +26,8 @@ class Dataset:
     """
 
     def __init__(self, columns: Sequence['Columns'], keys: Sequence[str] = None):
-        if not isinstance(columns, (list, tuple, set)):
-            columns = (columns,)
+        if not isinstance(columns, (list, tuple)):
+            raise TypeError("Columns must be a list/tuple of hangar columns")
         if len(columns) == 0:
             raise ValueError('len(columns) cannot == 0')
         all_keys: List[set] = []
@@ -62,8 +62,8 @@ class Dataset:
         self.columns = columns
         self.keys = list(keys)
 
-    def __getitem__(self, item: Union[str, int]) -> Tuple['np.ndarray']:
+    def __getitem__(self, key: Union[str, int]) -> Tuple['np.ndarray']:
         """It takes one sample name and returns a tuple of items from each column for
         the given sample name
         """
-        return tuple([col[item] for col in self.columns])
+        return tuple([col[key] for col in self.columns])
