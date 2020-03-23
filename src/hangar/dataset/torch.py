@@ -1,4 +1,5 @@
-from typing import Sequence, Callable, TYPE_CHECKING
+from typing import Sequence, TYPE_CHECKING
+from collections import OrderedDict
 
 import torch
 from .common import HangarDataset
@@ -16,22 +17,25 @@ class TorchDataset(torch.utils.data.Dataset):
     `PyTorch Dataset <https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset>`_
     """
 
-    def __init__(self, hangar_dataset: HangarDataset, wrapper: Callable):
+    def __init__(self, hangar_dataset: HangarDataset, as_dict: bool = False):
         self.dataset = hangar_dataset
-        self.wrapper = wrapper
+        self.column_names = [col._column_name for col in hangar_dataset.columns]
+        self._as_dict = as_dict
 
     def __len__(self) -> int:
         return len(self.dataset.keys)
 
     def __getitem__(self, index: int):
         key = self.dataset.keys[index]
-        data = self.dataset[key]
-        return self.wrapper(*data) if self.wrapper else data
+        if self._as_dict:
+            return OrderedDict(zip(self.column_names, self.dataset[key]))
+        else:
+            return self.dataset[key]
 
 
 @experimental
 def make_torch_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
-                       wrapper: Callable = None) -> TorchDataset:
+                       as_dict: bool = False) -> TorchDataset:
     """Returns a :class:`torch.utils.data.Dataset` object which can be loaded into
     a :class:`torch.utils.data.DataLoader`.
 
@@ -66,12 +70,14 @@ def make_torch_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
     keys : Sequence[str]
         An sequence collection of sample names. If given only those samples will
         fetched from the column
-    wrapper : Callable, optional
-        A wrapper function, that will be called on the return value of
-        ``__getitem__`` to wrap the output in a namedtuple or a dictionary. PyTorch's
-        :class:`torch.utils.data.DataLoader` respects the type of the return value
-        from the dataset and make the batch also follows same type. If ``wrapper`` is
-        ``None``, the returned batch will be a tuple
+    as_dict : bool
+        Return the data as an OrderedDict with column names as keys. If False, it returns
+        a tuple of arrays
+
+
+    Returns
+    -------
+    dict or tuple
 
     Examples
     --------
@@ -83,16 +89,15 @@ def make_torch_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
     >>> co = repo.checkout()
     >>> imgcol = co.columns['images']
     >>> classcol = co.columns['classes']
-    >>> wrapper = namedtuple('batch', field_names=['images', 'classes'])
-    >>> dataset = make_torch_dataset((imgcol, classcol), wrapper=wrapper)
+    >>> dataset = make_torch_dataset((imgcol, classcol), as_dict=True)
     >>> loader = DataLoader(dataset, batch_size=16)
     >>> for batch in loader:
-    ...     out = train_model(batch.images)
-    ...     loss = loss_fn(out, batch.classes)
+    ...     out = train_model(batch['images'])
+    ...     loss = loss_fn(out, batch['classes'])
 
     Returns
     -------
     :class:`torch.utils.data.Dataset`
     """
     hangar_dataset = HangarDataset(columns, keys)
-    return TorchDataset(hangar_dataset, wrapper)
+    return TorchDataset(hangar_dataset, as_dict)

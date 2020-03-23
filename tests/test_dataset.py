@@ -204,39 +204,28 @@ class TestTorchDataset(object):
         assert total_samples == 18  # drop last is True
         co.close()
 
-    def test_wrapper(self, repo_20_filled_samples):
+    def test_return_as_dict(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.columns['writtenaset']
         second_aset = co.columns['second_aset']
-        with pytest.raises(TypeError):  # number of dsets and field_names are different
-            wrapper = namedtuple('batch', field_names=['input'])
-            torch_dset = make_torch_dataset([first_aset, second_aset], wrapper=wrapper)
-            loader = DataLoader(torch_dset, batch_size=5)
-            next(iter(loader))
-        with pytest.raises(TypeError):  # field_names's type is wrong
-            torch_dset = make_torch_dataset([first_aset, second_aset], wrapper={'input': '', 'target': ''})
-            loader = DataLoader(torch_dset, batch_size=5)
-            next(iter(loader))
-        wrapper = namedtuple('batch', field_names=['input', 'target'])
-        torch_dset = make_torch_dataset([first_aset, second_aset], wrapper=wrapper)
+        torch_dset = make_torch_dataset([first_aset, second_aset], as_dict=True)
         assert len(torch_dset) == 20
         loader = DataLoader(torch_dset, batch_size=5)
         for sample in loader:
-            assert type(sample).__name__ == 'batch'
-            assert sample._fields == ('input', 'target')
+            assert 'writtenaset' in sample.keys()
+            assert 'second_aset' in sample.keys()
         co.close()
 
     def test_lots_of_data_with_multiple_backend(self, repo_300_filled_samples):
         repo = repo_300_filled_samples
         co = repo.checkout()
         aset = co.columns['aset']
-        wrapper = namedtuple('batch', field_names=['aset'])
-        torch_dset = make_torch_dataset([aset], wrapper=wrapper)
+        torch_dset = make_torch_dataset([aset], as_dict=True)
         loader = DataLoader(torch_dset, batch_size=10, drop_last=True)
         for data in loader:
-            assert isinstance(data, tuple)
-            assert data.aset.shape == (10, 5, 7)
+            assert isinstance(data, dict)
+            assert data['aset'].shape == (10, 5, 7)
         co.close()
 
     @pytest.mark.xfail(sys.platform == "win32",
