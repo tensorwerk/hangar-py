@@ -259,7 +259,10 @@ class TestTorchDataLoader(object):
 
 
 try:
-    import tensorflow as tf
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=DeprecationWarning)
+        import tensorflow as tf
     tf.compat.v1.enable_eager_execution()
     from hangar import make_tf_dataset
     skipTF = False

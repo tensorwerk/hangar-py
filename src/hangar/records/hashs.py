@@ -7,7 +7,6 @@ from .column_parsers import (
     hash_record_count_start_range_key,
     hash_schema_raw_key_from_db_key,
     hash_data_raw_key_from_db_key,
-    hash_meta_raw_val_from_db_val,
     schema_hash_db_key_from_digest,
     schema_spec_from_db_val,
     schema_record_count_start_range_key
@@ -19,9 +18,9 @@ from ..utils import ilen
 
 
 class HashQuery(CursorRangeIterator):
-    """Traverse and query contents contained in ``hashenv`` and ``labelenv`` dbs
+    """Traverse and query contents contained in ``hashenv`` db
 
-    These methods operate on the databases which store the mapping of some data
+    These methods operate on the database which store the mapping of some data
     digest to it's location on disk (or value in the case of metadata and
     schemas). These databases are not specific to a particular commit; the
     records are for every piece of data stored in every commit across history.
@@ -111,21 +110,10 @@ class HashQuery(CursorRangeIterator):
         """
         return ilen(self._traverse_all_schema_records(keys=True, values=False))
 
-    def num_metadata_records(self) -> int:
-        """Total count of metadata digests / values stored over all repo history.
-        """
-        return self._hashenv.stat()['entries']
-
     def gen_all_data_digests_and_parsed_backend_specs(self):
         for dbk, dbv in self._traverse_all_hash_records(keys=True, values=True):
             rawk = hash_data_raw_key_from_db_key(dbk)
             rawv = backend_decoder(dbv)
-            yield (rawk, rawv)
-
-    def gen_all_metadata_digests_and_decoded_values(self) -> Iterable[Tuple[str, str]]:
-        for dbk, dbv in self._traverse_all_hash_records(keys=True, values=True):
-            rawk = hash_data_raw_key_from_db_key(dbk)
-            rawv = hash_meta_raw_val_from_db_val(dbv)
             yield (rawk, rawv)
 
     def gen_all_schema_digests_and_parsed_specs(self) -> Iterable[Tuple[str, dict]]:

@@ -3,7 +3,6 @@ import numpy as np
 from .base import ColumnBase
 from .descriptors import OneOf, String, OptionalString, SizedIntegerTuple, OptionalDict
 from ..records import CompatibleData
-from ..records.hashmachine import array_hash_digest
 
 
 @OneOf(['variable_shape', 'fixed_shape'])
@@ -16,11 +15,26 @@ class NdarrayColumnType(String):
     pass
 
 
+@OneOf(['0'])
+class DataHasherTcode(String):
+    pass
+
+
 class NdarraySchemaBase(ColumnBase):
     _schema_type = NdarraySchemaType()
     _column_type = NdarrayColumnType()
+    _data_hasher_tcode = DataHasherTcode()
 
-    def __init__(self, shape, dtype, backend=None, backend_options=None, *args, **kwargs):
+    def __init__(
+            self,
+            shape,
+            dtype,
+            backend=None,
+            backend_options=None,
+            *args, **kwargs
+    ):
+        if 'data_hasher_tcode' not in kwargs:
+            kwargs['data_hasher_tcode'] = '0'
         super().__init__(*args, **kwargs)
 
         if backend_options is not None and backend is None:
@@ -71,8 +85,8 @@ class NdarraySchemaBase(ColumnBase):
     def backend_options(self):
         return self._backend_options
 
-    def data_hash_digest(self, data: np.ndarray, *, tcode='0') -> str:
-        return array_hash_digest(data, tcode=tcode)
+    def data_hash_digest(self, data: np.ndarray) -> str:
+        return self._data_hasher_func(data)
 
     def change_backend(self, backend, backend_options=None):
         old_backend = self._backend

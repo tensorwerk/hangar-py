@@ -34,11 +34,6 @@ class HangarServiceStub(object):
         request_serializer=hangar__service__pb2.FetchDataRequest.SerializeToString,
         response_deserializer=hangar__service__pb2.FetchDataReply.FromString,
         )
-    self.FetchLabel = channel.unary_unary(
-        '/hangar.HangarService/FetchLabel',
-        request_serializer=hangar__service__pb2.FetchLabelRequest.SerializeToString,
-        response_deserializer=hangar__service__pb2.FetchLabelReply.FromString,
-        )
     self.FetchCommit = channel.unary_stream(
         '/hangar.HangarService/FetchCommit',
         request_serializer=hangar__service__pb2.FetchCommitRequest.SerializeToString,
@@ -58,11 +53,6 @@ class HangarServiceStub(object):
         '/hangar.HangarService/PushData',
         request_serializer=hangar__service__pb2.PushDataRequest.SerializeToString,
         response_deserializer=hangar__service__pb2.PushDataReply.FromString,
-        )
-    self.PushLabel = channel.unary_unary(
-        '/hangar.HangarService/PushLabel',
-        request_serializer=hangar__service__pb2.PushLabelRequest.SerializeToString,
-        response_deserializer=hangar__service__pb2.PushLabelReply.FromString,
         )
     self.PushCommit = channel.stream_unary(
         '/hangar.HangarService/PushCommit',
@@ -84,11 +74,6 @@ class HangarServiceStub(object):
         request_serializer=hangar__service__pb2.FindMissingHashRecordsRequest.SerializeToString,
         response_deserializer=hangar__service__pb2.FindMissingHashRecordsReply.FromString,
         )
-    self.FetchFindMissingLabels = channel.stream_stream(
-        '/hangar.HangarService/FetchFindMissingLabels',
-        request_serializer=hangar__service__pb2.FindMissingLabelsRequest.SerializeToString,
-        response_deserializer=hangar__service__pb2.FindMissingLabelsReply.FromString,
-        )
     self.FetchFindMissingSchemas = channel.unary_unary(
         '/hangar.HangarService/FetchFindMissingSchemas',
         request_serializer=hangar__service__pb2.FindMissingSchemasRequest.SerializeToString,
@@ -103,11 +88,6 @@ class HangarServiceStub(object):
         '/hangar.HangarService/PushFindMissingHashRecords',
         request_serializer=hangar__service__pb2.FindMissingHashRecordsRequest.SerializeToString,
         response_deserializer=hangar__service__pb2.FindMissingHashRecordsReply.FromString,
-        )
-    self.PushFindMissingLabels = channel.stream_stream(
-        '/hangar.HangarService/PushFindMissingLabels',
-        request_serializer=hangar__service__pb2.FindMissingLabelsRequest.SerializeToString,
-        response_deserializer=hangar__service__pb2.FindMissingLabelsReply.FromString,
         )
     self.PushFindMissingSchemas = channel.unary_unary(
         '/hangar.HangarService/PushFindMissingSchemas',
@@ -148,13 +128,6 @@ class HangarServiceServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
-  def FetchLabel(self, request, context):
-    # missing associated documentation comment in .proto file
-    pass
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
   def FetchCommit(self, request, context):
     # missing associated documentation comment in .proto file
     pass
@@ -177,13 +150,6 @@ class HangarServiceServicer(object):
     raise NotImplementedError('Method not implemented!')
 
   def PushData(self, request_iterator, context):
-    # missing associated documentation comment in .proto file
-    pass
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def PushLabel(self, request, context):
     # missing associated documentation comment in .proto file
     pass
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -218,13 +184,6 @@ class HangarServiceServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
-  def FetchFindMissingLabels(self, request_iterator, context):
-    # missing associated documentation comment in .proto file
-    pass
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
   def FetchFindMissingSchemas(self, request, context):
     # missing associated documentation comment in .proto file
     pass
@@ -240,13 +199,6 @@ class HangarServiceServicer(object):
     raise NotImplementedError('Method not implemented!')
 
   def PushFindMissingHashRecords(self, request_iterator, context):
-    # missing associated documentation comment in .proto file
-    pass
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def PushFindMissingLabels(self, request_iterator, context):
     # missing associated documentation comment in .proto file
     pass
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -283,11 +235,6 @@ def add_HangarServiceServicer_to_server(servicer, server):
           request_deserializer=hangar__service__pb2.FetchDataRequest.FromString,
           response_serializer=hangar__service__pb2.FetchDataReply.SerializeToString,
       ),
-      'FetchLabel': grpc.unary_unary_rpc_method_handler(
-          servicer.FetchLabel,
-          request_deserializer=hangar__service__pb2.FetchLabelRequest.FromString,
-          response_serializer=hangar__service__pb2.FetchLabelReply.SerializeToString,
-      ),
       'FetchCommit': grpc.unary_stream_rpc_method_handler(
           servicer.FetchCommit,
           request_deserializer=hangar__service__pb2.FetchCommitRequest.FromString,
@@ -307,11 +254,6 @@ def add_HangarServiceServicer_to_server(servicer, server):
           servicer.PushData,
           request_deserializer=hangar__service__pb2.PushDataRequest.FromString,
           response_serializer=hangar__service__pb2.PushDataReply.SerializeToString,
-      ),
-      'PushLabel': grpc.unary_unary_rpc_method_handler(
-          servicer.PushLabel,
-          request_deserializer=hangar__service__pb2.PushLabelRequest.FromString,
-          response_serializer=hangar__service__pb2.PushLabelReply.SerializeToString,
       ),
       'PushCommit': grpc.stream_unary_rpc_method_handler(
           servicer.PushCommit,
@@ -333,11 +275,6 @@ def add_HangarServiceServicer_to_server(servicer, server):
           request_deserializer=hangar__service__pb2.FindMissingHashRecordsRequest.FromString,
           response_serializer=hangar__service__pb2.FindMissingHashRecordsReply.SerializeToString,
       ),
-      'FetchFindMissingLabels': grpc.stream_stream_rpc_method_handler(
-          servicer.FetchFindMissingLabels,
-          request_deserializer=hangar__service__pb2.FindMissingLabelsRequest.FromString,
-          response_serializer=hangar__service__pb2.FindMissingLabelsReply.SerializeToString,
-      ),
       'FetchFindMissingSchemas': grpc.unary_unary_rpc_method_handler(
           servicer.FetchFindMissingSchemas,
           request_deserializer=hangar__service__pb2.FindMissingSchemasRequest.FromString,
@@ -352,11 +289,6 @@ def add_HangarServiceServicer_to_server(servicer, server):
           servicer.PushFindMissingHashRecords,
           request_deserializer=hangar__service__pb2.FindMissingHashRecordsRequest.FromString,
           response_serializer=hangar__service__pb2.FindMissingHashRecordsReply.SerializeToString,
-      ),
-      'PushFindMissingLabels': grpc.stream_stream_rpc_method_handler(
-          servicer.PushFindMissingLabels,
-          request_deserializer=hangar__service__pb2.FindMissingLabelsRequest.FromString,
-          response_serializer=hangar__service__pb2.FindMissingLabelsReply.SerializeToString,
       ),
       'PushFindMissingSchemas': grpc.unary_unary_rpc_method_handler(
           servicer.PushFindMissingSchemas,

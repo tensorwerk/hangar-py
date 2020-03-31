@@ -25,10 +25,8 @@ from ..records import commiting, hashs, heads, parsing, queries, summarize
 from ..records import (
     hash_schema_db_key_from_raw_key,
     hash_data_db_key_from_raw_key,
-    hash_meta_db_key_from_raw_key,
-    hash_meta_raw_key_from_db_key,
 )
-from ..records.hashmachine import array_hash_digest, metadata_hash_digest
+from ..records.hashmachine import ndarray_hasher_tcode_0
 from ..utils import set_blosc_nthreads
 
 set_blosc_nthreads()
@@ -381,7 +379,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         for record in unpacked_records:
             data = chunks.deserialize_record(record)
             schema_hash = data.schema
-            received_hash = array_hash_digest(data.array)
+            received_hash = ndarray_hasher_tcode_0(data.array)
             if received_hash != data.digest:
                 msg = f'HASH MANGLED, received: {received_hash} != expected digest: {data.digest}'
                 context.set_details(msg)
@@ -393,64 +391,6 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         _ = self.CW.data(schema_hash, received_data)  # returns saved)_digests
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
-        return reply
-
-    # ----------------------------- Label Data --------------------------------
-
-    def FetchLabel(self, request, context):
-        """Retrieve the metadata value corresponding to some particular hash digests
-        """
-        digest = request.rec.digest
-        digest_type = request.rec.type
-        rec = hangar_service_pb2.HashRecord(digest=digest, type=digest_type)
-        reply = hangar_service_pb2.FetchLabelReply(rec=rec)
-
-        labelKey = hash_meta_db_key_from_raw_key(digest)
-        labelTxn = self.txnregister.begin_reader_txn(self.env.labelenv)
-        try:
-            labelVal = labelTxn.get(labelKey, default=False)
-            if labelVal is False:
-                msg = f'DOES NOT EXIST: labelval with key: {labelKey}'
-                context.set_code(grpc.StatusCode.NOT_FOUND)
-                context.set_details(msg)
-                err = hangar_service_pb2.ErrorProto(code=5, message=msg)
-            else:
-                err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-                compLabelVal = blosc.compress(labelVal)
-                reply.blob = compLabelVal
-        finally:
-            self.txnregister.abort_reader_txn(self.env.labelenv)
-
-        reply.error.CopyFrom(err)
-        return reply
-
-    def PushLabel(self, request, context):
-        """Add a metadata key/value pair to the server with a particular digest.
-
-        Like data tensors, the cryptographic hash of each value is verified
-        before the data is actually placed on the server file system.
-        """
-        req_digest = request.rec.digest
-
-        uncompBlob = blosc.decompress(request.blob)
-        received_hash = metadata_hash_digest(uncompBlob.decode())
-        if received_hash != req_digest:
-            msg = f'HASH MANGED: received_hash: {received_hash} != digest: {req_digest}'
-            context.set_details(msg)
-            context.set_code(grpc.StatusCode.DATA_LOSS)
-            err = hangar_service_pb2.ErrorProto(code=15, message=msg)
-            reply = hangar_service_pb2.PushLabelReply(error=err)
-            return reply
-
-        digest = self.CW.label(received_hash, uncompBlob)
-        if not digest:
-            msg = f'HASH ALREADY EXISTS: {req_digest}'
-            context.set_code(grpc.StatusCode.ALREADY_EXISTS)
-            context.set_details(msg)
-            err = hangar_service_pb2.ErrorProto(code=6, message=msg)
-        else:
-            err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-        reply = hangar_service_pb2.PushLabelReply(error=err)
         return reply
 
     # ------------------------ Fetch Find Missing -----------------------------------
@@ -565,60 +505,6 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         response_pb = hangar_service_pb2.FindMissingHashRecordsReply
-        cIter = chunks.missingHashIterator(commit, raw_pack, err, response_pb)
-        yield from cIter
-
-    def FetchFindMissingLabels(self, request_iterator, context):
-        """Determine metadata hash digest records existing on the server and not on the client.
-      """''
-        for idx, request in enumerate(request_iterator):
-            if idx == 0:
-                commit = request.commit
-                hBytes, offset = bytearray(request.total_byte_size), 0
-            size = len(request.hashs)
-            hBytes[offset: offset + size] = request.hashs
-            offset += size
-        uncompBytes = blosc.decompress(hBytes)
-        c_hashs_raw = chunks.deserialize_record_pack(uncompBytes)
-        c_hashset = set([chunks.deserialize_ident(raw).digest for raw in c_hashs_raw])
-
-        with tempfile.TemporaryDirectory() as tempD:
-            tmpDF = os.path.join(tempD, 'test.lmdb')
-            tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-            commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
-            s_hashes = set(queries.RecordQuery(tmpDB).metadata_hashes())
-            tmpDB.close()
-
-        c_missing = list(s_hashes.difference(c_hashset))
-        c_missing_raw = [chunks.serialize_ident(c_mis, '') for c_mis in c_missing]
-        raw_pack = chunks.serialize_record_pack(c_missing_raw)
-        err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-        response_pb = hangar_service_pb2.FindMissingLabelsReply
-        cIter = chunks.missingHashIterator(commit, raw_pack, err, response_pb)
-        yield from cIter
-
-    def PushFindMissingLabels(self, request_iterator, context):
-        """Determine metadata hash digest records existing on the client and not on the server.
-        """
-        for idx, request in enumerate(request_iterator):
-            if idx == 0:
-                commit = request.commit
-                hBytes, offset = bytearray(request.total_byte_size), 0
-            size = len(request.hashs)
-            hBytes[offset: offset + size] = request.hashs
-            offset += size
-        uncompBytes = blosc.decompress(hBytes)
-        c_hashs_raw = chunks.deserialize_record_pack(uncompBytes)
-        c_hashset = set([chunks.deserialize_ident(raw).digest for raw in c_hashs_raw])
-        s_hash_keys = list(hashs.HashQuery(self.env.labelenv).gen_all_hash_keys_db())
-        s_hashes = map(hash_meta_raw_key_from_db_key, s_hash_keys)
-        s_hashset = set(s_hashes)
-
-        s_missing = list(c_hashset.difference(s_hashset))
-        s_hashs_raw = [chunks.serialize_ident(s_mis, '') for s_mis in s_missing]
-        raw_pack = chunks.serialize_record_pack(s_hashs_raw)
-        err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-        response_pb = hangar_service_pb2.FindMissingLabelsReply
         cIter = chunks.missingHashIterator(commit, raw_pack, err, response_pb)
         yield from cIter
 

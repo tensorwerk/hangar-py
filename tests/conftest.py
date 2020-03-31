@@ -123,7 +123,7 @@ def repo_300_filled_samples(request, aset_samples_initialized_repo, array5by7) -
 
 
 @pytest.fixture()
-def repo_20_filled_samples_meta(repo) -> Repository:
+def repo_20_filled_samples2(repo) -> Repository:
     # for diff testing
     dummyData = np.arange(50).astype(np.int64)
     co1 = repo.checkout(write=True, branch='master')
@@ -131,8 +131,6 @@ def repo_20_filled_samples_meta(repo) -> Repository:
     for idx in range(10):
         dummyData[:] = idx
         co1.columns['dummy'][idx] = dummyData
-    co1.metadata['hello'] = 'world'
-    co1.metadata['somemetadatakey'] = 'somemetadatavalue'
     co1.commit('first commit adding dummy data and hello meta')
     co1.close()
     return repo
@@ -196,9 +194,7 @@ def repo_1_br_no_conf(repo) -> Repository:
     for idx in range(10):
         dummyData[:] = idx
         co1.columns['dummy'][str(idx)] = dummyData
-    co1.metadata['hello'] = 'world'
-    co1.metadata['somemetadatakey'] = 'somemetadatavalue'
-    co1.commit('first commit adding dummy data and hello meta')
+    co1.commit('first commit adding dummy data')
     co1.close()
 
     repo.create_branch('testbranch')
@@ -207,8 +203,7 @@ def repo_1_br_no_conf(repo) -> Repository:
         dummyData[:] = idx
         co2.columns['dummy'][str(idx)] = dummyData
         co2.columns['dummy'][idx] = dummyData
-    co2.metadata['foo'] = 'bar'
-    co2.commit('first commit on test branch adding non-conflict data and meta')
+    co2.commit('first commit on test branch adding non-conflict data')
     co2.close()
     return repo
 

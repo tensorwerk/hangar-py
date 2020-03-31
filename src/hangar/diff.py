@@ -5,13 +5,11 @@ import lmdb
 
 from .records import (
     dynamic_layout_data_record_from_db_key,
-    metadata_record_raw_key_from_db_key,
     schema_column_record_from_db_key,
     data_record_digest_val_from_db_val,
     ColumnSchemaKey,
     FlatColumnDataKey,
     NestedColumnDataKey,
-    MetadataRecordKey,
 )
 from .records.commiting import (
     check_commit_hash_in_history,
@@ -37,7 +35,6 @@ class HistoryDiffStruct(NamedTuple):
 class Changes(NamedTuple):
     schema: dict
     samples: tuple
-    metadata: tuple
 
 
 class DiffOutDB(NamedTuple):
@@ -52,8 +49,7 @@ class DiffOut(NamedTuple):
     mutated: Changes
 
 
-ConflictKeys = Union[str, FlatColumnDataKey, NestedColumnDataKey,
-                     ColumnSchemaKey, MetadataRecordKey]
+ConflictKeys = Union[str, FlatColumnDataKey, NestedColumnDataKey, ColumnSchemaKey]
 
 
 class Conflicts(NamedTuple):
@@ -186,9 +182,6 @@ def _raw_from_db_change(changes: Set[Tuple[bytes, bytes]]) -> Changes:
         elif k[:2] == b'n:':
             columnKeys.append(k)
             continue
-        elif k[:2] == b'l:':
-            metadataKeys.append(k)
-            continue
         elif k[:2] == b's:':
             schemaKeyVals.append((k, v))
             continue
@@ -197,12 +190,11 @@ def _raw_from_db_change(changes: Set[Tuple[bytes, bytes]]) -> Changes:
                                f'{k[:2]}. full record => k: {k} & v: {v}')
 
     columndata = map(dynamic_layout_data_record_from_db_key, columnKeys)
-    metadata = map(metadata_record_raw_key_from_db_key, metadataKeys)
     schemas = {
         schema_column_record_from_db_key(k):
             data_record_digest_val_from_db_val(v) for k, v in schemaKeyVals
     }
-    return Changes(schema=schemas, samples=tuple(columndata), metadata=tuple(metadata))
+    return Changes(schema=schemas, samples=tuple(columndata))
 
 
 def _all_raw_from_db_changes(outDb: DiffAndConflictsDB) -> DiffAndConflicts:
@@ -235,7 +227,7 @@ def _all_raw_from_db_changes(outDb: DiffAndConflictsDB) -> DiffAndConflicts:
 
 def _symmetric_difference_keys(pair1: Set[Tuple[bytes, bytes]],
                                pair2: Set[Tuple[bytes, bytes]]
-                               ) -> List[Tuple[bytes]]:
+                               ) -> List[Tuple[bytes, bytes]]:
     """Find all keys common to both input pairs AND which have different values.
 
     Essentially a moddified `symmetric_difference` set operation, which keeps
@@ -251,7 +243,7 @@ def _symmetric_difference_keys(pair1: Set[Tuple[bytes, bytes]],
 
     Returns
     -------
-    List[Tuple[bytes]]
+    List[Tuple[bytes, bytes]]
         keys which appear in both input pair sets but which have different values.
     """
     seen = set()

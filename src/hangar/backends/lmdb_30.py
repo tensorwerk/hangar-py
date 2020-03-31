@@ -315,7 +315,7 @@ class LMDB_30_FileHandles:
         for uidpth in process_dir.iterdir():
             if uidpth.suffix == '.lmdbdir':
                 os.remove(process_dir.joinpath(uidpth.name))
-                db_dir = data_dir.joinpath(uidpth.suffix)
+                db_dir = data_dir.joinpath(uidpth.stem)
                 shutil.rmtree(str(db_dir))
         os.rmdir(process_dir)
 

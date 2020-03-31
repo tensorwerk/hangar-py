@@ -9,7 +9,6 @@ from ..records import (
     schema_spec_from_db_val,
     hash_schema_db_key_from_raw_key,
     hash_data_db_key_from_raw_key,
-    hash_meta_db_key_from_raw_key,
 )
 from ..txnctx import TxnRegister
 
@@ -153,34 +152,6 @@ class ContentWriter(object):
             be_accessor.close()
         return saved_digests
 
-    def label(self, digest: str, labelVal: bytes) -> Union[str, bool]:
-        """write a metadata / label hash record & content to the db.
-
-        Parameters
-        ----------
-        digest : str
-            hash digest of the label value being written
-        labelVal : bytes
-            db formatted representation of the label content
-
-        Returns
-        -------
-        Union[str, bool]
-            digest if the operation was successful.
-
-            False if some content already exists with the same digest in the
-            db and no operation was performed.
-        """
-        labelHashKey = hash_meta_db_key_from_raw_key(digest)
-        labelTxn = self.txnctx.begin_writer_txn(self.env.labelenv)
-        try:
-            labelExists = labelTxn.put(labelHashKey, labelVal, overwrite=False)
-        finally:
-            self.txnctx.commit_writer_txn(self.env.labelenv)
-
-        ret = False if not labelExists else digest
-        return ret
-
 
 RawCommitContent = NamedTuple('RawCommitContent', [('commit', str),
                                                    ('cmtParentVal', bytes),
@@ -263,29 +234,4 @@ class ContentReader(object):
             self.txnctx.abort_reader_txn(self.env.hashenv)
 
         ret = False if not schemaVal else schemaVal
-        return ret
-
-    def label(self, digest: str) -> Union[bytes, bool]:
-        """Read db formatted label / metadata val for a label / metadata digest
-
-        Parameters
-        ----------
-        digest : str
-            label digest to look up
-
-        Returns
-        -------
-        bytes or False
-            bytes db formatted representation of the label if digest exists
-
-            False if the digest does not exist in the db.
-        """
-        labelKey = hash_meta_db_key_from_raw_key(digest)
-        labelTxn = self.txnctx.begin_reader_txn(self.env.labelenv)
-        try:
-            labelVal = labelTxn.get(labelKey, default=False)
-        finally:
-            self.txnctx.abort_reader_txn(self.env.labelenv)
-
-        ret = False if not labelVal else labelVal
         return ret
