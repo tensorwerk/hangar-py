@@ -18,6 +18,8 @@ jobs:
           - macos-latest
           - windows-latest
         python-version: [3.6, 3.7]
+        testcover: [yes, no]
+        testml: [yes, no]
 
     steps:
     - uses: actions/checkout@v1
@@ -34,3 +36,6 @@ jobs:
       run: tox -- -p no:sugar
       env:
         PYTEST_XDIST_PROC_NR: 2
+        TESTCOVER: ${{ matrix.testcover }}
+        TESTML: ${{ matrix.testml }}
+
