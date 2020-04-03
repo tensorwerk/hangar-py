@@ -38,4 +38,10 @@ jobs:
         PYTEST_XDIST_PROC_NR: 2
         TESTCOVER: ${{ matrix.testcover }}
         TESTML: ${{ matrix.testml }}
+    - name: Upload coverage to Codecov
+      if: ${{ matrix.testcover }} == yes
+      uses: codecov/codecov-action@v1
+      with:
+        fail_ci_if_error: true
+
 
