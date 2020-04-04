@@ -2,12 +2,14 @@
 Change Log
 ==========
 
-`In-Progress`_
-==============
+`v0.5.0`_ (2020-04-4)
+======================
 
 Improvements
 ------------
 
+* Python 3.8 is now fully supported.
+  (`#193 <https://github.com/tensorwerk/hangar-py/pull/193>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Column and backend classes are now fully serializable (pickleable) for ``read-only`` checkouts.
   (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Modularized internal structure of API classes to easily allow new columnn layouts / data types
@@ -316,4 +318,5 @@ Breaking changes
 .. _v0.2.0: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...v0.2.0
 .. _v0.3.0: https://github.com/tensorwerk/hangar-py/compare/v0.2.0...v0.3.0
 .. _v0.4.0: https://github.com/tensorwerk/hangar-py/compare/v0.3.0...v0.4.0
-.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.4.0...master
+.. _v0.5.0: https://github.com/tensorwerk/hangar-py/compare/v0.5.0...v0.5.0
+.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.5.0...master
