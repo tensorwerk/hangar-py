@@ -10,20 +10,20 @@ try:
     import torch
     from torch.utils.data import DataLoader
     from hangar import make_torch_dataset
-    skipTorch = False
-except ImportError:
-    skipTorch = True
+    torchExists = True
+except (ImportError, ModuleNotFoundError):
+    torchExists = False
 
 
-@pytest.mark.skipif(skipTorch is False,
-                    reason='pytorch installed for test requiring it to not be')
+@pytest.mark.skipif(torchExists,
+                    reason='pytorch is installed in the test environment.')
 def test_no_torch_installed_raises_error_on_dataloader_import():
     with pytest.raises(ImportError):
         from hangar import make_torch_dataset
         make_torch_dataset(None)
 
 
-@pytest.mark.skipif(skipTorch is True,
+@pytest.mark.skipif(not torchExists,
                     reason='pytorch is not installed in the test environment.')
 class TestTorchDataLoader(object):
 
@@ -265,22 +265,21 @@ try:
         import tensorflow as tf
     tf.compat.v1.enable_eager_execution()
     from hangar import make_tf_dataset
-    skipTF = False
-except ImportError:
-    skipTF = True
+    tfExists = True
+except (ImportError, ModuleNotFoundError):
+    tfExists = False
 
 
-@pytest.mark.skipif(skipTF is False,
-                    reason='tensorflow installed for test requiring it to not be')
+@pytest.mark.skipif(tfExists,
+                    reason='tensorflow is installed in the test environment.')
 def test_no_tf_installed_raises_error_on_dataloader_import():
     with pytest.raises(ImportError):
         from hangar import make_tf_dataset
         make_tf_dataset(None)
 
 
-@pytest.mark.skipif(
-    skipTF is True,
-    reason='tensorflow is not installed in the test environment.')
+@pytest.mark.skipif(not tfExists,
+                    reason='tensorflow is not installed in the test environment.')
 class TestTfDataLoader(object):
 
     def test_warns_experimental(self, repo_20_filled_samples):

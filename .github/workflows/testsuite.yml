@@ -50,7 +50,11 @@ jobs:
         TESTML: ${{ matrix.testml }}
     - name: Upload Coverage Report to Codecov
       if: matrix.testcover == 'yes'
-      uses: codecov/codecov-action@v1
-      with:
-        file: ./coverage.xml
-        fail_ci_if_error: true
+      run: bash <(curl -s https://codecov.io/bash) -n "${CC_PLAT}-py${CC_PY}-cov${CC_COV}-ml${CC_ML}"
+      shell: bash
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        CC_PLAT: ${{ matrix.platform }}
+        CC_PY: ${{ matrix.python-version }}
+        CC_COV: ${{ matrix.testcover }}
+        CC_ML: ${{ matrix.testml }}
