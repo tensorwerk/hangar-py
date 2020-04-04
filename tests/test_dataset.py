@@ -164,19 +164,23 @@ class TestNumpyDataset:
         repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.columns['writtenaset']
-        dataset = make_numpy_dataset((first_aset,), keys=('0', '1', '2', '3', '4'),
-                                     shuffle=False)
-        one_point_from_each = []
-        ordered = [0, 1, 2, 3, 4]
-        for data in dataset:
-            one_point_from_each.append(int(data[0][0][0]))
-        assert one_point_from_each == ordered
-        dataset = make_numpy_dataset((first_aset,), keys=('0', '1', '2', '3', '4'),
-                                     shuffle=True)
-        one_point_from_each = []
-        for data in dataset:
-            one_point_from_each.append(int(data[0][0][0]))
-        assert one_point_from_each != ordered
+
+        unshuffled_dataset = make_tensorflow_dataset((first_aset,),
+                                                     keys=[str(i) for i in range(15)],
+                                                     shuffle=False)
+        expected_unshuffled_content = [i for i in range(15)]
+        recieved_unshuffled_content = []
+        for data in unshuffled_dataset:
+            recieved_unshuffled_content.append(int(data[0][0][0]))
+        assert expected_unshuffled_content == recieved_unshuffled_content
+
+        shuffled_dataset = make_tensorflow_dataset((first_aset,),
+                                                   keys=[str(i) for i in range(15)],
+                                                   shuffle=True)
+        recieved_shuffled_content = []
+        for data in shuffled_dataset:
+            recieved_shuffled_content.append(int(data[0][0][0]))
+        assert recieved_shuffled_content != expected_unshuffled_content
         co.close()
 
 
@@ -349,17 +353,20 @@ class TestTfDataset(object):
         repo = repo_20_filled_samples
         co = repo.checkout()
         first_aset = co.columns['writtenaset']
-        dataset = make_tensorflow_dataset((first_aset,), keys=('0', '1', '2', '3', '4'),
-                                          shuffle=False)
-        one_point_from_each = []
-        ordered = [0, 1, 2, 3, 4]
-        for data in dataset:
-            one_point_from_each.append(int(data[0][0][0]))
-        assert one_point_from_each == ordered
-        dataset = make_tensorflow_dataset((first_aset,), keys=('0', '1', '2', '3', '4'),
-                                          shuffle=True)
-        one_point_from_each = []
-        for data in dataset:
-            one_point_from_each.append(int(data[0][0][0]))
-        assert one_point_from_each != ordered
+        unshuffled_dataset = make_tensorflow_dataset((first_aset,),
+                                                     keys=[str(i) for i in range(15)],
+                                                     shuffle=False)
+        expected_unshuffled_content = [i for i in range(15)]
+        recieved_unshuffled_content = []
+        for data in unshuffled_dataset:
+            recieved_unshuffled_content.append(int(data[0][0][0]))
+        assert expected_unshuffled_content == recieved_unshuffled_content
+
+        shuffled_dataset = make_tensorflow_dataset((first_aset,),
+                                                   keys=[str(i) for i in range(15)],
+                                                   shuffle=True)
+        recieved_shuffled_content = []
+        for data in shuffled_dataset:
+            recieved_shuffled_content.append(int(data[0][0][0]))
+        assert recieved_shuffled_content != expected_unshuffled_content
         co.close()
