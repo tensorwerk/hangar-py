@@ -1,13 +1,8 @@
-from os.path import join as pjoin
-from os import mkdir
 import pytest
 import sys
 import numpy as np
-from hangar import Repository
-
 
 from hangar import make_numpy_dataset
-from hangar.dataset.common import HangarDataset
 
 try:
     import torch
@@ -25,6 +20,8 @@ try:
 except (ImportError, ModuleNotFoundError):
     tfExists = False
 
+from hangar.dataset.common import HangarDataset
+
 
 class TestInternalDatasetClass:
 
@@ -38,6 +35,7 @@ class TestInternalDatasetClass:
         assert np.allclose(dataset[key], target)
         with pytest.raises(TypeError):
             HangarDataset(first_col)
+        co.close()
 
     def test_no_column(self):
         with pytest.raises(ValueError):
@@ -49,29 +47,34 @@ class TestInternalDatasetClass:
         first_aset = co.columns['writtenaset']
         with pytest.raises(TypeError):
             HangarDataset((first_aset,))
+        co.close()
 
     @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_columns_without_local_data_and_without_key_argument(self,
-                                                                 written_two_cmt_server_repo,
-                                                                 managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        repo.remote.fetch_data('origin', branch='master', max_num_bytes=1000)
+    def test_columns_without_local_data_and_without_key_argument(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
-        aset = co.columns['writtenaset']
-        dataset = HangarDataset((aset,))
-        available_keys = len(dataset.keys)
-        all_keys = len(list(aset.keys()))
-        assert available_keys != all_keys
+        # perform a mock for nonlocal data
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        co._columns._columns['writtenaset']._samples['4'] = template
+
+        col = co.columns['writtenaset']
+        dataset = HangarDataset((col,))
+        dataset_available_keys = dataset.keys
+        assert len(dataset_available_keys) == 19
+        assert '4' not in dataset_available_keys
+        column_reported_local_keys = list(col.keys(local=True))
+        for dset_avail_key in dataset_available_keys:
+            assert dset_avail_key in column_reported_local_keys
+        assert len(dataset_available_keys) == len(column_reported_local_keys)
+        co.close()
 
     def test_columns_without_common_keys_and_without_key_argument(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout(write=True)
         first_col = co.columns['writtenaset']
         first_col['AnExtraKey'] = first_col['0']
         co.commit('added an extra key')
+        co.close()
         co = repo_20_filled_samples.checkout()
         first_col = co.columns['writtenaset']
         second_col = co.columns['second_aset']
@@ -79,6 +82,7 @@ class TestInternalDatasetClass:
         assert '0' in dataset.keys
         assert 'AnExtraKey' in first_col
         assert 'AnExtraKey' not in dataset.keys
+        co.close()
 
     def test_keys_success(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
@@ -86,6 +90,7 @@ class TestInternalDatasetClass:
         keys = ['1', '2', '3']
         dataset = HangarDataset((first_col,), keys=keys)
         assert dataset.keys == keys
+        co.close()
 
     def test_keys_non_common(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
@@ -93,22 +98,29 @@ class TestInternalDatasetClass:
         keys = ['w', 'r', 'o', 'n', 'g']
         with pytest.raises(KeyError):
             HangarDataset((first_col,), keys=keys)
+        co.close()
 
     @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
-    def test_keys_non_local(self,
-                            written_two_cmt_server_repo,
-                            managed_tmpdir):
-        new_tmpdir = pjoin(managed_tmpdir, 'new')
-        mkdir(new_tmpdir)
-        server, _ = written_two_cmt_server_repo
-        repo = Repository(path=new_tmpdir, exists=False)
-        repo.clone('name', 'a@b.c', server, remove_old=True)
-        repo.remote.fetch_data('origin', branch='master', max_num_bytes=1000)
+    def test_keys_non_local(self, repo_20_filled_samples):
+        repo = repo_20_filled_samples
         co = repo.checkout()
-        aset = co.columns['writtenaset']
-        keys = aset.remote_reference_keys
+        # perform a mock for nonlocal data
+        from hangar.backends import backend_decoder
+        template = backend_decoder(b'50:daeaaeeaebv')
+        co._columns._columns['writtenaset']._samples['4'] = template
+
+        col = co.columns['writtenaset']
+        col_reported_remote_keys = col.remote_reference_keys
+        assert col_reported_remote_keys == ('4',)
+        assert len(col_reported_remote_keys) == 1
+
         with pytest.raises(FileNotFoundError):
-            HangarDataset((aset,), keys=keys)
+            HangarDataset((col,), keys=('0', *col_reported_remote_keys))
+        with pytest.raises(FileNotFoundError):
+            HangarDataset((col,), keys=col_reported_remote_keys)
+        with pytest.raises(FileNotFoundError):
+            HangarDataset((col,), keys=(*col_reported_remote_keys, '0'))
+        co.close()
 
 
 # ====================================   Numpy    ====================================
@@ -122,6 +134,7 @@ class TestNumpyDataset:
         first_aset = co.columns['writtenaset']
         with pytest.warns(UserWarning, match='make_numpy_dataset is experimental'):
             make_numpy_dataset([first_aset])
+        co.close()
 
     def test_multiple_dataset_batched_loader(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
@@ -163,6 +176,7 @@ class TestNumpyDataset:
         for data in dataset:
             one_point_from_each.append(int(data[0][0][0]))
         assert one_point_from_each != ordered
+        co.close()
 
 
 # ====================================   PyTorch  ====================================
@@ -187,6 +201,7 @@ class TestTorchDataset(object):
         first_aset = co.columns['writtenaset']
         with pytest.warns(UserWarning, match='make_torch_dataset is experimental'):
             make_torch_dataset([first_aset])
+        co.close()
 
     def test_multiple_dataset_loader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
@@ -227,11 +242,9 @@ class TestTorchDataset(object):
             assert data['aset'].shape == (10, 5, 7)
         co.close()
 
-    @pytest.mark.xfail(sys.platform == "win32",
-                       strict=True,
-                       reason="multiprocess workers does not run on windows")
-    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self,
-                                                                           repo_300_filled_samples):
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="multiprocess workers does not run on windows")
+    def test_lots_of_data_with_multiple_backend_multiple_worker_dataloader(self, repo_300_filled_samples):
         repo = repo_300_filled_samples
         co = repo.checkout()
         aset = co.columns['aset']
@@ -241,9 +254,8 @@ class TestTorchDataset(object):
             assert data[0].shape == (10, 5, 7)
         co.close()
 
-    @pytest.mark.xfail(sys.platform == "win32",
-                       strict=True,
-                       reason="multiprocess workers does not run on windows")
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="multiprocess workers does not run on windows")
     def test_two_aset_loader_two_worker_dataloader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
@@ -260,9 +272,11 @@ class TestTorchDataset(object):
             assert np.allclose(asets_batch[0], -asets_batch[1])
             count += 1
         assert count == 10
+        co.close()
 
 # ==================================== Tensorflow ====================================
 # ====================================================================================
+
 
 @pytest.mark.skipif(tfExists,
                     reason='tensorflow is installed in the test environment.')
@@ -284,6 +298,7 @@ class TestTfDataset(object):
         first_aset = co.columns['writtenaset']
         with pytest.warns(UserWarning, match='make_tensorflow_dataset is experimental'):
             make_tensorflow_dataset([first_aset])
+        co.close()
 
     def test_dataset_loader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
@@ -348,3 +363,4 @@ class TestTfDataset(object):
         for data in dataset:
             one_point_from_each.append(int(data[0][0][0]))
         assert one_point_from_each != ordered
+        co.close()

@@ -4,12 +4,6 @@ __all__ = ('Repository', 'make_numpy_dataset', 'make_torch_dataset', 'make_tenso
 from .repository import Repository
 
 
-def __dir__():
-    return list(globals().keys()) + ['make_numpy_dataset',
-                                     'make_torch_dataset',
-                                     'make_tensorflow_dataset']
-
-
 def __getattr__(name):
     """Lazy Loader that defers the loading of heavy packages such as tensorflow & pytorch
     """

@@ -3,15 +3,15 @@ import typing
 from functools import partial
 import random
 
-from .common import HangarDataset
-from ..utils import experimental
-
 try:
     import tensorflow as tf
 except (ImportError, ModuleNotFoundError):
     raise ImportError(
         'Could not import "tensorflow" library. Ensure library is '
         'installed correctly to use tensorflow dataloader functions') from None
+
+from .common import HangarDataset
+from ..utils import experimental
 
 
 if typing.TYPE_CHECKING:

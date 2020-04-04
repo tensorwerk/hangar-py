@@ -1,10 +1,11 @@
 import typing
 from typing import Sequence
 import random
+
 import numpy as np
+
 from .common import HangarDataset
 from ..utils import experimental
-
 
 if typing.TYPE_CHECKING:
     from hangar.columns.column import ModifierTypes as Columns
@@ -18,7 +19,6 @@ class NumpyDataset:
     such operations. Note that, user would never instantiate this class directly. Instead
     `:func:`make_numpy_dataset` act as the entry point and return an object of this class
     to the user
-
 
     Parameters
     ----------
@@ -101,7 +101,7 @@ def make_numpy_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
     for other non-supported frameworks to load data from hangar as batches into the
     training loop
 
-    .. Note::
+    .. note::
 
         Column with layouts ``str`` or ``ndarray nested`` are not compatible with the
         dataset APIs in the current release. So making dataset is only possible for
