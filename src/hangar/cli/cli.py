@@ -396,7 +396,7 @@ def remove_remote(repo: Repository, name):
 @click.argument('master', nargs=1, required=False, default=None)
 @pass_repo
 def diff(repo: Repository, dev, master):
-    """Display diff of DEV commit/branch to MASTER commit/branch
+    """Display diff of DEV commit/branch to MASTER commit/branch.
 
     If no MASTER is specified, then the staging area branch HEAD will
     will be used as the commit digest for MASTER. This operation will

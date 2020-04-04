@@ -27,8 +27,7 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  clone        Initialize a repository at the current path and fetch updated...\n'\
            '  column       Operations for working with columns in the writer checkout.\n'\
            '  commit       Commits outstanding changes.\n'\
-           '  diff         Display diff of DEV commit/branch to MASTER commit/branch If\n'\
-           '               no...\n'\
+           '  diff         Display diff of DEV commit/branch to MASTER commit/branch.\n'\
            '  export       Export COLUMN sample data as it existed a STARTPOINT to some...\n'\
            '  fetch        Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data   Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
@@ -50,7 +49,7 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
 def test_help_option():
     runner = CliRunner()
     with runner.isolated_filesystem():
-        res = runner.invoke(cli.main, ['--help'])
+        res = runner.invoke(cli.main, ['--help'], terminal_width=80)
         assert res.exit_code == 0
         assert res.stdout == help_res
 
@@ -58,7 +57,7 @@ def test_help_option():
 def test_help_no_args_option():
     runner = CliRunner()
     with runner.isolated_filesystem():
-        res = runner.invoke(cli.main)
+        res = runner.invoke(cli.main, terminal_width=80)
         assert res.exit_code == 0
         assert res.stdout == help_res
 
@@ -571,9 +570,8 @@ def test_arrayset_create_invalid_dtype_fails(repo_20_filled_samples2):
         cli.create_column,
         ['train_images', 'FLOAT7', '256'], obj=repo_20_filled_samples2)
     assert res.exit_code == 2
-    expected = ('Error: Invalid value for "[UINT8|INT8|UINT16|INT16|UINT32|INT32|'
-                'UINT64|INT64|FLOAT16|FLOAT32|FLOAT64|STR]": invalid choice: FLOAT7. '
-                '(choose from UINT8, INT8, UINT16, INT16, UINT32, INT32, UINT64, '
+    expected = ('invalid choice: FLOAT7. (choose from UINT8, '
+                'INT8, UINT16, INT16, UINT32, INT32, UINT64, '
                 'INT64, FLOAT16, FLOAT32, FLOAT64, STR)\n')
     assert res.stdout.endswith(expected) is True
     co = repo_20_filled_samples2.checkout(write=True)
@@ -870,7 +868,10 @@ class TestImport(object):
                 # invalid file
                 res = runner.invoke(cli.import_data, [aset_name, 'valid.ext'], obj=repo)
                 assert res.exit_code == 2
-                assert res.stdout.endswith('Invalid value for "PATH": Path "valid.ext" does not exist.\n')
+                assert "Invalid value for" in res.stdout
+                assert "PATH" in res.stdout
+                assert "valid.ext" in res.stdout
+                assert "does not exist." in res.stdout
 
                 with open('valid.ext', 'w') as f:
                     f.write('empty')
@@ -976,7 +977,9 @@ class TestExport(object):
             res = runner.invoke(
                 cli.export_data, [aset_name, '-o', 'wrongpath', '--sample', 'data', '--format', 'ext'], obj=repo)
             assert res.exit_code == 2
-            assert 'Invalid value for "-o"' in res.stdout
+            assert "Invalid value for" in res.stdout
+            assert "-o" in res.stdout
+            assert "--out" in res.stdout
 
     def test_export_wrong_arg(self, monkeypatch, written_repo_with_1_sample, tmp_path):
         repo = written_repo_with_1_sample
