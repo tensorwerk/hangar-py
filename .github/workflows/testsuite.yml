@@ -26,6 +26,9 @@ jobs:
           # tensorflow-cpu:latest (2.1.0) is not available for python 3.8 yet.
           - python-version: 3.8
             testml: yes
+          # build time with limited macos jobs
+          - platform: macos-latest
+            python-version: 3.7
 
     steps:
     - uses: actions/checkout@v1

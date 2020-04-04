@@ -161,7 +161,7 @@ SETUP_REQUIRES = [
 ]
 
 INSTALL_REQUIRES = [
-    'blosc<1.8.2',
+    'blosc>=1.8',
     'click',
     'grpcio',
     'protobuf',
@@ -176,7 +176,7 @@ INSTALL_REQUIRES = [
 
 setup(
     name='hangar',
-    version='0.5.0.dev3',
+    version='0.5.0',
     license='Apache 2.0',
     # Package Meta Info (for PyPi)
     description=SHORT_DESCRIPTION,
@@ -223,6 +223,7 @@ setup(
         'Programming Language :: Python :: 3 :: Only',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
         'Topic :: Database',
         'Topic :: Scientific/Engineering',
         'Topic :: Software Development :: Libraries',
