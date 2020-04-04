@@ -2,6 +2,9 @@ from typing import Sequence, Callable, List, Tuple
 import typing
 from functools import partial
 import random
+import warnings
+
+import numpy as np
 
 try:
     import tensorflow as tf
@@ -11,11 +14,8 @@ except (ImportError, ModuleNotFoundError):
         'installed correctly to use tensorflow dataloader functions') from None
 
 from .common import HangarDataset
-from ..utils import experimental
-
 
 if typing.TYPE_CHECKING:
-    import numpy as np
     tf_TensorType = tf.python.framework.dtypes.DType
     tf_TensorShape = tf.TensorShape
     from hangar.columns.column import ModifierTypes as Columns
@@ -28,7 +28,6 @@ def yield_data(dataset: HangarDataset, shuffle: bool) -> Tuple['np.ndarray']:
         yield dataset[name]
 
 
-@experimental
 def make_tensorflow_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
                             shuffle: bool = False) -> tf.data.Dataset:
     """
@@ -56,6 +55,11 @@ def make_tensorflow_dataset(columns: Sequence['Columns'], keys: Sequence[str] = 
         call. In fact, any attempts to parellelize the read will result in worse
         performance
 
+    .. note::
+
+        This is an experimental method in the current Hangar version. Please be aware
+        that Significant changes may be introduced in future releases without advance
+        notice or deprication warnings.
 
     Parameters
     ----------
@@ -90,6 +94,10 @@ def make_tensorflow_dataset(columns: Sequence['Columns'], keys: Sequence[str] = 
     -------
     :class:`tf.data.Dataset`
     """
+    warn_msg = ('This is an experimental method in the current Hangar version. '
+                'Please be aware that Significant changes may be introduced in '
+                'future releases without advance notice / deprication warnings.')
+    warnings.warn(warn_msg, UserWarning)
 
     dataset = HangarDataset(columns, keys)
     generator: Callable = partial(yield_data, dataset, shuffle)

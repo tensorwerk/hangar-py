@@ -2,6 +2,7 @@ import pytest
 import sys
 import numpy as np
 
+import hangar
 from hangar import make_numpy_dataset
 
 try:
@@ -127,13 +128,13 @@ class TestInternalDatasetClass:
 # ====================================================================================
 
 
-@pytest.mark.filterwarnings("ignore:.* is experimental in the current release")
+@pytest.mark.filterwarnings("ignore:.* experimental method")
 class TestNumpyDataset:
     def test_warns_experimental(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
         first_aset = co.columns['writtenaset']
-        with pytest.warns(UserWarning, match='make_numpy_dataset is experimental'):
-            make_numpy_dataset([first_aset])
+        with pytest.warns(UserWarning, match='This is an experimental'):
+            aset = make_numpy_dataset([first_aset])
         co.close()
 
     def test_multiple_dataset_batched_loader(self, repo_20_filled_samples):
@@ -188,10 +189,9 @@ class TestNumpyDataset:
 def test_no_torch_installed_raises_error_on_dataloader_import():
     with pytest.raises(ImportError):
         from hangar import make_torch_dataset
-        make_torch_dataset(None)
 
 
-@pytest.mark.filterwarnings("ignore:.* is experimental in the current release")
+@pytest.mark.filterwarnings("ignore:.* experimental method")
 @pytest.mark.skipif(not torchExists,
                     reason='pytorch is not installed in the test environment.')
 class TestTorchDataset(object):
@@ -199,7 +199,7 @@ class TestTorchDataset(object):
     def test_warns_experimental(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
         first_aset = co.columns['writtenaset']
-        with pytest.warns(UserWarning, match='make_torch_dataset is experimental'):
+        with pytest.warns(UserWarning, match='This is an experimental'):
             make_torch_dataset([first_aset])
         co.close()
 
@@ -283,10 +283,9 @@ class TestTorchDataset(object):
 def test_no_tf_installed_raises_error_on_dataloader_import():
     with pytest.raises(ImportError):
         from hangar import make_tensorflow_dataset
-        make_tensorflow_dataset(None)
 
 
-@pytest.mark.filterwarnings("ignore:.* is experimental in the current release")
+@pytest.mark.filterwarnings("ignore:.* experimental method")
 @pytest.mark.skipif(
     not tfExists,
     reason='tensorflow is not installed in the test environment.')
@@ -296,7 +295,7 @@ class TestTfDataset(object):
     def test_warns_experimental(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
         first_aset = co.columns['writtenaset']
-        with pytest.warns(UserWarning, match='make_tensorflow_dataset is experimental'):
+        with pytest.warns(UserWarning, match='This is an experimental'):
             make_tensorflow_dataset([first_aset])
         co.close()
 

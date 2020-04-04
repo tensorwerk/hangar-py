@@ -1,5 +1,6 @@
 from typing import Sequence, TYPE_CHECKING
 from collections import OrderedDict
+import warnings
 
 try:
     import torch
@@ -9,8 +10,6 @@ except (ImportError, ModuleNotFoundError):
         'installed correctly to use pytorch dataloader functions') from None
 
 from .common import HangarDataset
-from ..utils import experimental
-
 
 if TYPE_CHECKING:
     from hangar.columns.column import ModifierTypes as Columns
@@ -40,19 +39,18 @@ class TorchDataset(torch.utils.data.Dataset):
             return self.dataset[key]
 
 
-@experimental
 def make_torch_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
                        as_dict: bool = False) -> TorchDataset:
     """Returns a :class:`torch.utils.data.Dataset` object which can be loaded into
     a :class:`torch.utils.data.DataLoader`.
 
-    .. Note::
+    .. note::
 
         Column with layouts ``str`` or ``ndarray nested`` are not compatible with the
         dataset APIs in the current release. So making dataset is only possible for
         columns with layout ``ndarray flat``
 
-    .. Note::
+    .. note::
 
         PyTorch's :class:`torch.utils.data.DataLoader` can effectively do custom
         operations such as shuffling, batching, multiprocessed read etc and hence we
@@ -68,6 +66,11 @@ def make_torch_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
        (``num_workers=0``) will let the DataLoader work in single process mode
        as expected.
 
+    .. note::
+
+        This is an experimental method in the current Hangar version. Please be aware
+        that Significant changes may be introduced in future releases without advance
+        notice or deprication warnings.
 
     Parameters
     ----------
@@ -80,7 +83,6 @@ def make_torch_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
     as_dict : bool
         Return the data as an OrderedDict with column names as keys. If False, it returns
         a tuple of arrays
-
 
     Returns
     -------
@@ -106,5 +108,9 @@ def make_torch_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
     -------
     :class:`torch.utils.data.Dataset`
     """
+    warn_msg = ('This is an experimental method in the current Hangar version. '
+                'Please be aware that Significant changes may be introduced in '
+                'future releases without advance notice / deprication warnings.')
+    warnings.warn(warn_msg, UserWarning)
     hangar_dataset = HangarDataset(columns, keys)
     return TorchDataset(hangar_dataset, as_dict)

@@ -1,14 +1,11 @@
 import typing
 from typing import Sequence
 import random
+import warnings
 
 import numpy as np
 
 from .common import HangarDataset
-from ..utils import experimental
-
-if typing.TYPE_CHECKING:
-    from hangar.columns.column import ModifierTypes as Columns
 
 
 class NumpyDataset:
@@ -88,7 +85,6 @@ class NumpyDataset:
                 yield tuple([np.stack(d) for d in zip(*out)])
 
 
-@experimental
 def make_numpy_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
                        batch_size: int = None, drop_last: bool = False,
                        shuffle: bool = True) -> NumpyDataset:
@@ -107,6 +103,11 @@ def make_numpy_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
         dataset APIs in the current release. So making dataset is only possible for
         columns with layout ``ndarray flat``
 
+    .. note::
+
+        This is an experimental method in the current Hangar version. Please be aware
+        that Significant changes may be introduced in future releases without advance
+        notice or deprication warnings.
 
     Parameters
     ----------
@@ -129,7 +130,10 @@ def make_numpy_dataset(columns: Sequence['Columns'], keys: Sequence[str] = None,
     -------
         :class: `.NumpyDataset`
     """
-
+    warn_msg = ('This is an experimental method in the current Hangar version. '
+                'Please be aware that Significant changes may be introduced in '
+                'future releases without advance notice / deprication warnings.')
+    warnings.warn(warn_msg, UserWarning)
     dataset = HangarDataset(columns, keys)
     dataset = NumpyDataset(dataset, batch_size, drop_last, shuffle)
     return dataset
