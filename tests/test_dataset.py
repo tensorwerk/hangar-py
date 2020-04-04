@@ -1,5 +1,4 @@
 from os.path import join as pjoin
-from collections import namedtuple
 from os import mkdir
 import pytest
 import sys
@@ -15,7 +14,7 @@ try:
     from torch.utils.data import DataLoader
     from hangar import make_torch_dataset
     torchExists = True
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     torchExists = False
 
 try:
@@ -23,7 +22,7 @@ try:
     tf.compat.v1.enable_eager_execution()
     from hangar import make_tensorflow_dataset
     tfExists = True
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     tfExists = False
 
 
