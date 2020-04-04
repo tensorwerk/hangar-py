@@ -1,9 +1,16 @@
 from typing import Sequence, TYPE_CHECKING
 from collections import OrderedDict
 
-import torch
 from .common import HangarDataset
 from ..utils import experimental
+
+try:
+    import torch
+except (ImportError, ModuleNotFoundError):
+    raise ImportError(
+        'Could not import "pytorch" library. Ensure library is '
+        'installed correctly to use pytorch dataloader functions') from None
+
 
 if TYPE_CHECKING:
     from hangar.columns.column import ModifierTypes as Columns
