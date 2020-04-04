@@ -16,9 +16,9 @@ jobs:
       matrix:
         # https://help.github.com/articles/virtual-environments-for-github-actions
         platform:
-          - ubuntu-latest
-          - macos-latest
           - windows-latest
+          - macos-latest
+          - ubuntu-latest
         python-version: [3.6, 3.7]
         testcover: [yes, no]
         testml: [yes, no]
@@ -53,7 +53,6 @@ jobs:
       run: bash <(curl -s https://codecov.io/bash) -n "${CC_PLAT}-py${CC_PY}-cov${CC_COV}-ml${CC_ML}"
       shell: bash
       env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         CC_PLAT: ${{ matrix.platform }}
         CC_PY: ${{ matrix.python-version }}
         CC_COV: ${{ matrix.testcover }}
