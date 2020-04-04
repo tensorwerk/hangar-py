@@ -165,18 +165,18 @@ class TestNumpyDataset:
         co = repo.checkout()
         first_aset = co.columns['writtenaset']
 
-        unshuffled_dataset = make_tensorflow_dataset((first_aset,),
-                                                     keys=[str(i) for i in range(15)],
-                                                     shuffle=False)
+        unshuffled_dataset = make_numpy_dataset((first_aset,),
+                                                keys=[str(i) for i in range(15)],
+                                                shuffle=False)
         expected_unshuffled_content = [i for i in range(15)]
         recieved_unshuffled_content = []
         for data in unshuffled_dataset:
             recieved_unshuffled_content.append(int(data[0][0][0]))
         assert expected_unshuffled_content == recieved_unshuffled_content
 
-        shuffled_dataset = make_tensorflow_dataset((first_aset,),
-                                                   keys=[str(i) for i in range(15)],
-                                                   shuffle=True)
+        shuffled_dataset = make_numpy_dataset((first_aset,),
+                                              keys=[str(i) for i in range(15)],
+                                              shuffle=True)
         recieved_shuffled_content = []
         for data in shuffled_dataset:
             recieved_shuffled_content.append(int(data[0][0][0]))
