@@ -8,6 +8,8 @@ Change Log
 Improvements
 ------------
 
+* Python 3.8 is now fully supported.
+  (`#193 <https://github.com/tensorwerk/hangar-py/pull/193>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Column and backend classes are now fully serializable (pickleable) for ``read-only`` checkouts.
   (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Modularized internal structure of API classes to easily allow new columnn layouts / data types

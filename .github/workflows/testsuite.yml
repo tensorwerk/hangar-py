@@ -15,13 +15,17 @@ jobs:
       fail-fast: false
       matrix:
         # https://help.github.com/articles/virtual-environments-for-github-actions
+        testcover: [yes, no]
+        testml: [no, yes]
         platform:
           - windows-latest
           - macos-latest
           - ubuntu-latest
-        python-version: [3.6, 3.7]
-        testcover: [yes, no]
-        testml: [yes, no]
+        python-version: [3.6, 3.7, 3.8]
+        exclude:
+          # tensorflow-cpu:latest (2.1.0) is not available for python 3.8 yet.
+          - python-version: 3.8
+            testml: yes
 
     steps:
     - uses: actions/checkout@v1
