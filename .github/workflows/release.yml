@@ -193,7 +193,7 @@ jobs:
     - run: mv -v dist-windows-3.8/* dist/
 
     - name: Upload PreRelease to Test PyPi with Twine
-      if: github.event.release.prereleased
+      if: "github.event.release.prerelease"
       env:
         TWINE_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.TEST_PYPI_PASSWORD }}
@@ -203,7 +203,7 @@ jobs:
         twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
     - name: Upload Release to PyPi with Twine
-      if: "!github.event.release.prereleased"
+      if: "!github.event.release.prerelease"
       env:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
