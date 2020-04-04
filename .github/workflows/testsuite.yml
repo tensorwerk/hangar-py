@@ -3,8 +3,10 @@ name: Run Test Suite
 on:
   pull_request:
     branches:
-    - master
-
+      - master
+  push:
+    branches:
+      - master
 
 jobs:
   run_test_suite:
@@ -32,16 +34,23 @@ jobs:
         python -m pip install --upgrade setuptools pip wheel
         # Use the latest published version for myself :)
         python -m pip install tox-gh-actions
-    - name: Test with tox
+    - name: Run Tests Without Coverage Report
+      if: matrix.testcover == 'no'
       run: tox -- -p no:sugar
       env:
         PYTEST_XDIST_PROC_NR: 2
         TESTCOVER: ${{ matrix.testcover }}
         TESTML: ${{ matrix.testml }}
-    - name: Upload coverage to Codecov
-      if: ${{ matrix.testcover }} == yes
+    - name: Run Tests With Coverage Report
+      if: matrix.testcover == 'yes'
+      run: tox -- --cov-report xml -p no:sugar
+      env:
+        PYTEST_XDIST_PROC_NR: 2
+        TESTCOVER: ${{ matrix.testcover }}
+        TESTML: ${{ matrix.testml }}
+    - name: Upload Coverage Report to Codecov
+      if: matrix.testcover == 'yes'
       uses: codecov/codecov-action@v1
       with:
+        file: ./coverage.xml
         fail_ci_if_error: true
-
-
