@@ -40,7 +40,7 @@ project = 'Hangar'
 year = '2019-2020'
 author = 'Richard Izzo'
 copyright = '{0}, {1}'.format(year, author)
-version = release = '0.5.0.dev1'
+version = release = '0.5.0.dev2'
 
 pygments_style = 'default'
 pygments_lexer = 'PythonConsoleLexer'
