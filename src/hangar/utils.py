@@ -193,37 +193,37 @@ def ilen(iterable):
     return next(counter)
 
 
-def find_next_prime(N: int) -> int:
-    """Find next prime >= N
-
-    Parameters
-    ----------
-    N : int
-        Starting point to find the next prime >= N.
-
-    Returns
-    -------
-    int
-        the next prime found after the number N
-    """
-    def is_prime(n):
-        if n % 2 == 0:
-            return False
-        i = 3
-        while i * i <= n:
-            if n % i != 0:
-                i += 2
-            else:
-                return False
-        return True
-
-    if N < 3:
-        return 2
-    if N % 2 == 0:
-        N += 1
-    for n in range(N, 2 * N, 2):
-        if is_prime(n):
-            return n
+# def find_next_prime(N: int) -> int:
+#     """Find next prime >= N
+#
+#     Parameters
+#     ----------
+#     N : int
+#         Starting point to find the next prime >= N.
+#
+#     Returns
+#     -------
+#     int
+#         the next prime found after the number N
+#     """
+#     def is_prime(n):
+#         if n % 2 == 0:
+#             return False
+#         i = 3
+#         while i * i <= n:
+#             if n % i != 0:
+#                 i += 2
+#             else:
+#                 return False
+#         return True
+#
+#     if N < 3:
+#         return 2
+#     if N % 2 == 0:
+#         N += 1
+#     for n in range(N, 2 * N, 2):
+#         if is_prime(n):
+#             return n
 
 
 def file_size(p: Path) -> int:  # pragma: no cover

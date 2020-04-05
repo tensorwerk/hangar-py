@@ -34,12 +34,12 @@ class TestInternalDatasetClass:
         key = dataset.keys[0]
         target = array5by7[:] = int(key)
         assert np.allclose(dataset[key], target)
-        with pytest.raises(TypeError):
-            HangarDataset(first_col)
+        dset = HangarDataset(first_col)
+        assert dataset.keys == dset.keys
         co.close()
 
     def test_no_column(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             dataset = HangarDataset([])
 
     def test_fails_on_write_enabled_columns(self, repo_20_filled_samples):

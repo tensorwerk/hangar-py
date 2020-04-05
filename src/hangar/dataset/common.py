@@ -1,9 +1,11 @@
 import typing
-from typing import Union, Sequence, List, Set, Tuple
+from typing import Union, Sequence, Tuple, Any
+from ..columns import is_column, is_writer_column
+from ..optimized_utils import is_ordered_sequence, is_iterable
 
 if typing.TYPE_CHECKING:
-    import numpy as np
     from hangar.columns.column import ModifierTypes as Columns
+    KeyType = Union[str, int]
 
 
 class HangarDataset:
@@ -18,52 +20,95 @@ class HangarDataset:
 
     Parameters
     ----------
-    columns : :class:`~hangar.columns.column.Columns` or a Sequence
+    columns : :class:`~hangar.columns.column.Columns` or a Sequence['Columns']
         A single column object of a sequence the column objects
-    keys : Sequence[str]
+    keys : Sequence['KeyType']
         An sequence collection of sample names. If given only those samples will
         fetched from the column
     """
 
-    def __init__(self, columns: Sequence['Columns'], keys: Sequence[str] = None):
-        if not isinstance(columns, (list, tuple)):
-            raise TypeError("Columns must be a list/tuple of hangar columns")
-        if len(columns) == 0:
-            raise ValueError('len(columns) cannot == 0')
-        all_keys: List[set] = []
-        all_remote_keys: List[set] = []
-        for col in columns:
-            if col.iswriteable is True:
-                raise TypeError(f'Cannot load columns opened in `write-enabled` checkout.')
-            all_keys.append(set(col.keys()))
-            all_remote_keys.append(set(col.remote_reference_keys))
-        common_keys: Set[str] = set.intersection(*all_keys)
-        remote_keys: Set[str] = set.union(*all_remote_keys)
-        common_local_keys: Set[str] = common_keys.difference(remote_keys)
-        if keys:
-            if not isinstance(keys, (list, tuple, set)):
-                raise TypeError('keys must be a list/tuple/set of hangar sample keys')
-            unique = set(keys)
-            not_common = unique.difference(common_keys)
-            not_local = unique.difference(common_local_keys)
-            if len(not_common) > 0:
-                raise KeyError(f'{len(not_common)} keys do not exist in all columns.')
-            if len(not_local) > 0:
-                raise FileNotFoundError(
-                    f'{len(not_local)} keys are remote data samples and are not downloaded'
-                    f' locally.')
+    def __init__(self,
+                 columns: Union['Columns', Sequence['Columns']],
+                 keys: Sequence['KeyType'] = None):
+
+        # ------- verify user args are valid hangar column instance(s) --------
+
+        if is_ordered_sequence(columns):
+            if len(columns) == 0:
+                raise TypeError(f'Atleast one element must exist in input sequence.')
+            for obj in columns:
+                if not is_column(obj):
+                    raise TypeError(
+                        f'All elements of input sequence must be hangar column objects.')
+                elif is_writer_column(obj):
+                    raise TypeError(
+                        f'Columns cannot be used while accessed via a `write-enabled` '
+                        f'checkout. Please close the checkout and reopen the column in '
+                        f'via a new checkout opened in `read-only` mode.')
+        else:
+            if not is_column(columns):
+                raise TypeError(
+                    f'columns arguments must be a live Hangar column or '
+                    f'sequenc of column instances, not {type(columns)}.')
+            elif is_writer_column(columns):
+                raise TypeError(
+                    f'Columns cannot be used while accessed via a `write-enabled` '
+                    f'checkout. Please close the checkout and reopen the column in '
+                    f'via a new checkout opened in `read-only` mode.')
+            columns = (columns,)
+
+        # --------- inspect column keys / validate requested view ------------
+
+        first_col = columns[0]
+        common_local_keys = set(first_col.keys(local=True))
+        remote_keys = set(first_col.remote_reference_keys)
+        for col in columns[1:]:
+            common_local_keys.intersection_update(col.keys(local=True))
+            remote_keys.update(col.remote_reference_keys)
+
+        if len(common_local_keys) == 0:
+            raise KeyError(
+                f'The intersection of common keys (whose data exists on the '
+                f'local machine) between all specified columns is empty. No '
+                f'data can be returned.')
+
+        # -------- validate user requested sample keys exist in view ----------
+
+        if keys is not None:
+            if not is_iterable(keys):
+                raise TypeError(
+                    f'If `keys` argument is specified, an iterable sequence of key '
+                    f'elements must be provided, not type {type(keys)}')
+            # Note: The set of requested user keys is ONLY used for input validation.
+            # We use the original sequence passed in by the user to specify which
+            # samples and in which order data should be retrieved in.
+            keys_set = set(keys)
+            if not keys_set.issubset(common_local_keys):
+                if not keys_set.isdisjoint(remote_keys):
+                    raise FileNotFoundError(
+                        f'Data corresponding to requested sample keys has not '
+                        f'been downloaded to the local repo copy. Please fetch data '
+                        f'for all requested samples and retry this operation.')
+                else:
+                    raise KeyError(
+                        f'Not all requested sample keys exist in the specified '
+                        f'columns, cannot continue with dataloader operation.')
         else:
             keys = common_local_keys
-        if len(keys) == 0:
-            raise ValueError('No Samples available common to all '
-                             'columns and available locally.')
 
-        # TODO: May be we need light weight data accessors instead of columns
-        self.columns = columns
-        self.keys = list(keys)
+        self._keys = list(keys) if not isinstance(keys, list) else keys
+        self._columns = columns
 
-    def __getitem__(self, key: Union[str, int]) -> Tuple['np.ndarray']:
+    @property
+    def keys(self):
+        return self._keys
+
+    @property
+    def columns(self):
+        return self._columns
+
+    def __getitem__(self, key: Union[str, int]) -> Tuple[Any]:
         """It takes one sample name and returns a tuple of items from each column for
         the given sample name
         """
-        return tuple([col[key] for col in self.columns])
+        return tuple([col[key] for col in self._columns])

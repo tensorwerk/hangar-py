@@ -31,15 +31,45 @@ class NumpyDataset:
     """
     def __init__(self, dataset: HangarDataset, batch_size: int,
                  drop_last: bool, shuffle: bool):
-        self.dataset = dataset
-        self.num_batches = None
-        self.batch_size = None
+        self._dataset = dataset
+        self._num_batches = None
+        self._batch_size = None
         if batch_size:
             self._batch(batch_size, drop_last)
-        self.shuffle = shuffle
+        self._shuffle = shuffle
+
+    @property
+    def dataset(self):
+        return self._dataset
+
+    @property
+    def num_batches(self):
+        return self._num_batches
+
+    @property
+    def batch_size(self):
+        return self._batch_size
+
+    @batch_size.setter
+    def batch_size(self, value: int):
+        if not isinstance(value, int):
+            raise TypeError(f'Expected integer type, recieved {type(value)}')
+        elif value < 1:
+            raise ValueError(f'batch_size value must be >= 1, recieved {value}')
+        self._batch_size = value
+
+    @property
+    def shuffle(self):
+        return self._shuffle
+
+    @shuffle.setter
+    def shuffle(self, value: bool):
+        if not isinstance(value, bool):
+            raise TypeError(f'Expected bool type, recieved {type(value)}')
+        self._shuffle = value
 
     def __len__(self):
-        return len(self.dataset.keys)
+        return len(self._dataset.keys)
 
     def _batch(self, batch_size, drop_last=True) -> None:
         """Private function to this class to calculate the batch parameters. These
@@ -55,33 +85,35 @@ class NumpyDataset:
         drop_last : bool
             Should drop the last incomplete batch
         """
-        num_batches, has_last = divmod(len(self.dataset.keys), batch_size)
+        num_batches, has_last = divmod(len(self._dataset.keys), batch_size)
         if num_batches == 0:
             raise RuntimeError("Batch size exceeded the number of samples")
         if not has_last or drop_last:
             total = batch_size * num_batches
-            self.dataset.keys = self.dataset.keys[:total]
+            # TODO: Do not access private attribute... probably want to
+            #       allow batching parameters to more directly influence __iter__.
+            self._dataset._keys = self._dataset._keys[:total]
         else:
             num_batches += 1
-        self.num_batches = num_batches
-        self.batch_size = batch_size
+        self._num_batches = num_batches
+        self._batch_size = batch_size
 
     def __iter__(self):
-        if self.shuffle:
-            random.shuffle(self.dataset.keys)
-        if self.num_batches is None:
-            for k in self.dataset.keys:
-                yield self.dataset[k]
+        if self._shuffle:
+            random.shuffle(self._dataset.keys)
+        if self._num_batches is None:
+            for k in self._dataset.keys:
+                yield self._dataset[k]
         else:
             start = 0
-            end = self.batch_size
-            for i in range(self.num_batches):
-                batch = self.dataset.keys[start:end]
+            end = self._batch_size
+            for i in range(self._num_batches):
+                batch = self._dataset.keys[start:end]
                 start = end
-                end = end + self.batch_size
+                end = end + self._batch_size
                 out = []
                 for name in batch:
-                    out.append(self.dataset[name])
+                    out.append(self._dataset[name])
                 yield tuple([np.stack(d) for d in zip(*out)])
 
 
