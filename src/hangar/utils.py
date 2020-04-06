@@ -8,8 +8,8 @@ import time
 import types
 from collections import deque
 from io import StringIO
-from itertools import tee, filterfalse, count
 from pathlib import Path
+from itertools import tee, filterfalse, count, zip_longest
 from typing import Union
 
 import blosc
@@ -226,6 +226,27 @@ def ilen(iterable):
     counter = count()
     deque(zip(iterable, counter), maxlen=0)
     return next(counter)
+
+
+def grouper(iterable, n, fillvalue=None):
+    """split iterable into n sized groups upon each call to `next()`
+
+    >>> for grp in grouper([(x, x*2) for x in range(4)], 2):
+    ...     print(grp)
+    [(0, 0), (1, 2)]
+    [(2, 4), (3, 6)]
+    >>> for grp in grouper([x for x in range(5)], 2, fillvalue=None):
+    ...     print(grp)
+    [0, 1]
+    [2, 3]
+    >>> for grp in grouper([(x, x*2) for x in range(5)], 2, fillvalue=('FOO', 'BAR')):
+    ...     print(grp)
+    [(0, 0), (1, 2)]
+    [(2, 4), (3, 6)]
+    [(4, 8), ('HELLO', 'WORLD')]
+    """
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=(None, None))
 
 
 def find_next_prime(N: int) -> int:

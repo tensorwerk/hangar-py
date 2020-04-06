@@ -103,6 +103,9 @@ class NdarraySchemaBase(ColumnBase):
             self._backend_options = self._beopts.backend_options
             raise e from None
 
+    def data_nbytes(self, obj: np.ndarray):
+        return obj.nbytes
+
 
 @OneOf(['00', '01', '10', '50', None])
 class NdarrayFixedShapeBackends(OptionalString):

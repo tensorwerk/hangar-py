@@ -1107,7 +1107,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         return commit_hash
 
-    def reset_staging_area(self) -> str:
+    def reset_staging_area(self, *, force=False) -> str:
         """Perform a hard reset of the staging area to the last commit head.
 
         After this operation completes, the writer checkout will automatically
@@ -1135,8 +1135,9 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         print(f'Hard reset requested with writer_lock: {self._writer_lock}')
 
         if self._differ.status() == 'CLEAN':
-            e = RuntimeError(f'No changes made in staging area. No reset necessary.')
-            raise e from None
+            if not force:
+                e = RuntimeError(f'No changes made in staging area. No reset necessary.')
+                raise e from None
 
         if isinstance(self._stack, ExitStack):
             self._stack.close()
