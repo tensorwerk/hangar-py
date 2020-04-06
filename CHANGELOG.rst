@@ -2,6 +2,18 @@
 Change Log
 ==========
 
+
+`0.5.1`_ (2020-04-05)
+=====================
+
+BugFixes
+--------
+
+* Fixed issue where importing ``make_torch_dataloader`` or ``make_tf_dataloader`` under python 3.6
+  Would raise a ``NameError`` irrigardless of if the package is installed.
+  (`#196 <https://github.com/tensorwerk/hangar-py/pull/196>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
 `v0.5.0`_ (2020-04-4)
 ======================
 
@@ -331,4 +343,5 @@ Breaking changes
 .. _v0.3.0: https://github.com/tensorwerk/hangar-py/compare/v0.2.0...v0.3.0
 .. _v0.4.0: https://github.com/tensorwerk/hangar-py/compare/v0.3.0...v0.4.0
 .. _v0.5.0: https://github.com/tensorwerk/hangar-py/compare/v0.4.0...v0.5.0
-.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.5.0...master
+.. _v0.5.1  https://github.com/tensorwerk/hangar-py/compare/v0.5.0...v0.5.1
+.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.5.1...master
