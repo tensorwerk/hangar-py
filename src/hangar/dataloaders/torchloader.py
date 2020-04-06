@@ -1,15 +1,17 @@
 import warnings
 from collections import namedtuple
 from typing import Sequence
+
 from .common import GroupedColumns
+from ..utils import LazyLoader
 
 
 try:
-    from torch.utils import data as torchdata
+    torchdata = LazyLoader('torchdata', globals(), 'torch.utils.data')
 except (ImportError, ModuleNotFoundError):
     raise ImportError(
         'Could not import "pytorch" library. Ensure library is '
-        'installed correctly to use pytorch dataloader functions') from None
+        'installed correctly to use pytorch dataloader functions')
 
 
 def make_torch_dataset(columns,
