@@ -612,7 +612,11 @@ def serve(hangar_path: str,
     server_dir = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
     hangserv = HangarServer(server_dir, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
-    server.add_insecure_port(channel_address)
+    port = server.add_insecure_port(channel_address)
+    if port == 0:
+        server.stop(0.1)
+        server.wait_for_termination(timeout=10)
+        raise OSError(f'Unable to bind port, adddress {channel_address} already in use.')
     return (server, hangserv, channel_address)
 
 

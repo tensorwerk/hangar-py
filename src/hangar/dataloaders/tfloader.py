@@ -4,9 +4,10 @@ from typing import Sequence
 import random
 
 from .common import GroupedColumns
+from ..utils import LazyLoader
 
 try:
-    import tensorflow as tf
+    tf = LazyLoader('tf', globals(), 'tensorflow')
 except (ImportError, ModuleNotFoundError):
     raise ImportError(
         'Could not import "tensorflow" library. Ensure library is '
