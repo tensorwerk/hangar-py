@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Iterable, List, Tuple, Union
+from typing import Iterable, List, Tuple, Union, Set
 
 import lmdb
 
@@ -90,6 +90,31 @@ class HashQuery(CursorRangeIterator):
 
     def gen_all_hash_keys_db(self) -> Iterable[bytes]:
         return self._traverse_all_hash_records(keys=True, values=False)
+
+    def intersect_keys_db(self, other: Set[bytes]):
+        """Set intersection of provided keys and those contained in the database.
+
+        Parameters
+        ----------
+        other: Set[bytes]
+            Set of db formated keys to intersect with keys of the lmdb environment.
+
+        Returns
+        -------
+        Set[bytes]
+            intersection of input with the keys existing in the lmdb environment.
+        """
+        res = []
+        hashtxn = TxnRegister().begin_reader_txn(self._hashenv)
+        try:
+            with hashtxn.cursor() as cur:
+                # sort input sequence to reduce time spent moving cursor.
+                for key in sorted(other):
+                    if cur.set_key(key):
+                        res.append(key)
+        finally:
+            TxnRegister().abort_reader_txn(self._hashenv)
+        return set(res)
 
     def list_all_schema_digests(self) -> List[str]:
         recs = self._traverse_all_schema_records(keys=True, values=False)

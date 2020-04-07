@@ -5,19 +5,24 @@ from contextlib import closing
 from typing import NamedTuple, Union, Tuple, Optional, List
 import multiprocessing as mp
 import queue
+from itertools import filterfalse
+from operator import attrgetter as op_attrgetter
 from collections import defaultdict
 from inspect import getcallargs
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from tqdm.auto import tqdm
 
 from .records import hashs
 from .records.column_parsers import (
+    hash_data_raw_key_from_db_key,
     hash_data_db_key_from_raw_key,
     flat_data_db_key_from_names,
     nested_data_db_key_from_names,
     data_record_db_val_from_digest
 )
-from .utils import is_suitable_user_key, ilen, grouper
+from .utils import is_suitable_user_key, ilen, grouper, is_valid_directory_path
 from .columns.common import open_file_handles
 from .txnctx import TxnRegister
 
@@ -52,25 +57,31 @@ def _check_user_input_args(schema, keys_kwargs):
         data reader func to retrieve a single samples data from disk.
     """
     if not isinstance(keys_kwargs, (list, tuple)):
-        raise TypeError(f'expected arg of type list/tuple, recieved {type(keys_kwargs)}')
+        raise TypeError(f'`keys_kwargs` parameter must be of type list/tuple, not {type(keys_kwargs)}')
     elif len(keys_kwargs) <= 1:
-        raise ValueError(f'batch input must specify more than 1 data sample')
+        raise ValueError(
+            f'Input work list must contain atleast two data samples to store; recieved '
+            f'only {len(keys_kwargs)}. Use standard API to write single samples at a time.')
 
     sample_keys = []
     for sample_key_kwargs in keys_kwargs:
         if len(sample_key_kwargs) != 2:
             raise ValueError(
                 f'all containers defining samples of batch input must be length 2 '
-                f'where idx 0 == sample key and idx 1 == reader function kwargs dict.'
-                f'Recieved {sample_key_kwargs} of length {len(sample_key_kwargs)}')
+                f'(where idx 0 == sample key and idx 1 == reader function kwargs dict.)'
+                f'Recieved {sample_key_kwargs} of length {len(sample_key_kwargs)} as '
+                f'part of input work list')
 
         key, kwargs = sample_key_kwargs
         if not isinstance(kwargs, dict):
-            raise TypeError(f'reader input must be passed kwargs dict, not {type(kwargs)}')
+            raise TypeError(
+                f'arguments passed to reader functions must be specified as a keywork argument'
+                f' dictionary, cannot accept value {kwargs} of {type(kwargs)}.')
+
         if schema.column_layout == 'nested':
             if not isinstance(key, (list, tuple)) or len(key) != 2:
                 raise TypeError(f'Key {key} not list/tuple of length 2 for nested column.')
-            if not all([is_suitable_user_key(k) for k in key]):
+            if not is_suitable_user_key(key[0]) or not is_suitable_user_key(key[1]):
                 raise ValueError(f'one of key values in {key} is not valid')
         elif schema.column_layout == 'flat':
             if not is_suitable_user_key(key):
@@ -86,7 +97,7 @@ def _check_user_input_args(schema, keys_kwargs):
     return True
 
 
-def _check_user_input_func(schema, read_func, keys_kwargs):
+def _check_user_input_func(schema, read_func, keys_kwargs, *, prerun_check_percentage: float = 0.02):
     """Perform a few sanity tests to ensure kwargs and reader_func produces valid data.
 
     Parameters
@@ -103,29 +114,33 @@ def _check_user_input_func(schema, read_func, keys_kwargs):
 
         element 1 --> dict of kwargs which are passed to user specified
         data reader func to retrieve a single samples data from disk.
+    prerun_check_percentage: float, kwargonly, default=0.02
+        value between (0.0, 1.0) representing what percentage of items in the full
+        work list should be selected (at random) to be processed by reader_func &
+        verified against the column schema.
+
+        This is meant to serve as a quick sanity check (to test if is success is even
+        possible) before launching the full pipeline with multiple worker processes.
     """
-    for sample, reader_args in keys_kwargs:
+    for key, kwargs in keys_kwargs:
         try:
-            getcallargs(read_func, **reader_args)
+            getcallargs(read_func, **kwargs)
         except Exception as e:
-            print(sample, reader_args)
+            print(f'Invalid call args passed to {read_func} by key: {key} with kwargs: {kwargs}')
             raise e from None
 
-    failcount = 0
-    numtries = min(10, len(keys_kwargs))
-    maxfail = round(0.75 * numtries)
-    for i in range(numtries):
-        sample, func_kwargs = random.choice(keys_kwargs)
-        res = read_func(**func_kwargs)
+    num_choices_by_percent = round(len(keys_kwargs) * prerun_check_percentage)
+    num_choices = max(max(2, num_choices_by_percent), 100)  # place upper/lower bounds.
+    work_samples = random.choices(keys_kwargs, k=num_choices)
+    for key, kwargs in tqdm(work_samples, desc='Performing pre-run sanity check'):
+        res = read_func(**kwargs)
         if res is None:
-            failcount += 1
             continue
         iscompat = schema.verify_data_compatible(res)
         if not iscompat.compatible:
-            raise ValueError(f'Key {sample} kwargs {func_kwargs} data invalid {iscompat.reason}')
-    if failcount >= maxfail:
-        raise ValueError(f'reader func returned None on {failcount} / {numtries} samples.')
-
+            raise ValueError(
+                f'Executing {read_func} with kwargs {kwargs} for sample key {key}'
+                f'produced invalid data for column. Reason= {iscompat.reason}')
     return True
 
 
@@ -280,7 +295,7 @@ def run_prepare_recipe(column, reader_func, keys_reader_kwargs, *, ncpu=0, batch
 
     # collect outputs and fill queue with more work if low
     # terminate if no more work should be done.
-    with tqdm(total=len(keys_reader_kwargs), desc='Constructing Import Recipe') as pbar:
+    with tqdm(total=len(keys_reader_kwargs), desc='Constructing task recipe') as pbar:
         ngroups_processed = 0
         remaining = True
         while remaining is True:
@@ -293,7 +308,6 @@ def run_prepare_recipe(column, reader_func, keys_reader_kwargs, *, ncpu=0, batch
                 while not in_queue.full():
                     keys_kwargs = next(grouped_keys_kwargs)
                     in_queue.put(keys_kwargs)
-                    time.sleep(0.0001)
             except StopIteration:
                 if ngroups_processed == n_queue_tasks:
                     remaining = False
@@ -302,7 +316,7 @@ def run_prepare_recipe(column, reader_func, keys_reader_kwargs, *, ncpu=0, batch
     return out
 
 
-def run_write_recipe_data(column, reader_func, keys_reader_kwargs, *, ncpu=0, batch_size=10):
+def run_write_recipe_data(tmp_dir: Path, column, reader_func, keys_reader_kwargs, *, ncpu=0, batch_size=10):
 
     if ncpu <= 0:
         ncpu = os.cpu_count() // 2
@@ -322,9 +336,8 @@ def run_write_recipe_data(column, reader_func, keys_reader_kwargs, *, ncpu=0, ba
         column_name = column.column
         backend = column.backend
         schema = column._schema
-        pth = column._path
         be_instance_map = open_file_handles(
-            backends=[backend], path=pth, mode='a', schema=column._schema)
+            backends=[backend], path=tmp_dir, mode='a', schema=column._schema)
         be_instance = be_instance_map[backend]
         t = BatchProcessWriter(
             read_func=reader_func, backend_instance=be_instance, schema=schema,
@@ -352,7 +365,6 @@ def run_write_recipe_data(column, reader_func, keys_reader_kwargs, *, ncpu=0, ba
                 while not in_queue.full():
                     keys_kwargs = next(grouped_keys_kwargs)
                     in_queue.put(keys_kwargs)
-                    time.sleep(0.0001)
             except StopIteration:
                 if ngroups_processed == n_queue_tasks:
                     remaining = False
@@ -399,25 +411,26 @@ def reduce_recipe_on_required_digests(recipe: List[ContentDescription], hashenv)
       all (returning None when valid arguments were passed in to the
       reader_func)
     """
-    sample_steps = [step for step in recipe if not step.skip]
+    skip_attr = op_attrgetter('skip')
+    sample_steps = tuple(filterfalse(skip_attr, recipe))
+
     recipe_digests = set((el.digest for el in sample_steps))
+    recipe_digests_db = set(map(hash_data_db_key_from_raw_key, recipe_digests))
 
     hq = hashs.HashQuery(hashenv)
-    repository_digests = set(hq.list_all_hash_keys_raw())
+    existing_digests_db = hq.intersect_keys_db(recipe_digests_db)
 
-    missing_digests = recipe_digests.difference(repository_digests)
-    missing_data_sample_steps = [step for step in sample_steps if step.digest in missing_digests]
+    missing_digests_db = recipe_digests_db.difference(existing_digests_db)
+    missing_digests = set(map(hash_data_raw_key_from_db_key, missing_digests_db))
 
-    digest_sample_steps_map = defaultdict(list)
-    for spec in missing_data_sample_steps:
-        digest_sample_steps_map[spec.digest].append(spec)
-
-    single_steps_producing_unique_digests = []
-    for spec, *_ in digest_sample_steps_map.values():
-        single_steps_producing_unique_digests.append(spec)
+    missing_digest_sample_steps_map = defaultdict(list)
+    for step in sample_steps:
+        digest = step.digest
+        if digest in missing_digests:
+            missing_digest_sample_steps_map[digest].append(step)
 
     reduced_recipe_keys_kwargs = []
-    for spec in single_steps_producing_unique_digests:
+    for spec, *_ in missing_digest_sample_steps_map.values():
         item = (spec.key, spec.kwargs)
         reduced_recipe_keys_kwargs.append(item)
 
@@ -465,6 +478,54 @@ def write_full_recipe_sample_key_to_digest_mapping(sample_steps, dataenv):
         TxnRegister().commit_writer_txn(dataenv)
 
 
+def mock_hangar_directory_structure(dir_name: str) -> Path:
+    from .constants import DIR_DATA, DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE
+
+    dirpth = Path(dir_name)
+    is_valid_directory_path(dirpth)
+
+    dirpth.joinpath(DIR_DATA_STORE).mkdir()
+    dirpth.joinpath(DIR_DATA_STAGE).mkdir()
+    dirpth.joinpath(DIR_DATA_REMOTE).mkdir()
+    dirpth.joinpath(DIR_DATA).mkdir()
+    return dirpth
+
+
+def move_tmpdir_data_files_to_stagedir(repodir: Path, tmpdir: Path):
+    import shutil
+    import concurrent.futures
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .constants import DIR_DATA, DIR_DATA_STAGE
+
+    tmp_stage_dir = tmpdir.joinpath(DIR_DATA_STAGE)
+    tmp_data_dir = tmpdir.joinpath(DIR_DATA)
+    hangar_stage_dir = repodir.joinpath(DIR_DATA_STAGE)
+    hangar_data_dir = repodir.joinpath(DIR_DATA)
+
+    task_list = []
+    for be_pth in tmp_stage_dir.iterdir():
+        if be_pth.is_dir():
+            for fpth in be_pth.iterdir():
+                if fpth.is_file() and not fpth.stem.startswith('.'):
+                    tmp_stage_fp = tmp_stage_dir.joinpath(be_pth.name, fpth.name)
+                    hangar_stage_fp = hangar_stage_dir.joinpath(be_pth.name, fpth.name)
+                    stage_src_dest = (tmp_stage_fp, hangar_stage_fp)
+                    task_list.append(stage_src_dest)
+
+                    tmp_data_fp = tmp_data_dir.joinpath(be_pth.name, fpth.name)
+                    hangar_data_fp = hangar_data_dir.joinpath(be_pth.name, fpth.name)
+                    data_src_dest = (tmp_data_fp, hangar_data_fp)
+                    task_list.append(data_src_dest)
+
+    with ThreadPoolExecutor(max_workers=10) as e:
+        future_result = [e.submit(shutil.move, str(src), str(dst)) for src, dst in task_list]
+        for future in concurrent.futures.as_completed(future_result):
+            res = future.result()
+
+    return True
+
+
 def run_bulk_import(repo, branch_name, column_name, reader_func, keys_kwargs,
                     *, ncpus=0, autocommit=True):
     """Perform a bulk import operation.
@@ -480,9 +541,6 @@ def run_bulk_import(repo, branch_name, column_name, reader_func, keys_kwargs,
     autocommit : bool, optional, default=True
     """
     with closing(repo.checkout(write=True, branch=branch_name)) as co:
-        if co.diff.status() != 'CLEAN':
-            raise RuntimeError(f'Cannot perform operation with uncommited changes in staging area.')
-
         column = co.columns[column_name]
         schema = column._schema
 
@@ -494,24 +552,18 @@ def run_bulk_import(repo, branch_name, column_name, reader_func, keys_kwargs,
         print('Optimizing base recipe against repostiory contents & duplicated sample data.')
         recipe_steps, reduced_keys_kwargs = reduce_recipe_on_required_digests(recipe, co._hashenv)
 
+        hangardirpth = repo._repo_path
         if len(reduced_keys_kwargs) >= 1:
             print('Starting multiprocessed data importer.')
-            try:
-                written_data_steps = run_write_recipe_data(column, reader_func, reduced_keys_kwargs, ncpu=ncpus)
-                write_digest_to_bespec_mapping(written_data_steps, co._hashenv, co._stagehashenv)
-            except Exception:
-                co.reset_staging_area(force=True)
-                raise
+            with TemporaryDirectory(dir=str(hangardirpth)) as tmpdirname:
+                tmpdirpth = mock_hangar_directory_structure(tmpdirname)
+                written_data_steps = run_write_recipe_data(tmpdirpth, column, reader_func, reduced_keys_kwargs, ncpu=ncpus)
+                move_tmpdir_data_files_to_stagedir(hangardirpth, tmpdirpth)
+            write_digest_to_bespec_mapping(written_data_steps, co._hashenv, co._stagehashenv)
         else:
             print('No actions requiring the data importer remain after optimizations. Skipping this step...')
 
-
-        try:
-            print(f'Adding changes to staging area.')
-            write_full_recipe_sample_key_to_digest_mapping(recipe_steps, co._stageenv)
-        except Exception:
-            co.reset_staging_area(force=True)
-            raise
+        write_full_recipe_sample_key_to_digest_mapping(recipe_steps, co._stageenv)
 
         if autocommit:
             print(f'autocommiting changes.')
