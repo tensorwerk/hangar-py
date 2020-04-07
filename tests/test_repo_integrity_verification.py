@@ -8,6 +8,7 @@ def diverse_repo(repo):
     co = repo.checkout(write=True)
     co.add_ndarray_column('test', prototype=np.arange(10))
     co.add_str_column('test_meta')
+    co.add_bytes_column('test_bytes')
     co.columns['test'][0] = np.arange(10)
     co.columns['test'][1] = np.arange(10) + 1
     co.columns['test'][2] = np.arange(10) + 2
@@ -15,6 +16,7 @@ def diverse_repo(repo):
     co.columns['test'][4] = np.arange(10) + 4
     co['test_meta']['hi'] = 'foo'
     co['test_meta']['aea'] = 'eeae'
+    co['test_bytes']['lol'] = b'foo bytes'
     co.commit('hello world')
 
     sample_trimg = np.arange(50).reshape(5, 10).astype(np.uint8)
@@ -46,6 +48,7 @@ def diverse_repo(repo):
     dset_vimgs[1] = sample_vimg + 1
     dset_vimgs[2] = sample_vimg + 2
     co['test_meta']['second'] = 'on master now'
+    co['test_bytes']['second'] = b'on master now'
     co.commit('second on master')
     co.close()
 
@@ -53,6 +56,7 @@ def diverse_repo(repo):
     repo.create_branch('newbranch', base_commit=base)
     co = repo.checkout(write=True, branch='master')
     co['test_meta']['newmeta'] = 'wow'
+    co['test_bytes']['newbytes'] = b'new bytesdata'
     co.commit('on master after merge')
     co.close()
 

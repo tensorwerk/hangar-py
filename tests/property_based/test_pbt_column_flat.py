@@ -4,7 +4,8 @@ import numpy as np
 from conftest import (
     variable_shape_backend_params,
     fixed_shape_backend_params,
-    str_variable_shape_backend_params
+    str_variable_shape_backend_params,
+    bytes_variable_shape_backend_params
 )
 
 import string
@@ -85,6 +86,21 @@ def variable_shape_repo_co_str_aset_flat(classrepo, request) -> Repository:
     co.add_str_column(name='strcolumn',
                       contains_subsamples=False,
                       backend=request.param)
+    yield co
+    co.reset_staging_area()
+    co.close()
+
+
+@pytest.fixture(params=bytes_variable_shape_backend_params, scope='class')
+def variable_shape_repo_co_bytes_aset_flat(classrepo, request) -> Repository:
+    # needed because fixtures don't reset between each hypothesis run
+    # tracks added_samples = set(sample_key)
+    global added_samples
+    added_samples = set()
+    co = classrepo.checkout(write=True)
+    co.add_bytes_column(name='bytescolumn',
+                        contains_subsamples=False,
+                        backend=request.param)
     yield co
     co.reset_staging_area()
     co.close()
@@ -230,4 +246,27 @@ class TestColumn4:
         assert out == val
         assert len(col) == len(added_samples)
 
+
+bytes_stratagy = st.binary(max_size=2000)
+
+
+class TestColumn5:
+
+    @given(key=st_valid_keys, val=bytes_stratagy)
+    @settings(max_examples=200, deadline=None)
+    def test_bytes_column_variable_shape(self, key, val, variable_shape_repo_co_bytes_aset_flat):
+        global added_samples
+
+        co = variable_shape_repo_co_bytes_aset_flat
+        col = co.columns['bytescolumn']
+        col[key] = val
+
+        assert col.schema_type == 'variable_shape'
+        assert col.column_type == 'bytes'
+        assert col.dtype == bytes
+
+        added_samples.add(key)
+        out = col[key]
+        assert out == val
+        assert len(col) == len(added_samples)
 

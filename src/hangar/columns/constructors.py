@@ -15,7 +15,12 @@ from .layout_nested import (
 )
 from ..records.queries import RecordQuery
 from ..records import hash_data_db_key_from_raw_key
-from ..typesystem import NdarrayFixedShape, NdarrayVariableShape, StringVariableShape
+from ..typesystem import (
+    NdarrayFixedShape,
+    NdarrayVariableShape,
+    StringVariableShape,
+    BytesVariableShape
+)
 from ..backends import BACKEND_IS_LOCAL_MAP, backend_decoder
 
 
@@ -24,7 +29,12 @@ from ..backends import BACKEND_IS_LOCAL_MAP, backend_decoder
 
 KeyType = Union[str, int]
 
-_column_definitions = (NdarrayVariableShape, NdarrayFixedShape, StringVariableShape)
+_column_definitions = (
+    NdarrayVariableShape,
+    NdarrayFixedShape,
+    StringVariableShape,
+    BytesVariableShape
+)
 
 
 def column_type_object_from_schema(schema: dict):

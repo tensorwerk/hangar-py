@@ -22,6 +22,7 @@ from .typesystem import (
     NdarrayFixedShape,
     NdarrayVariableShape,
     StringVariableShape,
+    BytesVariableShape,
 )
 from .utils import is_suitable_user_key, is_ascii
 from .records import (
@@ -745,6 +746,87 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         layout = 'nested' if contains_subsamples else 'flat'
         schema = StringVariableShape(
             dtype=str, column_layout=layout, backend=backend, backend_options=backend_options)
+
+        # ------------------ create / return new column -----------------------
+
+        col = self._initialize_new_column(
+            column_name=name, column_layout=layout, schema=schema)
+        return col
+
+    def add_bytes_column(self,
+                         name: str,
+                         contains_subsamples: bool = False,
+                         *,
+                         backend: Optional[str] = None,
+                         backend_options: Optional[dict] = None):
+        """Initializes a :class:`bytes` container column
+
+        Columns are created in order to store some arbitrary collection of data
+        pieces. In this case, we store :class:`bbytes` data. Items need not be
+        related to each-other in any direct capacity; the only criteria hangar
+        requires is that all pieces of data stored in the column have a
+        compatible schema with each-other (more on this below). Each piece of
+        data is indexed by some key (either user defined or automatically
+        generated depending on the user's preferences). Both single level
+        stores (sample keys mapping to data on disk) and nested stores (where
+        some sample key maps to an arbitrary number of subsamples, in turn each
+        pointing to some piece of store data on disk) are supported.
+
+        All data pieces within a column have the same data type. For
+        :class:`bytes` columns, there is no distinction between
+        ``'variable_shape'`` and ``'fixed_shape'`` schema types. Values are
+        allowed to take on a value of any size so long as the datatype and
+        contents are valid for the schema definition.
+
+        Parameters
+        ----------
+        name : str
+            Name assigned to the column
+        contains_subsamples : bool, optional
+            True if the column column should store data in a nested structure.
+            In this scheme, a sample key is used to index an arbitrary number
+            of subsamples which map some (sub)key to a piece of data. If False,
+            sample keys map directly to a single piece of data; essentially
+            acting as a single level key/value store. By default, False.
+        backend : Optional[str], optional
+            ADVANCED USERS ONLY, backend format code to use for column data. If
+            None, automatically inferred and set based on data shape and type.
+            by default None
+        backend_options : Optional[dict], optional
+            ADVANCED USERS ONLY, filter opts to apply to column data. If None,
+            automatically inferred and set based on data shape and type.
+            by default None
+
+        Returns
+        -------
+        :class:`~.columns.column.Columns`
+            instance object of the initialized column.
+        """
+        self._verify_alive()
+        if self.columns._any_is_conman() or self._is_conman:
+            raise PermissionError('Not allowed while context manager is used.')
+
+        # ------------- Checks for argument validity --------------------------
+
+        try:
+            if (not is_suitable_user_key(name)) or (not is_ascii(name)):
+                raise ValueError(
+                    f'Column name provided: `{name}` is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace). '
+                    f'Must be <= 64 characters long')
+            if name in self._columns:
+                raise LookupError(f'Column already exists with name: {name}.')
+            if not isinstance(contains_subsamples, bool):
+                raise ValueError(f'contains_subsamples argument must be bool, '
+                                 f'not type {type(contains_subsamples)}')
+        except (ValueError, LookupError) as e:
+            raise e from None
+
+        # ---------- schema validation handled automatically by typesystem ----
+
+        layout = 'nested' if contains_subsamples else 'flat'
+        schema = BytesVariableShape(
+            dtype=bytes, column_layout=layout, backend=backend, backend_options=backend_options)
 
         # ------------------ create / return new column -----------------------
 

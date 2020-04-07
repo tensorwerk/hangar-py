@@ -16,6 +16,8 @@ cpdef object hash_func_from_tcode(str tcode):
         return schema_hasher_tcode_1
     elif tcode == '2':
         return pystr_hasher_tcode_2
+    elif tcode == '3':
+        return pybytes_hasher_tcode_3
     else:
         raise ValueError(f'unknown hash function type code. tcode: {tcode}')
 
@@ -112,17 +114,17 @@ cpdef str schema_hasher_tcode_1(dict schema):
 
 
 cpdef str pystr_hasher_tcode_2(str value):
-    """Generate the hash digest of some metadata value
+    """Generate the hash digest of some str value
 
     Parameters
     ----------
     value : str
-        data to set as the value of the metadata key.
+        data value to hash
 
     Returns
     -------
     str
-        hex digest of the metadata value with typecode prepended by '{tcode}='.
+        hex digest of the data value with typecode prepended by '{tcode}='.
     """
     cdef bytes raw
     cdef str digest, res
@@ -130,4 +132,28 @@ cpdef str pystr_hasher_tcode_2(str value):
     raw = value.encode()
     digest = blake2b(raw, digest_size=20).hexdigest()
     res = f'2={digest}'
+    return res
+
+
+
+# --------------------------- bytes type data ----------------------------------------
+
+
+cpdef str pybytes_hasher_tcode_3(bytes value):
+    """Generate the hash digest of some bytes value
+
+    Parameters
+    ----------
+    value : bytes
+        data value to hash
+
+    Returns
+    -------
+    str
+        hex digest of the data value with typecode prepended by '{tcode}='.
+    """
+    cdef str digest, res
+
+    digest = blake2b(value, digest_size=20).hexdigest()
+    res = f'3={digest}'
     return res

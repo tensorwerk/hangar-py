@@ -7,7 +7,7 @@ class ColumnLayout(String):
     pass
 
 
-@OneOf(['str', 'ndarray'])
+@OneOf(['str', 'ndarray', 'bytes'])
 class ColumnDType(String):
     pass
 

@@ -4,34 +4,34 @@ from ..records import CompatibleData
 from ..utils import format_bytes
 
 
-@OneOf(['<class\'str\'>'])
-class StringDType(Descriptor):
+@OneOf(['<class\'bytes\'>'])
+class BytesDType(Descriptor):
     pass
 
 
 SERIAL_DTYPE_TO_OBJ = {
-    '<class\'str\'>': str,
+    '<class\'bytes\'>': bytes,
 }
 
 
 @OneOf(['variable_shape'])
-class StringSchemaType(String):
+class BytesSchemaType(String):
     pass
 
 
-@OneOf(['str'])
-class StrColumnType(String):
+@OneOf(['bytes'])
+class BytesColumnType(String):
     pass
 
 
-@OneOf(['2'])
+@OneOf(['3'])
 class DataHasherTcode(String):
     pass
 
 
-class StringSchemaBase(ColumnBase):
-    _schema_type = StringSchemaType()
-    _column_type = StrColumnType()
+class BytesSchemaBase(ColumnBase):
+    _schema_type = BytesSchemaType()
+    _column_type = BytesColumnType()
     _data_hasher_tcode = DataHasherTcode()
 
     def __init__(
@@ -42,14 +42,14 @@ class StringSchemaBase(ColumnBase):
             *args, **kwargs
     ):
         if 'data_hasher_tcode' not in kwargs:
-            kwargs['data_hasher_tcode'] = '2'
+            kwargs['data_hasher_tcode'] = '3'
         super().__init__(*args, **kwargs)
 
         if backend_options is not None and backend is None:
             raise ValueError(
                 '`backend_options` cannot be set if `backend` is not also provided.')
 
-        if not isinstance(dtype, str):
+        if not isinstance(dtype, bytes):
             dtype = repr(dtype).replace(' ', '')
 
         self._dtype = dtype
@@ -60,7 +60,7 @@ class StringSchemaBase(ColumnBase):
         )
 
     def backend_from_heuristics(self):
-        self._backend = '30'
+        self._backend = '31'
 
     @property
     def schema_type(self):
@@ -98,8 +98,8 @@ class StringSchemaBase(ColumnBase):
             raise e from None
 
 
-@OneOf(['30', '50', None])
-class StringVariableShapeBackends(OptionalString):
+@OneOf(['31', '50', None])
+class BytesVariableShapeBackends(OptionalString):
     pass
 
 
@@ -108,9 +108,9 @@ class VariableShapeSchemaType(String):
     pass
 
 
-class StringVariableShape(StringSchemaBase):
-    _dtype = StringDType()
-    _backend = StringVariableShapeBackends()
+class BytesVariableShape(BytesSchemaBase):
+    _dtype = BytesDType()
+    _backend = BytesVariableShapeBackends()
     _backend_options = OptionalDict()
     _schema_type = VariableShapeSchemaType()
 
@@ -118,7 +118,7 @@ class StringVariableShape(StringSchemaBase):
         if 'column_type' in kwargs:
             super().__init__(*args, **kwargs)
         else:
-            super().__init__(column_type='str', *args, **kwargs)
+            super().__init__(column_type='bytes', *args, **kwargs)
 
         if 'schema_type' in kwargs:
             self._schema_type = kwargs['schema_type']
@@ -132,13 +132,12 @@ class StringVariableShape(StringSchemaBase):
     def verify_data_compatible(self, data):
         compatible = True
         reason = ''
-
-        if not isinstance(data, str):
+        if not isinstance(data, bytes):
             compatible = False
-            reason = f'data {data} must be {str} type, not {type(data)}'
-        elif len(data.encode()) > 2000000:  # 2MB
+            reason = f'data {data} not valid, must be of type {bytes} not{type(data)}'
+        elif len(data) > 2000000:  # 2MB
             compatible = False
-            reason = f'str bytes must be less than 2MB in size, recieved {format_bytes(len(data))}'
+            reason = f'bytes must be less than 2MB in size, recieved {format_bytes(len(data))}'
 
         res = CompatibleData(compatible, reason)
         return res
