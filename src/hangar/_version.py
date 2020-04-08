@@ -19,6 +19,8 @@ import re
 from collections import namedtuple
 from itertools import dropwhile
 from typing import Callable, Optional, SupportsInt, Tuple, Union
+from operator import lt, le, eq, ge, gt, ne
+
 
 __all__ = ["parse", "Version", "InvalidVersion", "VERSION_PATTERN"]
 
@@ -146,29 +148,28 @@ class _BaseVersion(object):
         return hash(self._key)
 
     def __lt__(self, other: '_BaseVersion') -> bool:
-        return self._compare(other, lambda s, o: s < o)
+        return self._compare(other, lt)
 
     def __le__(self, other: '_BaseVersion') -> bool:
-        return self._compare(other, lambda s, o: s <= o)
+        return self._compare(other, le)
 
     def __eq__(self, other: object) -> bool:
-        return self._compare(other, lambda s, o: s == o)
+        return self._compare(other, eq)
 
     def __ge__(self, other: '_BaseVersion') -> bool:
-        return self._compare(other, lambda s, o: s >= o)
+        return self._compare(other, ge)
 
     def __gt__(self, other: '_BaseVersion') -> bool:
-        return self._compare(other, lambda s, o: s > o)
+        return self._compare(other, gt)
 
     def __ne__(self, other: object) -> bool:
-        return self._compare(other, lambda s, o: s != o)
+        return self._compare(other, ne)
 
     def _compare(self, other: object, method: VersionComparisonMethod
                  ) -> Union[bool, type(NotImplemented)]:
-        if not isinstance(other, _BaseVersion):
-            return NotImplemented
-
-        return method(self._key, other._key)
+        if isinstance(other, _BaseVersion):
+            return method(self._key, other._key)
+        return NotImplemented
 
 
 # Deliberately not anchored to the start and end of the string, to make it
@@ -213,11 +214,11 @@ class Version(_BaseVersion):  # lgtm [py/missing-equals]
 
     def __init__(self, version: str) -> None:
         super().__init__()
-        
+
         # Validate the version and parse it into pieces
         match = _REGEX.search(version)
         if not match:
-            raise InvalidVersion("Invalid version: '{0}'".format(version))
+            raise InvalidVersion(f"Invalid version: '{version}'")
 
         # Store the parsed out pieces of the version
         self._version = _Version(
@@ -242,14 +243,14 @@ class Version(_BaseVersion):  # lgtm [py/missing-equals]
         )
 
     def __repr__(self) -> str:
-        return "<Version({0})>".format(repr(str(self)))
+        return f"<Version({repr(str(self))})>"
 
     def __str__(self) -> str:
         parts = []
 
         # Epoch
         if self.epoch != 0:
-            parts.append("{0}!".format(self.epoch))
+            parts.append(f"{self.epoch}!")
 
         # Release segment
         parts.append(".".join(str(x) for x in self.release))
@@ -260,15 +261,15 @@ class Version(_BaseVersion):  # lgtm [py/missing-equals]
 
         # Post-release
         if self.post is not None:
-            parts.append(".post{0}".format(self.post))
+            parts.append(f".post{self.post}")
 
         # Development release
         if self.dev is not None:
-            parts.append(".dev{0}".format(self.dev))
+            parts.append(f".dev{self.dev}")
 
         # Local version segment
         if self.local is not None:
-            parts.append("+{0}".format(self.local))
+            parts.append(f"+{self.local}")
 
         return "".join(parts)
 
@@ -312,7 +313,7 @@ class Version(_BaseVersion):  # lgtm [py/missing-equals]
 
         # Epoch
         if self.epoch != 0:
-            parts.append("{0}!".format(self.epoch))
+            parts.append(f"{self.epoch}!")
 
         # Release segment
         parts.append(".".join(str(x) for x in self.release))

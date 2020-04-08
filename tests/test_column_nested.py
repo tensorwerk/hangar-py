@@ -1,7 +1,7 @@
 """Tests for the class methods contained in the nested subsample column accessor.
 """
-import pytest
 import numpy as np
+import pytest
 from conftest import fixed_shape_backend_params, variable_shape_backend_params
 
 
@@ -68,7 +68,7 @@ class TestArraysetSetup:
 
         # init and immediate delete leaves no trace
         co.add_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float64,
-                                 backend=aset_backend, contains_subsamples=True)
+                              backend=aset_backend, contains_subsamples=True)
         assert len(co.columns) == 1
         co.columns.delete('writtenaset')
         assert len(co.columns) == 0
@@ -79,7 +79,7 @@ class TestArraysetSetup:
         co = aset_subsamples_initialized_repo.checkout(write=True)
         assert len(co.columns) == 0
         co.add_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float64,
-                                 backend=aset_backend, contains_subsamples=True)
+                              backend=aset_backend, contains_subsamples=True)
         co.commit('this is a commit message')
         co.close()
         co = aset_subsamples_initialized_repo.checkout(write=True)
@@ -95,15 +95,15 @@ class TestArraysetSetup:
     def test_init_same_arrayset_twice_fails_again(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         co.add_ndarray_column('aset', prototype=randomsizedarray,
-                                 backend=aset_backend, contains_subsamples=True)
+                              backend=aset_backend, contains_subsamples=True)
         with pytest.raises(LookupError):
             # test if everything is the same as initalized one.
             co.add_ndarray_column('aset', prototype=randomsizedarray,
-                                     backend=aset_backend, contains_subsamples=True)
+                                  backend=aset_backend, contains_subsamples=True)
         with pytest.raises(LookupError):
             # test if column container type is different than existing name (no subsamples0
             co.add_ndarray_column('aset', prototype=randomsizedarray,
-                                     backend=aset_backend, contains_subsamples=False)
+                                  backend=aset_backend, contains_subsamples=False)
         co.close()
 
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
@@ -114,18 +114,18 @@ class TestArraysetSetup:
         with pytest.raises(ValueError):
             # cannot have zero valued size for any dimension
             co.add_ndarray_column('aset', shape=shape, dtype=np.int,
-                                     backend=aset_backend, contains_subsamples=True)
+                                  backend=aset_backend, contains_subsamples=True)
 
         shape = [1] * 31
         aset = co.add_ndarray_column('aset1', shape=shape, dtype=np.int,
-                                        backend=aset_backend, contains_subsamples=True)
+                                     backend=aset_backend, contains_subsamples=True)
         assert len(aset.shape) == 31
 
         shape = [1] * 32
         with pytest.raises(ValueError):
             # maximum tensor rank must be <= 31
             co.add_ndarray_column('aset2', shape=shape, dtype=np.int,
-                                     backend=aset_backend, contains_subsamples=True)
+                                  backend=aset_backend, contains_subsamples=True)
         co.close()
 
 
@@ -223,7 +223,7 @@ def subsample_writer_written_aset(backend_params, repo, monkeypatch):
 
     co = repo.checkout(write=True)
     aset = co.add_ndarray_column('foo', shape=(4, 4), dtype=np.uint8, variable_shape=False,
-                                    backend=backend_params, contains_subsamples=True)
+                                 backend=backend_params, contains_subsamples=True)
     yield aset
     co.close()
 
@@ -256,7 +256,7 @@ class TestAddData:
             assert f'subsample{subsample_idx}' in aset._samples['baz']._subsamples
 
     def test_update_sample_kwargs_and_other_dict_doesnt_modify_input_in_calling_scope(
-        self, subsample_writer_written_aset, iterable_subsamples, iterable_samples
+            self, subsample_writer_written_aset, iterable_subsamples, iterable_samples
     ):
         """ensure bug does not revert.
 
@@ -277,7 +277,9 @@ class TestAddData:
         #
         assert list(iterable_samples.items()) == iterable_samples_before
 
-    def test_update_sample_kwargs_and_iterably_empty_arrayset(self, subsample_writer_written_aset, iterable_subsamples, iterable_samples):
+    def test_update_sample_kwargs_and_iterably_empty_arrayset(
+            self, subsample_writer_written_aset, iterable_subsamples, iterable_samples
+    ):
         aset = subsample_writer_written_aset
         aset.update(iterable_samples, fookwarg=iterable_subsamples)
         assert len(aset._samples) == len(iterable_samples) + 1
@@ -286,7 +288,9 @@ class TestAddData:
         for sample_idx in range(len(iterable_samples)):
             assert f'sample{sample_idx}' in aset._samples
 
-    def test_update_sample_subsamples_duplicate_data_does_not_save_new(self, subsample_writer_written_aset, iterable_samples):
+    def test_update_sample_subsamples_duplicate_data_does_not_save_new(
+            self, subsample_writer_written_aset, iterable_samples
+    ):
         aset = subsample_writer_written_aset
         aset.update(iterable_samples)
         old_specs = {}
@@ -347,7 +351,8 @@ class TestAddData:
                 assert f'subsample{subsample_idx}' in aset._samples[
                     f'sample{sample_idx}']._subsamples
 
-    def test_update_subsamples_empty_arrayset(self, multi_item_generator, subsample_writer_written_aset, iterable_subsamples):
+    def test_update_subsamples_empty_arrayset(self, multi_item_generator, subsample_writer_written_aset,
+                                              iterable_subsamples):
         aset = subsample_writer_written_aset
         for sample_idx in range(multi_item_generator):
             aset[f'sample{sample_idx}'] = {'foo': np.arange(16, dtype=np.uint8).reshape(4, 4) + 10}
@@ -375,7 +380,7 @@ class TestAddData:
             assert 'bar' in aset._samples[f'sample{sample_idx}']._subsamples
 
     def test_update_subsamples_kwargs_and_other_dict_doesnt_modify_input_in_calling_scopy(
-        self, multi_item_generator, subsample_writer_written_aset, iterable_subsamples
+            self, multi_item_generator, subsample_writer_written_aset, iterable_subsamples
     ):
         """ensure bug does not revert.
 
@@ -390,7 +395,8 @@ class TestAddData:
 
         for sample_idx in range(multi_item_generator):
             aset[f'sample{sample_idx}'] = {'foo': np.arange(16, dtype=np.uint8).reshape(4, 4) + 10}
-            aset[f'sample{sample_idx}'].update(iterable_subsamples, kwargadded=np.arange(16, dtype=np.uint8).reshape(4, 4))
+            aset[f'sample{sample_idx}'].update(iterable_subsamples,
+                                               kwargadded=np.arange(16, dtype=np.uint8).reshape(4, 4))
             # in bug case, would now observe that iterable_subsamples would have been
             # silently modified in a method analogous to calling:
             #
@@ -400,7 +406,7 @@ class TestAddData:
         assert list(iterable_subsamples.keys()) == iterable_subsamples_before
 
     def test_update_subsamples_via_kwargs_and_iterable_empty_arrayset(
-        self, multi_item_generator, subsample_writer_written_aset, iterable_subsamples
+            self, multi_item_generator, subsample_writer_written_aset, iterable_subsamples
     ):
         aset = subsample_writer_written_aset
         for sample_idx in range(multi_item_generator):
@@ -416,11 +422,12 @@ class TestAddData:
             assert 'bar' in aset._samples[f'sample{sample_idx}']._subsamples
 
     @pytest.mark.parametrize('backend', fixed_shape_backend_params)
-    def test_update_subsamples_context_manager(self, backend, multi_item_generator,
-                                               iterable_subsamples, repo):
+    def test_update_subsamples_context_manager(
+            self, backend, multi_item_generator, iterable_subsamples, repo
+    ):
         co = repo.checkout(write=True)
         aset = co.add_ndarray_column('foo', shape=(4, 4), dtype=np.uint8,
-                                        backend=backend, contains_subsamples=True)
+                                     backend=backend, contains_subsamples=True)
 
         for sample_idx in range(multi_item_generator):
             aset[f'sample{sample_idx}'] = {'foo': np.arange(16, dtype=np.uint8).reshape(4, 4) + 10}
@@ -440,7 +447,9 @@ class TestAddData:
                 assert f'subsample{subsample_idx}' in aset._samples[f'sample{sample_idx}']._subsamples
         co.close()
 
-    def test_setitem_sample_empty_arrayset(self, multi_item_generator, iterable_subsamples, subsample_writer_written_aset):
+    def test_setitem_sample_empty_arrayset(
+            self, multi_item_generator, iterable_subsamples, subsample_writer_written_aset
+    ):
         aset = subsample_writer_written_aset
 
         subsamples_dict = dict(iterable_subsamples)
@@ -472,7 +481,8 @@ class TestAddData:
             aset['sample']['subsample'] = np.arange(16, dtype=np.uint8).reshape(4, 4)
         assert len(aset) == 0
 
-    def test_setitem_subsamples_contextmanager(self, multi_item_generator, iterable_subsamples, subsample_writer_written_aset):
+    def test_setitem_subsamples_contextmanager(self, multi_item_generator, iterable_subsamples,
+                                               subsample_writer_written_aset):
         aset = subsample_writer_written_aset
         subsamples_dict = dict(iterable_subsamples)
         for sample_idx in range(multi_item_generator):
@@ -530,7 +540,7 @@ class TestAddData:
     def test_update_noniterable_subsample_iter_fails(self, backend, other, repo):
         co = repo.checkout(write=True)
         aset = co.add_ndarray_column('foo', shape=(4, 4), dtype=np.uint8,
-                                        backend=backend, contains_subsamples=True)
+                                     backend=backend, contains_subsamples=True)
         aset[f'foo'] = {'foo': np.arange(16, dtype=np.uint8).reshape(4, 4) + 10}
         with pytest.raises(ValueError, match='dictionary update sequence'):
             aset['foo'].update(other)
@@ -544,7 +554,7 @@ class TestAddData:
     def test_update_subsamples_with_too_many_arguments_fails(self, backend, repo):
         co = repo.checkout(write=True)
         aset = co.add_ndarray_column('foo', shape=(4, 4), dtype=np.uint8,
-                                        backend=backend, contains_subsamples=True)
+                                     backend=backend, contains_subsamples=True)
         arr = np.arange(16, dtype=np.uint8).reshape(4, 4)
         aset[f'foo'] = {'foo': arr + 10}
         with pytest.raises(TypeError, match='takes from 1 to 2 positional arguments'):
@@ -558,7 +568,7 @@ class TestAddData:
     def test_update_subsamples_with_too_few_arguments_fails(self, backend, repo):
         co = repo.checkout(write=True)
         aset = co.add_ndarray_column('foo', shape=(4, 4), dtype=np.uint8,
-                                        backend=backend, contains_subsamples=True)
+                                     backend=backend, contains_subsamples=True)
         arr = np.arange(16, dtype=np.uint8).reshape(4, 4)
         aset[f'foo'] = {'foo': arr + 10}
         with pytest.raises(ValueError, match='dictionary update sequence element #0 has length 1; 2 is required'):
@@ -652,8 +662,8 @@ class TestAddData:
     def test_update_sample_invalid_array_fails_fixed_shape(self, backend, variable_shape, other, repo):
         co = repo.checkout(write=True)
         aset = co.add_ndarray_column('foo',
-                                        shape=(2, 2), dtype=np.uint8, variable_shape=variable_shape,
-                                        backend=backend, contains_subsamples=True)
+                                     shape=(2, 2), dtype=np.uint8, variable_shape=variable_shape,
+                                     backend=backend, contains_subsamples=True)
         with pytest.raises(ValueError):
             aset.update(other)
         assert len(aset._samples) == 0
@@ -691,8 +701,8 @@ class TestAddData:
     def test_update_subsample_invalid_array_fails_fixed_shape(self, backend, variable_shape, other, repo):
         co = repo.checkout(write=True)
         aset = co.add_ndarray_column('foo',
-                                        shape=(4, 4), dtype=np.uint8, variable_shape=variable_shape,
-                                        backend=backend, contains_subsamples=True)
+                                     shape=(4, 4), dtype=np.uint8, variable_shape=variable_shape,
+                                     backend=backend, contains_subsamples=True)
         aset['sample'] = {0: np.zeros((4, 4), dtype=np.uint8)}
         with pytest.raises(ValueError):
             aset['sample'].update(other)
@@ -707,7 +717,7 @@ class TestAddData:
 
 @pytest.fixture(scope='class')
 def subsample_data_map():
-    arr = np.arange(5*7).astype(np.uint16).reshape((5, 7))
+    arr = np.arange(5 * 7).astype(np.uint16).reshape((5, 7))
     res = {
         'foo': {
             0: arr,
@@ -736,8 +746,8 @@ def write_enabled(request):
 def initialized_arrayset(write_enabled, backend_param, classrepo, subsample_data_map):
     co = classrepo.checkout(write=True)
     aset = co.add_ndarray_column(f'foo{backend_param}{int(write_enabled)}',
-                                    shape=(5, 7), dtype=np.uint16, backend=backend_param,
-                                    contains_subsamples=True)
+                                 shape=(5, 7), dtype=np.uint16, backend=backend_param,
+                                 contains_subsamples=True)
     aset.update(subsample_data_map)
     co.commit(f'done {backend_param}{write_enabled}')
     co.close()
@@ -755,7 +765,7 @@ def initialized_arrayset(write_enabled, backend_param, classrepo, subsample_data
 def initialized_arrayset_write_only(backend_param, repo, subsample_data_map):
     co = repo.checkout(write=True)
     aset = co.add_ndarray_column('foo', shape=(5, 7), dtype=np.uint16,
-                                    backend=backend_param, contains_subsamples=True)
+                                 backend=backend_param, contains_subsamples=True)
     aset.update(subsample_data_map)
     yield co.columns['foo']
     co.close()
@@ -891,7 +901,9 @@ class TestContainerIntrospection:
             for k, v in res.items():
                 assert_equal(v, subsample_data[k])
 
-    def test_get_sample_test_subsample_contains_remote_references_property(self, initialized_arrayset, subsample_data_map):
+    def test_get_sample_test_subsample_contains_remote_references_property(
+            self, initialized_arrayset, subsample_data_map
+    ):
         aset = initialized_arrayset
         # test works before add remote references
         aset.contains_remote_references is False
@@ -968,6 +980,7 @@ class TestContainerIntrospection:
             hasattr(sample, '_mode')
         setattr(aset, '_mode', original)
         setattr(sample, '_mode', original)
+
 
 # ------------------------------ Getting Data --------------------------------------------
 
@@ -1453,11 +1466,11 @@ class TestGetDataMethods:
     ):
         co = repo.checkout(write=True)
         aset1 = co.add_ndarray_column('aset1', prototype=randomsizedarray,
-                                         backend=aset1_backend, contains_subsamples=True)
+                                      backend=aset1_backend, contains_subsamples=True)
         aset2 = co.add_ndarray_column('aset2', shape=(2, 2), dtype=np.int,
-                                         backend=aset2_backend, contains_subsamples=True)
+                                      backend=aset2_backend, contains_subsamples=True)
         aset3 = co.add_ndarray_column('aset3', shape=(3, 4), dtype=np.float32,
-                                         backend=aset3_backend, contains_subsamples=True)
+                                      backend=aset3_backend, contains_subsamples=True)
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1[1] = {11: randomsizedarray}
             d2[1] = {21: np.ones((2, 2), dtype=np.int)}
@@ -1475,11 +1488,11 @@ class TestGetDataMethods:
     ):
         co = repo.checkout(write=True)
         aset1 = co.add_ndarray_column('aset1', prototype=randomsizedarray,
-                                         backend=aset1_backend, contains_subsamples=True)
+                                      backend=aset1_backend, contains_subsamples=True)
         aset2 = co.add_ndarray_column('aset2', shape=(2, 2), dtype=np.int,
-                                         backend=aset2_backend, contains_subsamples=True)
+                                      backend=aset2_backend, contains_subsamples=True)
         aset3 = co.add_ndarray_column('aset3', shape=(3, 4), dtype=np.float32,
-                                         backend=aset3_backend, contains_subsamples=True)
+                                      backend=aset3_backend, contains_subsamples=True)
         with aset1 as d1, aset2 as d2, aset3 as d3:
             d1[1] = {11: randomsizedarray}
             d2[1] = {21: np.ones((2, 2), dtype=np.int)}
@@ -1508,7 +1521,7 @@ class TestWriteThenReadCheckout:
     def test_add_data_commit_checkout_read_only_contains_same(self, backend, repo, subsample_data_map):
         co = repo.checkout(write=True)
         aset = co.add_ndarray_column('foo', shape=(5, 7), dtype=np.uint16,
-                                        backend=backend, contains_subsamples=True)
+                                     backend=backend, contains_subsamples=True)
         added = aset.update(subsample_data_map)
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)

@@ -49,7 +49,7 @@ class BytesSchemaBase(ColumnBase):
             raise ValueError(
                 '`backend_options` cannot be set if `backend` is not also provided.')
 
-        if not isinstance(dtype, bytes):
+        if not isinstance(dtype, str):
             dtype = repr(dtype).replace(' ', '')
 
         self._dtype = dtype

@@ -42,7 +42,7 @@ def column_type_object_from_schema(schema: dict):
         try:
             instance = c(**schema)
             return instance
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
             pass
     else:  # N.B. for-else loop (ie. "no-break")
         raise ValueError(f'Could not instantiate column schema object for {schema}')

@@ -1,8 +1,6 @@
 import time
 import shutil
 import random
-from random import randint
-import platform
 from os.path import join as pjoin
 from os import mkdir
 
@@ -11,7 +9,6 @@ import numpy as np
 
 from hangar import Repository
 from hangar.checkout import WriterCheckout
-
 import hangar
 
 
@@ -27,6 +24,7 @@ def classrepo(tmp_path_factory) -> Repository:
     old01_size = hangar.backends.hdf5_01.COLLECTION_SIZE
     old10_size = hangar.backends.numpy_10.COLLECTION_SIZE
     old30_lmdb_settings = hangar.backends.lmdb_30.LMDB_SETTINGS
+    old31_lmdb_settings = hangar.backends.lmdb_31.LMDB_SETTINGS
     hangar.backends.hdf5_00.COLLECTION_COUNT = 5
     hangar.backends.hdf5_00.COLLECTION_SIZE = 20
     hangar.backends.hdf5_01.COLLECTION_COUNT = 5
@@ -34,7 +32,6 @@ def classrepo(tmp_path_factory) -> Repository:
     hangar.backends.numpy_10.COLLECTION_SIZE = 50
     hangar.backends.lmdb_30.LMDB_SETTINGS['map_size'] = 1_000_000
     hangar.backends.lmdb_31.LMDB_SETTINGS['map_size'] = 1_000_000
-
 
     old_map_size = hangar.constants.LMDB_SETTINGS['map_size']
     hangar.constants.LMDB_SETTINGS['map_size'] = 2_000_000
@@ -51,6 +48,7 @@ def classrepo(tmp_path_factory) -> Repository:
     hangar.backends.hdf5_01.COLLECTION_SIZE = old01_size
     hangar.backends.numpy_10.COLLECTION_SIZE = old10_size
     hangar.backends.lmdb_30.LMDB_SETTINGS = old30_lmdb_settings
+    hangar.backends.lmdb_31.LMDB_SETTINGS = old31_lmdb_settings
     repo_obj._env._close_environments()
 
 
@@ -225,26 +223,46 @@ def repo_2_br_no_conf(repo_1_br_no_conf) -> Repository:
     return repo
 
 
+def mock_server_config(*args, **kwargs):
+    import os
+    import configparser
+    from pathlib import Path
+    from hangar import constants as c
+    from hangar import remote
+
+    src_path = Path(os.path.dirname(remote.__file__), c.CONFIG_SERVER_NAME)
+    CFG = configparser.ConfigParser()
+    CFG.read(src_path)
+    CFG['SERVER_GRPC']['max_concurrent_rpcs'] = '10'
+    CFG['SERVER_GRPC']['max_thread_pool_workers'] = '2'
+    return CFG
+
+
+def mock_nbytes_limit_cfg(*args, **kwargs):
+    CFG = mock_server_config()
+    CFG['SERVER_GRPC']['fetch_max_nbytes'] = '500000'
+    CFG['CLIENT_GRPC']['push_max_nbytes'] = '500000'
+    return CFG
+
+
 @pytest.fixture()
-def server_instance(managed_tmpdir, worker_id, monkeypatch):
+def server_instance(monkeypatch, managed_tmpdir, worker_id):
     from secrets import choice
-    from hangar.remote.server import serve
+    from hangar.remote import server
+    monkeypatch.setattr(server, 'server_config', mock_server_config)
 
     possibble_addresses = [x for x in range(50000, 59999)]
     chosen_address = choice(possibble_addresses)
     address = f'localhost:{chosen_address}'
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
     mkdir(base_tmpdir)
-
-    server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
-    monkeypatch.setitem(hangserver.CFG['SERVER_GRPC'], 'max_concurrent_rpcs', '20')
-    monkeypatch.setitem(hangserver.CFG['SERVER_GRPC'], 'max_thread_pool_workers', '5')
+    server, hangserver, _ = server.serve(base_tmpdir, overwrite=True, channel_address=address)
     server.start()
     yield address
 
     hangserver.close()
     server.stop(0.1)
-    server.wait_for_termination(timeout=10)
+    server.wait_for_termination(timeout=2)
 
 
 @pytest.fixture()
@@ -254,3 +272,51 @@ def written_two_cmt_server_repo(server_instance, two_commit_filled_samples_repo)
     success = two_commit_filled_samples_repo.remote.push('origin', 'master')
     assert success == 'master'
     yield (server_instance, two_commit_filled_samples_repo)
+
+
+@pytest.fixture()
+def server_instance_nbytes_limit(monkeypatch, managed_tmpdir, worker_id):
+    from hangar.remote import server
+    from secrets import choice
+    monkeypatch.setattr(server, 'server_config', mock_nbytes_limit_cfg)
+
+    possibble_addresses = [x for x in range(50000, 59999)]
+    chosen_address = choice(possibble_addresses)
+    address = f'localhost:{chosen_address}'
+    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
+    mkdir(base_tmpdir)
+    server, hangserver, _ = server.serve(base_tmpdir, overwrite=True, channel_address=address)
+    server.start()
+    yield address
+
+    hangserver.env._close_environments()
+    hangserver.close()
+    server.stop(0.1)
+    server.wait_for_termination(timeout=2)
+
+
+@pytest.fixture()
+def server_instance_push_restricted(monkeypatch, managed_tmpdir, worker_id):
+    from hangar.remote import server
+    from secrets import choice
+    monkeypatch.setattr(server, 'server_config', mock_server_config)
+
+    possibble_addresses = [x for x in range(50000, 59999)]
+    chosen_address = choice(possibble_addresses)
+    address = f'localhost:{chosen_address}'
+    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
+    mkdir(base_tmpdir)
+    server, hangserver, _ = server.serve(base_tmpdir,
+                                         overwrite=True,
+                                         channel_address=address,
+                                         restrict_push=True,
+                                         username='right_username',
+                                         password='right_password')
+    server.start()
+    yield address
+
+    hangserver.env._close_environments()
+    hangserver.close()
+    server.stop(0.1)
+    server.wait_for_termination(timeout=2)
+

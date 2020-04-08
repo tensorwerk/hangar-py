@@ -8,7 +8,7 @@ import numpy as np
 
 
 def assert_equal(expected, actual):
-    if isinstance(expected, str):
+    if isinstance(expected, (str, bytes)):
         assert expected == actual
     elif isinstance(expected, np.ndarray):
         assert np.allclose(expected, actual)
@@ -41,6 +41,15 @@ def str_generate_data_variable_shape(
     return res
 
 
+def bytes_generate_data_variable_shape(
+        length=20, *,
+        _ALPHABET=''.join([string.printable, '\x01', '\x12', '\x25', '\x26', '\x27', '\x91'])
+):
+    tokens = [secrets.choice(_ALPHABET) for i in range(length)]
+    res = ''.join(tokens).encode()
+    return res
+
+
 column_settings = {
     'ndarray': {
         'fixed_shape': ['00', '01', '10'],
@@ -48,6 +57,9 @@ column_settings = {
     },
     'str': {
         'variable_shape': ['30']
+    },
+    'bytes': {
+        'variable_shape': ['31']
     }
 }
 
@@ -59,13 +71,17 @@ column_data_generators = {
     },
     'str': {
         'variable_shape': str_generate_data_variable_shape
+    },
+    'bytes': {
+        'variable_shape': bytes_generate_data_variable_shape
     }
 }
 
 
 column_layouts = {
     'ndarray': ['flat', 'nested'],
-    'str': ['flat', 'nested']
+    'str': ['flat', 'nested'],
+    'bytes': ['flat', 'nested']
 }
 
 
@@ -116,11 +132,11 @@ def column_permutation_repo(repo, num_samples_gen, num_subsamples_gen):
 
                     if col_dtype == 'ndarray':
                         col = co.add_ndarray_column(name,
-                                                       shape=shape,
-                                                       dtype=dtype,
-                                                       variable_shape=is_var,
-                                                       contains_subsamples=has_subs,
-                                                       backend=backend)
+                                                    shape=shape,
+                                                    dtype=dtype,
+                                                    variable_shape=is_var,
+                                                    contains_subsamples=has_subs,
+                                                    backend=backend)
                         data_partial = partial(generator, shape, dtype)
                         if layout == 'flat':
                             column_data_copy[name] = add_data_to_column(col, data_partial, nsamp)
@@ -130,6 +146,13 @@ def column_permutation_repo(repo, num_samples_gen, num_subsamples_gen):
                             raise ValueError(f'invalid layout {layout}')
                     elif col_dtype == 'str':
                         col = co.add_str_column(name, contains_subsamples=has_subs, backend=backend)
+                        data_partial = partial(generator)
+                        if layout == 'flat':
+                            column_data_copy[name] = add_data_to_column(col, data_partial, nsamp)
+                        elif layout == 'nested':
+                            column_data_copy[name] = add_data_to_column(col, data_partial, nsamp, nsubs)
+                    elif col_dtype == 'bytes':
+                        col = co.add_bytes_column(name, contains_subsamples=has_subs, backend=backend)
                         data_partial = partial(generator)
                         if layout == 'flat':
                             column_data_copy[name] = add_data_to_column(col, data_partial, nsamp)

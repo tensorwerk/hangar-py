@@ -1,6 +1,6 @@
 import math
 import struct
-from typing import NamedTuple, List
+from typing import NamedTuple, List, Union, Tuple
 
 import blosc
 import numpy as np
@@ -68,7 +68,7 @@ def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
         yield request
 
 
-def tensorChunkedIterator(buf, uncomp_nbytes, itemsize, pb2_request, *, err=None):
+def tensorChunkedIterator(buf, uncomp_nbytes, pb2_request, *, err=None):
 
     compBytes = blosc.compress(
         buf, clevel=3, cname='lz4', typesize=1, shuffle=blosc.NOSHUFFLE)
@@ -115,87 +115,133 @@ def missingHashRequestIterator(commit, hash_bytes, pb2_func):
 # ------------------------ serialization formats -------------------------
 
 
-ArrayIdent = NamedTuple('ArrayIdent', [
-    ('digest', str),
-    ('schema', str)
-])
-
-ArrayRecord = NamedTuple('ArrayRecord', [
-    ('array', np.ndarray),
-    ('digest', str),
-    ('schema', str),
-])
+class DataIdent(NamedTuple):
+    digest: str
+    schema: str
 
 
-def serialize_arr(arr: np.ndarray) -> bytes:
+class DataRecord(NamedTuple):
+    data: Union[np.ndarray, str, bytes]
+    digest: str
+    schema: str
+
+
+def _serialize_arr(arr: np.ndarray) -> bytes:
     """
     dtype_num ndim dim1_size dim2_size ... dimN_size array_bytes
     """
-    domain = struct.pack(f'<II', arr.dtype.num, arr.ndim)
-    dims = [struct.pack(f'<I', dim) for dim in arr.shape]
-    return b''.join([domain, *dims, arr.tobytes()])
+    raw = struct.pack(
+        f'<bb{len(arr.shape)}i{arr.nbytes}s',
+        arr.dtype.num, arr.ndim, *arr.shape, arr.tobytes()
+    )
+    return raw
 
 
-def deserialize_arr(raw: bytes) -> np.ndarray:
-    dtnum, ndim = struct.unpack('<II', raw[:8])
-    dtype = np.typeDict[dtnum]
-    dataStart = 8 + (ndim * 4)
-    shape = struct.unpack(f'<{ndim}I', raw[8:dataStart])
-    arr = np.frombuffer(raw, dtype=dtype, offset=dataStart).reshape(shape)
+def _deserialize_arr(raw: bytes) -> np.ndarray:
+    dtnum, ndim = struct.unpack('<bb', raw[0:2])
+    end = 2 + struct.calcsize(f'<{ndim}i')
+    arrshape = struct.unpack(f'<{ndim}i', raw[2:end])
+    arr = np.frombuffer(raw, dtype=np.typeDict[dtnum], offset=end).reshape(arrshape)
     return arr
+
+
+def _serialize_str(data: str) -> bytes:
+    """
+    data_bytes
+    """
+    return data.encode()
+
+
+def _deserialize_str(raw: bytes) -> str:
+    return raw.decode()
+
+
+def _serialize_bytes(data: bytes) -> bytes:
+    """
+    data_bytes
+    """
+    return data
+
+
+def _deserialize_bytes(data: bytes) -> bytes:
+    return data
 
 
 def serialize_ident(digest: str, schema: str) -> bytes:
     """
-    len_digest digest_str len_schema schema_str
+    len_digest len_schema digest_str schema_str
     """
-    ident_digest = struct.pack(f'<I{len(digest)}s', len(digest), digest.encode())
-    ident_schema = struct.pack(f'<I{len(schema)}s', len(schema), schema.encode())
-    return b''.join([ident_digest, ident_schema])
+    raw = struct.pack(
+        f'<hh{len(digest)}s{len(schema)}s',
+        len(digest), len(schema), digest.encode(), schema.encode()
+    )
+    return raw
 
 
-def deserialize_ident(raw: bytes) -> ArrayIdent:
-    digestLen = struct.unpack('<I', raw[:4])[0]
-    digestEnd = 4 + (digestLen * 1)
-    schemaStart = 4 + digestEnd
-    schemaLen = struct.unpack('<I', raw[digestEnd:schemaStart])[0]
-    digest = struct.unpack(f'<{digestLen}s', raw[4:digestEnd])[0].decode()
-    schema = struct.unpack(f'<{schemaLen}s', raw[schemaStart:])[0].decode()
-    return ArrayIdent(digest, schema)
+def deserialize_ident(raw: bytes) -> DataIdent:
+    digestLen, schemaLen = struct.unpack('<hh', raw[:4])
+    rawdigest, rawschema = struct.unpack(f'<{digestLen}s{schemaLen}s', raw[4:])
+    digest = rawdigest.decode()
+    schema = rawschema.decode()
+    return DataIdent(digest, schema)
 
 
-def serialize_record(arr: np.ndarray, digest: str, schema: str) -> bytes:
+def serialize_data(data: Union[np.ndarray, str, bytes]) -> Tuple[int, bytes]:
+    if isinstance(data, np.ndarray):
+        return (0, _serialize_arr(data))
+    elif isinstance(data, str):
+        return (2, _serialize_str(data))
+    elif isinstance(data, bytes):
+        return (3, _serialize_bytes(data))
+    else:
+        raise TypeError(type(data))
+
+
+def deserialize_data(dtype_code: int, raw_data: bytes) -> Union[np.ndarray, str, bytes]:
+    if dtype_code == 0:
+        return _deserialize_arr(raw_data)
+    elif dtype_code == 2:
+        return _deserialize_str(raw_data)
+    elif dtype_code == 3:
+        return _deserialize_bytes(raw_data)
+    else:
+        raise ValueError(f'dtype_code unknown {dtype_code}')
+
+
+def serialize_record(data: Union[np.ndarray, str, bytes], digest: str, schema: str) -> bytes:
     """
-    len_raw_ident len_raw_arr raw_ident, raw_arr
+    dtype_code len_raw_ident len_raw_data raw_ident, raw_data
     """
-    raw_arr = serialize_arr(arr)
+    dtype_code, raw_data = serialize_data(data)
     raw_ident = serialize_ident(digest, schema)
-    record = struct.pack(f'<2Q', len(raw_ident), len(raw_arr))
-    return b''.join([record, raw_ident, raw_arr])
+    raw = struct.pack(
+        f'<b2Q{len(raw_ident)}s{len(raw_data)}s',
+        dtype_code, len(raw_ident), len(raw_data), raw_ident, raw_data
+    )
+    return raw
 
 
-def deserialize_record(raw: bytes) -> ArrayRecord:
-    identStart = 16  # 2 * 8 bytes
-    identLen, arrLen = struct.unpack(f'<2Q', raw[:identStart])
+def deserialize_record(raw: bytes) -> DataRecord:
+    identStart = 17  # 1 + 2 * 8 bytes
+    dtype_code, identLen, dataLen = struct.unpack(f'<b2Q', raw[:identStart])
     identEnd = identStart + identLen
-    arrEnd = identEnd + arrLen
-
-    arr = deserialize_arr(raw[identEnd:arrEnd])
+    arrEnd = identEnd + dataLen
+    arr = deserialize_data(dtype_code, raw[identEnd:arrEnd])
     ident = deserialize_ident(raw[identStart:identEnd])
-    return ArrayRecord(arr, ident.digest, ident.schema)
+    return DataRecord(arr, ident.digest, ident.schema)
 
 
 def serialize_record_pack(records: List[bytes]) -> bytes:
     """
     num_records len_rec1 raw_rec1 len_rec2 raw_rec2 ... len_recN raw_recN
     """
-    raw_num_records = struct.pack(f'<I', len(records))
+    raw_num_records = struct.pack(f'<i', len(records))
     raw_records = [b''.join([struct.pack(f'<Q', len(rec)), rec]) for rec in records]
     return b''.join([raw_num_records, *raw_records])
 
 
 def deserialize_record_pack(raw: bytes) -> List[bytes]:
-    numRecords = struct.unpack(f'<I', raw[:4])[0]
+    numRecords = struct.unpack(f'<i', raw[:4])[0]
     cursorPos, recs = 4, []
     for i in range(numRecords):
         lenRec = struct.unpack(f'<Q', raw[cursorPos:cursorPos+8])[0]

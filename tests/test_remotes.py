@@ -567,55 +567,8 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
     newRepo._env._close_environments()
 
 
-# ---------------------------- fixture func servers ---------------------------
-
-
-@pytest.fixture()
-def server_instance_nbytes_limit(monkeypatch, managed_tmpdir, worker_id, mocker):
-    from hangar.remote.server import serve
-
-    address = f'localhost:{randint(50000, 59999)}'
-    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
-    mkdir(base_tmpdir)
-    server, hangserver, _ = serve(base_tmpdir, overwrite=True, channel_address=address)
-    hangserver.CFG['SERVER_GRPC']['fetch_max_nbytes'] = '500000'
-    hangserver.CFG['CLIENT_GRPC']['push_max_nbytes'] = '500000'
-    server.start()
-    yield address
-
-    hangserver.env._close_environments()
-    server.stop(0.05)
-    time.sleep(0.1)
-    if platform.system() == 'Windows':
-        # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.1)
-
-
-@pytest.fixture()
-def server_instance_push_restricted(managed_tmpdir, worker_id):
-    from hangar.remote.server import serve
-
-    address = f'localhost:{randint(50000, 59999)}'
-    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
-    mkdir(base_tmpdir)
-    server, hangserver, _ = serve(base_tmpdir,
-                                  overwrite=True,
-                                  channel_address=address,
-                                  restrict_push=True,
-                                  username='right_username',
-                                  password='right_password')
-    server.start()
-    yield address
-
-    hangserver.env._close_environments()
-    server.stop(0.05)
-    time.sleep(0.1)
-    if platform.system() == 'Windows':
-        # time for open file handles to close before tmp dir can be removed.
-        time.sleep(0.1)
-
-
 # -----------------------------------------------------------------------------
+
 
 @pytest.mark.skip(reason='unknown test failures intermitently')
 def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance_nbytes_limit, repo, managed_tmpdir):

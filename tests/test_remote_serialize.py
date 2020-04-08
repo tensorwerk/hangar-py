@@ -43,23 +43,23 @@ def ident_testcase(ident_digest, ident_schema):
 
 
 def test_serialize_deserialize_array(array_testcase):
-    from hangar.remote.chunks import serialize_arr
-    from hangar.remote.chunks import deserialize_arr
+    from hangar.remote.chunks import _serialize_arr
+    from hangar.remote.chunks import _deserialize_arr
 
-    raw = serialize_arr(array_testcase)
-    res = deserialize_arr(raw)
+    raw = _serialize_arr(array_testcase)
+    res = _deserialize_arr(raw)
     assert_equal(array_testcase, res)
 
 
 def test_serialize_deserialize_ident(ident_testcase):
     from hangar.remote.chunks import serialize_ident
     from hangar.remote.chunks import deserialize_ident
-    from hangar.remote.chunks import ArrayIdent
+    from hangar.remote.chunks import DataIdent
 
     digest, schema = ident_testcase
     raw = serialize_ident(digest, schema)
     res = deserialize_ident(raw)
-    assert isinstance(res, ArrayIdent)
+    assert isinstance(res, DataIdent)
     assert res.digest == digest
     assert res.schema == schema
 
@@ -67,12 +67,12 @@ def test_serialize_deserialize_ident(ident_testcase):
 def test_serialize_deserialize_record(array_testcase, ident_testcase):
     from hangar.remote.chunks import serialize_record
     from hangar.remote.chunks import deserialize_record
-    from hangar.remote.chunks import ArrayRecord
+    from hangar.remote.chunks import DataRecord
 
     digest, schema = ident_testcase
     raw = serialize_record(array_testcase, digest, schema)
     res = deserialize_record(raw)
-    assert isinstance(res, ArrayRecord)
+    assert isinstance(res, DataRecord)
     assert_equal(res.array, array_testcase)
     assert res.digest == digest
     assert res.schema == schema
@@ -84,7 +84,7 @@ def test_serialize_deserialize_record_pack(ident_testcase, nrecords):
     from hangar.remote.chunks import serialize_record_pack
     from hangar.remote.chunks import deserialize_record
     from hangar.remote.chunks import deserialize_record_pack
-    from hangar.remote.chunks import ArrayRecord
+    from hangar.remote.chunks import DataRecord
 
     idx = 0
     ArrList, RecList = [], []
@@ -107,7 +107,7 @@ def test_serialize_deserialize_record_pack(ident_testcase, nrecords):
 
     for rawres, origRec in zip(reslist, ArrList):
         resRec = deserialize_record(rawres)
-        assert isinstance(resRec, ArrayRecord)
+        assert isinstance(resRec, DataRecord)
         assert_equal(resRec.array, origRec[0])
         assert resRec.digest == origRec[1]
         assert resRec.schema == origRec[2]
@@ -116,12 +116,12 @@ def test_serialize_deserialize_record_pack(ident_testcase, nrecords):
 def test_serialize_deserialize_ident_digest_field_only(ident_testcase):
     from hangar.remote.chunks import serialize_ident
     from hangar.remote.chunks import deserialize_ident
-    from hangar.remote.chunks import ArrayIdent
+    from hangar.remote.chunks import DataIdent
 
     digest, schema = ident_testcase
     raw = serialize_ident(digest, '')
     res = deserialize_ident(raw)
-    assert isinstance(res, ArrayIdent)
+    assert isinstance(res, DataIdent)
     assert res.digest == digest
     assert res.schema == ''
 
@@ -129,12 +129,12 @@ def test_serialize_deserialize_ident_digest_field_only(ident_testcase):
 def test_serialize_deserialize_ident_schema_field_only(ident_testcase):
     from hangar.remote.chunks import serialize_ident
     from hangar.remote.chunks import deserialize_ident
-    from hangar.remote.chunks import ArrayIdent
+    from hangar.remote.chunks import DataIdent
 
     digest, schema = ident_testcase
     raw = serialize_ident('', schema)
     res = deserialize_ident(raw)
-    assert isinstance(res, ArrayIdent)
+    assert isinstance(res, DataIdent)
     assert res.digest == ''
     assert res.schema == schema
 
@@ -145,7 +145,7 @@ def test_serialize_deserialize_ident_only_record_pack(ident_testcase, nrecords):
     from hangar.remote.chunks import deserialize_ident
     from hangar.remote.chunks import serialize_record_pack
     from hangar.remote.chunks import deserialize_record_pack
-    from hangar.remote.chunks import ArrayIdent
+    from hangar.remote.chunks import DataIdent
 
     idx = 0
     IdentList, RawList = [], []
@@ -164,7 +164,7 @@ def test_serialize_deserialize_ident_only_record_pack(ident_testcase, nrecords):
 
     for raw, origIdent in zip(unpacked_raw, IdentList):
         resIdent = deserialize_ident(raw)
-        assert isinstance(resIdent, ArrayIdent)
+        assert isinstance(resIdent, DataIdent)
         assert resIdent.digest == origIdent[0]
         assert resIdent.schema == origIdent[1]
 
@@ -175,7 +175,7 @@ def test_serialize_deserialize_ident_only_digest_only_record_pack(ident_testcase
     from hangar.remote.chunks import deserialize_ident
     from hangar.remote.chunks import serialize_record_pack
     from hangar.remote.chunks import deserialize_record_pack
-    from hangar.remote.chunks import ArrayIdent
+    from hangar.remote.chunks import DataIdent
 
     idx = 0
     IdentList, RawList = [], []
@@ -194,7 +194,7 @@ def test_serialize_deserialize_ident_only_digest_only_record_pack(ident_testcase
 
     for raw, origIdent in zip(unpacked_raw, IdentList):
         resIdent = deserialize_ident(raw)
-        assert isinstance(resIdent, ArrayIdent)
+        assert isinstance(resIdent, DataIdent)
         assert resIdent.digest == origIdent[0]
         assert resIdent.schema == origIdent[1]
 
@@ -205,7 +205,7 @@ def test_serialize_deserialize_ident_only_schema_only_record_pack(ident_testcase
     from hangar.remote.chunks import deserialize_ident
     from hangar.remote.chunks import serialize_record_pack
     from hangar.remote.chunks import deserialize_record_pack
-    from hangar.remote.chunks import ArrayIdent
+    from hangar.remote.chunks import DataIdent
 
     idx = 0
     IdentList, RawList = [], []
@@ -224,6 +224,6 @@ def test_serialize_deserialize_ident_only_schema_only_record_pack(ident_testcase
 
     for raw, origIdent in zip(unpacked_raw, IdentList):
         resIdent = deserialize_ident(raw)
-        assert isinstance(resIdent, ArrayIdent)
+        assert isinstance(resIdent, DataIdent)
         assert resIdent.digest == origIdent[0]
         assert resIdent.schema == origIdent[1]
