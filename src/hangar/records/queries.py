@@ -98,12 +98,19 @@ class RecordQuery(CursorRangeIterator):
         ------
         Iterable[Union[bytes, Tuple[bytes, bytes]]]:
             dict of db_key/db_values for each record traversed
+
+        Raises
+        ------
+        KeyError
+            if no column exists with the requested name.
         """
         try:
             datatxn = TxnRegister().begin_reader_txn(self._dataenv)
             schemaColumnRangeKey = schema_db_range_key_from_column_unknown_layout(column_name)
             with datatxn.cursor() as cur:
-                cur.set_range(schemaColumnRangeKey)
+                if not cur.set_range(schemaColumnRangeKey):
+                    raise KeyError(f'Traversal of commit references failed. '
+                                   f'No column named `{column_name}` exists.')
                 schemaColumnKey = cur.key()
             column_record = schema_column_record_from_db_key(schemaColumnKey)
             startRangeKey = dynamic_layout_data_record_db_start_range_key(column_record)

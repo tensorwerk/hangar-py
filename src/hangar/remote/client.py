@@ -295,8 +295,9 @@ class HangarClient(object):
         response = self.stub.PushSchema(request)
         return response
 
-    def fetch_data(self, schema_hash: str,
-                   digests: Sequence[str]) -> Sequence[Tuple[str, np.ndarray]]:
+    def fetch_data(
+            self, schema_hash: str, digests: Sequence[str]
+    ) -> Sequence[Tuple[str, np.ndarray]]:
         """Fetch data hash digests for a particular schema.
 
         As the total size of the data to be transferred isn't known before this
@@ -329,6 +330,7 @@ class HangarClient(object):
                                                  pb2_request=hangar_service_pb2.FetchDataRequest)
 
             replies = self.stub.FetchData(cIter)
+
             for idx, reply in enumerate(replies):
                 if idx == 0:
                     uncomp_nbytes, comp_nbytes = reply.uncomp_nbytes, reply.comp_nbytes
@@ -353,7 +355,7 @@ class HangarClient(object):
             data = chunks.deserialize_record(record)
             expected_hasher_tcode = hash_type_code_from_digest(data.digest)
             hash_func = hash_func_from_tcode(expected_hasher_tcode)
-            received_hash = hash_func(record.data)
+            received_hash = hash_func(data.data)
             if received_hash != data.digest:
                 raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {data.digest}')
             received_data.append((received_hash, data.data))

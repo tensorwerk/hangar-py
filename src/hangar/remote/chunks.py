@@ -139,7 +139,7 @@ def _serialize_arr(arr: np.ndarray) -> bytes:
 
 def _deserialize_arr(raw: bytes) -> np.ndarray:
     dtnum, ndim = struct.unpack('<bb', raw[0:2])
-    end = 2 + struct.calcsize(f'<{ndim}i')
+    end = 2 + (4 * ndim)
     arrshape = struct.unpack(f'<{ndim}i', raw[2:end])
     arr = np.frombuffer(raw, dtype=np.typeDict[dtnum], offset=end).reshape(arrshape)
     return arr

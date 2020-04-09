@@ -364,14 +364,22 @@ class Remotes(object):
                             while notEmpty:
                                 notEmpty = curs.delete()
                     unpack_commit_ref(self._env.refenv, tmpDB, commit)
+                    print(f'Client processing commit {commit}')
+                    recQuery = queries.RecordQuery(tmpDB)
+
                     # handle column_names option
+                    cmt_column_names = recQuery.column_names()
                     if column_names is None:
-                        column_names = queries.RecordQuery(tmpDB).column_names()
-                    for asetn in column_names:
-                        cmtData_hashs = queries.RecordQuery(tmpDB).column_data_hashes(asetn)
+                        cmt_columns = cmt_column_names
+                    else:
+                        cmt_columns = [col for col in column_names if col in cmt_column_names]
+                    for col in cmt_columns:
+                        print(f'Client Querying Hashs for Column: {col}')
+                        cmtData_hashs = recQuery.column_data_hashes(col)
                         allHashs.update(cmtData_hashs)
             finally:
                 tmpDB.close()
+
         hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
         try:
             m_schema_hash_map = defaultdict(list)
