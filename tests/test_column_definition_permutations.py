@@ -184,6 +184,87 @@ def column_permutations_write_checkout(column_permutation_repo):
     co.close()
 
 
+@pytest.mark.parametrize('column_type,column_kwargs', [
+    ('ndarray', {'prototype': np.array([1, 2, 3])}),
+    ('str', {}),
+    ('bytes', {}),
+])
+@pytest.mark.parametrize('contains_subsamples', [True, False])
+def test_cannot_create_column_within_cm(repo, column_type, column_kwargs, contains_subsamples):
+    co = repo.checkout(write=True)
+    with co:
+        with pytest.raises(PermissionError):
+            if column_type == 'ndarray':
+                co.add_ndarray_column(
+                    'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+            elif column_type == 'str':
+                co.add_str_column(
+                    'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+            elif column_type == 'bytes':
+                co.add_bytes_column(
+                    'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+            else:
+                raise ValueError(column_type)
+    co.close()
+
+
+@pytest.mark.parametrize('column_type,column_kwargs', [
+    ('ndarray', {'prototype': np.array([1, 2, 3])}),
+    ('str', {}),
+    ('bytes', {}),
+])
+def test_contains_subsamples_non_bool_value_fails(repo, column_type, column_kwargs):
+    co = repo.checkout(write=True)
+    with pytest.raises(ValueError):
+        if column_type == 'ndarray':
+            co.add_ndarray_column(
+                'testcol', contains_subsamples=None, **column_kwargs)
+        elif column_type == 'str':
+            co.add_str_column(
+                'testcol', contains_subsamples=None, **column_kwargs)
+        elif column_type == 'bytes':
+            co.add_bytes_column(
+                'testcol', contains_subsamples=None, **column_kwargs)
+        else:
+            raise ValueError(column_type)
+    co.close()
+
+
+@pytest.mark.parametrize('column_type,column_kwargs', [
+    ('ndarray', {'prototype': np.array([1, 2, 3])}),
+    ('str', {}),
+    ('bytes', {}),
+])
+@pytest.mark.parametrize('contains_subsamples', [True, False])
+def test_cannot_create_column_name_exists(repo, column_type, column_kwargs, contains_subsamples):
+    co = repo.checkout(write=True)
+
+    # setup so that a column already exists
+    if column_type == 'ndarray':
+        co.add_ndarray_column(
+            'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+    elif column_type == 'str':
+        co.add_str_column(
+            'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+    elif column_type == 'bytes':
+        co.add_bytes_column(
+            'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+
+    with pytest.raises(LookupError):
+        if column_type == 'ndarray':
+            co.add_ndarray_column(
+                'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+        elif column_type == 'str':
+            co.add_str_column(
+                'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+        elif column_type == 'bytes':
+            co.add_bytes_column(
+                'testcol', contains_subsamples=contains_subsamples, **column_kwargs)
+        else:
+            raise ValueError(column_type)
+    co.close()
+
+
 def test_read_data_from_column_permutations(column_permutations_read_write_checkout):
     co, column_data, column_data_partials = column_permutations_read_write_checkout
 

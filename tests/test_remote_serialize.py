@@ -9,7 +9,7 @@ param_digest = ['0=digesta', '0=digestaaaaaa', '2=digestaaaaaaaaaaaaaaaaaaaaaaaa
 param_schema = ['schemaa', 'schemaaaaaaaaa', 'schemaaaaaaaaaaaaaaaa']
 
 
-def assert_equal(arr, arr2):
+def assert_array_equal(arr, arr2):
     assert np.array_equal(arr, arr2)
     assert arr.dtype == arr2.dtype
 
@@ -37,6 +37,23 @@ def array_testcase(arr_shape, arr_dtype):
     return arr.astype(arr_dtype)
 
 
+@pytest.fixture(scope='module', params=[
+    'hello', ' world', 'how are you today! ',
+    '325', f'{"".join([str(i) for i in range(100)])}',
+    'o\n\x01'
+])
+def str_testcase(request):
+    return request.param
+
+
+@pytest.fixture(scope='module', params=[
+    b'hello', b' world', b'how are you today! ',
+    b'325', b'\x01\x00\x12\x14'
+])
+def bytes_testcase(request):
+    return request.param
+
+
 @pytest.fixture(scope='module')
 def ident_testcase(ident_digest, ident_schema):
     return (ident_digest, ident_schema)
@@ -48,7 +65,40 @@ def test_serialize_deserialize_array(array_testcase):
 
     raw = _serialize_arr(array_testcase)
     res = _deserialize_arr(raw)
-    assert_equal(array_testcase, res)
+    assert_array_equal(array_testcase, res)
+
+
+def test_serialize_deserialize_str(str_testcase):
+    from hangar.remote.chunks import _serialize_str, _deserialize_str
+    raw = _serialize_str(str_testcase)
+    res = _deserialize_str(raw)
+    assert res == str_testcase
+
+
+def test_serialize_deserialize_bytes(bytes_testcase):
+    from hangar.remote.chunks import _serialize_bytes, _deserialize_bytes
+    raw = _serialize_bytes(bytes_testcase)
+    res = _deserialize_bytes(raw)
+    assert bytes_testcase == res
+
+
+@pytest.mark.parametrize('expected_dtype_code,data', [
+    (0, np.array([0, 1, 2, 3, 4])),
+    (2, 'i am string'),
+    (3, b'i am bytes')
+])
+def test_serialize_deserialize_data(expected_dtype_code, data):
+    from hangar.remote.chunks import serialize_data, deserialize_data
+
+    dtcode, raw = serialize_data(data)
+    res = deserialize_data(dtype_code=dtcode, raw_data=raw)
+    assert dtcode == expected_dtype_code
+    if isinstance(res, np.ndarray):
+        assert_array_equal(data, res)
+    elif isinstance(res, (str, bytes)):
+        assert data == res
+    else:
+        raise TypeError(data)
 
 
 def test_serialize_deserialize_ident(ident_testcase):
@@ -73,7 +123,7 @@ def test_serialize_deserialize_record(array_testcase, ident_testcase):
     raw = serialize_record(array_testcase, digest, schema)
     res = deserialize_record(raw)
     assert isinstance(res, DataRecord)
-    assert_equal(res.array, array_testcase)
+    assert_array_equal(res.data, array_testcase)
     assert res.digest == digest
     assert res.schema == schema
 
@@ -93,8 +143,8 @@ def test_serialize_deserialize_record_pack(ident_testcase, nrecords):
         for dtype in param_dtypes:
             arr = 200 * np.random.random_sample(shape) + 100
             arr = arr.astype(dtype)
-            digest = f'digest{str(idx)*len(digest)}'
-            schema = f'schema{str(idx)*len(schema)}'
+            digest = f'digest{str(idx) + str(digest)}'
+            schema = f'schema{str(idx) + str(schema)}'
             idx += 1
 
             ArrList.append((arr, digest, schema))
@@ -108,7 +158,7 @@ def test_serialize_deserialize_record_pack(ident_testcase, nrecords):
     for rawres, origRec in zip(reslist, ArrList):
         resRec = deserialize_record(rawres)
         assert isinstance(resRec, DataRecord)
-        assert_equal(resRec.array, origRec[0])
+        assert_array_equal(resRec.data, origRec[0])
         assert resRec.digest == origRec[1]
         assert resRec.schema == origRec[2]
 
@@ -151,8 +201,8 @@ def test_serialize_deserialize_ident_only_record_pack(ident_testcase, nrecords):
     IdentList, RawList = [], []
     digest, schema = ident_testcase
     for idx in range(nrecords):
-        digest = f'digest{str(idx)*len(digest)}'
-        schema = f'schema{str(idx)*len(schema)}'
+        digest = f'digest{str(idx) + str(digest)}'
+        schema = f'schema{str(idx) + str(schema)}'
 
         IdentList.append((digest, schema))
         RawList.append(serialize_ident(digest, schema))
@@ -181,7 +231,7 @@ def test_serialize_deserialize_ident_only_digest_only_record_pack(ident_testcase
     IdentList, RawList = [], []
     digest, schema = ident_testcase
     for idx in range(nrecords):
-        digest = f'digest{str(idx)*len(digest)}'
+        digest = f'digest{str(idx)+str(digest)}'
         schema = f''
 
         IdentList.append((digest, schema))
@@ -212,7 +262,7 @@ def test_serialize_deserialize_ident_only_schema_only_record_pack(ident_testcase
     digest, schema = ident_testcase
     for idx in range(nrecords):
         digest = f''
-        schema = f'schema{str(idx)*len(schema)}'
+        schema = f'schema{str(idx)+str(schema)}'
 
         IdentList.append((digest, schema))
         RawList.append(serialize_ident(digest, schema))

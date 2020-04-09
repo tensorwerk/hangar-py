@@ -71,7 +71,7 @@ def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
 def tensorChunkedIterator(buf, uncomp_nbytes, pb2_request, *, err=None):
 
     compBytes = blosc.compress(
-        buf, clevel=3, cname='lz4', typesize=1, shuffle=blosc.NOSHUFFLE)
+        buf, clevel=3, cname='blosclz', shuffle=blosc.NOSHUFFLE)
 
     request = pb2_request(
         comp_nbytes=len(compBytes),

@@ -139,17 +139,21 @@ class ContentWriter(object):
                                         mode='a',
                                         schema=schema,
                                         remote_operation=True)[schema.backend]
-        saved_digests = []
-        hashTxn = self.txnctx.begin_writer_txn(self.env.hashenv)
         try:
+            saved_digests, hashKVs = [], []
             for hdigest, tensor in received_data:
                 hashVal = be_accessor.write_data(tensor, remote_operation=True)
                 hashKey = hash_data_db_key_from_raw_key(hdigest)
-                hashTxn.put(hashKey, hashVal)
                 saved_digests.append(hdigest)
+                hashKVs.append((hashKey, hashVal))
+        finally:
+            be_accessor.close()
+        try:
+            hashTxn = self.txnctx.begin_writer_txn(self.env.hashenv)
+            for k, v in hashKVs:
+                hashTxn.put(k, v)
         finally:
             self.txnctx.commit_writer_txn(self.env.hashenv)
-            be_accessor.close()
         return saved_digests
 
 

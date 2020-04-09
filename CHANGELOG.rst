@@ -20,6 +20,15 @@ Improvements
   (`#198 <https://github.com/tensorwerk/hangar-py/pull/198>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 
+Bug Fixes
+---------
+
+* Fixed issue where ``str`` and (newly added) ``bytes`` column data could not be fetched / pushed
+  between a local client repository and remote server.
+  (`#198 <https://github.com/tensorwerk/hangar-py/pull/198>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+
 `0.5.1`_ (2020-04-05)
 =====================
 

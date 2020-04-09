@@ -233,15 +233,8 @@ def mock_server_config(*args, **kwargs):
     src_path = Path(os.path.dirname(remote.__file__), c.CONFIG_SERVER_NAME)
     CFG = configparser.ConfigParser()
     CFG.read(src_path)
-    CFG['SERVER_GRPC']['max_concurrent_rpcs'] = '10'
-    CFG['SERVER_GRPC']['max_thread_pool_workers'] = '2'
-    return CFG
-
-
-def mock_nbytes_limit_cfg(*args, **kwargs):
-    CFG = mock_server_config()
-    CFG['SERVER_GRPC']['fetch_max_nbytes'] = '500000'
-    CFG['CLIENT_GRPC']['push_max_nbytes'] = '500000'
+    CFG['SERVER_GRPC']['max_concurrent_rpcs'] = '16'
+    CFG['SERVER_GRPC']['max_thread_pool_workers'] = '4'
     return CFG
 
 
@@ -272,27 +265,6 @@ def written_two_cmt_server_repo(server_instance, two_commit_filled_samples_repo)
     success = two_commit_filled_samples_repo.remote.push('origin', 'master')
     assert success == 'master'
     yield (server_instance, two_commit_filled_samples_repo)
-
-
-@pytest.fixture()
-def server_instance_nbytes_limit(monkeypatch, managed_tmpdir, worker_id):
-    from hangar.remote import server
-    from secrets import choice
-    monkeypatch.setattr(server, 'server_config', mock_nbytes_limit_cfg)
-
-    possibble_addresses = [x for x in range(50000, 59999)]
-    chosen_address = choice(possibble_addresses)
-    address = f'localhost:{chosen_address}'
-    base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
-    mkdir(base_tmpdir)
-    server, hangserver, _ = server.serve(base_tmpdir, overwrite=True, channel_address=address)
-    server.start()
-    yield address
-
-    hangserver.env._close_environments()
-    hangserver.close()
-    server.stop(0.1)
-    server.wait_for_termination(timeout=2)
 
 
 @pytest.fixture()

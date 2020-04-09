@@ -287,62 +287,44 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
 @pytest.mark.filterwarnings('ignore::UserWarning')
 @pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[2, 10]])
 @pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 16]])
-@pytest.mark.parametrize('fetchBranch,fetchCommit,fetchAsetns,fetchNbytes,fetchAll_history', [
-    ['master',      None,  None,              None,  False],
-    ['testbranch',  None,  None,              None,  False],
-    [None,          'ma',  None,              None,  False],
-    [None,          'br',  None,              None,  False],
-    ['master',      None,  ('writtenaset',),  None,  False],
-    ['testbranch',  None,  ('_two',),         None,  False],
-    [None,          'ma',  ('writtenaset',),  None,  False],
-    [None,          'br',  ('_two',),         None,  False],
-    ['master',      None,  None,              None,  False],
-    ['testbranch',  None,  None,              None,  False],
-    [None,          'ma',  None,              None,  False],
-    [None,          'br',  None,              None,  False],
-    ['master',      None,  ('writtenaset',),  None,  False],
-    ['testbranch',  None,  ('_two',),         None,  False],
-    [None,          'ma',  ('writtenaset',),  None,  False],
-    [None,          'br',  ('_two',),         None,  False],
-    ['master',      None,  None,              None,  True],
-    ['testbranch',  None,  None,              None,  True],
-    [None,          'ma',  None,              None,  True],
-    [None,          'br',  None,              None,  True],
-    ['master',      None,  ('writtenaset',),  None,  True],
-    ['testbranch',  None,  ('_two',),         None,  True],
-    [None,          'ma',  ('writtenaset',),  None,  True],
-    [None,          'br',  ('_two',),         None,  True],
-    ['master',      None,  None,              1000,  False],
-    ['testbranch',  None,  None,              1000,  False],
-    [None,          'ma',  None,              1000,  False],
-    [None,          'br',  None,              1000,  False],
-    ['master',      None,  ('writtenaset',),  1000,  False],
-    ['testbranch',  None,  ('_two',),         1000,  False],
-    [None,          'ma',  ('writtenaset',),  1000,  False],
-    [None,          'br',  ('_two',),         1000,  False],
-    [None,          'br',  ('_two',),         1000,  True],  # will raise error
+@pytest.mark.parametrize('fetchAsetns', [
+    None, ('writtenaset',), ('_two',), ('str_col',), ('bytes_col',),
 ])
+@pytest.mark.parametrize('fetchBranch', [None, 'testbranch'])
+@pytest.mark.parametrize('fetchCommit', [None, 'ma'])
+@pytest.mark.parametrize('fetchAll_history', [False, True])
+@pytest.mark.parametrize('fetchNbytes', [None, 1000])
 def test_server_push_two_branch_then_clone_fetch_data_options(
         server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
         nMasterSamples, nDevCommits, nDevSamples, fetchBranch, fetchCommit,
         fetchAsetns, fetchNbytes, fetchAll_history):
     from hangar import Repository
     from hangar.records.summarize import list_history
+    from operator import eq
 
     # Push master branch test
     masterCmts = {}
     co = repo.checkout(write=True)
     co.add_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
     co.add_ndarray_column(name='_two', shape=(20), dtype=np.float32)
+    co.add_str_column('str_col')
+    co.add_bytes_column('bytes_col')
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
             co = repo.checkout(write=True)
         masterSampList1 = []
         masterSampList2 = []
-        with co.columns['writtenaset'] as d, co.columns['_two'] as dd:
+        masterSampList3 = []
+        masterSampList4 = []
+        with co.columns['writtenaset'] as d,\
+                co.columns['_two'] as dd,\
+                co.columns['str_col'] as scol, \
+                co.columns['bytes_col'] as bcol:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
                 del dd[prevKey]
+                del scol[prevKey]
+                del bcol[prevKey]
 
             for sIdx in range(nMasterSamples):
                 arr1 = np.random.randn(*array5by7.shape).astype(np.float32) * 100
@@ -351,8 +333,15 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                 arr2 = np.random.randn(20).astype(np.float32)
                 dd[str(sIdx)] = arr2
                 masterSampList2.append(arr2)
+                sval = f'strval master {cIdx} {sIdx}'
+                scol[str(sIdx)] = sval
+                masterSampList3.append(sval)
+                bval = f'bytesval master {cIdx} {sIdx}'.encode()
+                bcol[str(sIdx)] = bval
+                masterSampList4.append(bval)
+
         cmt = co.commit(f'master commit number: {cIdx}')
-        masterCmts[cmt] = (masterSampList1, masterSampList2)
+        masterCmts[cmt] = (masterSampList1, masterSampList2, masterSampList3, masterSampList4)
         co.close()
 
     repo.remote.add('origin', server_instance)
@@ -367,10 +356,17 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         co = repo.checkout(write=True, branch=branch.name)
         devSampList1 = []
         devSampList2 = []
-        with co.columns['writtenaset'] as d, co.columns['_two'] as dd:
+        devSampList3 = []
+        devSampList4 = []
+        with co.columns['writtenaset'] as d,\
+                co.columns['_two'] as dd,\
+                co.columns['str_col'] as scol, \
+                co.columns['bytes_col'] as bcol:
             for prevKey in list(d.keys())[1:]:
                 del d[prevKey]
                 del dd[prevKey]
+                del scol[prevKey]
+                del bcol[prevKey]
 
             for sIdx in range(nDevSamples):
                 arr1 = np.random.randn(*array5by7.shape).astype(np.float32) * 100
@@ -379,8 +375,15 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                 arr2 = np.random.randn(20).astype(np.float32)
                 dd[str(sIdx)] = arr2
                 devSampList2.append(arr2)
+                sval = f'strval dev {cIdx} {sIdx}'
+                scol[str(sIdx)] = sval
+                devSampList3.append(sval)
+                bval = f'bytesval dev {cIdx} {sIdx}'.encode()
+                bcol[str(sIdx)] = bval
+                devSampList4.append(bval)
+
         cmt = co.commit(f'dev commit number: {cIdx}')
-        devCmts[cmt] = (devSampList1, devSampList2)
+        devCmts[cmt] = (devSampList1, devSampList2, devSampList3, devSampList4)
         co.close()
 
     push2 = repo.remote.push('origin', branch.name)
@@ -444,21 +447,32 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
             d = co.columns[fetchAsetns[0]]
             # ensure we didn't fetch the other data simultaneously
 
-            ds1SampList, ds2SampList = devCmts[fCmt]
+            ds1SampList, ds2SampList, ds3SampList, ds4SampList = devCmts[fCmt]
             if fetchAsetns[0] == 'writtenaset':
                 compare = ds1SampList
-            else:
+                cmp_func = np.allclose
+            elif fetchAsetns[0] == '_two':
                 compare = ds2SampList
+                cmp_func = np.allclose
+            elif fetchAsetns[0] == 'str_col':
+                compare = ds3SampList
+                cmp_func = eq
+            else:
+                compare = ds4SampList
+                cmp_func = eq
 
             totalSeen = 0
             for idx, samp in enumerate(compare):
                 if fetchNbytes is None:
-                    assert np.allclose(samp, d[str(idx)])
+                    assert cmp_func(samp, d[str(idx)])
                 else:
                     try:
                         arr = d[str(idx)]
-                        assert np.allclose(samp, arr)
-                        totalSeen += arr.nbytes
+                        assert cmp_func(samp, arr)
+                        try:
+                            totalSeen += arr.nbytes
+                        except AttributeError:
+                            totalSeen += len(arr)
                     except FileNotFoundError:
                         pass
                     assert totalSeen <= fetchNbytes
@@ -467,13 +481,17 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         else:
             d = co.columns['writtenaset']
             dd = co.columns['_two']
-            ds1List, ds2List = devCmts[fCmt]
+            str_col = co.columns['str_col']
+            bytes_col = co.columns['bytes_col']
+            ds1List, ds2List, ds3List, ds4List = devCmts[fCmt]
             totalSeen = 0
-            for idx, ds1ds2 in enumerate(zip(ds1List, ds2List)):
-                ds1, ds2 = ds1ds2
+            for idx, ds1ds2ds3ds4 in enumerate(zip(ds1List, ds2List, ds3List, ds4List)):
+                ds1, ds2, ds3, ds4 = ds1ds2ds3ds4
                 if fetchNbytes is None:
                     assert np.allclose(ds1, d[str(idx)])
                     assert np.allclose(ds2, dd[str(idx)])
+                    assert ds3 == str_col[str(idx)]
+                    assert ds4 == bytes_col[str(idx)]
                 else:
                     try:
                         arr1 = d[str(idx)]
@@ -485,6 +503,18 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                         arr2 = dd[str(idx)]
                         assert np.allclose(ds2, arr2)
                         totalSeen += arr2.nbytes
+                    except FileNotFoundError:
+                        pass
+                    try:
+                        sval = str_col[str(idx)]
+                        assert ds3 == sval
+                        totalSeen += len(sval.encode())
+                    except FileNotFoundError:
+                        pass
+                    try:
+                        bval = bytes_col[str(idx)]
+                        assert ds4 == bval
+                        totalSeen += len(bval)
                     except FileNotFoundError:
                         pass
                     assert totalSeen <= fetchNbytes
@@ -568,62 +598,6 @@ def test_push_clone_three_way_merge(server_instance, repo_2_br_no_conf, managed_
 
 
 # -----------------------------------------------------------------------------
-
-
-@pytest.mark.skip(reason='unknown test failures intermitently')
-def test_push_clone_digests_exceeding_server_nbyte_limit(mocker, server_instance_nbytes_limit, repo, managed_tmpdir):
-    from hangar import Repository
-    from hangar.remote import chunks, client
-
-    # Push master branch test
-    masterCmtList = []
-    co = repo.checkout(write=True)
-    co.add_ndarray_column(name='aset', shape=(50, 50), dtype=np.float32)
-    for cIdx in range(4):
-        if cIdx != 0:
-            co = repo.checkout(write=True)
-        masterSampList = []
-        with co.columns['aset'] as d:
-            for prevKey in list(d.keys())[1:]:
-                del d[prevKey]
-            for sIdx in range(70):
-                arr = np.random.randint(0, 255, size=(50, 50)).astype(np.float32)
-                d[str(sIdx)] = arr
-                masterSampList.append(arr)
-        cmt = co.commit(f'master commit number: {cIdx}')
-        masterCmtList.append((cmt, masterSampList))
-        co.close()
-
-    repo.remote.add('origin', server_instance_nbytes_limit)
-
-    spy = mocker.spy(chunks, 'tensorChunkedIterator')
-    push1 = repo.remote.push('origin', 'master')
-    assert chunks.tensorChunkedIterator.call_count == 6
-    for call in spy.call_args_list:
-        assert call[1]['uncomp_nbytes'] <= 550_000 # maximum amount over 100_000 observed in test development
-
-    assert push1 == 'master'
-
-    # Clone test (master branch)
-    new_tmpdir = pjoin(managed_tmpdir, 'new')
-    mkdir(new_tmpdir)
-    newRepo = Repository(path=new_tmpdir, exists=False)
-    newRepo.clone('Test User', 'tester@foo.com', server_instance_nbytes_limit, remove_old=True)
-    assert newRepo.list_branches() == ['master', 'origin/master']
-
-    spy = mocker.spy(client.HangarClient, 'fetch_data')
-    for cmt, sampList in masterCmtList:
-        newRepo.remote.fetch_data('origin', commit=cmt)
-        nco = newRepo.checkout(commit=cmt)
-        assert len(nco.columns) == 1
-        assert 'aset' in nco.columns
-        assert len(nco.columns['aset']) == 70
-        for sIdx, samp in enumerate(sampList):
-            assert np.allclose(nco.columns['aset'][str(sIdx)], samp)
-        nco.close()
-        del nco
-    assert client.HangarClient.fetch_data.call_count == 8
-    newRepo._env._close_environments()
 
 
 def test_push_restricted_with_right_username_password(server_instance_push_restricted, repo, managed_tmpdir):

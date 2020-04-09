@@ -127,7 +127,14 @@ class HangarClient(object):
         tmp_insec_channel.close()
         configured_channel = grpc.insecure_channel(
             self.address,
-            options=[('grpc.optimization_target', self.cfg['optimization_target'])],
+            options=[
+                ('grpc.optimization_target', self.cfg['optimization_target']),
+                ("grpc.keepalive_time_ms", 1000 * 60 * 1),
+                ("grpc.keepalive_timeout_ms", 1000 * 10),
+                ("grpc.http2_min_sent_ping_interval_without_data_ms", 1000 * 10),
+                ("grpc.http2_max_pings_without_data", 0),
+                ("grpc.keepalive_permit_without_calls", 1),
+            ],
             compression=self.cfg['enable_compression'])
         self.channel = grpc.intercept_channel(configured_channel, self.header_adder_int)
         self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
@@ -330,7 +337,6 @@ class HangarClient(object):
                                                  pb2_request=hangar_service_pb2.FetchDataRequest)
 
             replies = self.stub.FetchData(cIter)
-
             for idx, reply in enumerate(replies):
                 if idx == 0:
                     uncomp_nbytes, comp_nbytes = reply.uncomp_nbytes, reply.comp_nbytes
@@ -357,6 +363,7 @@ class HangarClient(object):
             hash_func = hash_func_from_tcode(expected_hasher_tcode)
             received_hash = hash_func(data.data)
             if received_hash != data.digest:
+                logger.error(data.data)
                 raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {data.digest}')
             received_data.append((received_hash, data.data))
         return received_data
