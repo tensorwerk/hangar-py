@@ -10,6 +10,7 @@ from typing import List, NamedTuple, Optional, Sequence
 import grpc
 import lmdb
 from tqdm import tqdm
+import numpy as np
 
 from .backends import backend_decoder
 from .constants import LMDB_SETTINGS
@@ -364,16 +365,22 @@ class Remotes(object):
                             while notEmpty:
                                 notEmpty = curs.delete()
                     unpack_commit_ref(self._env.refenv, tmpDB, commit)
+                    recQuery = queries.RecordQuery(tmpDB)
+
                     # handle column_names option
+                    cmt_column_names = recQuery.column_names()
                     if column_names is None:
-                        column_names = queries.RecordQuery(tmpDB).column_names()
-                    for asetn in column_names:
-                        cmtData_hashs = queries.RecordQuery(tmpDB).column_data_hashes(asetn)
+                        cmt_columns = cmt_column_names
+                    else:
+                        cmt_columns = [col for col in column_names if col in cmt_column_names]
+                    for col in cmt_columns:
+                        cmtData_hashs = recQuery.column_data_hashes(col)
                         allHashs.update(cmtData_hashs)
             finally:
                 tmpDB.close()
-        hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
+
         try:
+            hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
             m_schema_hash_map = defaultdict(list)
             for hashVal in allHashs:
                 hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
@@ -398,7 +405,10 @@ class Remotes(object):
                     # max_num_bytes option
                     if isinstance(max_num_bytes, int):
                         for idx, r_kv in enumerate(ret):
-                            total_nbytes_seen += r_kv[1].nbytes
+                            try:
+                                total_nbytes_seen += r_kv[1].nbytes
+                            except AttributeError:
+                                total_nbytes_seen += len(r_kv[1])
                             if total_nbytes_seen >= max_num_bytes:
                                 ret = ret[0:idx]
                                 stop = True

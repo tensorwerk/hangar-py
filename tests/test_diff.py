@@ -2,12 +2,6 @@ import pytest
 import numpy as np
 
 
-def create_meta_nt(name):
-    from hangar.records import MetadataRecordKey
-    res = MetadataRecordKey(name)
-    return res
-
-
 class TestReaderWriterDiff(object):
 
     @pytest.mark.parametrize('writer', [False, True])

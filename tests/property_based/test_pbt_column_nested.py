@@ -6,7 +6,8 @@ import numpy as np
 from conftest import (
     variable_shape_backend_params,
     fixed_shape_backend_params,
-    str_variable_shape_backend_params
+    str_variable_shape_backend_params,
+    bytes_variable_shape_backend_params
 )
 
 import string
@@ -87,6 +88,21 @@ def variable_shape_repo_co_str_aset_nested(classrepo, request) -> Repository:
     co.add_str_column(name='strcolumn',
                       contains_subsamples=True,
                       backend=request.param)
+    yield co
+    co.reset_staging_area()
+    co.close()
+
+
+@pytest.fixture(params=bytes_variable_shape_backend_params, scope='class')
+def variable_shape_repo_co_bytes_aset_nested(classrepo, request) -> Repository:
+    # needed because fixtures don't reset between each hypothesis run
+    # tracks added_samples = set(sample_key)
+    global added_samples_subsamples
+    added_samples_subsamples = defaultdict(set)
+    co = classrepo.checkout(write=True)
+    co.add_bytes_column(name='bytescolumn',
+                        contains_subsamples=True,
+                        backend=request.param)
     yield co
     co.reset_staging_area()
     co.close()
@@ -214,7 +230,7 @@ class TestColumn3:
         assert np.allclose(out, val)
 
 
-ascii_characters = st.characters(min_codepoint=0, max_codepoint=127)
+ascii_characters = st.characters(min_codepoint=0, max_codepoint=500)
 ascii_text_stratagy = st.text(alphabet=ascii_characters, min_size=0, max_size=500)
 
 
@@ -227,6 +243,30 @@ class TestStrColumn:
 
         co = variable_shape_repo_co_str_aset_nested
         col = co.columns['strcolumn']
+        assert col.schema_type == 'variable_shape'
+        assert col.contains_subsamples is True
+
+        col[key] = {subkey: val}
+        out = col[key][subkey]
+        added_samples_subsamples[key].add(subkey)
+
+        assert len(col) == len(added_samples_subsamples)
+        assert len(col[key]) == len(added_samples_subsamples[key])
+        assert out == val
+
+
+bytes_stratagy = st.binary(max_size=2000)
+
+
+class TestBytesColumn:
+
+    @given(key=st_valid_keys, subkey=st_valid_keys, val=bytes_stratagy)
+    @settings(max_examples=200, deadline=None)
+    def test_bytes_column_variable_shape_nested(self, key, subkey, val, variable_shape_repo_co_bytes_aset_nested):
+        global added_samples_subsamples
+
+        co = variable_shape_repo_co_bytes_aset_nested
+        col = co.columns['bytescolumn']
         assert col.schema_type == 'variable_shape'
         assert col.contains_subsamples is True
 

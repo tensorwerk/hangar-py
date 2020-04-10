@@ -20,7 +20,7 @@ from ..txnctx import TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
-from ..records.hashmachine import ndarray_hasher_tcode_0
+from ..records.hashmachine import hash_type_code_from_digest, hash_func_from_tcode
 from ..records import hash_data_db_key_from_raw_key
 from ..records import queries
 from ..records import summarize
@@ -127,7 +127,14 @@ class HangarClient(object):
         tmp_insec_channel.close()
         configured_channel = grpc.insecure_channel(
             self.address,
-            options=[('grpc.optimization_target', self.cfg['optimization_target'])],
+            options=[
+                ('grpc.optimization_target', self.cfg['optimization_target']),
+                ("grpc.keepalive_time_ms", 1000 * 60 * 1),
+                ("grpc.keepalive_timeout_ms", 1000 * 10),
+                ("grpc.http2_min_sent_ping_interval_without_data_ms", 1000 * 10),
+                ("grpc.http2_max_pings_without_data", 0),
+                ("grpc.keepalive_permit_without_calls", 1),
+            ],
             compression=self.cfg['enable_compression'])
         self.channel = grpc.intercept_channel(configured_channel, self.header_adder_int)
         self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
@@ -295,8 +302,9 @@ class HangarClient(object):
         response = self.stub.PushSchema(request)
         return response
 
-    def fetch_data(self, schema_hash: str,
-                   digests: Sequence[str]) -> Sequence[Tuple[str, np.ndarray]]:
+    def fetch_data(
+            self, schema_hash: str, digests: Sequence[str]
+    ) -> Sequence[Tuple[str, np.ndarray]]:
         """Fetch data hash digests for a particular schema.
 
         As the total size of the data to be transferred isn't known before this
@@ -325,9 +333,8 @@ class HangarClient(object):
         """
         try:
             raw_digests = c.SEP_LST.join(digests).encode()
-            cIter = chunks.tensorChunkedIterator(
-                buf=raw_digests, uncomp_nbytes=len(raw_digests), itemsize=1,
-                pb2_request=hangar_service_pb2.FetchDataRequest)
+            cIter = chunks.tensorChunkedIterator(buf=raw_digests, uncomp_nbytes=len(raw_digests),
+                                                 pb2_request=hangar_service_pb2.FetchDataRequest)
 
             replies = self.stub.FetchData(cIter)
             for idx, reply in enumerate(replies):
@@ -352,10 +359,13 @@ class HangarClient(object):
         unpacked_records = chunks.deserialize_record_pack(uncompBytes)
         for record in unpacked_records:
             data = chunks.deserialize_record(record)
-            received_hash = ndarray_hasher_tcode_0(data.array)
+            expected_hasher_tcode = hash_type_code_from_digest(data.digest)
+            hash_func = hash_func_from_tcode(expected_hasher_tcode)
+            received_hash = hash_func(data.data)
             if received_hash != data.digest:
+                logger.error(data.data)
                 raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {data.digest}')
-            received_data.append((received_hash, data.array))
+            received_data.append((received_hash, data.data))
         return received_data
 
     def push_data(self, schema_hash: str, digests: Sequence[str],
@@ -402,17 +412,16 @@ class HangarClient(object):
                 self._rFs[k].__enter__()
             responses = []
             for digest, spec in specs:
-                arr = self._rFs[spec.backend].read_data(spec)
-                record = chunks.serialize_record(arr, digest, schema_hash)
+                data = self._rFs[spec.backend].read_data(spec)
+                record = chunks.serialize_record(data, digest, schema_hash)
                 records.append(record)
                 totalSize += len(record)
                 if (totalSize >= self.cfg['push_max_nbytes']) or (len(records) > 2000):
                     # send tensor pack when >= configured max nbytes occupied in memory
                     pbar.update(len(records))
                     pack = chunks.serialize_record_pack(records)
-                    cIter = chunks.tensorChunkedIterator(
-                        buf=pack, uncomp_nbytes=len(pack), itemsize=1,
-                        pb2_request=hangar_service_pb2.PushDataRequest)
+                    cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
+                                                         pb2_request=hangar_service_pb2.PushDataRequest)
                     response = self.stub.PushData.future(cIter)
                     responses.append(response)
                     totalSize = 0
@@ -426,9 +435,8 @@ class HangarClient(object):
             if totalSize > 0:
                 # finish sending all remaining tensors if max size has not been hit.
                 pack = chunks.serialize_record_pack(records)
-                cIter = chunks.tensorChunkedIterator(
-                    buf=pack, uncomp_nbytes=len(pack), itemsize=arr.itemsize,
-                    pb2_request=hangar_service_pb2.PushDataRequest)
+                cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
+                                                     pb2_request=hangar_service_pb2.PushDataRequest)
                 response = self.stub.PushData.future(cIter)
                 responses.append(response)
         for fut in responses:

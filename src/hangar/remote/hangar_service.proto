@@ -77,6 +77,12 @@ message SchemaRecord {
 }
 
 
+message NdArray {
+    // shape of the array
+
+}
+
+
 /*
 -------------------------------------------------------------------------------
 | Client Config from Server

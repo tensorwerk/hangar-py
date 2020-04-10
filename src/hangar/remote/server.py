@@ -7,6 +7,7 @@ from concurrent import futures
 from os.path import join as pjoin
 import shutil
 import configparser
+from pprint import pprint as pp
 
 import blosc
 import grpc
@@ -26,10 +27,30 @@ from ..records import (
     hash_schema_db_key_from_raw_key,
     hash_data_db_key_from_raw_key,
 )
-from ..records.hashmachine import ndarray_hasher_tcode_0
+from ..records.hashmachine import hash_type_code_from_digest, hash_func_from_tcode
 from ..utils import set_blosc_nthreads
 
 set_blosc_nthreads()
+
+
+def server_config(server_dir, *, create: bool = True) -> configparser.ConfigParser:
+    CFG = configparser.ConfigParser()
+    dst_dir = Path(server_dir)
+    dst_path = dst_dir.joinpath(c.CONFIG_SERVER_NAME)
+    if dst_path.is_file():
+        CFG.read(dst_path)
+        print(f'Found Config File at {dst_path}')
+    else:
+        if create:
+            dst_dir.mkdir(exist_ok=True)
+            print(f'Creating Server Config File in {dst_path}')
+            src_path = Path(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
+            shutil.copyfile(src_path, dst_path)
+            CFG.read(src_path)
+        else:
+            src_path = Path(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
+            CFG.read(src_path)
+    return CFG
 
 
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
@@ -61,13 +82,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     schema_dtype=None)
                 self._rFs[backend].open(mode='r')
 
-        src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
-        dst_path = pjoin(repo_path, c.CONFIG_SERVER_NAME)
-        if not os.path.isfile(dst_path):
-            shutil.copyfile(src_path, dst_path)
-        self.CFG = configparser.ConfigParser()
-        self.CFG.read(dst_path)
-
+        self.CFG = server_config(repo_path, create=True)
+        print(f'Server Started with Config:')
+        pp({k: dict(v) for k, v in self.CFG.items()})
         self.txnregister = TxnRegister()
         self.repo_path = self.env.repo_path
         self.data_dir = pjoin(self.repo_path, c.DIR_DATA)
@@ -315,17 +332,16 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     raise StopIteration()
                 else:
                     spec = backend_decoder(hashVal)
-                    tensor = self._rFs[spec.backend].read_data(spec)
+                    data = self._rFs[spec.backend].read_data(spec)
 
-                record = chunks.serialize_record(tensor, digest, '')
+                record = chunks.serialize_record(data, digest, '')
                 records.append(record)
                 totalSize += len(record)
                 if totalSize >= fetch_max_nbytes:
                     pack = chunks.serialize_record_pack(records)
                     err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-                    cIter = chunks.tensorChunkedIterator(
-                        buf=pack, uncomp_nbytes=len(pack), itemsize=tensor.itemsize,
-                        pb2_request=hangar_service_pb2.FetchDataReply, err=err)
+                    cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
+                                                         pb2_request=hangar_service_pb2.FetchDataReply, err=err)
                     yield from cIter
                     msg = 'HANGAR REQUESTED RETRY: developer enforced limit on returned '\
                           'raw data size to prevent memory overload of user system.'
@@ -342,9 +358,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             if totalSize > 0:
                 pack = chunks.serialize_record_pack(records)
                 err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-                cIter = chunks.tensorChunkedIterator(
-                    buf=pack, uncomp_nbytes=len(pack), itemsize=tensor.itemsize,
-                    pb2_request=hangar_service_pb2.FetchDataReply, err=err)
+                cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
+                                                     pb2_request=hangar_service_pb2.FetchDataReply, err=err)
                 yield from cIter
             self.txnregister.abort_reader_txn(self.env.hashenv)
 
@@ -379,7 +394,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         for record in unpacked_records:
             data = chunks.deserialize_record(record)
             schema_hash = data.schema
-            received_hash = ndarray_hasher_tcode_0(data.array)
+            expected_hasher_tcode = hash_type_code_from_digest(data.digest)
+            hash_func = hash_func_from_tcode(expected_hasher_tcode)
+            received_hash = hash_func(data.data)
             if received_hash != data.digest:
                 msg = f'HASH MANGLED, received: {received_hash} != expected digest: {data.digest}'
                 context.set_details(msg)
@@ -387,7 +404,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 err = hangar_service_pb2.ErrorProto(code=15, message=msg)
                 reply = hangar_service_pb2.PushDataReply(error=err)
                 return reply
-            received_data.append((received_hash, data.array))
+            received_data.append((received_hash, data.data))
         _ = self.CW.data(schema_hash, received_data)  # returns saved)_digests
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
@@ -497,7 +514,6 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         uncompBytes = blosc.decompress(hBytes)
         c_hashs_raw = chunks.deserialize_record_pack(uncompBytes)
         c_hashset = set([chunks.deserialize_ident(raw).digest for raw in c_hashs_raw])
-
         s_hashset = set(hashs.HashQuery(self.env.hashenv).list_all_hash_keys_raw())
         s_missing = c_hashset.difference(s_hashset)
         s_hashs_raw = [chunks.serialize_ident(s_mis, '') for s_mis in s_missing]
@@ -556,14 +572,8 @@ def serve(hangar_path: str,
 
     # ------------------- Configure Server ------------------------------------
 
-    dst_path = pjoin(hangar_path, c.DIR_HANGAR_SERVER, c.CONFIG_SERVER_NAME)
-    CFG = configparser.ConfigParser()
-    if os.path.isfile(dst_path):
-        CFG.read(dst_path)
-    else:
-        src_path = pjoin(os.path.dirname(__file__), c.CONFIG_SERVER_NAME)
-        CFG.read(src_path)
-
+    server_dir = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
+    CFG = server_config(server_dir, create=False)
     serverCFG = CFG['SERVER_GRPC']
     enable_compression = serverCFG['enable_compression']
     if enable_compression == 'NoCompression':
@@ -609,7 +619,6 @@ def serve(hangar_path: str,
 
     # ------------------- Start the GRPC server -------------------------------
 
-    server_dir = pjoin(hangar_path, c.DIR_HANGAR_SERVER)
     hangserv = HangarServer(server_dir, overwrite)
     hangar_service_pb2_grpc.add_HangarServiceServicer_to_server(hangserv, server)
     port = server.add_insecure_port(channel_address)

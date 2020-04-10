@@ -115,6 +115,33 @@ cdef class LMDB_30_DataHashSpec:
         return True
 
 
+
+cdef class LMDB_31_DataHashSpec:
+
+    def __init__(self, str backend, str uid, str row_idx, str checksum):
+
+        self.backend = backend
+        self.uid = uid
+        self.row_idx = row_idx
+        self.checksum = checksum
+
+
+    def __repr__(self):
+        return (f'{self.__class__.__name__}('
+                f'backend="{self.backend}", '
+                f'uid="{self.uid}", '
+                f'row_idx={self.row_idx}, '
+                f'checksum="{self.checksum}")')
+
+    def __iter__(self):
+        for attr in ['backend', 'uid', 'row_idx', 'checksum']:
+            yield getattr(self, attr)
+
+    @property
+    def islocal(self):
+        return True
+
+
 cdef class REMOTE_50_DataHashSpec:
 
     def __init__(self, str backend, str schema_hash):

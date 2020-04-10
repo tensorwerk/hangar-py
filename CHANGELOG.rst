@@ -3,6 +3,32 @@ Change Log
 ==========
 
 
+_`In-Progress`
+==============
+
+New Features
+------------
+
+* New column data type supporting arbitrary ``bytes`` data.
+  (`#198 <https://github.com/tensorwerk/hangar-py/pull/198>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+Improvements
+------------
+
+* ``str`` typed columns can now accept data containing any unicode code-point. In prior releases
+  data containing any ``non-ascii`` character could not be written to this column type.
+  (`#198 <https://github.com/tensorwerk/hangar-py/pull/198>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+Bug Fixes
+---------
+
+* Fixed issue where ``str`` and (newly added) ``bytes`` column data could not be fetched / pushed
+  between a local client repository and remote server.
+  (`#198 <https://github.com/tensorwerk/hangar-py/pull/198>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+
 `0.5.1`_ (2020-04-05)
 =====================
 
