@@ -21,4 +21,4 @@ Hangar Tutorial
    Tutorial-002
    Tutorial-003
    Tutorial-Dataloader
-   Tutorial-QuickStart
+   Tutorial-RealQuickStart
