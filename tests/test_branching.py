@@ -23,7 +23,7 @@ def test_cannot_create_new_branch_from_initialized_repo_with_no_commits(repo):
 
 def test_can_create_new_branch_from_repo_with_one_commit(repo):
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
     expected_digest = co.commit('first')
     co.close()
 
@@ -50,16 +50,17 @@ def test_create_multiple_branches_different_name_same_commit(aset_samples_initia
     assert aset_samples_initialized_repo.list_branches() == ['master', 'testbranch1', 'testbranch2', 'testbranch3']
 
 
-def test_create_branch_by_specifying_base_commit(aset_samples_initialized_repo):
+def test_create_branch_by_specifying_base_commit(repo):
 
-    repo = aset_samples_initialized_repo
     co = repo.checkout(write=True)
+    co.add_str_column('test_meta')
+    co.commit('first commit')
     first_digest = co.commit_hash
-    co.metadata['foo'] = 'bar'
+    co['test_meta']['foo'] = 'bar'
     second_digest = co.commit('second')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     third_digest = co.commit('third')
-    co.metadata['zen'] = 'python'
+    co['test_meta']['zen'] = 'python'
     fourth_digest = co.commit('fourth')
     co.close()
 
@@ -70,15 +71,16 @@ def test_create_branch_by_specifying_base_commit(aset_samples_initialized_repo):
     assert secBranch.digest == second_digest
 
     co = repo.checkout(branch='dev-second')
-    assert len(co.metadata) == 1
-    assert co.metadata['foo'] == 'bar'
+    assert len(co['test_meta']) == 1
+    assert co['test_meta']['foo'] == 'bar'
     co.close()
 
 
-def test_remove_branch_works_when_commits_align(aset_samples_initialized_repo):
-    repo = aset_samples_initialized_repo
+def test_remove_branch_works_when_commits_align(repo):
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co.commit('first')
+    co['test_meta']['foo'] = 'bar'
     masterHEAD = co.commit('second')
     co.close()
     repo.create_branch('testdelete')
@@ -91,16 +93,17 @@ def test_remove_branch_works_when_commits_align(aset_samples_initialized_repo):
     assert repo.list_branches() == ['master']
 
 
-def test_delete_branch_raises_runtime_error_when_history_not_merged(aset_samples_initialized_repo):
-    repo = aset_samples_initialized_repo
+def test_delete_branch_raises_runtime_error_when_history_not_merged(repo):
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co.commit('first')
+    co['test_meta']['foo'] = 'bar'
     masterHEAD = co.commit('second')
     co.close()
 
     repo.create_branch('testdelete')
     co = repo.checkout(write=True, branch='testdelete')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     thirdDigest = co.commit('third')
     co.close()
 
@@ -113,16 +116,17 @@ def test_delete_branch_raises_runtime_error_when_history_not_merged(aset_samples
         repo.remove_branch('testdelete')
 
 
-def test_delete_branch_completes_when_history_not_merged_but_force_option_set(aset_samples_initialized_repo):
-    repo = aset_samples_initialized_repo
+def test_delete_branch_completes_when_history_not_merged_but_force_option_set(repo):
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co.commit('first')
+    co['test_meta']['foo'] = 'bar'
     masterHEAD = co.commit('second')
     co.close()
 
     repo.create_branch('testdelete')
     co = repo.checkout(write=True, branch='testdelete')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     thirdDigest = co.commit('third')
     co.close()
 
@@ -137,16 +141,17 @@ def test_delete_branch_completes_when_history_not_merged_but_force_option_set(as
     assert repo.list_branches() == ['master']
 
 
-def test_delete_branch_raises_value_error_if_invalid_branch_name(aset_samples_initialized_repo):
-    repo = aset_samples_initialized_repo
+def test_delete_branch_raises_value_error_if_invalid_branch_name(repo):
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co.commit('first')
+    co['test_meta']['foo'] = 'bar'
     masterHEAD = co.commit('second')
     co.close()
 
     repo.create_branch('testdelete')
     co = repo.checkout(write=True, branch='testdelete')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     thirdDigest = co.commit('third')
     co.close()
 
@@ -157,16 +162,17 @@ def test_delete_branch_raises_value_error_if_invalid_branch_name(aset_samples_in
         repo.remove_branch('origin/master')
 
 
-def test_delete_branch_raises_permission_error_if_writer_lock_held(aset_samples_initialized_repo):
-    repo = aset_samples_initialized_repo
+def test_delete_branch_raises_permission_error_if_writer_lock_held(repo):
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co.commit('first')
+    co['test_meta']['foo'] = 'bar'
     masterHEAD = co.commit('second')
     co.close()
 
     repo.create_branch('testdelete')
     co = repo.checkout(write=True, branch='testdelete')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     thirdDigest = co.commit('third')
     co.close()
 
@@ -178,16 +184,17 @@ def test_delete_branch_raises_permission_error_if_writer_lock_held(aset_samples_
     co.close()
 
 
-def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_head(aset_samples_initialized_repo):
-    repo = aset_samples_initialized_repo
+def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_head(repo):
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co.commit('first')
+    co['test_meta']['foo'] = 'bar'
     masterHEAD = co.commit('second')
     co.close()
 
     repo.create_branch('testdelete')
     co = repo.checkout(write=True, branch='testdelete')
-    co.metadata['hello'] = 'world'
+    co['test_meta']['hello'] = 'world'
     thirdDigest = co.commit('third')
     co.close()
 
@@ -196,14 +203,12 @@ def test_delete_branch_raises_permission_error_if_branch_requested_is_staging_he
     assert repo.list_branches() == ['master', 'testdelete']
 
 
-def test_delete_branch_raises_permission_error_if_only_one_branch_left(
-    aset_samples_initialized_repo):
-    repo = aset_samples_initialized_repo
+def test_delete_branch_raises_permission_error_if_only_one_branch_left(repo):
     co = repo.checkout(write=True)
-    co.metadata['foo'] = 'bar'
+    co.add_str_column('test_meta')
+    co['test_meta']['foo'] = 'bar'
     masterHEAD = co.commit('second')
     co.close()
-
 
     assert repo.list_branches() == ['master']
     with pytest.raises(PermissionError):

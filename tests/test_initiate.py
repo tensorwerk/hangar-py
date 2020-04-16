@@ -156,18 +156,15 @@ def test_force_release_writer_lock(managed_tmpdir, monkeypatch):
     def mock_true(*args, **kwargs):
         return True
 
-    co.metadata['hello'] = 'world'
     # try to release the writer lock with a process which has different uid
     co._writer_lock = 'lololol'
     with pytest.raises(RuntimeError):
         monkeypatch.setattr(co, '_verify_alive', mock_true)
         monkeypatch.setattr(co._columns, '_destruct', mock_true)
-        monkeypatch.setattr(co._metadata, '_destruct', mock_true)
         co.close()
     # replace, but rest of object is closed
     monkeypatch.setattr(co, '_writer_lock', orig_lock)
     monkeypatch.delattr(co._columns, '_destruct')
-    monkeypatch.delattr(co._metadata, '_destruct')
     co.close()
     repo._env._close_environments()
 
@@ -176,7 +173,6 @@ def test_force_release_writer_lock_works(managed_tmpdir):
     repo = Repository(path=managed_tmpdir, exists=False)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
     co = repo.checkout(write=True)
-    co.metadata['hello'] = 'world'
 
     # try to release the writer lock with a process which has different uid
     with pytest.warns(ResourceWarning):

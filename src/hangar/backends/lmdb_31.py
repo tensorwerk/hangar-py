@@ -4,15 +4,15 @@ Backend Identifiers
 ===================
 
 *  Backend: ``3``
-*  Version: ``0``
-*  Format Code: ``30``
-*  Canonical Name: ``LMDB_30``
+*  Version: ``1``
+*  Format Code: ``31``
+*  Canonical Name: ``LMDB_31``
 
 Storage Method
 ==============
 
-*  This module is meant to handle string typed data which is of any size. IO
-   is performed via the LMDB storage system.
+*  This module is meant to handle bbytes typed data which is of any size.
+   less than 2MB per value. IO is performed via the LMDB storage system.
 
 *  This module does not compress values upon writing, the full (uncompressed)
    value of the text is written to the DB for each key.
@@ -63,7 +63,7 @@ Examples
     *  Row Index: "0123"
     *  xxhash64_hexdigest: 8067007c0f05c359
 
-    ``Record Data => "30:rlUK3C:0123:8067007c0f05c359"``
+    ``Record Data => "31:rlUK3C:0123:8067007c0f05c359"``
 
 2)  Adding a second piece of data:
 
@@ -71,7 +71,7 @@ Examples
     *  Row Index: "0124"
     *  xxhash64_hexdigest: b89f873d3d153a9c
 
-    ``Record Data => "30:rlUK3C:0124:b89f873d3d153a9c"``
+    ``Record Data => "31:rlUK3C:0124:b89f873d3d153a9c"``
 
 3)  Adding a the 500th piece of data:
 
@@ -79,7 +79,7 @@ Examples
     *  Row Index: "01AU"
     *  xxhash64_hexdigest: cf3fc53cad153a5a
 
-    ``Record Data => "30:rlUK3C:01AU:cf3fc53cad153a5a"``
+    ``Record Data => "31:rlUK3C:01AU:cf3fc53cad153a5a"``
 """
 import os
 import shutil
@@ -94,7 +94,7 @@ from typing import Optional
 import lmdb
 from xxhash import xxh64_hexdigest
 
-from .specs import LMDB_30_DataHashSpec
+from .specs import LMDB_31_DataHashSpec
 from ..constants import DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE, DIR_DATA
 from ..op_state import reader_checkout_only, writer_checkout_only
 from ..utils import random_string
@@ -108,7 +108,7 @@ LMDB_SETTINGS = {
     'lock': True,
     'max_spare_txns': 4,
 }
-_FmtCode = '30'
+_FmtCode = '31'
 
 
 def _lexicographic_keys():
@@ -128,17 +128,17 @@ def _lexicographic_keys():
         yield res
 
 
-def lmdb_30_encode(uid: str, row_idx: int, checksum: str) -> bytes:
-    res = f'30:{uid}:{row_idx}:{checksum}'
+def lmdb_31_encode(uid: str, row_idx: int, checksum: str) -> bytes:
+    res = f'31:{uid}:{row_idx}:{checksum}'
     return res.encode()
 
 
-@OneOf(['<class\'str\'>', str])
+@OneOf(['<class\'bytes\'>', bytes])
 class AllowedDtypes(Descriptor):
     pass
 
 
-class LMDB_30_Options(metaclass=checkedmeta):
+class LMDB_31_Options(metaclass=checkedmeta):
     _dtype = AllowedDtypes()
     _backend_options = EmptyDict()
 
@@ -161,7 +161,7 @@ class LMDB_30_Options(metaclass=checkedmeta):
         return ('repo_path',)
 
 
-class LMDB_30_FileHandles:
+class LMDB_31_FileHandles:
 
     def __init__(self, repo_path: Path, *args, **kwargs):
 
@@ -256,8 +256,8 @@ class LMDB_30_FileHandles:
             for uidpth in process_dir.iterdir():
                 if uidpth.suffix == '.lmdbdir':
                     file_pth = self.DATADIR.joinpath(uidpth.stem)
-                    self.rFp[uidpth.stem] = partial(lmdb.open, str(file_pth), readonly=True,
-                                                    **LMDB_SETTINGS)
+                    self.rFp[uidpth.stem] = partial(
+                        lmdb.open, str(file_pth), readonly=True, **LMDB_SETTINGS)
 
         if not remote_operation:
             if not self.STOREDIR.is_dir():
@@ -265,8 +265,8 @@ class LMDB_30_FileHandles:
             for uidpth in self.STOREDIR.iterdir():
                 if uidpth.suffix == '.lmdbdir':
                     file_pth = self.DATADIR.joinpath(uidpth.stem)
-                    self.rFp[uidpth.stem] = partial(lmdb.open, str(file_pth), readonly=True,
-                                                    **LMDB_SETTINGS)
+                    self.rFp[uidpth.stem] = partial(
+                        lmdb.open, str(file_pth), readonly=True, **LMDB_SETTINGS)
 
     def close(self):
         """Close a file handle after writes have been completed
@@ -331,12 +331,12 @@ class LMDB_30_FileHandles:
         process_dir = self.REMOTEDIR if remote_operation else self.STAGEDIR
         Path(process_dir, f'{uid}.lmdbdir').touch()
 
-    def read_data(self, hashVal: LMDB_30_DataHashSpec) -> str:
+    def read_data(self, hashVal: LMDB_31_DataHashSpec) -> str:
         """Read data from an hdf5 file handle at the specified locations
 
         Parameters
         ----------
-        hashVal : LMDB_30_DataHashSpec
+        hashVal : LMDB_31_DataHashSpec
             record specification parsed from its serialized store val in lmdb.
 
         Returns
@@ -361,18 +361,17 @@ class LMDB_30_FileHandles:
             else:
                 raise
 
-        out = res.decode()
         if xxh64_hexdigest(res) != hashVal.checksum:
             raise RuntimeError(
                 f'DATA CORRUPTION Checksum {xxh64_hexdigest(res)} != recorded {hashVal}')
-        return out
+        return res
 
-    def write_data(self, data: str, *, remote_operation: bool = False) -> bytes:
+    def write_data(self, data: bytes, *, remote_operation: bool = False) -> bytes:
         """verifies correctness of array data and performs write operation.
 
         Parameters
         ----------
-        data: str
+        data: bytes
             data to write to group.
         remote_operation : optional, kwarg only, bool
             If this is a remote process which is adding data, any necessary
@@ -386,9 +385,7 @@ class LMDB_30_FileHandles:
             string identifying the collection dataset and collection dim-0 index
             which the array can be accessed at.
         """
-        encoded_data = data.encode()
-        checksum = xxh64_hexdigest(encoded_data)
-
+        checksum = xxh64_hexdigest(data)
         if self.w_uid in self.wFp:
             try:
                 row_idx = next(self.row_idx)
@@ -402,9 +399,9 @@ class LMDB_30_FileHandles:
         encoded_row_idx = row_idx.encode()
         try:
             with self.wFp[self.w_uid].begin(write=True) as txn:
-                txn.put(encoded_row_idx, encoded_data, append=True)
+                txn.put(encoded_row_idx, data, append=True)
         except lmdb.MapFullError:
             self._create_schema(remote_operation=remote_operation)
             return self.write_data(data, remote_operation=remote_operation)
 
-        return lmdb_30_encode(self.w_uid, row_idx, checksum)
+        return lmdb_31_encode(self.w_uid, row_idx, checksum)

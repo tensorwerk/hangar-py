@@ -91,6 +91,7 @@ from .specs import (
     HDF5_01_DataHashSpec,
     NUMPY_10_DataHashSpec,
     LMDB_30_DataHashSpec,
+    LMDB_31_DataHashSpec,
     REMOTE_50_DataHashSpec,
 )
 from .specparse import backend_decoder
@@ -98,6 +99,7 @@ from .specparse import backend_decoder
 from .hdf5_00 import HDF5_00_FileHandles, HDF5_00_Options
 from .hdf5_01 import HDF5_01_FileHandles, HDF5_01_Options
 from .lmdb_30 import LMDB_30_FileHandles, LMDB_30_Options
+from .lmdb_31 import LMDB_31_FileHandles, LMDB_31_Options
 from .numpy_10 import NUMPY_10_FileHandles, NUMPY_10_Options
 from .remote_50 import REMOTE_50_Handler, REMOTE_50_Options
 
@@ -108,6 +110,7 @@ BACKEND_ACCESSOR_MAP = {
     '01': HDF5_01_FileHandles,
     '10': NUMPY_10_FileHandles,
     '30': LMDB_30_FileHandles,
+    '31': LMDB_31_FileHandles,
     # REMOTES -> [50:99] + ['AA':'ZZ']
     '50': REMOTE_50_Handler,
 }
@@ -117,6 +120,7 @@ BACKEND_OPTIONS_MAP = {
     '01': HDF5_01_Options,
     '10': NUMPY_10_Options,
     '30': LMDB_30_Options,
+    '31': LMDB_31_Options,
     '50': REMOTE_50_Options,
 }
 
@@ -129,5 +133,6 @@ BACKEND_IS_LOCAL_MAP: Dict[str, bool] = {
 __all__ = [
     'backend_decoder', 'HDF5_00_DataHashSpec', 'HDF5_01_DataHashSpec',
     'NUMPY_10_DataHashSpec', 'LMDB_30_DataHashSpec', 'REMOTE_50_DataHashSpec',
-    'BACKEND_OPTIONS_MAP', 'BACKEND_ACCESSOR_MAP', 'BACKEND_IS_LOCAL_MAP',
+    'LMDB_31_DataHashSpec', 'BACKEND_OPTIONS_MAP', 'BACKEND_ACCESSOR_MAP',
+    'BACKEND_IS_LOCAL_MAP',
 ]

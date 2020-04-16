@@ -10,6 +10,7 @@ from typing import List, NamedTuple, Optional, Sequence
 import grpc
 import lmdb
 from tqdm import tqdm
+import numpy as np
 
 from .backends import backend_decoder
 from .constants import LMDB_SETTINGS
@@ -243,12 +244,6 @@ class Remotes(object):
             mCmtResponse = client.fetch_find_missing_commits(branch)
             m_cmts = mCmtResponse.commits
             for commit in tqdm(m_cmts, desc='fetching commit data refs'):
-                # Get missing label (metadata) digest & values
-                m_labels = set(client.fetch_find_missing_labels(commit))
-                for label in m_labels:
-                    received_hash, labelVal = client.fetch_label(label)
-                    CW.label(received_hash, labelVal)
-                # Get missing data schema digests & values
                 mSchemaResponse = client.fetch_find_missing_schemas(commit)
                 for schema in mSchemaResponse.schema_digests:
                     schema_hash, schemaVal = client.fetch_schema(schema)
@@ -370,16 +365,22 @@ class Remotes(object):
                             while notEmpty:
                                 notEmpty = curs.delete()
                     unpack_commit_ref(self._env.refenv, tmpDB, commit)
+                    recQuery = queries.RecordQuery(tmpDB)
+
                     # handle column_names option
+                    cmt_column_names = recQuery.column_names()
                     if column_names is None:
-                        column_names = queries.RecordQuery(tmpDB).column_names()
-                    for asetn in column_names:
-                        cmtData_hashs = queries.RecordQuery(tmpDB).column_data_hashes(asetn)
+                        cmt_columns = cmt_column_names
+                    else:
+                        cmt_columns = [col for col in column_names if col in cmt_column_names]
+                    for col in cmt_columns:
+                        cmtData_hashs = recQuery.column_data_hashes(col)
                         allHashs.update(cmtData_hashs)
             finally:
                 tmpDB.close()
-        hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
+
         try:
+            hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
             m_schema_hash_map = defaultdict(list)
             for hashVal in allHashs:
                 hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
@@ -404,7 +405,10 @@ class Remotes(object):
                     # max_num_bytes option
                     if isinstance(max_num_bytes, int):
                         for idx, r_kv in enumerate(ret):
-                            total_nbytes_seen += r_kv[1].nbytes
+                            try:
+                                total_nbytes_seen += r_kv[1].nbytes
+                            except AttributeError:
+                                total_nbytes_seen += len(r_kv[1])
                             if total_nbytes_seen >= max_num_bytes:
                                 ret = ret[0:idx]
                                 stop = True
@@ -499,7 +503,7 @@ class Remotes(object):
                 else:
                     raise rpc_error
 
-            m_labels, m_schemas = set(), set()
+            m_schemas = set()
             m_schema_hashs = defaultdict(set)
             with tempfile.TemporaryDirectory() as tempD:
                 tmpDF = Path(tempD, 'test.lmdb')
@@ -522,9 +526,6 @@ class Remotes(object):
                         m_cmt_schema_hashs[schema].append(hsh)
                     for schema, hashes in m_cmt_schema_hashs.items():
                         m_schema_hashs[schema].update(hashes)
-                    # labels / metadata
-                    missing_labels = client.push_find_missing_labels(commit, tmpDB=tmpDB)
-                    m_labels.update(missing_labels)
                 tmpDB.close()
 
             # ------------------------- send data -----------------------------
@@ -541,12 +542,6 @@ class Remotes(object):
                 for dataSchema, dataHashes in m_schema_hashs.items():
                     client.push_data(dataSchema, dataHashes, pbar=p)
                     p.update(1)
-            # labels/metadata
-            for label in tqdm(m_labels, desc='pushing metadata'):
-                labelVal = CR.label(label)
-                if not labelVal:
-                    raise KeyError(f'no label with hash: {label} exists')
-                client.push_label(label, labelVal)
             # commit refs
             for commit in tqdm(m_commits, desc='pushing commit refs'):
                 cmtContent = CR.commit(commit)

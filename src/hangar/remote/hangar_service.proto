@@ -11,24 +11,20 @@ service HangarService {
 
     rpc FetchBranchRecord (FetchBranchRecordRequest) returns (FetchBranchRecordReply) {}
     rpc FetchData (stream FetchDataRequest) returns (stream FetchDataReply) {}
-    rpc FetchLabel (FetchLabelRequest) returns (FetchLabelReply) {}
     rpc FetchCommit (FetchCommitRequest) returns (stream FetchCommitReply) {}
     rpc FetchSchema (FetchSchemaRequest) returns (FetchSchemaReply) {}
 
     rpc PushBranchRecord (PushBranchRecordRequest) returns (PushBranchRecordReply) {}
     rpc PushData (stream PushDataRequest) returns (PushDataReply) {}
-    rpc PushLabel (PushLabelRequest) returns (PushLabelReply) {}
     rpc PushCommit (stream PushCommitRequest) returns (PushCommitReply) {}
     rpc PushSchema (PushSchemaRequest) returns (PushSchemaReply) {}
 
     rpc FetchFindMissingCommits (FindMissingCommitsRequest) returns (FindMissingCommitsReply) {}
     rpc FetchFindMissingHashRecords (stream FindMissingHashRecordsRequest) returns (stream FindMissingHashRecordsReply) {}
-    rpc FetchFindMissingLabels (stream FindMissingLabelsRequest) returns (stream FindMissingLabelsReply) {}
     rpc FetchFindMissingSchemas (FindMissingSchemasRequest) returns (FindMissingSchemasReply) {}
 
     rpc PushFindMissingCommits (FindMissingCommitsRequest) returns (FindMissingCommitsReply) {}
     rpc PushFindMissingHashRecords (stream FindMissingHashRecordsRequest) returns (stream FindMissingHashRecordsReply) {}
-    rpc PushFindMissingLabels (stream FindMissingLabelsRequest) returns (stream FindMissingLabelsReply) {}
     rpc PushFindMissingSchemas (FindMissingSchemasRequest) returns (FindMissingSchemasReply) {}
 
 }
@@ -73,21 +69,17 @@ message CommitRecord {
 }
 
 
-message LabelData {
-    // (hex)digest of the label data
-    string digest = 1;
-    // label data to be sent
-    bytes blob = 2;
-    // total size of bytes
-    int64 total_byte_size = 3;
-}
-
-
 message SchemaRecord {
     // hash of the schema def
     string digest = 1;
     // encoded schema val to be sent
     bytes blob = 2;
+}
+
+
+message NdArray {
+    // shape of the array
+
 }
 
 
@@ -154,18 +146,6 @@ message FetchDataReply {
 }
 
 
-message FetchLabelRequest {
-    // (hex)digest of the label data
-    HashRecord rec = 1;
-}
-message FetchLabelReply {
-    HashRecord rec = 1;
-    // label data to be sent
-    bytes blob = 2;
-    // success or not
-    ErrorProto error = 3;
-}
-
 
 message FetchCommitRequest {
     // (hex)digest of the commit to fetch references to
@@ -226,15 +206,6 @@ message PushDataReply {
     ErrorProto error = 1;
 }
 
-message PushLabelRequest {
-    HashRecord rec = 1;
-    // label data to be sent
-    bytes blob = 2;
-}
-message PushLabelReply {
-    // success or not
-    ErrorProto error = 1;
-}
 
 message PushCommitRequest {
     // (hex)digest hash of the commit record
@@ -300,25 +271,6 @@ message FindMissingHashRecordsReply {
     ErrorProto error = 4;
 }
 
-
-message FindMissingLabelsRequest {
-    // commit hash to check label hash records for
-    string commit = 1;
-    // all label hashes existing on the client
-    bytes hashs = 2;
-    // total byte size
-    int64 total_byte_size = 3;
-}
-message FindMissingLabelsReply {
-    // commit hash specified
-    string commit = 1;
-    // all label hashs existing in the specified commit which do not exist on client
-    bytes hashs = 2;
-    // total byte size
-    int64 total_byte_size = 3;
-    // success or not
-    ErrorProto error = 4;
-}
 
 
 message FindMissingSchemasRequest {

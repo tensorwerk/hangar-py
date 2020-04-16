@@ -275,7 +275,6 @@ class Repository(object):
                 co = WriterCheckout(
                     repo_pth=self._repo_path,
                     branch_name=branch,
-                    labelenv=self._env.labelenv,
                     hashenv=self._env.hashenv,
                     refenv=self._env.refenv,
                     stageenv=self._env.stageenv,
@@ -287,7 +286,6 @@ class Repository(object):
                     branch_name=branch, commit=commit)
                 co = ReaderCheckout(
                     base_path=self._repo_path,
-                    labelenv=self._env.labelenv,
                     dataenv=self._env.cmtenv[commit_hash],
                     hashenv=self._env.hashenv,
                     branchenv=self._env.branchenv,
@@ -449,8 +447,6 @@ class Repository(object):
         print(summarize.details(
             self._env.hashenv, line_limit=line_limit, line_length=line_length).getvalue())
         print(summarize.details(
-            self._env.labelenv, line_limit=line_limit, line_length=line_length).getvalue())
-        print(summarize.details(
             self._env.stageenv, line_limit=line_limit, line_length=line_length).getvalue())
         print(summarize.details(
             self._env.stagehashenv, line_limit=line_limit, line_length=line_length).getvalue())
@@ -566,7 +562,6 @@ class Repository(object):
             >>> repo.list_branches()
                 ['master', 'testbranch']
             >>> co = repo.checkout(write=True, branch='testbranch')
-            >>> co.metadata['foo'] = 'bar'
             >>> # add data ...
             >>> newDigest = co.commit('added some stuff')
 
@@ -636,7 +631,7 @@ class Repository(object):
             ['master', 'first-testbranch', 'second-testbranch']
             >>> # Make a commit to advance a branch
             >>> co = repo.checkout(write=True, branch='first-testbranch')
-            >>> co.metadata['foo'] = 'bar'
+            >>> # add data ...
             >>> co.commit('added some stuff')
             '3l253la5hna3k3a553256nak35hq5q534kq35532'
             >>> co.close()
@@ -804,7 +799,6 @@ class Repository(object):
             integrity.run_verification(
                 branchenv=self._env.branchenv,
                 hashenv=self._env.hashenv,
-                labelenv=self._env.labelenv,
                 refenv=self._env.refenv,
                 repo_path=self._env.repo_path)
         finally:

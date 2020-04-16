@@ -1,0 +1,31 @@
+name: Build Sphinx Docs
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+jobs:
+  build_docs:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade setuptools pip wheel tox
+          sudo apt-get update
+          sudo apt-get install pandoc
+      - name: Run Documentation Generator
+        run: tox -e docs
+        env:
+          GH_ACTIONS_PROC_NR: 1

@@ -20,8 +20,8 @@ from ..txnctx import TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
 from ..records import commiting
 from ..records import hashs
-from ..records.hashmachine import array_hash_digest, metadata_hash_digest
-from ..records import hash_data_db_key_from_raw_key, hash_meta_raw_key_from_db_key
+from ..records.hashmachine import hash_type_code_from_digest, hash_func_from_tcode
+from ..records import hash_data_db_key_from_raw_key
 from ..records import queries
 from ..records import summarize
 from ..utils import set_blosc_nthreads
@@ -127,7 +127,14 @@ class HangarClient(object):
         tmp_insec_channel.close()
         configured_channel = grpc.insecure_channel(
             self.address,
-            options=[('grpc.optimization_target', self.cfg['optimization_target'])],
+            options=[
+                ('grpc.optimization_target', self.cfg['optimization_target']),
+                ("grpc.keepalive_time_ms", 1000 * 60 * 1),
+                ("grpc.keepalive_timeout_ms", 1000 * 10),
+                ("grpc.http2_min_sent_ping_interval_without_data_ms", 1000 * 10),
+                ("grpc.http2_max_pings_without_data", 0),
+                ("grpc.keepalive_permit_without_calls", 1),
+            ],
             compression=self.cfg['enable_compression'])
         self.channel = grpc.intercept_channel(configured_channel, self.header_adder_int)
         self.stub = hangar_service_pb2_grpc.HangarServiceStub(self.channel)
@@ -295,8 +302,9 @@ class HangarClient(object):
         response = self.stub.PushSchema(request)
         return response
 
-    def fetch_data(self, schema_hash: str,
-                   digests: Sequence[str]) -> Sequence[Tuple[str, np.ndarray]]:
+    def fetch_data(
+            self, schema_hash: str, digests: Sequence[str]
+    ) -> Sequence[Tuple[str, np.ndarray]]:
         """Fetch data hash digests for a particular schema.
 
         As the total size of the data to be transferred isn't known before this
@@ -325,9 +333,8 @@ class HangarClient(object):
         """
         try:
             raw_digests = c.SEP_LST.join(digests).encode()
-            cIter = chunks.tensorChunkedIterator(
-                buf=raw_digests, uncomp_nbytes=len(raw_digests), itemsize=1,
-                pb2_request=hangar_service_pb2.FetchDataRequest)
+            cIter = chunks.tensorChunkedIterator(buf=raw_digests, uncomp_nbytes=len(raw_digests),
+                                                 pb2_request=hangar_service_pb2.FetchDataRequest)
 
             replies = self.stub.FetchData(cIter)
             for idx, reply in enumerate(replies):
@@ -352,10 +359,13 @@ class HangarClient(object):
         unpacked_records = chunks.deserialize_record_pack(uncompBytes)
         for record in unpacked_records:
             data = chunks.deserialize_record(record)
-            received_hash = array_hash_digest(data.array)
+            expected_hasher_tcode = hash_type_code_from_digest(data.digest)
+            hash_func = hash_func_from_tcode(expected_hasher_tcode)
+            received_hash = hash_func(data.data)
             if received_hash != data.digest:
+                logger.error(data.data)
                 raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {data.digest}')
-            received_data.append((received_hash, data.array))
+            received_data.append((received_hash, data.data))
         return received_data
 
     def push_data(self, schema_hash: str, digests: Sequence[str],
@@ -402,17 +412,16 @@ class HangarClient(object):
                 self._rFs[k].__enter__()
             responses = []
             for digest, spec in specs:
-                arr = self._rFs[spec.backend].read_data(spec)
-                record = chunks.serialize_record(arr, digest, schema_hash)
+                data = self._rFs[spec.backend].read_data(spec)
+                record = chunks.serialize_record(data, digest, schema_hash)
                 records.append(record)
                 totalSize += len(record)
                 if (totalSize >= self.cfg['push_max_nbytes']) or (len(records) > 2000):
                     # send tensor pack when >= configured max nbytes occupied in memory
                     pbar.update(len(records))
                     pack = chunks.serialize_record_pack(records)
-                    cIter = chunks.tensorChunkedIterator(
-                        buf=pack, uncomp_nbytes=len(pack), itemsize=1,
-                        pb2_request=hangar_service_pb2.PushDataRequest)
+                    cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
+                                                         pb2_request=hangar_service_pb2.PushDataRequest)
                     response = self.stub.PushData.future(cIter)
                     responses.append(response)
                     totalSize = 0
@@ -426,63 +435,13 @@ class HangarClient(object):
             if totalSize > 0:
                 # finish sending all remaining tensors if max size has not been hit.
                 pack = chunks.serialize_record_pack(records)
-                cIter = chunks.tensorChunkedIterator(
-                    buf=pack, uncomp_nbytes=len(pack), itemsize=arr.itemsize,
-                    pb2_request=hangar_service_pb2.PushDataRequest)
+                cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
+                                                     pb2_request=hangar_service_pb2.PushDataRequest)
                 response = self.stub.PushData.future(cIter)
                 responses.append(response)
         for fut in responses:
             last = fut.result()
         return last
-
-    def fetch_label(self, digest: str) -> Tuple[str, bytes]:
-        """get a the raw bytes for a metadata/label digest
-
-        Parameters
-        ----------
-        digest : str
-            digest to request from the server
-
-        Returns
-        -------
-        Tuple[str, bytes]
-            elements indicating [`digest`, `raw record bytes`]
-
-        Raises
-        ------
-        RuntimeError
-            if the received data does not match the requested hash value
-        """
-        rec = hangar_service_pb2.HashRecord(digest=digest)
-        request = hangar_service_pb2.FetchLabelRequest(rec=rec)
-        reply = self.stub.FetchLabel(request)
-
-        uncompBlob = blosc.decompress(reply.blob)
-        received_hash = metadata_hash_digest(uncompBlob.decode())
-        if received_hash != digest:
-            raise RuntimeError(f'received_hash: {received_hash} != digest: {digest}')
-        return (received_hash, uncompBlob)
-
-    def push_label(self, digest: str, labelVal: bytes) -> hangar_service_pb2.PushLabelReply:
-        """send a label/metadata digest & value to the remote server
-
-        Parameters
-        ----------
-        digest : str
-            digest being sent
-        labelVal : bytes
-            raw bytes of the label value
-
-        Returns
-        -------
-        hangar_service_pb2.PushLabelReply
-            standard error proto indicating success
-        """
-        rec = hangar_service_pb2.HashRecord(digest=digest)
-        request = hangar_service_pb2.PushLabelRequest(rec=rec)
-        request.blob = blosc.compress(labelVal)
-        reply = self.stub.PushLabel(request)
-        return reply
 
     def fetch_find_missing_commits(self, branch_name):
 
@@ -560,58 +519,6 @@ class HangarClient(object):
         s_mis_hsh = [chunks.deserialize_ident(raw).digest for raw in s_missing_raw]
         s_mis_hsh_sch = [(s_hsh, c_hashs_schemas[s_hsh]) for s_hsh in s_mis_hsh]
         return s_mis_hsh_sch
-
-    def fetch_find_missing_labels(self, commit):
-        c_hash_keys = hashs.HashQuery(self.env.labelenv).gen_all_hash_keys_db()
-        c_hashset = set(map(hash_meta_raw_key_from_db_key, c_hash_keys))
-        c_hashs_raw = [chunks.serialize_ident(digest, '') for digest in c_hashset]
-        raw_pack = chunks.serialize_record_pack(c_hashs_raw)
-
-        pb2_func = hangar_service_pb2.FindMissingLabelsRequest
-        cIter = chunks.missingHashRequestIterator(commit, raw_pack, pb2_func)
-        responses = self.stub.FetchFindMissingLabels(cIter)
-        for idx, response in enumerate(responses):
-            if idx == 0:
-                hBytes, offset = bytearray(response.total_byte_size), 0
-            size = len(response.hashs)
-            hBytes[offset: offset + size] = response.hashs
-            offset += size
-
-        uncompBytes = blosc.decompress(hBytes)
-        s_missing_raw = chunks.deserialize_record_pack(uncompBytes)
-        s_mis_hsh = [chunks.deserialize_ident(raw).digest for raw in s_missing_raw]
-        return s_mis_hsh
-
-    def push_find_missing_labels(self, commit, tmpDB: lmdb.Environment = None):
-
-        if tmpDB is None:
-            with tempfile.TemporaryDirectory() as tempD:
-                tmpDF = os.path.join(tempD, 'test.lmdb')
-                tmpDB = lmdb.open(path=tmpDF, **c.LMDB_SETTINGS)
-                commiting.unpack_commit_ref(self.env.refenv, tmpDB, commit)
-                c_hashset = set(queries.RecordQuery(tmpDB).metadata_hashes())
-                c_hashes = list(c_hashset)
-                tmpDB.close()
-        else:
-            c_hashset = set(queries.RecordQuery(tmpDB).metadata_hashes())
-            c_hashes = list(c_hashset)
-
-        c_hashs_raw = [chunks.serialize_ident(digest, '') for digest in c_hashes]
-        raw_pack = chunks.serialize_record_pack(c_hashs_raw)
-        pb2_func = hangar_service_pb2.FindMissingLabelsRequest
-        cIter = chunks.missingHashRequestIterator(commit, raw_pack, pb2_func)
-        responses = self.stub.PushFindMissingLabels(cIter)
-        for idx, response in enumerate(responses):
-            if idx == 0:
-                hBytes, offset = bytearray(response.total_byte_size), 0
-            size = len(response.hashs)
-            hBytes[offset: offset + size] = response.hashs
-            offset += size
-
-        uncompBytes = blosc.decompress(hBytes)
-        s_missing_raw = chunks.deserialize_record_pack(uncompBytes)
-        s_mis_hsh = [chunks.deserialize_ident(raw).digest for raw in s_missing_raw]
-        return s_mis_hsh
 
     def fetch_find_missing_schemas(self, commit):
         c_schemaset = set(hashs.HashQuery(self.env.hashenv).list_all_schema_digests())

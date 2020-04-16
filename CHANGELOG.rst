@@ -2,12 +2,56 @@
 Change Log
 ==========
 
-`In-Progress`_
+
+_`In-Progress`
 ==============
+
+New Features
+------------
+
+* New column data type supporting arbitrary ``bytes`` data.
+  (`#198 <https://github.com/tensorwerk/hangar-py/pull/198>`__) `@rlizzo <https://github.com/rlizzo>`__
 
 Improvements
 ------------
 
+* ``str`` typed columns can now accept data containing any unicode code-point. In prior releases
+  data containing any ``non-ascii`` character could not be written to this column type.
+  (`#198 <https://github.com/tensorwerk/hangar-py/pull/198>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+Bug Fixes
+---------
+
+* Fixed issue where ``str`` and (newly added) ``bytes`` column data could not be fetched / pushed
+  between a local client repository and remote server.
+  (`#198 <https://github.com/tensorwerk/hangar-py/pull/198>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+
+`0.5.1`_ (2020-04-05)
+=====================
+
+BugFixes
+--------
+
+* Fixed issue where importing ``make_torch_dataloader`` or ``make_tf_dataloader`` under python 3.6
+  Would raise a ``NameError`` irrigardless of if the package is installed.
+  (`#196 <https://github.com/tensorwerk/hangar-py/pull/196>`__) `@rlizzo <https://github.com/rlizzo>`__
+
+
+`v0.5.0`_ (2020-04-4)
+======================
+
+Improvements
+------------
+
+* Python 3.8 is now fully supported.
+  (`#193 <https://github.com/tensorwerk/hangar-py/pull/193>`__) `@rlizzo <https://github.com/rlizzo>`__
+* Major backend overhaul which defines column layouts and data types in the same interchangable
+  / extensable manner as storage backends. This will allow rapid development of new layouts and
+  data type support as new use cases are discovered by the community.
+  (`#184 <https://github.com/tensorwerk/hangar-py/pull/184>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Column and backend classes are now fully serializable (pickleable) for ``read-only`` checkouts.
   (`#180 <https://github.com/tensorwerk/hangar-py/pull/180>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Modularized internal structure of API classes to easily allow new columnn layouts / data types
@@ -31,6 +75,11 @@ Improvements
 New Features
 ------------
 
+* Added ``str`` type column with same behavior as ``ndarray`` column (supporting both
+  single-level and nested layouts) added to replace functionality of removed ``metadata`` container.
+  (`#184 <https://github.com/tensorwerk/hangar-py/pull/184>`__) `@rlizzo <https://github.com/rlizzo>`__
+* New backend based on ``LMDB`` has been added (specifier of ``lmdb_30``).
+  (`#184 <https://github.com/tensorwerk/hangar-py/pull/184>`__) `@rlizzo <https://github.com/rlizzo>`__
 * Added ``.diff()`` method to ``Repository`` class to enable diffing changes between any pair of
   commits / branches without needing to open the diff base in a checkout.
   (`#183 <https://github.com/tensorwerk/hangar-py/pull/183>`__) `@rlizzo <https://github.com/rlizzo>`__
@@ -66,6 +115,9 @@ Changes
 Removed
 -------
 
+* ``metadata`` container for ``str`` typed data has been completly removed. It is replaced by a highly
+  extensible and much more user-friendly ``str`` typed column.
+  (`#184 <https://github.com/tensorwerk/hangar-py/pull/184>`__) `@rlizzo <https://github.com/rlizzo>`__
 * ``__setitem__()`` method in ``WriterCheckout`` objects.  Writing data to columns via a checkout object
   is no longer supported.
   (`#183 <https://github.com/tensorwerk/hangar-py/pull/183>`__) `@rlizzo <https://github.com/rlizzo>`__
@@ -316,4 +368,6 @@ Breaking changes
 .. _v0.2.0: https://github.com/tensorwerk/hangar-py/compare/v0.1.1...v0.2.0
 .. _v0.3.0: https://github.com/tensorwerk/hangar-py/compare/v0.2.0...v0.3.0
 .. _v0.4.0: https://github.com/tensorwerk/hangar-py/compare/v0.3.0...v0.4.0
-.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.4.0...master
+.. _v0.5.0: https://github.com/tensorwerk/hangar-py/compare/v0.4.0...v0.5.0
+.. _v0.5.1  https://github.com/tensorwerk/hangar-py/compare/v0.5.0...v0.5.1
+.. _In-Progress: https://github.com/tensorwerk/hangar-py/compare/v0.5.1...master

@@ -37,6 +37,14 @@ cdef class LMDB_30_DataHashSpec:
     cdef readonly  str checksum
 
 
+cdef class LMDB_31_DataHashSpec:
+
+    cdef readonly str backend
+    cdef readonly str uid
+    cdef readonly str row_idx
+    cdef readonly  str checksum
+
+
 cdef class REMOTE_50_DataHashSpec:
 
     cdef readonly str backend

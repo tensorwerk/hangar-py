@@ -12,8 +12,6 @@ from .mixins import GetMixin, CheckoutDictIteration
 from .columns import (
     ColumnTxn,
     Columns,
-    MetadataReader,
-    MetadataWriter,
     generate_nested_column,
     generate_flat_column,
 )
@@ -24,6 +22,7 @@ from .typesystem import (
     NdarrayFixedShape,
     NdarrayVariableShape,
     StringVariableShape,
+    BytesVariableShape,
 )
 from .utils import is_suitable_user_key, is_ascii
 from .records import (
@@ -79,9 +78,11 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
     """
 
     def __init__(self,
-                 base_path: Path, labelenv: lmdb.Environment,
-                 dataenv: lmdb.Environment, hashenv: lmdb.Environment,
-                 branchenv: lmdb.Environment, refenv: lmdb.Environment,
+                 base_path: Path,
+                 dataenv: lmdb.Environment,
+                 hashenv: lmdb.Environment,
+                 branchenv: lmdb.Environment,
+                 refenv: lmdb.Environment,
                  commit: str):
         """Developer documentation of init method.
 
@@ -89,8 +90,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         ----------
         base_path : Path
             directory path to the Hangar repository on disk
-        labelenv : lmdb.Environment
-            db where the label dat is stored
         dataenv : lmdb.Environment
             db where the checkout record data is unpacked and stored.
         hashenv : lmdb.Environment
@@ -104,7 +103,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         """
         self._commit_hash = commit
         self._repo_path = base_path
-        self._labelenv = labelenv
         self._dataenv = dataenv
         self._hashenv = hashenv
         self._branchenv = branchenv
@@ -112,11 +110,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         self._enter_count = 0
         self._stack: Optional[ExitStack] = None
 
-        self._metadata = MetadataReader(
-            mode='r',
-            repo_pth=self._repo_path,
-            dataenv=self._dataenv,
-            labelenv=self._labelenv)
         self._columns = Columns._from_commit(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
@@ -134,15 +127,13 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : False\
                 \n    Commit Hash  : {self._commit_hash}\
-                \n    Num Columns  : {len(self)}\
-                \n    Num Metadata : {len(self._metadata)}\n'
+                \n    Num Columns  : {len(self)}\n'
         p.text(res)
 
     def __repr__(self):
         self._verify_alive()
         res = f'{self.__class__}('\
               f'base_path={self._repo_path} '\
-              f'labelenv={self._labelenv} '\
               f'dataenv={self._dataenv} '\
               f'hashenv={self._hashenv} '\
               f'commit={self._commit_hash})'
@@ -153,7 +144,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         with ExitStack() as stack:
             if self._enter_count == 0:
                 stack.enter_context(self._columns)
-                stack.enter_context(self._metadata)
             self._enter_count += 1
             self._stack = stack.pop_all()
         return self
@@ -218,25 +208,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         """
         self._verify_alive()
         return self._columns
-
-    @property
-    def metadata(self) -> MetadataReader:
-        """Provides access to metadata interaction object.
-
-        .. seealso::
-
-            The class :class:`~hangar.columns.metadata.MetadataReader` contains all methods
-            accessible by this property accessor
-
-        Returns
-        -------
-        MetadataReader
-            weakref proxy to the metadata object which behaves exactly like a
-            metadata class but which can be invalidated when the writer lock is
-            released.
-        """
-        self._verify_alive()
-        return self._metadata
 
     @property
     def diff(self) -> ReaderUserDiff:
@@ -338,7 +309,6 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
             self._stack.close()
 
         self._columns._destruct()
-        self._metadata._destruct()
         for attr in list(self.__dict__.keys()):
             delattr(self, attr)
         atexit.unregister(self.close)
@@ -389,7 +359,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
     def __init__(self,
                  repo_pth: Path,
                  branch_name: str,
-                 labelenv: lmdb.Environment,
                  hashenv: lmdb.Environment,
                  refenv: lmdb.Environment,
                  stageenv: lmdb.Environment,
@@ -405,8 +374,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         branch_name : str
             name of the branch whose ``HEAD`` commit will for the starting state
             of the staging area.
-        labelenv : lmdb.Environment
-            db where the label dat is stored
         hashenv lmdb.Environment
             db where the hash records are stored.
         refenv : lmdb.Environment
@@ -428,14 +395,12 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         self._refenv = refenv
         self._hashenv = hashenv
-        self._labelenv = labelenv
         self._stageenv = stageenv
         self._branchenv = branchenv
         self._stagehashenv = stagehashenv
 
         self._columns: Optional[Columns] = None
         self._differ: Optional[WriterUserDiff] = None
-        self._metadata: Optional[MetadataWriter] = None
         self._setup()
         atexit.register(self.close)
 
@@ -446,8 +411,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         res = f'Hangar {self.__class__.__name__}\
                 \n    Writer       : True\
                 \n    Base Branch  : {self._branch_name}\
-                \n    Num Columns  : {len(self)}\
-                \n    Num Metadata : {len(self._metadata)}\n'
+                \n    Num Columns  : {len(self)}\n'
         p.text(res)
 
     def __repr__(self):
@@ -455,7 +419,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         res = f'{self.__class__}('\
               f'base_path={self._repo_path} '\
               f'branch_name={self._branch_name} ' \
-              f'labelenv={self._labelenv} '\
               f'hashenv={self._hashenv} '\
               f'refenv={self._refenv} '\
               f'stageenv={self._stageenv} '\
@@ -467,7 +430,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         with ExitStack() as stack:
             if self._enter_count == 0:
                 stack.enter_context(self._columns)
-                stack.enter_context(self._metadata)
             self._enter_count += 1
             self._stack = stack.pop_all()
         return self
@@ -496,9 +458,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                 self._columns._destruct()
                 del self._columns
             with suppress(AttributeError):
-                self._metadata._destruct()
-                del self._metadata
-            with suppress(AttributeError):
                 del self._differ
             err = f'Unable to operate on past checkout objects which have been '\
                   f'closed. No operation occurred. Please use a new checkout.'
@@ -510,9 +469,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             with suppress(AttributeError):
                 self._columns._destruct()
                 del self._columns
-            with suppress(AttributeError):
-                self._metadata._destruct()
-                del self._metadata
             with suppress(AttributeError):
                 del self._differ
             raise e from None
@@ -562,11 +518,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                 heads.set_staging_branch_head(
                     branchenv=self._branchenv, branch_name=self._branch_name)
 
-        self._metadata = MetadataWriter(
-            mode='a',
-            repo_pth=self._repo_path,
-            dataenv=self._stageenv,
-            labelenv=self._labelenv)
         self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
@@ -623,24 +574,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         """
         self._verify_alive()
         return self._columns
-
-    @property
-    def metadata(self) -> MetadataWriter:
-        """Provides access to metadata interaction object.
-
-        .. seealso::
-
-            The class :class:`~.columns.metadata.MetadataWriter` contains
-            all methods accessible by this property accessor
-
-        Returns
-        -------
-        MetadataWriter
-            the metadata object which behaves exactly like a metadata class but
-            which can be invalidated when the writer lock is released.
-        """
-        self._verify_alive()
-        return self._metadata
 
     @property
     def diff(self) -> WriterUserDiff:
@@ -813,6 +746,87 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         layout = 'nested' if contains_subsamples else 'flat'
         schema = StringVariableShape(
             dtype=str, column_layout=layout, backend=backend, backend_options=backend_options)
+
+        # ------------------ create / return new column -----------------------
+
+        col = self._initialize_new_column(
+            column_name=name, column_layout=layout, schema=schema)
+        return col
+
+    def add_bytes_column(self,
+                         name: str,
+                         contains_subsamples: bool = False,
+                         *,
+                         backend: Optional[str] = None,
+                         backend_options: Optional[dict] = None):
+        """Initializes a :class:`bytes` container column
+
+        Columns are created in order to store some arbitrary collection of data
+        pieces. In this case, we store :class:`bbytes` data. Items need not be
+        related to each-other in any direct capacity; the only criteria hangar
+        requires is that all pieces of data stored in the column have a
+        compatible schema with each-other (more on this below). Each piece of
+        data is indexed by some key (either user defined or automatically
+        generated depending on the user's preferences). Both single level
+        stores (sample keys mapping to data on disk) and nested stores (where
+        some sample key maps to an arbitrary number of subsamples, in turn each
+        pointing to some piece of store data on disk) are supported.
+
+        All data pieces within a column have the same data type. For
+        :class:`bytes` columns, there is no distinction between
+        ``'variable_shape'`` and ``'fixed_shape'`` schema types. Values are
+        allowed to take on a value of any size so long as the datatype and
+        contents are valid for the schema definition.
+
+        Parameters
+        ----------
+        name : str
+            Name assigned to the column
+        contains_subsamples : bool, optional
+            True if the column column should store data in a nested structure.
+            In this scheme, a sample key is used to index an arbitrary number
+            of subsamples which map some (sub)key to a piece of data. If False,
+            sample keys map directly to a single piece of data; essentially
+            acting as a single level key/value store. By default, False.
+        backend : Optional[str], optional
+            ADVANCED USERS ONLY, backend format code to use for column data. If
+            None, automatically inferred and set based on data shape and type.
+            by default None
+        backend_options : Optional[dict], optional
+            ADVANCED USERS ONLY, filter opts to apply to column data. If None,
+            automatically inferred and set based on data shape and type.
+            by default None
+
+        Returns
+        -------
+        :class:`~.columns.column.Columns`
+            instance object of the initialized column.
+        """
+        self._verify_alive()
+        if self.columns._any_is_conman() or self._is_conman:
+            raise PermissionError('Not allowed while context manager is used.')
+
+        # ------------- Checks for argument validity --------------------------
+
+        try:
+            if (not is_suitable_user_key(name)) or (not is_ascii(name)):
+                raise ValueError(
+                    f'Column name provided: `{name}` is invalid. Can only contain '
+                    f'alpha-numeric or "." "_" "-" ascii characters (no whitespace). '
+                    f'Must be <= 64 characters long')
+            if name in self._columns:
+                raise LookupError(f'Column already exists with name: {name}.')
+            if not isinstance(contains_subsamples, bool):
+                raise ValueError(f'contains_subsamples argument must be bool, '
+                                 f'not type {type(contains_subsamples)}')
+        except (ValueError, LookupError) as e:
+            raise e from None
+
+        # ---------- schema validation handled automatically by typesystem ----
+
+        layout = 'nested' if contains_subsamples else 'flat'
+        schema = BytesVariableShape(
+            dtype=bytes, column_layout=layout, backend=backend, backend_options=backend_options)
 
         # ------------------ create / return new column -----------------------
 
@@ -1028,11 +1042,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             with suppress(KeyError):
                 asetHandle._close()
 
-        self._metadata = MetadataWriter(
-            mode='a',
-            repo_pth=self._repo_path,
-            dataenv=self._stageenv,
-            labelenv=self._labelenv)
         self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
@@ -1072,11 +1081,8 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         for column in self._columns.values():
             if column._is_conman:
                 open_columns.append(column.column)
-        open_meta = self._metadata._is_conman
 
         try:
-            if open_meta:
-                self._metadata.__exit__()
             for column_name in open_columns:
                 self._columns[column_name].__exit__()
 
@@ -1098,8 +1104,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         finally:
             for column_name in open_columns:
                 self._columns[column_name].__enter__()
-            if open_meta:
-                self._metadata.__enter__()
 
         return commit_hash
 
@@ -1138,8 +1142,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             self._stack.close()
         if hasattr(self._columns, '_destruct'):
             self._columns._destruct()
-        if hasattr(self._metadata, '_destruct'):
-            self._metadata._destruct()
 
         hashs.remove_stage_hash_records_from_hashenv(self._hashenv, self._stagehashenv)
         hashs.clear_stage_hash_records(self._stagehashenv)
@@ -1157,11 +1159,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                                                        stageenv=self._stageenv,
                                                        commit_hash=head_commit)
 
-        self._metadata = MetadataWriter(
-            mode='a',
-            repo_pth=self._repo_path,
-            dataenv=self._stageenv,
-            labelenv=self._labelenv)
         self._columns = Columns._from_staging_area(
             repo_pth=self._repo_path,
             hashenv=self._hashenv,
@@ -1190,9 +1187,6 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         if hasattr(self, '_columns'):
             if hasattr(self._columns, '_destruct'):
                 self._columns._destruct()
-        if hasattr(self, '_metadata'):
-            if hasattr(self._metadata, '_destruct'):
-                self._metadata._destruct()
 
         with suppress(lmdb.Error):
             heads.release_writer_lock(self._branchenv, self._writer_lock)

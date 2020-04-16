@@ -996,67 +996,19 @@ class TestDataWithFixedSizedColumn(object):
         assert_equal(co.columns['aset']['1'], randomsizedarray)
         co.close()
 
-    def test_writer_context_manager_metadata_update_iterable(self, repo):
-        co = repo.checkout(write=True)
-        with co.metadata as metadata:
-            metadata.update([('key', 'val'), ('hello', 'world')])
-        co.commit('this is a commit message')
-        co.close()
-        co = repo.checkout()
-        assert co.metadata['key'] == 'val'
-        assert co.metadata['hello'] == 'world'
-        co.close()
-
-    def test_writer_context_manager_metadata_update_dict(self, repo):
-        co = repo.checkout(write=True)
-        with co.metadata as metadata:
-            metadata.update({'key': 'val'})
-        co.commit('this is a commit message')
-        co.close()
-        co = repo.checkout()
-        assert co.metadata['key'] == 'val'
-        co.close()
-
-    def test_writer_context_manager_metadata_update_kwargs(self, repo):
-        co = repo.checkout(write=True)
-        with co.metadata as metadata:
-            metadata.update(key='val')
-        co.commit('this is a commit message')
-        co.close()
-        co = repo.checkout()
-        assert co.metadata['key'] == 'val'
-        co.close()
-
-    def test_writer_context_manager_metadata_update_dict_kwargs(self, repo):
-        co = repo.checkout(write=True)
-        with co.metadata as metadata:
-            metadata.update({'key': 'val'}, hello='world')
-        co.commit('this is a commit message')
-        co.close()
-        co = repo.checkout()
-        assert co.metadata['key'] == 'val'
-        assert co.metadata['hello'] == 'world'
-        co.close()
-
     @pytest.mark.parametrize("aset_backend", fixed_shape_backend_params)
-    def test_column_context_manager_aset_sample_and_metadata_add(self, aset_backend, repo, randomsizedarray):
+    def test_column_context_manager_aset_sample_add(self, aset_backend, repo, randomsizedarray):
         co = repo.checkout(write=True)
         aset = co.add_ndarray_column('aset', prototype=randomsizedarray, backend=aset_backend)
         with co.columns['aset'] as aset:
             aset['1'] = randomsizedarray
-            co.metadata['hello'] = 'world'
-        with co.metadata as metadata:
-            newarr = randomsizedarray + 1
-            aset['2'] = newarr
-            metadata.update({'key': 'val'})
+            aset['2'] = randomsizedarray + 1
         co.commit('this is a commit message')
         co.close()
 
         co = repo.checkout()
         assert_equal(co.columns['aset']['1'], randomsizedarray)
-        assert np.allclose(co.columns['aset'].get('2'), newarr)
-        assert co.metadata['key'] == 'val'
-        assert co.metadata.get('hello') == 'world'
+        assert np.allclose(co.columns['aset'].get('2'), randomsizedarray + 1)
         co.close()
 
     def test_writer_column_properties_are_correct(self, aset_samples_initialized_repo, array5by7):

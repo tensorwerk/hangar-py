@@ -1,30 +1,22 @@
 from os.path import join as pjoin
 from os import mkdir
-import pytest
 import sys
+import warnings
+
+import pytest
 import numpy as np
+import torch
+from torch.utils.data import DataLoader
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore', category=DeprecationWarning)
+    import tensorflow as tf
+    tf.compat.v1.enable_eager_execution()
+
 from hangar import Repository
+from hangar import make_torch_dataset
+from hangar import make_tf_dataset
 
 
-try:
-    import torch
-    from torch.utils.data import DataLoader
-    from hangar import make_torch_dataset
-    skipTorch = False
-except ImportError:
-    skipTorch = True
-
-
-@pytest.mark.skipif(skipTorch is False,
-                    reason='pytorch installed for test requiring it to not be')
-def test_no_torch_installed_raises_error_on_dataloader_import():
-    with pytest.raises(ImportError):
-        from hangar import make_torch_dataset
-        make_torch_dataset(None)
-
-
-@pytest.mark.skipif(skipTorch is True,
-                    reason='pytorch is not installed in the test environment.')
 class TestTorchDataLoader(object):
 
     def test_warns_experimental(self, repo_20_filled_samples):
@@ -258,26 +250,6 @@ class TestTorchDataLoader(object):
         repo._env._close_environments()
 
 
-try:
-    import tensorflow as tf
-    tf.compat.v1.enable_eager_execution()
-    from hangar import make_tf_dataset
-    skipTF = False
-except ImportError:
-    skipTF = True
-
-
-@pytest.mark.skipif(skipTF is False,
-                    reason='tensorflow installed for test requiring it to not be')
-def test_no_tf_installed_raises_error_on_dataloader_import():
-    with pytest.raises(ImportError):
-        from hangar import make_tf_dataset
-        make_tf_dataset(None)
-
-
-@pytest.mark.skipif(
-    skipTF is True,
-    reason='tensorflow is not installed in the test environment.')
 class TestTfDataLoader(object):
 
     def test_warns_experimental(self, repo_20_filled_samples):

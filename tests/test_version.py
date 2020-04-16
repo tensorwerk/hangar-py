@@ -799,7 +799,7 @@ class TestVersion:
         assert not op(Version(left), Version(right))
 
     @pytest.mark.parametrize(("op", "expected"), [("eq", False), ("ne", True)])
-    def test_compare_other(self, op, expected):
+    def test_compare_other(self, monkeypatch, op, expected):
         other = pretend.stub(**{"__{0}__".format(op): lambda other: NotImplemented})
 
         assert getattr(operator, op)(Version("1"), other) is expected

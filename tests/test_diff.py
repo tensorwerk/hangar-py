@@ -2,12 +2,6 @@ import pytest
 import numpy as np
 
 
-def create_meta_nt(name):
-    from hangar.records import MetadataRecordKey
-    res = MetadataRecordKey(name)
-    return res
-
-
 class TestReaderWriterDiff(object):
 
     @pytest.mark.parametrize('writer', [False, True])
@@ -89,10 +83,6 @@ class TestReaderWriterDiff(object):
         assert len(diffs.added.samples) == 20
         assert len(diffs.mutated.samples) == 1
         assert len(diffs.deleted.samples) == 1
-
-        assert len(diffs.added.metadata) == 1
-        assert len(diffs.deleted.metadata) == 0
-        assert len(diffs.mutated.metadata) == 0
 
         assert len(diffs.added.schema) == 0
         assert len(diffs.deleted.schema) == 0
@@ -268,74 +258,6 @@ class TestReaderWriterDiff(object):
         assert list(conflicts.t3.schema.keys())[0].column == 'testing_aset'
         co.close()
 
-    @pytest.mark.parametrize('writer', [False, True])
-    def test_meta_addition_conflict(self, repo_1_br_no_conf, writer):
-        # t1
-        repo = repo_1_br_no_conf
-        co = repo.checkout(write=True, branch='testbranch')
-        co.metadata['metatest'] = 'value1'
-        co.commit('metadata addition')
-        co.close()
-
-        co = repo.checkout(write=True, branch='master')
-        co.metadata['metatest'] = 'value2'
-        co.commit('metadata addition')
-        co.close()
-
-        co = repo.checkout(write=writer, branch='master')
-        conflicts = co.diff.branch('testbranch')[1]
-        for k in conflicts.t1.metadata:
-            assert k == create_meta_nt('metatest')
-        assert len(conflicts.t1.metadata) == 1
-        co.close()
-
-    @pytest.mark.parametrize('writer', [False, True])
-    def test_meta_removal_conflict(self, repo_1_br_no_conf, writer):
-        # t21 and t22
-        repo = repo_1_br_no_conf
-        co = repo.checkout(write=True, branch='testbranch')
-        co.metadata['hello'] = 'again'  # this is world in master
-        del co.metadata['somemetadatakey']
-        co.commit('removed & mutated')
-        co.close()
-
-        co = repo.checkout(write=True, branch='master')
-        del co.metadata['hello']
-        co.metadata['somemetadatakey'] = 'somemetadatavalue - not anymore'
-        co.commit('removed & mutation')
-        co.close()
-
-        co = repo.checkout(write=writer, branch='master')
-        conflicts = co.diff.branch('testbranch')[1]
-        co.close()
-
-        assert len(conflicts.t21.metadata) == 1
-        for k in conflicts.t21.metadata:
-            assert k == create_meta_nt('hello')
-        assert len(conflicts.t22.metadata) == 1
-        for k in conflicts.t22.metadata:
-            assert k == create_meta_nt('somemetadatakey')
-
-    @pytest.mark.parametrize('writer', [False, True])
-    def test_meta_mutation_conflict(self, repo_1_br_no_conf, writer):
-        # t3
-        repo = repo_1_br_no_conf
-        co = repo.checkout(write=True, branch='testbranch')
-        co.metadata['hello'] = 'again'  # this is world in master
-        co.commit('mutated')
-        co.close()
-
-        co = repo.checkout(write=True, branch='master')
-        co.metadata['hello'] = 'again and again'
-        co.commit('mutation')
-        co.close()
-
-        co = repo.checkout(write=writer, branch='master')
-        conflicts = co.diff.branch('testbranch')[1]
-        assert len(conflicts.t3.metadata) == 1
-        for k in conflicts.t3.metadata:
-            assert k == create_meta_nt('hello')
-        co.close()
 
     @pytest.mark.parametrize('writer', [False, True])
     def test_commits_inside_cm(self, aset_samples_initialized_repo, array5by7, writer):
@@ -345,9 +267,8 @@ class TestReaderWriterDiff(object):
         aset = co.columns['writtenaset']
         aset2 = co.add_ndarray_column('aset2', prototype=array5by7)
         aset2[1] = array5by7
-        with aset, co.metadata:
+        with aset:
             aset[100] = array5by7
-            co.metadata['crazykey'] = 'crazyvalue'
             co.commit('inside cm')
             aset[101] = array5by7
             co.commit('another commit inside cm')
@@ -355,7 +276,6 @@ class TestReaderWriterDiff(object):
         co = repo.checkout(write=writer, branch='testbranch')
         assert np.allclose(co.columns['writtenaset'][101], array5by7)
         diff = co.diff.branch('master').diff
-        assert create_meta_nt('crazykey') in diff.added.metadata
         assert 'aset2' in [x.column for x in diff.added.schema.keys()]
         calledWithAset = False
         for record in diff.added.samples:
@@ -368,13 +288,12 @@ class TestReaderWriterDiff(object):
 
 class TestWriterDiff(object):
 
-    def test_status_and_staged_meta(self, aset_samples_initialized_repo):
+    def test_status_and_staged_column(self, aset_samples_initialized_repo):
         repo = aset_samples_initialized_repo
         co = repo.checkout(write=True)
-        co.metadata['hello_from_test'] = 'hai to test'
+        co.add_str_column('DOESNOTEXIST')
+        co['DOESNOTEXIST'][1] = 'foo'
         assert co.diff.status() == 'DIRTY'
-        diff = co.diff.staged().diff
-        assert create_meta_nt('hello_from_test') in diff.added.metadata
         co.commit('init metadata')
         assert co.diff.status() == 'CLEAN'
         co.close()

@@ -1,4 +1,4 @@
-__version__ = '0.5.0.dev1'
+__version__ = '0.5.1'
 
 from .graphing import Graph
 

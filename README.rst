@@ -10,7 +10,7 @@ Overview
     * - docs
       - |docs|
     * - tests
-      - | |travis| |codecov|
+      - | |gh-build-status| |codecov|
         | |lgtm|
     * - package
       - | |version| |wheel| |conda-forge|
@@ -20,9 +20,9 @@ Overview
     :target: https://readthedocs.org/projects/hangar-py
     :alt: Documentation Status
 
-.. |travis| image:: https://travis-ci.com/tensorwerk/hangar-py.svg?branch=master
-    :alt: Travis-CI Build Status
-    :target: https://travis-ci.com/tensorwerk/hangar-py
+.. |gh-build-status| image:: https://github.com/tensorwerk/hangar-py/workflows/Run%20Test%20Suite/badge.svg?branch=master
+    :alt: Build Status
+    :target: https://github.com/tensorwerk/hangar-py/actions?query=workflow%3A%22Run+Test+Suite%22+branch%3Amaster+event%3Apush+is%3Acompleted
 
 .. |codecov| image:: https://codecov.io/gh/tensorwerk/hangar-py/branch/master/graph/badge.svg
    :alt: Code Coverage

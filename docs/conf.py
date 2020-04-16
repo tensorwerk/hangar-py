@@ -40,7 +40,7 @@ project = 'Hangar'
 year = '2019-2020'
 author = 'Richard Izzo'
 copyright = '{0}, {1}'.format(year, author)
-version = release = '0.5.0.dev1'
+version = release = '0.5.1'
 
 pygments_style = 'default'
 pygments_lexer = 'PythonConsoleLexer'
@@ -58,6 +58,15 @@ intersphinx_mapping = {
     'torch': ('https://pytorch.org/docs/master', None),
     'numpy': ('http://docs.scipy.org/doc/numpy', None),
 }
+
+# Regular expressions that match URIs that should not be checked
+# when doing a linkcheck build
+linkcheck_ignore = [
+    r'http://localhost:\d+/?', 'http://localhost/',
+    'https://github.com/tensorwerk/hangar-py',
+    r'https://github.com/tensorwerk/hangar-py/.*',
+]
+linkcheck_retries = 3
 
 # on_rtd is whether we are on readthedocs.org
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
