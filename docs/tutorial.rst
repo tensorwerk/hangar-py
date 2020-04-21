@@ -17,6 +17,7 @@ Hangar Tutorial
    :maxdepth: 2
    :titlesonly:
 
+   Tutorial-QuickStart
    Tutorial-001
    Tutorial-002
    Tutorial-003
