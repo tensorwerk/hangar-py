@@ -1,0 +1,66 @@
+# Metadata file for Zenoodo source code upload
+# This is part of the Escape 2020 project and was originally
+# requested by Filippo Quarenghi (Orobix).
+#
+# Metadata version - do not change
+metadata-version: 0.2
+
+# Mandatory entries
+title: hangar
+authors:
+  - Rick Izzo
+  - Luca Antiga
+contact:
+  - name: Rick Izzo
+  - email: rick@tensorwerk.com
+  - name: Luca Antiga
+  - email: luca.antiga@orobix.com
+license: Apache License 2.0
+url: https://github.com/tensorwerk/hangar-py
+description: Hangar is version control for tensor data. Commit, branch, merge, revert, and collaborate in the data-defined software era.
+
+#Optional entries
+doi: null
+keywords: Data versioning
+type: source
+grant: Tensorwerk Inc.
+language: python
+hardware:
+  - machine: [local, server, hpc]
+  - CPU: null
+  - RAM: 2GB
+  - drive:
+    - type: [SSD, HDD]
+    - volume: 500MB
+  - GPU: null
+
+dependencies:
+  - python>=3.6
+  - HDF5
+  - cython>=0.27
+  - setuptools>=40.0
+  - wheel>=0.30
+  - blosc>=1.8
+  - click
+  - protobuf
+  - h5py>=2.9
+  - hdf5plugin>=2.0
+  - lmdb>=0.94
+  - tqdm
+  - wrapt
+  - xxhash
+  - numpy
+  - grpcio
+
+os:
+  - 'win-64'
+  - 'linux'
+  - 'osx-64'
+
+compiler:
+  - gcc>=4.7
+  - manylinux2014
+
+multi-thread: true
+container:
+  - null
