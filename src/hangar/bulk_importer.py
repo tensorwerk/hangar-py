@@ -57,7 +57,7 @@ def _check_user_input_args(schema, keys_kwargs):
         data reader func to retrieve a single samples data from disk.
     """
     if not isinstance(keys_kwargs, (list, tuple)):
-        raise TypeError(f'`keys_kwargs` parameter must be of type list/tuple, not {type(keys_kwargs)}')
+        raise TypeError(f'`udf_kwargs` parameter must be of type list/tuple, not {type(keys_kwargs)}')
     elif len(keys_kwargs) <= 1:
         raise ValueError(
             f'Input work list must contain atleast two data samples to store; recieved '
@@ -97,16 +97,16 @@ def _check_user_input_args(schema, keys_kwargs):
     return True
 
 
-def _check_user_input_func(schema, read_func, keys_kwargs, *, prerun_check_percentage: float = 0.02):
-    """Perform a few sanity tests to ensure kwargs and reader_func produces valid data.
+def _check_user_input_func(columns, udf, udf_kwargs, *, prerun_check_percentage: float = 0.02):
+    """Perform a few sanity tests to ensure kwargs and udf produces valid data.
 
     Parameters
     ----------
-    schema:
-        initialized schema object for the column.
-    read_func:
+    columns:
+        initialized columns object dict.
+    udf:
         user provided function which takes some kwargs and generates one data sample.
-    keys_kwargs: list/tuple
+    udf_kwargs: list/tuple
         two element list/tuple where
 
         element 0 --> sample key (flat layout) or size == 2 list/tuple of
@@ -116,50 +116,51 @@ def _check_user_input_func(schema, read_func, keys_kwargs, *, prerun_check_perce
         data reader func to retrieve a single samples data from disk.
     prerun_check_percentage: float, kwargonly, default=0.02
         value between (0.0, 1.0) representing what percentage of items in the full
-        work list should be selected (at random) to be processed by reader_func &
+        work list should be selected (at random) to be processed by udf &
         verified against the column schema.
 
         This is meant to serve as a quick sanity check (to test if is success is even
         possible) before launching the full pipeline with multiple worker processes.
     """
-    for key, kwargs in keys_kwargs:
+    for kwargs in udf_kwargs:
         try:
-            getcallargs(read_func, **kwargs)
+            getcallargs(udf, **kwargs)
         except Exception as e:
-            print(f'Invalid call args passed to {read_func} by key: {key} with kwargs: {kwargs}')
+            print(f'Invalid call args passed to {udf} with kwargs: {kwargs}')
             raise e from None
 
-    num_choices_by_percent = round(len(keys_kwargs) * prerun_check_percentage)
+    num_choices_by_percent = round(len(udf_kwargs) * prerun_check_percentage)
     num_choices = max(max(2, num_choices_by_percent), 100)  # place upper/lower bounds.
-    work_samples = random.choices(keys_kwargs, k=num_choices)
-    for key, kwargs in tqdm(work_samples, desc='Performing pre-run sanity check'):
-        res = read_func(**kwargs)
-        if res is None:
-            continue
-        iscompat = schema.verify_data_compatible(res)
-        if not iscompat.compatible:
-            raise ValueError(
-                f'Executing {read_func} with kwargs {kwargs} for sample key {key}'
-                f'produced invalid data for column. Reason= {iscompat.reason}')
+    work_samples = random.choices(udf_kwargs, k=num_choices)
+    for kwargs in tqdm(work_samples, desc='Performing pre-run sanity check'):
+        results = udf(**kwargs)
+        assert isinstance(results, (list, tuple))
+        for res in results:
+            assert res.column in columns
+            _col = columns[res.columns]
+            if _col.column_layout == 'flat':
+                _col._set_arg_validate(res.key, res.data)
+            else:
+                _col._set_arg_validate(res.key[0], {res.key[1]: res.data})
     return True
 
 
 class BatchProcessPrepare(mp.Process):
     """Image Thread"""
 
-    def __init__(self, read_func, schema, column_name, in_queue, out_queue, *args, **kwargs):
+    def __init__(self, udf, schemas, columns, in_queue, out_queue, *args, **kwargs):
         """
         Parameters
         ----------
-        read_func:
+        udf:
             user provided function which takes some set of kwargs to generate one data sample
-        schema:
+        schemas:
             initialized schema object for the column. This is required in order to properly
             calculate the data hash digests.
         column_name:
             name of the column we are ading data for.
         in_queue:
-            multiprocessing.Queue object which passes in kwargs to read data for one sample via `read_func`
+            multiprocessing.Queue object which passes in kwargs to read data for one sample via `udf`
             as well as sample/subsample names to assign to the resulting data.
             tuple in form of `(kwargs, (samplen, [subsamplen,]))`
         out_queue:
@@ -167,26 +168,25 @@ class BatchProcessPrepare(mp.Process):
             serialized location spec, and hash digest of read / saved data.
         """
         super().__init__(*args, **kwargs)
-        self.column_name = column_name
-        self.layout = schema.column_layout
-        self.read_func = read_func
+        self.columns = columns
+        self.layout = schemas.column_layout
+        self.udf = udf
         self.in_queue = in_queue
         self.out_queue = out_queue
-        self.schema = schema
+        self.schemas = schemas
 
     def run(self):
         while True:
             try:
-                sample_keys_kwargs = self.in_queue.get(True, 2)
+                udf_kwargs = self.in_queue.get(True, 2)
             except queue.Empty:
                 break
 
-            sample_keys_and_data = (
-                (keys, kwargs, self.read_func(**kwargs)) for keys, kwargs in sample_keys_kwargs
-                if ((keys is not None) and (kwargs is not None))
+            udf_kwargs_res = (
+                (kwargs, self.udf(**kwargs)) for kwargs in udf_kwargs if kwargs is not None
             )
             content_digests = []
-            for keys, kwargs, data in sample_keys_and_data:
+            for kwargs, data in udf_kwargs_res:
                 if data is None:
                     res = ContentDescription(self.column_name, self.layout, keys, kwargs, skip=True)
                     content_digests.append(res)
@@ -221,7 +221,7 @@ class BatchProcessWriter(mp.Process):
         column_name:
             name of the column we are ading data for.
         in_queue:
-            multiprocessing.Queue object which passes in kwargs to read data for one sample via `read_func`
+            multiprocessing.Queue object which passes in kwargs to read data for one sample via `udf`
             as well as sample/subsample names to assign to the resulting data.
             tuple in form of `(kwargs, (samplen, [subsamplen,]))`
         out_queue:
@@ -265,7 +265,7 @@ class BatchProcessWriter(mp.Process):
             self.out_queue.put(saved_key_location_digests)
 
 
-def run_prepare_recipe(column, reader_func, keys_reader_kwargs, *, ncpu=0, batch_size=10):
+def run_prepare_recipe(columns, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=10):
     if ncpu <= 0:
         ncpu = os.cpu_count() // 2
     q_size = ncpu * 2
@@ -274,17 +274,15 @@ def run_prepare_recipe(column, reader_func, keys_reader_kwargs, *, ncpu=0, batch
     in_queue = mp.Queue(maxsize=q_size)
     out_queue = mp.Queue(maxsize=q_size)
 
-    dummy_groups = grouper(keys_reader_kwargs, batch_size)
+    dummy_groups = grouper(udf_kwargs, batch_size)
     n_queue_tasks = ilen(dummy_groups)
-    grouped_keys_kwargs = grouper(keys_reader_kwargs, batch_size)
+    grouped_keys_kwargs = grouper(udf_kwargs, batch_size)
 
     # start worker processes
     out, jobs = [], []
     for i in range(ncpu):
-        column_name = column.column
-        schema = column._schema
         t = BatchProcessPrepare(
-            read_func=reader_func, schema=schema, column_name=column_name, in_queue=in_queue, out_queue=out_queue)
+            udf=udf, schemas=schemas, columns=columns, in_queue=in_queue, out_queue=out_queue)
         jobs.append(t)
         t.start()
 
@@ -295,7 +293,7 @@ def run_prepare_recipe(column, reader_func, keys_reader_kwargs, *, ncpu=0, batch
 
     # collect outputs and fill queue with more work if low
     # terminate if no more work should be done.
-    with tqdm(total=len(keys_reader_kwargs), desc='Constructing task recipe') as pbar:
+    with tqdm(total=len(udf_kwargs), desc='Constructing task recipe') as pbar:
         ngroups_processed = 0
         remaining = True
         while remaining is True:
@@ -391,7 +389,7 @@ def reduce_recipe_on_required_digests(recipe: List[ContentDescription], hashenv)
     Notes
     -----
     - Any number of samples may be added which have unique keys/kwargs,
-      but whose reader_func returns identical data. To avoid writing
+      but whose udf returns identical data. To avoid writing
       identical data to disk multiple times, we select just one sample
       (at random) for each unique digest in the recipe. We write the
       data to disk alongside the digest -> backend spec mapping. Once
@@ -406,10 +404,10 @@ def reduce_recipe_on_required_digests(recipe: List[ContentDescription], hashenv)
       Since the digest -> backend spec map already exists, we just need
       to process to key -> digest mapping.
 
-    - step.skip will only ever == True if user's read_func decides not
+    - step.skip will only ever == True if user's udf decides not
       to use some piece of data and to not even include the sample at
       all (returning None when valid arguments were passed in to the
-      reader_func)
+      udf)
     """
     skip_attr = op_attrgetter('skip')
     sample_steps = tuple(filterfalse(skip_attr, recipe))
@@ -526,7 +524,7 @@ def move_tmpdir_data_files_to_stagedir(repodir: Path, tmpdir: Path):
     return True
 
 
-def run_bulk_import(repo, branch_name, column_name, reader_func, keys_kwargs,
+def run_bulk_import(repo, branch_name, column_names, udf, udf_kwargs,
                     *, ncpus=0, autocommit=True):
     """Perform a bulk import operation.
 
@@ -534,21 +532,25 @@ def run_bulk_import(repo, branch_name, column_name, reader_func, keys_kwargs,
     ----------
     repo : Repository
     branch_name : str
-    column_name : str
-    reader_func : object
-    keys_kwargs : List[Tuple[Union[Tuple[KeyType, KeyType], KeyType], dict]]
+    column_names : str
+    udf : object
+    udf_kwargs : List[Tuple[Union[Tuple[KeyType, KeyType], KeyType], dict]]
     ncpus : int, optional, default=0
     autocommit : bool, optional, default=True
     """
     with closing(repo.checkout(write=True, branch=branch_name)) as co:
-        column = co.columns[column_name]
-        schema = column._schema
+        columns, schemas = {}, {}
+        for name in column_names:
+            _col = co.columns[name]
+            _schema = _col._schema
+            columns[name] = _col
+            schemas[name] = _schema
 
         print(f'Validating Reader Function and Argument Input')
-        _check_user_input_args(schema, keys_kwargs)
-        _check_user_input_func(schema, reader_func, keys_kwargs)
+        # _check_user_input_args(schema, udf_kwargs)
+        _check_user_input_func(columns, udf, udf_kwargs)
 
-        recipe = run_prepare_recipe(column, reader_func, keys_kwargs, ncpu=ncpus)
+        recipe = run_prepare_recipe(columns, schemas, udf, udf_kwargs, ncpu=ncpus)
         print('Optimizing base recipe against repostiory contents & duplicated sample data.')
         recipe_steps, reduced_keys_kwargs = reduce_recipe_on_required_digests(recipe, co._hashenv)
 
@@ -557,7 +559,7 @@ def run_bulk_import(repo, branch_name, column_name, reader_func, keys_kwargs,
             print('Starting multiprocessed data importer.')
             with TemporaryDirectory(dir=str(hangardirpth)) as tmpdirname:
                 tmpdirpth = mock_hangar_directory_structure(tmpdirname)
-                written_data_steps = run_write_recipe_data(tmpdirpth, column, reader_func, reduced_keys_kwargs, ncpu=ncpus)
+                written_data_steps = run_write_recipe_data(tmpdirpth, column, udf, reduced_keys_kwargs, ncpu=ncpus)
                 move_tmpdir_data_files_to_stagedir(hangardirpth, tmpdirpth)
             write_digest_to_bespec_mapping(written_data_steps, co._hashenv, co._stagehashenv)
         else:
@@ -568,7 +570,7 @@ def run_bulk_import(repo, branch_name, column_name, reader_func, keys_kwargs,
         if autocommit:
             print(f'autocommiting changes.')
             co.commit(f'Auto commit after bulk import of {len(recipe_steps)} samples to '
-                      f'column {column_name} on branch {branch_name}')
+                      f'column {column_names} on branch {branch_name}')
         else:
             print(f'skipping autocommit')
 
