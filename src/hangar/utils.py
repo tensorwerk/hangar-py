@@ -372,6 +372,21 @@ def is_valid_directory_path(p: Path) -> Path:
     return usr_path
 
 
+def isiterable(obj) -> bool:
+    """Determine if input object is iterable.
+
+    Returns
+    -------
+    bool
+    """
+    try:
+        iter(obj)
+    except TypeError:
+        return False
+    else:
+        return True
+
+
 # ----------------- human & machine nbytes ------------------------------------
 
 

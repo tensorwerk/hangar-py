@@ -2,17 +2,15 @@ import time
 import os
 import random
 from contextlib import closing
-from typing import NamedTuple, Union, Tuple, Optional, List
+from typing import NamedTuple, Union, Tuple, Optional, List, Dict, Iterable
 import multiprocessing as mp
 import queue
-from itertools import filterfalse
-from operator import attrgetter as op_attrgetter
-from collections import defaultdict
 from inspect import getcallargs
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tqdm.auto import tqdm
+from tqdm import tqdm
+import numpy as np
 
 from .records import hashs
 from .records.column_parsers import (
@@ -22,7 +20,12 @@ from .records.column_parsers import (
     nested_data_db_key_from_names,
     data_record_db_val_from_digest
 )
-from .utils import is_suitable_user_key, ilen, grouper, is_valid_directory_path
+from .utils import (
+    ilen,
+    grouper,
+    is_valid_directory_path,
+    isiterable,
+)
 from .columns.common import open_file_handles
 from .txnctx import TxnRegister
 
@@ -30,71 +33,58 @@ from .txnctx import TxnRegister
 KeyType = Union[str, int]
 
 
+class UDF_Return(NamedTuple):
+    """User-Defined Function return container for bulk importer read functions
+
+    Attributes
+    ----------
+    column: str
+        column name to place data into
+    key: Union[KeyType, Tuple[KeyType, KeyType]]
+        key (single value) to place flat sample into, or 2-tuple of keys for nested samples
+    data: Union[np.ndarray, str, bytes]
+        piece of data to place in the column with the provided key.
+    """
+    column: str
+    key: Union[KeyType, Tuple[KeyType, KeyType]]
+    data: Union[np.ndarray, str, bytes]
+
+
+class ContentDescriptionPrep(NamedTuple):
+    column: str
+    layout: str
+    key: Union[Tuple[KeyType, KeyType], KeyType]
+    digest: Optional[str] = None
+    udf_iter_idx: Optional[int] = None
+    skip: bool = False
+
+    def db_record_key(self):
+        if self.layout == 'nested':
+            db_key = nested_data_db_key_from_names(self.column, self.key[0], self.key[1])
+        elif self.layout == 'flat':
+            db_key = flat_data_db_key_from_names(self.column, self.key)
+        else:
+            raise ValueError(f'unknown column layout value {self.layout} encountered while formating db record key')
+        return db_key
+
+    def db_record_val(self):
+        return data_record_db_val_from_digest(self.digest)
+
+
+class Task(NamedTuple):
+    udf_kwargs: dict
+    udf_iter_indices: Tuple[int]
+    expected_digests: Tuple[str]
+
+
 class ContentDescription(NamedTuple):
     column: str
     layout: str
     key: Union[Tuple[KeyType, KeyType], KeyType]
-    kwargs: dict
     digest: Optional[str] = None
     bespec: Optional[bytes] = None
+    udf_iter_idx: Optional[int] = None
     skip: bool = False
-
-
-def _check_user_input_args(schema, keys_kwargs):
-    """Validate user input specifying sample keys and reader func args/kwargs
-
-    Parameters
-    ----------
-    schema:
-        column schema
-    keys_kwargs: list/tuple
-        two element list/tuple where
-
-        element 0 --> sample key (flat layout) or size == 2 list/tuple of
-        samples/subsample key (nested layout).
-
-        element 1 --> dict of kwargs which are passed to user specified
-        data reader func to retrieve a single samples data from disk.
-    """
-    if not isinstance(keys_kwargs, (list, tuple)):
-        raise TypeError(f'`udf_kwargs` parameter must be of type list/tuple, not {type(keys_kwargs)}')
-    elif len(keys_kwargs) <= 1:
-        raise ValueError(
-            f'Input work list must contain atleast two data samples to store; recieved '
-            f'only {len(keys_kwargs)}. Use standard API to write single samples at a time.')
-
-    sample_keys = []
-    for sample_key_kwargs in keys_kwargs:
-        if len(sample_key_kwargs) != 2:
-            raise ValueError(
-                f'all containers defining samples of batch input must be length 2 '
-                f'(where idx 0 == sample key and idx 1 == reader function kwargs dict.)'
-                f'Recieved {sample_key_kwargs} of length {len(sample_key_kwargs)} as '
-                f'part of input work list')
-
-        key, kwargs = sample_key_kwargs
-        if not isinstance(kwargs, dict):
-            raise TypeError(
-                f'arguments passed to reader functions must be specified as a keywork argument'
-                f' dictionary, cannot accept value {kwargs} of {type(kwargs)}.')
-
-        if schema.column_layout == 'nested':
-            if not isinstance(key, (list, tuple)) or len(key) != 2:
-                raise TypeError(f'Key {key} not list/tuple of length 2 for nested column.')
-            if not is_suitable_user_key(key[0]) or not is_suitable_user_key(key[1]):
-                raise ValueError(f'one of key values in {key} is not valid')
-        elif schema.column_layout == 'flat':
-            if not is_suitable_user_key(key):
-                raise ValueError(f'key {key} is not valid')
-        else:
-            raise RuntimeError(f'schema layout {schema.column_layout} not supported.')
-        sample_keys.append(tuple(key))
-
-    # check that each key is unique
-    unique_sample_keys = set(sample_keys)
-    if len(sample_keys) != len(unique_sample_keys):
-        raise ValueError(f'sample keys cannot be duplicated')
-    return True
 
 
 def _check_user_input_func(columns, udf, udf_kwargs, *, prerun_check_percentage: float = 0.02):
@@ -122,6 +112,7 @@ def _check_user_input_func(columns, udf, udf_kwargs, *, prerun_check_percentage:
         This is meant to serve as a quick sanity check (to test if is success is even
         possible) before launching the full pipeline with multiple worker processes.
     """
+
     for kwargs in udf_kwargs:
         try:
             getcallargs(udf, **kwargs)
@@ -129,15 +120,25 @@ def _check_user_input_func(columns, udf, udf_kwargs, *, prerun_check_percentage:
             print(f'Invalid call args passed to {udf} with kwargs: {kwargs}')
             raise e from None
 
+        if not isiterable(udf(**kwargs)):
+            raise TypeError(f'Input udf {udf} is not Iterable')
+
     num_choices_by_percent = round(len(udf_kwargs) * prerun_check_percentage)
     num_choices = max(max(2, num_choices_by_percent), 100)  # place upper/lower bounds.
     work_samples = random.choices(udf_kwargs, k=num_choices)
+    num_failed = 0
+
     for kwargs in tqdm(work_samples, desc='Performing pre-run sanity check'):
         results = udf(**kwargs)
-        assert isinstance(results, (list, tuple))
         for res in results:
+            if res.data is None:
+                num_failed += 1
+                if num_failed >= num_choices * 0.2:
+                    raise ValueError(f'num failed exceeds max {num_failed}')
+                continue
+
             assert res.column in columns
-            _col = columns[res.columns]
+            _col = columns[res.column]
             if _col.column_layout == 'flat':
                 _col._set_arg_validate(res.key, res.data)
             else:
@@ -148,7 +149,7 @@ def _check_user_input_func(columns, udf, udf_kwargs, *, prerun_check_percentage:
 class BatchProcessPrepare(mp.Process):
     """Image Thread"""
 
-    def __init__(self, udf, schemas, columns, in_queue, out_queue, *args, **kwargs):
+    def __init__(self, udf, schemas, column_layouts, in_queue, out_queue, *args, **kwargs):
         """
         Parameters
         ----------
@@ -168,14 +169,14 @@ class BatchProcessPrepare(mp.Process):
             serialized location spec, and hash digest of read / saved data.
         """
         super().__init__(*args, **kwargs)
-        self.columns = columns
-        self.layout = schemas.column_layout
+        self.column_layouts = column_layouts
         self.udf = udf
         self.in_queue = in_queue
         self.out_queue = out_queue
         self.schemas = schemas
 
     def run(self):
+
         while True:
             try:
                 udf_kwargs = self.in_queue.get(True, 2)
@@ -183,43 +184,60 @@ class BatchProcessPrepare(mp.Process):
                 break
 
             udf_kwargs_res = (
-                (kwargs, self.udf(**kwargs)) for kwargs in udf_kwargs if kwargs is not None
+                (kwargs, self.udf(**kwargs)) for kwargs in udf_kwargs if isinstance(kwargs, dict)
             )
             content_digests = []
-            for kwargs, data in udf_kwargs_res:
-                if data is None:
-                    res = ContentDescription(self.column_name, self.layout, keys, kwargs, skip=True)
-                    content_digests.append(res)
-                    continue
-                elif keys is None or kwargs is None:
-                    continue
 
-                iscompat = self.schema.verify_data_compatible(data)
-                if not iscompat.compatible:
-                    raise ValueError(f'data for key {keys} incompatible due to {iscompat.reason}')
-                digest = self.schema.data_hash_digest(data)
-                res = ContentDescription(self.column_name, self.layout, keys, kwargs, digest)
-                content_digests.append(res)
+            for kwargs, udf_data_generator in udf_kwargs_res:
+                # udf_data_generator: Iterable[UDF_Return]
+                udf_kwarg_content_digests = []
+                for udf_iter_idx, udf_return in enumerate(udf_data_generator):
+                    _column = udf_return.column
+                    _layout = self.column_layouts[_column]
+                    _key = udf_return.key
+                    _data = udf_return.data
+
+                    if _data is None:
+                        res = ContentDescriptionPrep(column=_column,
+                                                     layout=_layout,
+                                                     key=_key,
+                                                     udf_iter_idx=udf_iter_idx,
+                                                     skip=True)
+                        udf_kwarg_content_digests.append(res)
+                        continue
+                    elif _key is None or kwargs is None:
+                        continue
+                    else:
+                        _schema = self.schemas[_column]
+                        iscompat = _schema.verify_data_compatible(_data)
+                        if not iscompat.compatible:
+                            raise ValueError(f'data for key {_key} incompatible due to {iscompat.reason}')
+                        digest = _schema.data_hash_digest(_data)
+                        res = ContentDescriptionPrep(column=_column,
+                                                     layout=_layout,
+                                                     key=_key,
+                                                     udf_iter_idx=udf_iter_idx,
+                                                     digest=digest)
+                        udf_kwarg_content_digests.append(res)
+                    content_digests.append((kwargs, udf_kwarg_content_digests))
             self.out_queue.put(content_digests)
 
 
 class BatchProcessWriter(mp.Process):
     """Image Thread"""
 
-    def __init__(self, read_func, backend_instance, schema, column_name, in_queue, out_queue, *args, **kwargs):
+    def __init__(self, udf, backends, schemas, column_layouts, tmp_pth, in_queue, out_queue, *args, **kwargs):
         """
         Parameters
         ----------
-        read_func:
+        udf:
             user provided function which takes some set of kwargs to generate one data sample
-        backend_instance:
+        backend_instances:
             initialized hangar backend class instance which will write data to disk for all
             samples read in via this thread.
-        schema:
+        schemas:
             initialized schema object for the column. This is required in order to properly
             calculate the data hash digests.
-        column_name:
-            name of the column we are ading data for.
         in_queue:
             multiprocessing.Queue object which passes in kwargs to read data for one sample via `udf`
             as well as sample/subsample names to assign to the resulting data.
@@ -229,43 +247,61 @@ class BatchProcessWriter(mp.Process):
             serialized location spec, and hash digest of read / saved data.
         """
         super().__init__(*args, **kwargs)
-        self.column_name = column_name
-        self.read_func = read_func
-        self.backend_instance = backend_instance
+        self.udf = udf
+        self.backends = backends
+        self.backend_instances = {}
         self.in_queue = in_queue
         self.out_queue = out_queue
-        self.schema = schema
-        self.layout = schema.column_layout
+        self.schemas = schemas
+        self.layouts = column_layouts
+        self.tmp_pth = tmp_pth
 
     def run(self):
+
+        for column_name, column_backend in self.backends.items():
+            be_instance_map = open_file_handles(
+                backends=[column_backend], path=self.tmp_pth, mode='a', schema=self.schemas[column_name])
+            be_instance = be_instance_map[column_backend]
+            self.backend_instances[column_name] = be_instance
+
         while True:
             # Grabs image path from queue
             try:
-                sample_keys_kwargs = self.in_queue.get(True, 2)
+                tasks_list = self.in_queue.get(True, 2)
             except queue.Empty:
                 break
 
-            sample_keys_and_data = (
-                (keys, kwargs, self.read_func(**kwargs)) for keys, kwargs in sample_keys_kwargs
-                if ((keys is not None) and (kwargs is not None))
+            tasks = (
+                (task, self.udf(**task.udf_kwargs)) for task in tasks_list if isinstance(task, Task)
             )
-
             saved_key_location_digests = []
-            for keys, kwargs, data in sample_keys_and_data:
-                if keys is None or kwargs is None or data is None:
-                    continue
+            for task, applied_udf in tasks:
+                relevant_udf_indices = iter(task.udf_iter_indices)
+                desired_udf_idx = next(relevant_udf_indices)
+                for gen_idx, res in enumerate(applied_udf):
+                    if gen_idx < desired_udf_idx:
+                        continue
 
-                iscompat = self.schema.verify_data_compatible(data)
-                if not iscompat.compatible:
-                    raise ValueError(f'data for key {keys} incompatible due to {iscompat.reason}')
-                digest = self.schema.data_hash_digest(data)
-                location_spec = self.backend_instance.write_data(data)
-                res = ContentDescription(self.column_name, self.layout, keys, kwargs, digest, location_spec)
-                saved_key_location_digests.append(res)
+                    column = res.column
+                    layout = self.layouts[column]
+                    keys = res.key
+                    data = res.data
+                    iscompat = self.schemas[column].verify_data_compatible(data)
+                    if not iscompat.compatible:
+                        raise ValueError(f'data for key {keys} incompatible due to {iscompat.reason}')
+                    digest = self.schemas[column].data_hash_digest(data)
+                    location_spec = self.backend_instances[column].write_data(data)
+                    res = ContentDescription(column, layout, keys, digest, location_spec)
+                    saved_key_location_digests.append(res)
+                    try:
+                        desired_udf_idx = next(relevant_udf_indices)
+                    except StopIteration:
+                        break
+
             self.out_queue.put(saved_key_location_digests)
 
 
-def run_prepare_recipe(columns, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=10):
+def run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=10):
     if ncpu <= 0:
         ncpu = os.cpu_count() // 2
     q_size = ncpu * 2
@@ -282,7 +318,7 @@ def run_prepare_recipe(columns, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=
     out, jobs = [], []
     for i in range(ncpu):
         t = BatchProcessPrepare(
-            udf=udf, schemas=schemas, columns=columns, in_queue=in_queue, out_queue=out_queue)
+            udf=udf, schemas=schemas, column_layouts=column_layouts, in_queue=in_queue, out_queue=out_queue)
         jobs.append(t)
         t.start()
 
@@ -297,7 +333,7 @@ def run_prepare_recipe(columns, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=
         ngroups_processed = 0
         remaining = True
         while remaining is True:
-            data_key_location_hash_digests = out_queue.get()
+            data_key_location_hash_digests = out_queue.get(True, 10)
             ngroups_processed += 1
             for saved in data_key_location_hash_digests:
                 pbar.update(1)
@@ -314,7 +350,7 @@ def run_prepare_recipe(columns, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=
     return out
 
 
-def run_write_recipe_data(tmp_dir: Path, column, reader_func, keys_reader_kwargs, *, ncpu=0, batch_size=10):
+def run_write_recipe_data(tmp_dir: Path, columns, column_layouts, schemas, udf: object, recipe_tasks: List[Task], *, ncpu=0, batch_size=10):
 
     if ncpu <= 0:
         ncpu = os.cpu_count() // 2
@@ -324,22 +360,19 @@ def run_write_recipe_data(tmp_dir: Path, column, reader_func, keys_reader_kwargs
     in_queue = mp.Queue(maxsize=q_size)
     out_queue = mp.Queue(maxsize=q_size)
 
-    dummy_groups = grouper(keys_reader_kwargs, batch_size)
+    dummy_groups = grouper(recipe_tasks, batch_size)
     n_queue_tasks = ilen(dummy_groups)
-    grouped_keys_kwargs = grouper(keys_reader_kwargs, batch_size)
+    grouped_keys_kwargs = grouper(recipe_tasks, batch_size)
 
     # start worker processes
     out, jobs = [], []
     for i in range(ncpu):
-        column_name = column.column
-        backend = column.backend
-        schema = column._schema
-        be_instance_map = open_file_handles(
-            backends=[backend], path=tmp_dir, mode='a', schema=column._schema)
-        be_instance = be_instance_map[backend]
+        backends = {}
+        for col_name, column in columns.items():
+            backends[col_name] = column.backend
         t = BatchProcessWriter(
-            read_func=reader_func, backend_instance=be_instance, schema=schema,
-            column_name=column_name, in_queue=in_queue, out_queue=out_queue)
+            udf=udf, backends=backends, schemas=schemas, column_layouts=column_layouts,
+            tmp_pth=tmp_dir, in_queue=in_queue, out_queue=out_queue)
         jobs.append(t)
         t.start()
 
@@ -350,7 +383,7 @@ def run_write_recipe_data(tmp_dir: Path, column, reader_func, keys_reader_kwargs
 
     # collect outputs and fill queue with more work if low
     # terminate if no more work should be done.
-    with tqdm(total=len(keys_reader_kwargs), desc='Executing Data Import Recipe') as pbar:
+    with tqdm(total=len(recipe_tasks), desc='Executing Data Import Recipe') as pbar:
         ngroups_processed = 0
         remaining = True
         while remaining is True:
@@ -371,20 +404,18 @@ def run_write_recipe_data(tmp_dir: Path, column, reader_func, keys_reader_kwargs
     return out
 
 
-def reduce_recipe_on_required_digests(recipe: List[ContentDescription], hashenv):
+def reduce_recipe_on_required_digests(recipe: List[Tuple[dict, List[ContentDescriptionPrep]]], hashenv):
     """Before writing, eliminate duplicate steps which would write identical
     data and steps which would write data already recorded in the repository.
 
     Parameters
     ----------
-    recipe: List[ContentDescription]
+    recipe: List[Tuple[dict, List[ContentDescriptionPrep]]]
 
     Returns
     -------
-    sample_steps:
-        List[ContentDescription] containing all sample steps to write.
-    reduced_recipe_keys_kwargs:
-        List[Tuple[KeyType, dict]] input for the mp writer
+    List[Task]:
+        reduced recipe tasks to serve as input for the mp writer.
 
     Notes
     -----
@@ -409,30 +440,59 @@ def reduce_recipe_on_required_digests(recipe: List[ContentDescription], hashenv)
       all (returning None when valid arguments were passed in to the
       udf)
     """
-    skip_attr = op_attrgetter('skip')
-    sample_steps = tuple(filterfalse(skip_attr, recipe))
+    all_digests = []
+    for udf_kwargs, content_prep_recipes in recipe:
+        for content_prep in content_prep_recipes:
+            if content_prep.skip:
+                continue
+            all_digests.append(content_prep.digest)
+    recipe_digests = set(all_digests)
 
-    recipe_digests = set((el.digest for el in sample_steps))
-    recipe_digests_db = set(map(hash_data_db_key_from_raw_key, recipe_digests))
 
     hq = hashs.HashQuery(hashenv)
+    recipe_digests_db = set(map(hash_data_db_key_from_raw_key, recipe_digests))
     existing_digests_db = hq.intersect_keys_db(recipe_digests_db)
-
     missing_digests_db = recipe_digests_db.difference(existing_digests_db)
     missing_digests = set(map(hash_data_raw_key_from_db_key, missing_digests_db))
 
-    missing_digest_sample_steps_map = defaultdict(list)
-    for step in sample_steps:
-        digest = step.digest
-        if digest in missing_digests:
-            missing_digest_sample_steps_map[digest].append(step)
+    remaining_digests = set(missing_digests)
+    task_list = []
+    for udf_kwargs, content_prep_recipes in recipe:
+        task_udf_kwargs = None  # Set to value if kwargs should be included
+        udf_indices = []
+        expected_digests = []
+        for content_prep in content_prep_recipes:
+            _digest = content_prep.digest
+            if _digest in remaining_digests:
+                udf_indices.append(content_prep.udf_iter_idx)
+                expected_digests.append(_digest)
+                task_udf_kwargs = udf_kwargs
+                remaining_digests.remove(_digest)
+        if task_udf_kwargs:
+            _task = Task(udf_kwargs, tuple(udf_indices), tuple(expected_digests))
+            task_list.append(_task)
 
-    reduced_recipe_keys_kwargs = []
-    for spec, *_ in missing_digest_sample_steps_map.values():
-        item = (spec.key, spec.kwargs)
-        reduced_recipe_keys_kwargs.append(item)
+    return task_list
 
-    return sample_steps, reduced_recipe_keys_kwargs
+
+def unify_recipe_contents(recipe: List[Tuple[dict, List[ContentDescriptionPrep]]]) -> List[ContentDescriptionPrep]:
+    """
+
+    Parameters
+    ----------
+    recipe: List[Tuple[dict, List[ContentDescriptionPrep]]]
+
+    Returns
+    -------
+    List[ContentDescriptionPrep]
+        Flat list where each element records a sample's column name, layout, keys, & digest.
+    """
+    unified_content = []
+    for udf_kwargs, udf_contents in recipe:
+        for content in udf_contents:
+            if not content.skip:
+                unified_content.append(content)
+    return unified_content
 
 
 def write_digest_to_bespec_mapping(executed_steps, hashenv, stagehashenv):
@@ -458,14 +518,9 @@ def write_full_recipe_sample_key_to_digest_mapping(sample_steps, dataenv):
 
     db_kvs = []
     for step in sample_steps:
-        if step.layout == 'nested':
-            sample, subsample = step.key
-            staging_key = nested_data_db_key_from_names(step.column, sample, subsample)
-        elif step.layout == 'flat':
-            staging_key = flat_data_db_key_from_names(step.column, step.key)
-        else:
-            raise ValueError(f'layout {step.layout} not supported')
-        staging_val = data_record_db_val_from_digest(step.digest)
+        step: ContentDescriptionPrep
+        staging_key = step.db_record_key()
+        staging_val = step.db_record_val()
         db_kvs.append((staging_key, staging_val))
 
     datatxn = TxnRegister().begin_writer_txn(dataenv)
@@ -539,37 +594,38 @@ def run_bulk_import(repo, branch_name, column_names, udf, udf_kwargs,
     autocommit : bool, optional, default=True
     """
     with closing(repo.checkout(write=True, branch=branch_name)) as co:
-        columns, schemas = {}, {}
+        columns, column_layouts, schemas = {}, {}, {}
         for name in column_names:
             _col = co.columns[name]
             _schema = _col._schema
             columns[name] = _col
+            column_layouts[name] = _col.column_layout
             schemas[name] = _schema
 
         print(f'Validating Reader Function and Argument Input')
-        # _check_user_input_args(schema, udf_kwargs)
         _check_user_input_func(columns, udf, udf_kwargs)
 
-        recipe = run_prepare_recipe(columns, schemas, udf, udf_kwargs, ncpu=ncpus)
+        recipe = run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, ncpu=ncpus)
         print('Optimizing base recipe against repostiory contents & duplicated sample data.')
-        recipe_steps, reduced_keys_kwargs = reduce_recipe_on_required_digests(recipe, co._hashenv)
+        reduced_recipe_tasks = reduce_recipe_on_required_digests(recipe, co._hashenv)
 
         hangardirpth = repo._repo_path
-        if len(reduced_keys_kwargs) >= 1:
+        if len(reduced_recipe_tasks) >= 1:
             print('Starting multiprocessed data importer.')
             with TemporaryDirectory(dir=str(hangardirpth)) as tmpdirname:
                 tmpdirpth = mock_hangar_directory_structure(tmpdirname)
-                written_data_steps = run_write_recipe_data(tmpdirpth, column, udf, reduced_keys_kwargs, ncpu=ncpus)
+                written_data_steps = run_write_recipe_data(tmpdirpth, columns, column_layouts, schemas, udf, reduced_recipe_tasks, ncpu=4)
                 move_tmpdir_data_files_to_stagedir(hangardirpth, tmpdirpth)
             write_digest_to_bespec_mapping(written_data_steps, co._hashenv, co._stagehashenv)
         else:
             print('No actions requiring the data importer remain after optimizations. Skipping this step...')
 
-        write_full_recipe_sample_key_to_digest_mapping(recipe_steps, co._stageenv)
+        unified_recipe = unify_recipe_contents(recipe)
+        write_full_recipe_sample_key_to_digest_mapping(unified_recipe, co._stageenv)
 
         if autocommit:
             print(f'autocommiting changes.')
-            co.commit(f'Auto commit after bulk import of {len(recipe_steps)} samples to '
+            co.commit(f'Auto commit after bulk import of {len(unified_recipe)} samples to '
                       f'column {column_names} on branch {branch_name}')
         else:
             print(f'skipping autocommit')
