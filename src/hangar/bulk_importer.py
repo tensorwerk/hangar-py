@@ -1,35 +1,46 @@
-import time
-import os
-import random
-from contextlib import closing
-from typing import NamedTuple, Union, Tuple, Optional, List, Dict, Iterable
+__all__ = ('UDF_Return', 'run_bulk_import')
+
+import concurrent.futures
 import multiprocessing as mp
+import os
 import queue
+import random
+import shutil
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from inspect import getcallargs
+from math import ceil
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import NamedTuple, Union, Tuple, List, Iterator, Callable, Dict, TYPE_CHECKING
+from operator import attrgetter, methodcaller
 
-from tqdm import tqdm
 import numpy as np
+from tqdm import tqdm
 
+from .columns.common import open_file_handles
+from .constants import DIR_DATA, DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE
 from .records import hashs
 from .records.column_parsers import (
     hash_data_raw_key_from_db_key,
     hash_data_db_key_from_raw_key,
     flat_data_db_key_from_names,
     nested_data_db_key_from_names,
-    data_record_db_val_from_digest
+    data_record_db_val_from_digest,
 )
+from .txnctx import TxnRegister
 from .utils import (
     ilen,
     grouper,
     is_valid_directory_path,
     isiterable,
 )
-from .columns.common import open_file_handles
-from .txnctx import TxnRegister
 
+if TYPE_CHECKING:
+    import lmdb
+    from . import Repository
 
+UDF_T = Callable[..., Iterator['UDF_Return']]
 KeyType = Union[str, int]
 
 
@@ -49,14 +60,29 @@ class UDF_Return(NamedTuple):
     key: Union[KeyType, Tuple[KeyType, KeyType]]
     data: Union[np.ndarray, str, bytes]
 
+    def __eq__(self, other):
+        if not self.__class__.__name__ == other.__class__.__name__:
+            raise NotImplementedError
 
-class ContentDescriptionPrep(NamedTuple):
+        if self.column != other.column:
+            return False
+        if self.key != other.key:
+            return False
+
+        if isinstance(self.data, np.ndarray):
+            if not np.array_equal(self.data, other.data):
+                return False
+        elif self.data != other.data:
+            return False
+        return True
+
+
+class _ContentDescriptionPrep(NamedTuple):
     column: str
     layout: str
     key: Union[Tuple[KeyType, KeyType], KeyType]
-    digest: Optional[str] = None
-    udf_iter_idx: Optional[int] = None
-    skip: bool = False
+    digest: str
+    udf_iter_idx:int
 
     def db_record_key(self):
         if self.layout == 'nested':
@@ -71,40 +97,52 @@ class ContentDescriptionPrep(NamedTuple):
         return data_record_db_val_from_digest(self.digest)
 
 
-class Task(NamedTuple):
+class _Task(NamedTuple):
     udf_kwargs: dict
     udf_iter_indices: Tuple[int]
     expected_digests: Tuple[str]
 
-
-class ContentDescription(NamedTuple):
-    column: str
-    layout: str
-    key: Union[Tuple[KeyType, KeyType], KeyType]
-    digest: Optional[str] = None
-    bespec: Optional[bytes] = None
-    udf_iter_idx: Optional[int] = None
-    skip: bool = False
+    def num_steps(self):
+        return len(self.udf_iter_indices)
 
 
-def _check_user_input_func(columns, udf, udf_kwargs, *, prerun_check_percentage: float = 0.02):
+class _WrittenContentDescription(NamedTuple):
+    """Description of data content piece saved in the multprocess content writter
+
+    Attributes
+    ----------
+    digest: str
+        digest of the data piece written.
+    bespec: bytes
+        backend location spec in db formated bytes representation.
+    """
+    digest: str
+    bespec: bytes
+
+
+def _num_steps_in_task_list(task_list: List[_Task]) -> int:
+    num_steps_method = methodcaller('num_steps')
+    return sum(map(num_steps_method, task_list))
+
+
+def _check_user_input_func(
+        columns,
+        udf: UDF_T,
+        udf_kwargs: List[dict],
+        *,
+        prerun_check_percentage: float = 0.02
+):
     """Perform a few sanity tests to ensure kwargs and udf produces valid data.
 
     Parameters
     ----------
-    columns:
+    columns
         initialized columns object dict.
-    udf:
+    udf : UDF_T
         user provided function which takes some kwargs and generates one data sample.
-    udf_kwargs: list/tuple
-        two element list/tuple where
-
-        element 0 --> sample key (flat layout) or size == 2 list/tuple of
-        samples/subsample key (nested layout).
-
-        element 1 --> dict of kwargs which are passed to user specified
-        data reader func to retrieve a single samples data from disk.
-    prerun_check_percentage: float, kwargonly, default=0.02
+    udf_kwargs : List[dict]
+        kwarg dicts to unpack into UDF via `udf(**kwargs)`
+    prerun_check_percentage : float, kwargonly, default=0.02
         value between (0.0, 1.0) representing what percentage of items in the full
         work list should be selected (at random) to be processed by udf &
         verified against the column schema.
@@ -123,30 +161,44 @@ def _check_user_input_func(columns, udf, udf_kwargs, *, prerun_check_percentage:
         if not isiterable(udf(**kwargs)):
             raise TypeError(f'Input udf {udf} is not Iterable')
 
-    num_choices_by_percent = round(len(udf_kwargs) * prerun_check_percentage)
+    num_choices_by_percent = ceil(len(udf_kwargs) * prerun_check_percentage)
     num_choices = max(max(2, num_choices_by_percent), 100)  # place upper/lower bounds.
     work_samples = random.choices(udf_kwargs, k=num_choices)
-    num_failed = 0
 
-    for kwargs in tqdm(work_samples, desc='Performing pre-run sanity check'):
-        results = udf(**kwargs)
-        for res in results:
-            if res.data is None:
-                num_failed += 1
-                if num_failed >= num_choices * 0.2:
-                    raise ValueError(f'num failed exceeds max {num_failed}')
-                continue
-
-            assert res.column in columns
-            _col = columns[res.column]
+    for kwargs in tqdm(work_samples,
+                       desc=f'Performing pre-run sanity check on {num_choices} samples'):
+        first_results = []
+        for first_res in udf(**kwargs):
+            if not first_res.__class__.__name__ == UDF_Return.__name__:
+                raise TypeError(
+                    f'UDF must yield only values of type {UDF_Return}, recieved '
+                    f'{type(first_res)} from input kwargs: {kwargs}')
+            if first_res.column not in columns:
+                raise ValueError(
+                    f'UDF_Return column value {first_res.column} was not specified in bulk '
+                    f'loader input. kwargs triggering this UDF_Return failure: {kwargs}')
+            _col = columns[first_res.column]
             if _col.column_layout == 'flat':
-                _col._set_arg_validate(res.key, res.data)
+                _col._set_arg_validate(first_res.key, first_res.data)
             else:
-                _col._set_arg_validate(res.key[0], {res.key[1]: res.data})
+                _col._set_arg_validate(first_res.key[0], {first_res.key[1]: first_res.data})
+            first_results.append(first_res)
+
+        _DeterministicError = ValueError(
+            f'contents returned in subbsequent calls to UDF with identical kwargs'
+            f'yielded different results. UDFs MUST generate deterministic results '
+            f'for the given inputs. Input kwargs generating this result: {kwargs}')
+        second_len = 0
+        for second_idx, second_res in enumerate(udf(**kwargs)):
+            if not second_res == first_results[second_idx]:
+                raise _DeterministicError
+            second_len += 1
+        if second_len != len(first_results):
+            raise _DeterministicError
     return True
 
 
-class BatchProcessPrepare(mp.Process):
+class _BatchProcessPrepare(mp.Process):
     """Image Thread"""
 
     def __init__(self, udf, schemas, column_layouts, in_queue, out_queue, *args, **kwargs):
@@ -175,58 +227,50 @@ class BatchProcessPrepare(mp.Process):
         self.out_queue = out_queue
         self.schemas = schemas
 
-    def run(self):
-
+    def _input_tasks(self):
         while True:
             try:
                 udf_kwargs = self.in_queue.get(True, 2)
             except queue.Empty:
                 break
+            yield udf_kwargs
 
+    def run(self):
+
+        for udf_kwargs in self._input_tasks():
             udf_kwargs_res = (
                 (kwargs, self.udf(**kwargs)) for kwargs in udf_kwargs if isinstance(kwargs, dict)
             )
-            content_digests = []
 
+            content_digests = []
             for kwargs, udf_data_generator in udf_kwargs_res:
                 # udf_data_generator: Iterable[UDF_Return]
+                if kwargs is None:
+                    continue
+
                 udf_kwarg_content_digests = []
                 for udf_iter_idx, udf_return in enumerate(udf_data_generator):
                     _column = udf_return.column
+                    _schema = self.schemas[_column]
                     _layout = self.column_layouts[_column]
                     _key = udf_return.key
                     _data = udf_return.data
 
-                    if _data is None:
-                        res = ContentDescriptionPrep(column=_column,
-                                                     layout=_layout,
-                                                     key=_key,
-                                                     udf_iter_idx=udf_iter_idx,
-                                                     skip=True)
-                        udf_kwarg_content_digests.append(res)
-                        continue
-                    elif _key is None or kwargs is None:
-                        continue
-                    else:
-                        _schema = self.schemas[_column]
-                        iscompat = _schema.verify_data_compatible(_data)
-                        if not iscompat.compatible:
-                            raise ValueError(f'data for key {_key} incompatible due to {iscompat.reason}')
-                        digest = _schema.data_hash_digest(_data)
-                        res = ContentDescriptionPrep(column=_column,
-                                                     layout=_layout,
-                                                     key=_key,
-                                                     udf_iter_idx=udf_iter_idx,
-                                                     digest=digest)
-                        udf_kwarg_content_digests.append(res)
-                    content_digests.append((kwargs, udf_kwarg_content_digests))
+                    iscompat = _schema.verify_data_compatible(_data)
+                    if not iscompat.compatible:
+                        raise ValueError(f'data for key {_key} incompatible due to {iscompat.reason}')
+                    digest = _schema.data_hash_digest(_data)
+                    res = _ContentDescriptionPrep(_column, _layout, _key, digest, udf_iter_idx)
+                    udf_kwarg_content_digests.append(res)
+
+                content_digests.append((kwargs, udf_kwarg_content_digests))
             self.out_queue.put(content_digests)
 
 
-class BatchProcessWriter(mp.Process):
+class _BatchProcessWriter(mp.Process):
     """Image Thread"""
 
-    def __init__(self, udf, backends, schemas, column_layouts, tmp_pth, in_queue, out_queue, *args, **kwargs):
+    def __init__(self, udf, backends, schemas, tmp_pth, in_queue, out_queue, *args, **kwargs):
         """
         Parameters
         ----------
@@ -253,28 +297,35 @@ class BatchProcessWriter(mp.Process):
         self.in_queue = in_queue
         self.out_queue = out_queue
         self.schemas = schemas
-        self.layouts = column_layouts
         self.tmp_pth = tmp_pth
 
-    def run(self):
-
+    def _setup_isolated_process_backend_instances(self):
+        """
+        Because backend FileHandle classes have a reader checkout only condition
+        check set on __getstate__, we open individual classes (and file) in the actual
+        processes they will be used in (rather than trying to pickle)
+        """
         for column_name, column_backend in self.backends.items():
             be_instance_map = open_file_handles(
                 backends=[column_backend], path=self.tmp_pth, mode='a', schema=self.schemas[column_name])
             be_instance = be_instance_map[column_backend]
             self.backend_instances[column_name] = be_instance
 
+    def _input_tasks(self):
         while True:
-            # Grabs image path from queue
             try:
                 tasks_list = self.in_queue.get(True, 2)
             except queue.Empty:
                 break
+            yield tasks_list
 
+    def run(self):
+        self._setup_isolated_process_backend_instances()
+        for tasks_list in self._input_tasks():
             tasks = (
-                (task, self.udf(**task.udf_kwargs)) for task in tasks_list if isinstance(task, Task)
+                (task, self.udf(**task.udf_kwargs)) for task in tasks_list if isinstance(task, _Task)
             )
-            saved_key_location_digests = []
+            written_digests_locations = []
             for task, applied_udf in tasks:
                 relevant_udf_indices = iter(task.udf_iter_indices)
                 desired_udf_idx = next(relevant_udf_indices)
@@ -283,25 +334,27 @@ class BatchProcessWriter(mp.Process):
                         continue
 
                     column = res.column
-                    layout = self.layouts[column]
-                    keys = res.key
                     data = res.data
                     iscompat = self.schemas[column].verify_data_compatible(data)
                     if not iscompat.compatible:
-                        raise ValueError(f'data for key {keys} incompatible due to {iscompat.reason}')
+                        raise ValueError(
+                            f'data for task {task} yielding data for column: {res.column},'
+                            f'key: {res.key} is is incompatible with column schema. Reason'
+                            f'provided is: {iscompat.reason}'
+                        )
                     digest = self.schemas[column].data_hash_digest(data)
                     location_spec = self.backend_instances[column].write_data(data)
-                    res = ContentDescription(column, layout, keys, digest, location_spec)
-                    saved_key_location_digests.append(res)
+                    res = _WrittenContentDescription(digest, location_spec)
+                    written_digests_locations.append(res)
                     try:
                         desired_udf_idx = next(relevant_udf_indices)
                     except StopIteration:
                         break
 
-            self.out_queue.put(saved_key_location_digests)
+            self.out_queue.put(written_digests_locations)
 
 
-def run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=10):
+def _run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=10):
     if ncpu <= 0:
         ncpu = os.cpu_count() // 2
     q_size = ncpu * 2
@@ -317,7 +370,7 @@ def run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, *, ncpu=0, batc
     # start worker processes
     out, jobs = [], []
     for i in range(ncpu):
-        t = BatchProcessPrepare(
+        t = _BatchProcessPrepare(
             udf=udf, schemas=schemas, column_layouts=column_layouts, in_queue=in_queue, out_queue=out_queue)
         jobs.append(t)
         t.start()
@@ -350,8 +403,11 @@ def run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, *, ncpu=0, batc
     return out
 
 
-def run_write_recipe_data(tmp_dir: Path, columns, column_layouts, schemas, udf: object, recipe_tasks: List[Task], *, ncpu=0, batch_size=10):
-
+def _run_write_recipe_data(
+        tmp_dir: Path, columns, schemas, udf: UDF_T, recipe_tasks: List[_Task],
+        *,
+        ncpu=0, batch_size=10
+):
     if ncpu <= 0:
         ncpu = os.cpu_count() // 2
     q_size = ncpu * 2
@@ -370,9 +426,9 @@ def run_write_recipe_data(tmp_dir: Path, columns, column_layouts, schemas, udf: 
         backends = {}
         for col_name, column in columns.items():
             backends[col_name] = column.backend
-        t = BatchProcessWriter(
-            udf=udf, backends=backends, schemas=schemas, column_layouts=column_layouts,
-            tmp_pth=tmp_dir, in_queue=in_queue, out_queue=out_queue)
+        t = _BatchProcessWriter(
+            udf=udf, backends=backends, schemas=schemas, tmp_pth=tmp_dir,
+            in_queue=in_queue, out_queue=out_queue)
         jobs.append(t)
         t.start()
 
@@ -383,7 +439,8 @@ def run_write_recipe_data(tmp_dir: Path, columns, column_layouts, schemas, udf: 
 
     # collect outputs and fill queue with more work if low
     # terminate if no more work should be done.
-    with tqdm(total=len(recipe_tasks), desc='Executing Data Import Recipe') as pbar:
+    nsteps = _num_steps_in_task_list(recipe_tasks)
+    with tqdm(total=nsteps, desc='Executing Data Import Recipe') as pbar:
         ngroups_processed = 0
         remaining = True
         while remaining is True:
@@ -404,17 +461,36 @@ def run_write_recipe_data(tmp_dir: Path, columns, column_layouts, schemas, udf: 
     return out
 
 
-def reduce_recipe_on_required_digests(recipe: List[Tuple[dict, List[ContentDescriptionPrep]]], hashenv):
+def _unify_recipe_contents(recipe: List[Tuple[dict, List[_ContentDescriptionPrep]]]) -> List[_ContentDescriptionPrep]:
+    """Flatten and isolate all ContentDescriptionPrep in flat recipe list.
+
+    Parameters
+    ----------
+    recipe: List[Tuple[dict, List[_ContentDescriptionPrep]]]
+
+    Returns
+    -------
+    List[_ContentDescriptionPrep]
+        Flat list where each element records a sample's column name, layout, keys, & digest.
+    """
+    unified_content = []
+    for udf_kwargs, udf_contents in recipe:
+        for content in udf_contents:
+            unified_content.append(content)
+    return unified_content
+
+
+def _reduce_recipe_on_required_digests(recipe: List[Tuple[dict, List[_ContentDescriptionPrep]]], hashenv):
     """Before writing, eliminate duplicate steps which would write identical
     data and steps which would write data already recorded in the repository.
 
     Parameters
     ----------
-    recipe: List[Tuple[dict, List[ContentDescriptionPrep]]]
+    recipe: List[Tuple[dict, List[_ContentDescriptionPrep]]]
 
     Returns
     -------
-    List[Task]:
+    List[_Task]:
         reduced recipe tasks to serve as input for the mp writer.
 
     Notes
@@ -434,20 +510,10 @@ def reduce_recipe_on_required_digests(recipe: List[Tuple[dict, List[ContentDescr
       we do not process writing of these steps at all (for any sample).
       Since the digest -> backend spec map already exists, we just need
       to process to key -> digest mapping.
-
-    - step.skip will only ever == True if user's udf decides not
-      to use some piece of data and to not even include the sample at
-      all (returning None when valid arguments were passed in to the
-      udf)
     """
-    all_digests = []
-    for udf_kwargs, content_prep_recipes in recipe:
-        for content_prep in content_prep_recipes:
-            if content_prep.skip:
-                continue
-            all_digests.append(content_prep.digest)
-    recipe_digests = set(all_digests)
-
+    recipe_contents = _unify_recipe_contents(recipe)
+    digest_getter = attrgetter('digest')
+    recipe_digests = set(map(digest_getter, recipe_contents))
 
     hq = hashs.HashQuery(hashenv)
     recipe_digests_db = set(map(hash_data_db_key_from_raw_key, recipe_digests))
@@ -469,56 +535,44 @@ def reduce_recipe_on_required_digests(recipe: List[Tuple[dict, List[ContentDescr
                 task_udf_kwargs = udf_kwargs
                 remaining_digests.remove(_digest)
         if task_udf_kwargs:
-            _task = Task(udf_kwargs, tuple(udf_indices), tuple(expected_digests))
+            _task = _Task(udf_kwargs, tuple(udf_indices), tuple(expected_digests))
             task_list.append(_task)
 
     return task_list
 
 
-def unify_recipe_contents(recipe: List[Tuple[dict, List[ContentDescriptionPrep]]]) -> List[ContentDescriptionPrep]:
+def _write_digest_to_bespec_mapping(
+        executed_steps: List[_WrittenContentDescription],
+        hashenv: 'lmdb.Environment',
+        stagehashenv: 'lmdb.Environment'
+):
+    """Write written content digests and bespec to hash and stagehash db.
     """
-
-    Parameters
-    ----------
-    recipe: List[Tuple[dict, List[ContentDescriptionPrep]]]
-
-    Returns
-    -------
-    List[ContentDescriptionPrep]
-        Flat list where each element records a sample's column name, layout, keys, & digest.
-    """
-    unified_content = []
-    for udf_kwargs, udf_contents in recipe:
-        for content in udf_contents:
-            if not content.skip:
-                unified_content.append(content)
-    return unified_content
-
-
-def write_digest_to_bespec_mapping(executed_steps, hashenv, stagehashenv):
-
     digests_bespecs = []
     for spec in executed_steps:
-        res = (spec.digest, spec.bespec)
-        digests_bespecs.append(res)
+        dbSpec = spec.bespec
+        dbDigest = hash_data_db_key_from_raw_key(spec.digest)
+        digests_bespecs.append((dbDigest, dbSpec))
 
     hashtxn = TxnRegister().begin_writer_txn(hashenv)
     stagehashtxn = TxnRegister().begin_writer_txn(stagehashenv)
     try:
-        for rawdigest, bespec in digests_bespecs:
-            dbDigest = hash_data_db_key_from_raw_key(rawdigest)
-            stagehashtxn.put(dbDigest, bespec)
-            hashtxn.put(dbDigest, bespec)
+        for dbDigest, dbSpec in digests_bespecs:
+            stagehashtxn.put(dbDigest, dbSpec)
+            hashtxn.put(dbDigest, dbSpec)
     finally:
         TxnRegister().commit_writer_txn(hashenv)
         TxnRegister().commit_writer_txn(stagehashenv)
 
 
-def write_full_recipe_sample_key_to_digest_mapping(sample_steps, dataenv):
-
+def _write_full_recipe_sample_key_to_digest_mapping(
+        sample_steps: List[_ContentDescriptionPrep],
+        dataenv: 'lmdb.Environment'
+):
+    """Write sample name -> digest key/value pairs in checkout data (stage) db.
+    """
     db_kvs = []
     for step in sample_steps:
-        step: ContentDescriptionPrep
         staging_key = step.db_record_key()
         staging_val = step.db_record_val()
         db_kvs.append((staging_key, staging_val))
@@ -531,9 +585,18 @@ def write_full_recipe_sample_key_to_digest_mapping(sample_steps, dataenv):
         TxnRegister().commit_writer_txn(dataenv)
 
 
-def mock_hangar_directory_structure(dir_name: str) -> Path:
-    from .constants import DIR_DATA, DIR_DATA_REMOTE, DIR_DATA_STAGE, DIR_DATA_STORE
+def _mock_hangar_directory_structure(dir_name: str) -> Path:
+    """Setup folder structure of hangar repo within a temporary directory path.
 
+    Parameters
+    ----------
+    dir_name
+        directory path to create the hangar dir structure in.
+
+    Returns
+    -------
+    mocked hangar directory path.
+    """
     dirpth = Path(dir_name)
     is_valid_directory_path(dirpth)
 
@@ -544,13 +607,7 @@ def mock_hangar_directory_structure(dir_name: str) -> Path:
     return dirpth
 
 
-def move_tmpdir_data_files_to_stagedir(repodir: Path, tmpdir: Path):
-    import shutil
-    import concurrent.futures
-    from concurrent.futures import ThreadPoolExecutor
-
-    from .constants import DIR_DATA, DIR_DATA_STAGE
-
+def _move_tmpdir_data_files_to_repodir(repodir: Path, tmpdir: Path):
     tmp_stage_dir = tmpdir.joinpath(DIR_DATA_STAGE)
     tmp_data_dir = tmpdir.joinpath(DIR_DATA)
     hangar_stage_dir = repodir.joinpath(DIR_DATA_STAGE)
@@ -563,35 +620,74 @@ def move_tmpdir_data_files_to_stagedir(repodir: Path, tmpdir: Path):
                 if fpth.is_file() and not fpth.stem.startswith('.'):
                     tmp_stage_fp = tmp_stage_dir.joinpath(be_pth.name, fpth.name)
                     hangar_stage_fp = hangar_stage_dir.joinpath(be_pth.name, fpth.name)
-                    stage_src_dest = (tmp_stage_fp, hangar_stage_fp)
-                    task_list.append(stage_src_dest)
+                    task_list.append((tmp_stage_fp, hangar_stage_fp))
 
-                    tmp_data_fp = tmp_data_dir.joinpath(be_pth.name, fpth.name)
-                    hangar_data_fp = hangar_data_dir.joinpath(be_pth.name, fpth.name)
-                    data_src_dest = (tmp_data_fp, hangar_data_fp)
-                    task_list.append(data_src_dest)
+                    if hangar_stage_fp.suffix.endswith('dir'):
+                        # data directories (ie. lmdb) have a stage_file suffix ending in
+                        # 'dir' (for lmdb this is a suffix of `.lmdbdir`). The stage_file
+                        # stem is the directory name which needs to be moved.
+                        tmp_data_fp = tmp_data_dir.joinpath(be_pth.name, fpth.stem)
+                        hangar_data_fp = hangar_data_dir.joinpath(be_pth.name, fpth.stem)
+                    else:
+                        # files are 1:1 copy of stage_file:data_file
+                        tmp_data_fp = tmp_data_dir.joinpath(be_pth.name, fpth.name)
+                        hangar_data_fp = hangar_data_dir.joinpath(be_pth.name, fpth.name)
+                    task_list.append((tmp_data_fp, hangar_data_fp))
 
+    _MoveException = False
     with ThreadPoolExecutor(max_workers=10) as e:
         future_result = [e.submit(shutil.move, str(src), str(dst)) for src, dst in task_list]
         for future in concurrent.futures.as_completed(future_result):
-            res = future.result()
-
+            try:
+                future.result()
+            except Exception:
+                _MoveException = future.exception()
+    if _MoveException is not False:
+        print(f'Error encountered while persisting imported data in hangar repo directory.')
+        print(f'Begining change set roll back.')
+        for _, dest_fp in task_list:
+            if dest_fp.is_file():
+                os.remove(str(dest_fp))
+                print(f'- {dest_fp}')
+            elif dest_fp.is_dir():
+                shutil.rmtree(str(dest_fp))
+                print(f'- {dest_fp}')
+        print(f'Roll back completed successfully')
+        raise _MoveException
     return True
 
 
-def run_bulk_import(repo, branch_name, column_names, udf, udf_kwargs,
-                    *, ncpus=0, autocommit=True):
+def run_bulk_import(
+        repo: 'Repository',
+        branch_name: str,
+        column_names: List[str],
+        udf: UDF_T,
+        udf_kwargs: List[dict],
+        *,
+        ncpus: int = 0,
+        autocommit: bool = True
+):
     """Perform a bulk import operation.
 
     Parameters
     ----------
     repo : Repository
+        Initialized repository object to import data into.
     branch_name : str
-    column_names : str
-    udf : object
-    udf_kwargs : List[Tuple[Union[Tuple[KeyType, KeyType], KeyType], dict]]
+        Name of the branch to checkout and import data into.
+    column_names : List[str]
+        Names of all columns which data should be saved to.
+    udf : UDF_T
+        User-Defined Function (generator style; yielding an arbitrary number
+        of values when iterated on) which is passed an unpacked kwarg dict as input
+        and yields a single :class:`~.UDF_Return` instance at a time when iterated over.
+        Cannot contain
+    udf_kwargs : List[dict]
     ncpus : int, optional, default=0
     autocommit : bool, optional, default=True
+
+    Returns
+    -------
     """
     with closing(repo.checkout(write=True, branch=branch_name)) as co:
         columns, column_layouts, schemas = {}, {}, {}
@@ -605,23 +701,32 @@ def run_bulk_import(repo, branch_name, column_names, udf, udf_kwargs,
         print(f'Validating Reader Function and Argument Input')
         _check_user_input_func(columns, udf, udf_kwargs)
 
-        recipe = run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, ncpu=ncpus)
-        print('Optimizing base recipe against repostiory contents & duplicated sample data.')
-        reduced_recipe_tasks = reduce_recipe_on_required_digests(recipe, co._hashenv)
+        recipe = _run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, ncpu=ncpus)
+        print('Unifying naieve recipe task set.')
+        unified_recipe = _unify_recipe_contents(recipe)
+        print('Pruning redundant ingest steps & eliminating tasks for data previously stored in hangar.')
+        reduced_recipe = _reduce_recipe_on_required_digests(recipe, co._hashenv)
+
+        nsteps_reduced_recipe = _num_steps_in_task_list(reduced_recipe)
+        optim_percent = ((len(unified_recipe) - nsteps_reduced_recipe) / len(unified_recipe)) * 100
+        print(f'Reduced recipe workload tasks by: {optim_percent:.2f}%')
+        print(f' - Num tasks for naieve ingest  : {len(unified_recipe)}')
+        print(f' - Num tasks after optimization : {nsteps_reduced_recipe}')
 
         hangardirpth = repo._repo_path
-        if len(reduced_recipe_tasks) >= 1:
+        if len(reduced_recipe) >= 1:
             print('Starting multiprocessed data importer.')
             with TemporaryDirectory(dir=str(hangardirpth)) as tmpdirname:
-                tmpdirpth = mock_hangar_directory_structure(tmpdirname)
-                written_data_steps = run_write_recipe_data(tmpdirpth, columns, column_layouts, schemas, udf, reduced_recipe_tasks, ncpu=4)
-                move_tmpdir_data_files_to_stagedir(hangardirpth, tmpdirpth)
-            write_digest_to_bespec_mapping(written_data_steps, co._hashenv, co._stagehashenv)
+                tmpdirpth = _mock_hangar_directory_structure(tmpdirname)
+                written_data_steps = _run_write_recipe_data(tmpdirpth, columns, schemas, udf, reduced_recipe, ncpu=4)
+                print(f'Finalizing written data pieces in hangar repo directory...')
+                _move_tmpdir_data_files_to_repodir(hangardirpth, tmpdirpth)
+            _write_digest_to_bespec_mapping(written_data_steps, co._hashenv, co._stagehashenv)
         else:
             print('No actions requiring the data importer remain after optimizations. Skipping this step...')
 
-        unified_recipe = unify_recipe_contents(recipe)
-        write_full_recipe_sample_key_to_digest_mapping(unified_recipe, co._stageenv)
+        print(f'Mapping full recipe requested via UDF to optimized task set actually processed.')
+        _write_full_recipe_sample_key_to_digest_mapping(unified_recipe, co._stageenv)
 
         if autocommit:
             print(f'autocommiting changes.')

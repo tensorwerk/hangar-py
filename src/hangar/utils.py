@@ -7,6 +7,7 @@ import sys
 import time
 import types
 from collections import deque
+from collections.abc import Iterable
 from io import StringIO
 from pathlib import Path
 from itertools import tee, filterfalse, count, zip_longest
@@ -243,7 +244,7 @@ def grouper(iterable, n, fillvalue=None):
     ...     print(grp)
     [(0, 0), (1, 2)]
     [(2, 4), (3, 6)]
-    [(4, 8), ('HELLO', 'WORLD')]
+    [(4, 8), ('FOO', 'BAR')]
     """
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=(None, None))
@@ -372,19 +373,22 @@ def is_valid_directory_path(p: Path) -> Path:
     return usr_path
 
 
-def isiterable(obj) -> bool:
+def isiterable(obj, ignore_types=(str, bytes)) -> bool:
     """Determine if input object is iterable.
+
+    Parameters
+    ----------
+    obj
+        object to check if it is iterable
+    ignore_types
+        Tuple of types to ignore
 
     Returns
     -------
     bool
     """
-    try:
-        iter(obj)
-    except TypeError:
-        return False
-    else:
-        return True
+    res = isinstance(obj, Iterable) and not isinstance(obj, ignore_types)
+    return res
 
 
 # ----------------- human & machine nbytes ------------------------------------
