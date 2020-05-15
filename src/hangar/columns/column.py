@@ -2,7 +2,7 @@
 """
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict
+from typing import Iterable, List, Mapping, Optional, Tuple, Union, Dict, TYPE_CHECKING
 
 import lmdb
 
@@ -21,8 +21,13 @@ from ..records.queries import RecordQuery
 from ..op_state import writer_checkout_only
 from ..txnctx import TxnRegister
 
+if TYPE_CHECKING:
+    from .layout_flat import FlatSampleWriter
+    from .layout_nested import NestedSampleWriter, FlatSubsampleWriter
+
+
+ModifierTypes = Union['NestedSampleWriter', 'FlatSubsampleWriter', 'FlatSampleWriter']
 KeyType = Union[str, int]
-ModifierTypes = Union['NestedSampleReader', 'FlatSubsampleReader']
 
 
 class Columns:

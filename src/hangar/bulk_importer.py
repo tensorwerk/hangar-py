@@ -1,20 +1,84 @@
+"""Bulk importer methods to ingest large quantities of data into Hangar.
+
+The following module is designed to address challenges inherent to writing
+massive amounts of data to a hangar repository via the standard API. Since
+write-enabled checkouts are limited to processing in a single thread, the
+time required to import hundreds of Gigabytes (or Terabytes) of data into
+Hangar (from external sources) can become prohibitivly long. This module
+implements a multi-processed importer which reduces import time nearly
+linearly with the number of CPU cores allocated on a machine.
+
+There are a number of challenges to overcome:
+
+1. How to validate data against a column schema?
+
+    - Does the column exist?
+
+    - Are the key(s) valid?
+
+    - Is the data a valid type/shape/precision valid for the the selected
+      column schema?
+
+2. How to handle duplicated data?
+
+    -  If an identical piece of data is recorded in the repository already,
+       only record the sample reference (do not write the data to disk again).
+
+    - If the bulk import method would write identical pieces of data to the
+      repository multiple times, and the data does not already exist, then that
+      piece of content should only be written to disk once. Only sample
+      references should be saved after that.
+
+3. How to handle transactionality?
+
+    - What happens if some column, sample keys, or data piece is invalid and
+      cannot be written as desired?
+
+    - How to rollback partial changes if the process is inturupted in
+      the middle of a bulk import operation?
+
+4. How to limit memory usage if many processes are trying to load and
+   write large tensors?
+
+
+Rough outline of steps:
+
+    1. Validate UDF & Argument Signature
+
+    2. Read, Validate, and Hash UDF results --> Task Recipe
+
+    3. Prune Recipe
+
+    4. Read, Validate, Write Data to Isolated Backend Storage
+
+    5. Record Sample References in Isolated Environment
+
+    6. If all successful, make isolated data known to repository core,
+       otherwise abort to starting state.
+"""
 __all__ = ('UDF_Return', 'run_bulk_import')
 
 import concurrent.futures
 import multiprocessing as mp
 import os
+import pickle
 import queue
 import random
 import shutil
+import warnings
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
-from inspect import getcallargs
+from contextlib import closing, contextmanager
+from inspect import signature, isgeneratorfunction
 from math import ceil
+from operator import attrgetter, methodcaller
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import NamedTuple, Union, Tuple, List, Iterator, Callable, Dict, TYPE_CHECKING
-from operator import attrgetter, methodcaller
+from typing import (
+    NamedTuple, Union, Tuple, List, Iterator,
+    Callable, Dict, Optional, TYPE_CHECKING
+)
 
+import cloudpickle
 import numpy as np
 from tqdm import tqdm
 
@@ -29,21 +93,23 @@ from .records.column_parsers import (
     data_record_db_val_from_digest,
 )
 from .txnctx import TxnRegister
-from .utils import (
-    ilen,
-    grouper,
-    is_valid_directory_path,
-    isiterable,
-)
+from .utils import grouper, is_valid_directory_path, bound
 
 if TYPE_CHECKING:
     import lmdb
     from . import Repository
+    from .typesystem.base import ColumnBase
+    from .columns import ModifierTypes
+
 
 UDF_T = Callable[..., Iterator['UDF_Return']]
 KeyType = Union[str, int]
 
 
+# ----------------- User Facing Potions of Bulk Data Loader -------------------
+
+
+# noinspection PyUnresolvedReferences
 class UDF_Return(NamedTuple):
     """User-Defined Function return container for bulk importer read functions
 
@@ -52,7 +118,7 @@ class UDF_Return(NamedTuple):
     column: str
         column name to place data into
     key: Union[KeyType, Tuple[KeyType, KeyType]]
-        key (single value) to place flat sample into, or 2-tuple of keys for nested samples
+        key to place flat sample into, or 2-tuple of keys for nested samples
     data: Union[np.ndarray, str, bytes]
         piece of data to place in the column with the provided key.
     """
@@ -77,12 +143,251 @@ class UDF_Return(NamedTuple):
         return True
 
 
+def run_bulk_import(
+        repo: 'Repository',
+        branch_name: str,
+        column_names: List[str],
+        udf: UDF_T,
+        udf_kwargs: List[dict],
+        *,
+        ncpus: int = 0,
+        autocommit: bool = True
+):
+    """Perform a bulk import operation from a given user-defined function.
+
+    In order to provide for arbitrary input data sources along with ensuring
+    the core promises of hangar hold we require the following from users:
+
+    Define some arbitrary function (ie "user-defined function" / "UDF") which
+    accepts some arguments and yields data. The UDF must be a generator function,
+    yielding only values which are of :class:`~.UDF_Return` type. The results
+    yielded by the UDF must be deterministic for a given set of  inputs. This
+    includes all values of the :class:`~.UDF_Return` (``columns`` and ``keys``,
+    as well as ``data``).
+
+    A list of input arguments to the UDF must be provided, this is formatted as a
+    sequence  (list / tuple) of keyword-arg dictionaries, each of which must be
+    valid when unpacked and bound to the UDF signature. Additionally, all columns
+    must be  specified up front. If any columns are named a :class:`~.UDF_Return`
+    which were not pre-specified, the entire operation will fail.
+
+    Notes
+    -----
+
+    *  This is an all-or-nothing operation, either all data is successfully
+       read, validated, and written to the storage backends, or none of it
+       is. A single maleformed key or data type/shape will cause the entire
+       import operation to abort.
+
+    *  The input kwargs should be fairly small (of no consequence to load
+       into memory), data out should be large. The results of the UDF
+       will only be stored in memory for a very short period (just the time
+       it takes to be validated against the column schema and compressed /
+       flushed to disk).
+
+    *  Every step of the process is executed as a generator, lazily loading
+       data the entire way. If possible, we recomend writing the UDF such that
+       data is not allocated in memory before it is ready to be yielded.
+
+    *  If it is possible, the task recipe will be pruned and optimized in such
+       a way that iteration over the UDF will be short circuted during the
+       second pass (writing data to the backend). As this can greatly reduce
+       processing time, we recomend trying to yield data pieces which are likely
+       to be unique first from the UDF.
+
+    Examples
+    --------
+
+    >>> import os
+    >>> import numpy as np
+    >>> from PIL import Image
+    >>> from hangar.bulk_importer import UDF_Return
+
+    >>> def image_loader(file_path):
+    ...     im = Image.open(file_name)
+    ...     arr = np.array(im.resize(512, 512))
+    ...     im_record = UDF_Return(column='image', key=(category, sample), data=arr)
+    ...     yield im_record
+    ...
+    ...     root, sample_file = os.path.split(file_path)
+    ...     category = os.path.dirname(root)
+    ...     sample_name, _ = os.path.splitext(sample_file)
+    ...     path_record = UDF_Return(column='file_str', key=(category, sample_name), data=file_path)
+    ...     yield path_record
+    ...
+    >>> udf_kwargs = [
+    ...     {'file_path': '/foo/cat/image_001.jpeg'},
+    ...     {'file_path': '/foo/cat/image_002.jpeg'},
+    ...     {'file_path': '/foo/dog/image_001.jpeg'},
+    ...     {'file_path': '/foo/bird/image_011.jpeg'},
+    ...     {'file_path': '/foo/bird/image_003.jpeg'}
+    ... ]
+    >>> repo = Repository('foo/path/to/repo')
+    >>> from hangar.bulk_importer import run_bulk_import
+    >>> run_bulk_import(
+    ...     repo, branch_name='master', column_names=['file_str', 'image'],
+    ...     udf=image_loader, udf_kwargs=udf_kwargs)
+
+    However, the following will not work, since the output is non-deterministic.
+
+    >>> def nondeterminstic(x, y):
+    ...     first = str(x * y)
+    ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=first)
+    ...
+    ...     second = str(x * y * random())
+    ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=second)
+    ...
+    >>> udf_kwargs = [
+    ...     {'x': 1, 'y': 2},
+    ...     {'x': 1, 'y': 3},
+    ...     {'x': 2, 'y': 4},
+    ... ]
+    >>> run_bulk_import(
+    ...     repo, branch_name='master', column_names=['valstr'],
+    ...     udf=image_loader, udf_kwargs=udf_kwargs)
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+    TypeError: contents returned in subbsequent calls to UDF with identical
+      kwargs yielded different results. UDFs MUST generate deterministic
+      results for the given inputs. Input kwargs generating this result:
+      {'x': 1, 'y': 2}.
+
+    Not all columns must be returned from every input to the UDF, the number of
+    data pieces yielded can also vary arbitrarily (so long as the results are
+    deterministic for a particular set of inputs)
+
+    >>> def maybe_load(x_arr, y_arr, sample_name, columns=['default']):
+    ...     for column in columns:
+    ...         arr = np.multiply(x_arr, y_arr)
+    ...         yield UDF_Return(column=column, key=sample_name, data=arr)
+    ...     #
+    ...     # do some strange processing which only outputs another column sometimes
+    ...     if len(columns) == 1:
+    ...         other = np.array(x_arr.shape) * np.array(y_arr.shape)
+    ...         yield UDF_Return(column='strange_column', key=sample_name, data=other)
+    ...
+    >>> udf_kwargs = [
+    ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_1'},
+    ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_2', 'columns': ['foo', 'bar', 'default']},
+    ...     {'x_arr': np.arange(10) * 2, 'y_arr': np.arange(10), 'sample_name': 'sample_3'},
+    ... ]
+    >>> run_bulk_import(
+    ...     repo, branch_name='master',
+    ...     column_names=['default', 'foo', 'bar', 'strange_column'],
+    ...     udf=maybe_load, udf_kwargs=udf_kwargs)
+
+    Parameters
+    ----------
+    repo : 'Repository'
+        Initialized repository object to import data into.
+    branch_name : str
+        Name of the branch to checkout and import data into.
+    column_names : List[str]
+        Names of all columns which data should be saved to.
+    udf : UDF_T
+        User-Defined Function (generator style; yielding an arbitrary number
+        of values when iterated on) which is passed an unpacked kwarg dict as input
+        and yields a single :class:`~.UDF_Return` instance at a time when iterated over.
+        Cannot contain
+    udf_kwargs : List[dict]
+        A sequence of keyword argument dictionaries which are individually unpacked
+        as inputs into the user-defined function (UDF). the keyword argument dictionaries
+    ncpus : int, optional, default=0
+        Number of Parallel processes to read data files & write to hangar backend stores
+        in. If <= 0, then the default is set to ``num_cpus / 2``. The value of this
+        parameter should never exceed the total CPU count of the system. Import time
+        scales mostly linearly with ncpus. Optimal performance is achieved by balancing
+        memory usage of the ``UDF`` function and backend storage writer processes against
+        the total system memory.
+        generally increase linearly up to
+    autocommit : bool, optional, default=True
+        Control whether a commit should be made after successfully importing the
+        specified data to the staging area of the branch.
+    """
+    _BATCH_SIZE = 10  # TODO: Is this necessary?
+
+    columns: Dict[str, 'ModifierTypes'] = {}
+    column_layouts: Dict[str, str] = {}
+    schemas: Dict[str, 'ColumnBase'] = {}
+
+    with closing(repo.checkout(write=True, branch=branch_name)) as co:
+        for name in column_names:
+            _col = co.columns[name]
+            _schema = _col._schema
+            columns[name] = _col
+            column_layouts[name] = _col.column_layout
+            schemas[name] = _schema
+
+        print(f'Validating Reader Function and Argument Input')
+        _check_user_input_func(columns=columns, udf=udf, udf_kwargs=udf_kwargs)
+        serialized_udf = _serialize_udf(udf)
+
+        ncpu = _process_num_cpus(ncpus)
+        print(f'Using {ncpu} worker processes')
+
+        recipe = _run_prepare_recipe(
+            column_layouts=column_layouts,
+            schemas=schemas,
+            udf=serialized_udf,
+            udf_kwargs=udf_kwargs,
+            ncpu=ncpu,
+            batch_size=_BATCH_SIZE)
+        print('Unifying naieve recipe task set.')
+        unified_recipe = _unify_recipe_contents(recipe)
+        print('Pruning redundant steps & eliminating tasks on data stored in hangar.')
+        reduced_recipe = _reduce_recipe_on_required_digests(recipe, co._hashenv)
+
+        nsteps_reduced_recipe = _num_steps_in_task_list(reduced_recipe)
+        optim_percent = ((len(unified_recipe) - nsteps_reduced_recipe) / len(unified_recipe)) * 100
+        print(f'Reduced recipe workload tasks by: {optim_percent:.2f}%')
+        print(f' - Num tasks for naieve ingest  : {len(unified_recipe)}')
+        print(f' - Num tasks after optimization : {nsteps_reduced_recipe}')
+
+        hangardirpth = repo._repo_path
+        if len(reduced_recipe) >= 1:
+            print('Starting multiprocessed data importer.')
+            with TemporaryDirectory(dir=str(hangardirpth)) as tmpdirname:
+                tmpdirpth = _mock_hangar_directory_structure(tmpdirname)
+                written_data_steps = _run_write_recipe_data(
+                    tmp_dir=tmpdirpth,
+                    columns=columns,
+                    schemas=schemas,
+                    udf=serialized_udf,
+                    recipe_tasks=reduced_recipe,
+                    ncpu=ncpu,
+                    batch_size=_BATCH_SIZE)
+                print(f'Finalizing written data pieces in hangar repo directory...')
+                _move_tmpdir_data_files_to_repodir(repodir=hangardirpth, tmpdir=tmpdirpth)
+            _write_digest_to_bespec_mapping(
+                executed_steps=written_data_steps,
+                hashenv=co._hashenv,
+                stagehashenv=co._stagehashenv)
+        else:
+            print('No actions requiring the data import remain after optimizations.')
+
+        print(f'Mapping full recipe requested via UDF to optimized task set actually processed.')
+        _write_full_recipe_sample_key_to_digest_mapping(sample_steps=unified_recipe, dataenv=co._stageenv)
+
+        if autocommit:
+            print(f'autocommiting changes.')
+            co.commit(f'Auto commit after bulk import of {len(unified_recipe)} samples to '
+                      f'column {column_names} on branch {branch_name}')
+        else:
+            print(f'skipping autocommit')
+
+        print('Buld data importer operation completed successfuly')
+        return
+
+
+# ---------------- Internal Implementation of Bulk Data Loader ----------------
+
+
 class _ContentDescriptionPrep(NamedTuple):
     column: str
     layout: str
     key: Union[Tuple[KeyType, KeyType], KeyType]
     digest: str
-    udf_iter_idx:int
+    udf_iter_idx: int
 
     def db_record_key(self):
         if self.layout == 'nested':
@@ -99,8 +404,8 @@ class _ContentDescriptionPrep(NamedTuple):
 
 class _Task(NamedTuple):
     udf_kwargs: dict
-    udf_iter_indices: Tuple[int]
-    expected_digests: Tuple[str]
+    udf_iter_indices: Tuple[int, ...]
+    expected_digests: Tuple[str, ...]
 
     def num_steps(self):
         return len(self.udf_iter_indices)
@@ -123,6 +428,40 @@ class _WrittenContentDescription(NamedTuple):
 def _num_steps_in_task_list(task_list: List[_Task]) -> int:
     num_steps_method = methodcaller('num_steps')
     return sum(map(num_steps_method, task_list))
+
+
+def _serialize_udf(udf: UDF_T) -> bytes:
+    raw = cloudpickle.dumps(udf, protocol=pickle.HIGHEST_PROTOCOL)
+    return raw
+
+
+def _deserialize_udf(raw: bytes) -> UDF_T:
+    udf = cloudpickle.loads(raw)
+    return udf
+
+
+def _process_num_cpus(ncpus: int) -> int:
+    """Determine how many workerprocesses to spin up in bulk importer
+
+    Parameters
+    ----------
+    ncpus: int
+        User specified number of worker processes. If <= 0 set to num CPU cores / 2.
+
+    Returns
+    -------
+    int
+    """
+    node_cpus = os.cpu_count()
+    if ncpus <= 0:
+        cpu_try = ceil(node_cpus / 2)
+        ncpus = bound(1, node_cpus, cpu_try)
+    elif ncpus > node_cpus:
+        warnings.warn(
+            f'Input number of CPUs exceeds maximum on node. {ncpus} > {node_cpus}',
+            category=UserWarning
+        )
+    return ncpus
 
 
 def _check_user_input_func(
@@ -150,23 +489,28 @@ def _check_user_input_func(
         This is meant to serve as a quick sanity check (to test if is success is even
         possible) before launching the full pipeline with multiple worker processes.
     """
+    if not isgeneratorfunction(udf):
+        raise TypeError(f'UDF {udf} is not a user defined generator function.')
 
-    for kwargs in udf_kwargs:
+    try:
+        _raw_udf = _serialize_udf(udf)
+        _deserialized = _deserialize_udf(_raw_udf)
+    except (pickle.PicklingError, pickle.UnpicklingError) as e:
+        my_err = RuntimeError(f'Could not pickle/unpickle UDF {udf} using cloudpickle.')
+        raise my_err from e
+
+    sig = signature(udf)
+    for idx, kwargs in enumerate(tqdm(udf_kwargs, desc='Validating argument signature')):
         try:
-            getcallargs(udf, **kwargs)
-        except Exception as e:
-            print(f'Invalid call args passed to {udf} with kwargs: {kwargs}')
-            raise e from None
-
-        if not isiterable(udf(**kwargs)):
-            raise TypeError(f'Input udf {udf} is not Iterable')
+            sig.bind(**kwargs)
+        except TypeError as e:
+            my_err = TypeError(f'Value {kwargs} at index {idx} of `udf_kwargs` is invalid.')
+            raise my_err from e
 
     num_choices_by_percent = ceil(len(udf_kwargs) * prerun_check_percentage)
-    num_choices = max(max(2, num_choices_by_percent), 100)  # place upper/lower bounds.
+    num_choices = bound(2, 100, num_choices_by_percent)
     work_samples = random.choices(udf_kwargs, k=num_choices)
-
-    for kwargs in tqdm(work_samples,
-                       desc=f'Performing pre-run sanity check on {num_choices} samples'):
+    for kwargs in tqdm(work_samples, desc=f'Performing pre-run sanity check'):
         first_results = []
         for first_res in udf(**kwargs):
             if not first_res.__class__.__name__ == UDF_Return.__name__:
@@ -195,39 +539,54 @@ def _check_user_input_func(
             second_len += 1
         if second_len != len(first_results):
             raise _DeterministicError
+
     return True
 
 
 class _BatchProcessPrepare(mp.Process):
-    """Image Thread"""
 
-    def __init__(self, udf, schemas, column_layouts, in_queue, out_queue, *args, **kwargs):
-        """
+    def __init__(
+            self,
+            udf: bytes,
+            schemas: Dict[str, 'ColumnBase'],
+            column_layouts: Dict[str, str],
+            in_queue: mp.Queue,
+            out_queue: mp.Queue,
+            *args, **kwargs
+    ):
+        """Read all data generated by all UDF(**udf_kwargs) input.
+
+        Validates reader function works, yields correct UDF_Return type, keys/columns
+        are compatible names, data schema is suitable for column, and calculates digest
+        of data and index location into UDF iteration.
+
         Parameters
         ----------
-        udf:
-            user provided function which takes some set of kwargs to generate one data sample
-        schemas:
-            initialized schema object for the column. This is required in order to properly
-            calculate the data hash digests.
-        column_name:
-            name of the column we are ading data for.
-        in_queue:
-            multiprocessing.Queue object which passes in kwargs to read data for one sample via `udf`
-            as well as sample/subsample names to assign to the resulting data.
-            tuple in form of `(kwargs, (samplen, [subsamplen,]))`
-        out_queue:
-            multiprocessing.Queue object which passes back sample keys formated for storage in ref db,
-            serialized location spec, and hash digest of read / saved data.
+        udf
+            user provided function yielding UDF_Return instances when iterated over
+        schemas
+            dict mapping column names -> initialized schema objects. This is required in
+            order to properly calculate the data hash digests.
+        column_layouts
+            dict mapping column names -> column layout string
+        in_queue
+            queue contianing work pieces (kwargs) to process via UDF `mp.Queue[List[dict]]`
+        out_queue
+            queue containing mp.Queue[List[Tuple[dict, List[_ContentDescriptionPrep]]]]
+            mapping kwargs -> content description read in.
         """
         super().__init__(*args, **kwargs)
         self.column_layouts = column_layouts
-        self.udf = udf
+        self._udf_raw: bytes = udf
+        self.udf: Optional[UDF_T] = None
         self.in_queue = in_queue
         self.out_queue = out_queue
         self.schemas = schemas
 
-    def _input_tasks(self):
+    def _setup(self):
+        self.udf = _deserialize_udf(self._udf_raw)
+
+    def _input_tasks(self) -> Iterator[List[dict]]:
         while True:
             try:
                 udf_kwargs = self.in_queue.get(True, 2)
@@ -236,25 +595,23 @@ class _BatchProcessPrepare(mp.Process):
             yield udf_kwargs
 
     def run(self):
-
+        self._setup()
         for udf_kwargs in self._input_tasks():
             udf_kwargs_res = (
                 (kwargs, self.udf(**kwargs)) for kwargs in udf_kwargs if isinstance(kwargs, dict)
             )
-
             content_digests = []
             for kwargs, udf_data_generator in udf_kwargs_res:
-                # udf_data_generator: Iterable[UDF_Return]
                 if kwargs is None:
                     continue
 
                 udf_kwarg_content_digests = []
                 for udf_iter_idx, udf_return in enumerate(udf_data_generator):
                     _column = udf_return.column
-                    _schema = self.schemas[_column]
-                    _layout = self.column_layouts[_column]
                     _key = udf_return.key
                     _data = udf_return.data
+                    _schema = self.schemas[_column]
+                    _layout = self.column_layouts[_column]
 
                     iscompat = _schema.verify_data_compatible(_data)
                     if not iscompat.compatible:
@@ -262,36 +619,112 @@ class _BatchProcessPrepare(mp.Process):
                     digest = _schema.data_hash_digest(_data)
                     res = _ContentDescriptionPrep(_column, _layout, _key, digest, udf_iter_idx)
                     udf_kwarg_content_digests.append(res)
-
                 content_digests.append((kwargs, udf_kwarg_content_digests))
+
             self.out_queue.put(content_digests)
 
 
-class _BatchProcessWriter(mp.Process):
-    """Image Thread"""
+def _run_prepare_recipe(
+        column_layouts: Dict[str, str],
+        schemas: Dict[str, 'ColumnBase'],
+        udf: bytes,
+        udf_kwargs: List[dict],
+        *,
+        ncpu: int = 0,
+        batch_size: int = 10
+) -> List[Tuple[dict, List[_ContentDescriptionPrep]]]:
 
-    def __init__(self, udf, backends, schemas, tmp_pth, in_queue, out_queue, *args, **kwargs):
+    # Setup & populate queue with batched arguments
+    in_queue = mp.Queue()
+    out_queue = mp.Queue()
+    n_queue_tasks = ceil(len(udf_kwargs) / batch_size)
+    for keys_kwargs in grouper(udf_kwargs, batch_size):
+        in_queue.put_nowait(keys_kwargs)
+
+    out, jobs = [], []
+    try:
+        # start worker processes
+        for _ in range(ncpu):
+            t = _BatchProcessPrepare(
+                udf=udf,
+                schemas=schemas,
+                column_layouts=column_layouts,
+                in_queue=in_queue,
+                out_queue=out_queue)
+            jobs.append(t)
+            t.start()
+
+        # collect outputs and fill queue with more work if low
+        # terminate if no more work should be done.
+        with tqdm(total=len(udf_kwargs), desc='Constructing task recipe') as pbar:
+            ngroups_processed = 0
+            while ngroups_processed < n_queue_tasks:
+                data_key_location_hash_digests = out_queue.get(True)
+                ngroups_processed += 1
+                for saved in data_key_location_hash_digests:
+                    pbar.update(1)
+                    out.append(saved)
+        for j in jobs:
+            try:
+                j.join(timeout=5)
+            except mp.TimeoutError:
+                j.terminate()
+    except (KeyboardInterrupt, InterruptedError):
+        while jobs:
+            j = jobs.pop()
+            if j.is_alive():
+                print(f'terminating PID {j.pid}')
+                j.terminate()
+            else:
+                exitcode = j.exitcode
+                if exitcode:
+                    print(f'PID {j.pid} exitcode: {exitcode}')
+        raise
+    finally:
+        in_queue.close()
+        out_queue.close()
+        in_queue.join_thread()
+        out_queue.join_thread()
+
+    return out
+
+
+class _BatchProcessWriter(mp.Process):
+
+    def __init__(
+            self,
+            udf: bytes,
+            backends: Dict[str, str],
+            schemas: Dict[str, 'ColumnBase'],
+            tmp_pth: Path,
+            in_queue: mp.Queue,
+            out_queue: mp.Queue,
+            *args,
+            **kwargs
+    ):
         """
+
         Parameters
         ----------
-        udf:
-            user provided function which takes some set of kwargs to generate one data sample
-        backend_instances:
-            initialized hangar backend class instance which will write data to disk for all
-            samples read in via this thread.
-        schemas:
-            initialized schema object for the column. This is required in order to properly
-            calculate the data hash digests.
-        in_queue:
-            multiprocessing.Queue object which passes in kwargs to read data for one sample via `udf`
-            as well as sample/subsample names to assign to the resulting data.
-            tuple in form of `(kwargs, (samplen, [subsamplen,]))`
-        out_queue:
-            multiprocessing.Queue object which passes back sample keys formated for storage in ref db,
-            serialized location spec, and hash digest of read / saved data.
+        udf
+            user provided function yielding UDF_Return instances when iterated over.
+        backends
+            dict mapping column name -> backend code.
+        schemas
+            dict mapping column names -> initialized schema objects. This is required in
+            order to properly calculate the data hash digests.
+        tmp_pth
+            tempdir path to write data to
+        in_queue
+            grouped task lists `mp.Queue[List[_Task]]`
+        out_queue
+            written content description `mp.Queue[List[_WrittenContentDescription]]`
+        args
+        kwargs
         """
         super().__init__(*args, **kwargs)
-        self.udf = udf
+        self._udf_raw: bytes = udf
+        self.udf: Optional[UDF_T] = None
         self.backends = backends
         self.backend_instances = {}
         self.in_queue = in_queue
@@ -299,19 +732,24 @@ class _BatchProcessWriter(mp.Process):
         self.schemas = schemas
         self.tmp_pth = tmp_pth
 
-    def _setup_isolated_process_backend_instances(self):
+    def _setup(self):
         """
         Because backend FileHandle classes have a reader checkout only condition
         check set on __getstate__, we open individual classes (and file) in the actual
         processes they will be used in (rather than trying to pickle)
         """
+        self.udf = _deserialize_udf(self._udf_raw)
+
         for column_name, column_backend in self.backends.items():
             be_instance_map = open_file_handles(
-                backends=[column_backend], path=self.tmp_pth, mode='a', schema=self.schemas[column_name])
+                backends=[column_backend],
+                path=self.tmp_pth,
+                mode='a',
+                schema=self.schemas[column_name])
             be_instance = be_instance_map[column_backend]
             self.backend_instances[column_name] = be_instance
 
-    def _input_tasks(self):
+    def _input_tasks(self) -> Iterator[List[_Task]]:
         while True:
             try:
                 tasks_list = self.in_queue.get(True, 2)
@@ -319,145 +757,111 @@ class _BatchProcessWriter(mp.Process):
                 break
             yield tasks_list
 
+    @contextmanager
+    def _enter_backends(self):
+        try:
+            for be in self.backend_instances.keys():
+                self.backend_instances[be].__enter__()
+            yield
+        finally:
+            for be in self.backend_instances.keys():
+                self.backend_instances[be].__exit__()
+
     def run(self):
-        self._setup_isolated_process_backend_instances()
-        for tasks_list in self._input_tasks():
-            tasks = (
-                (task, self.udf(**task.udf_kwargs)) for task in tasks_list if isinstance(task, _Task)
-            )
-            written_digests_locations = []
-            for task, applied_udf in tasks:
-                relevant_udf_indices = iter(task.udf_iter_indices)
-                desired_udf_idx = next(relevant_udf_indices)
-                for gen_idx, res in enumerate(applied_udf):
-                    if gen_idx < desired_udf_idx:
-                        continue
+        self._setup()
+        with self._enter_backends():
+            for tasks_list in self._input_tasks():
+                tasks = (
+                    (task, self.udf(**task.udf_kwargs)) for task in tasks_list if isinstance(task, _Task)
+                )
+                written_digests_locations = []
+                for task, applied_udf in tasks:
+                    relevant_udf_indices = iter(task.udf_iter_indices)
+                    desired_udf_idx = next(relevant_udf_indices)
+                    for gen_idx, res in enumerate(applied_udf):
+                        if gen_idx < desired_udf_idx:
+                            continue
 
-                    column = res.column
-                    data = res.data
-                    iscompat = self.schemas[column].verify_data_compatible(data)
-                    if not iscompat.compatible:
-                        raise ValueError(
-                            f'data for task {task} yielding data for column: {res.column},'
-                            f'key: {res.key} is is incompatible with column schema. Reason'
-                            f'provided is: {iscompat.reason}'
-                        )
-                    digest = self.schemas[column].data_hash_digest(data)
-                    location_spec = self.backend_instances[column].write_data(data)
-                    res = _WrittenContentDescription(digest, location_spec)
-                    written_digests_locations.append(res)
-                    try:
-                        desired_udf_idx = next(relevant_udf_indices)
-                    except StopIteration:
-                        break
-
-            self.out_queue.put(written_digests_locations)
-
-
-def _run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, *, ncpu=0, batch_size=10):
-    if ncpu <= 0:
-        ncpu = os.cpu_count() // 2
-    q_size = ncpu * 2
-
-    # setup queues
-    in_queue = mp.Queue(maxsize=q_size)
-    out_queue = mp.Queue(maxsize=q_size)
-
-    dummy_groups = grouper(udf_kwargs, batch_size)
-    n_queue_tasks = ilen(dummy_groups)
-    grouped_keys_kwargs = grouper(udf_kwargs, batch_size)
-
-    # start worker processes
-    out, jobs = [], []
-    for i in range(ncpu):
-        t = _BatchProcessPrepare(
-            udf=udf, schemas=schemas, column_layouts=column_layouts, in_queue=in_queue, out_queue=out_queue)
-        jobs.append(t)
-        t.start()
-
-    # Populate queue with batched arguments
-    for i in range(q_size):
-        initial_keys_kwargs_group = next(grouped_keys_kwargs)
-        in_queue.put(initial_keys_kwargs_group)
-
-    # collect outputs and fill queue with more work if low
-    # terminate if no more work should be done.
-    with tqdm(total=len(udf_kwargs), desc='Constructing task recipe') as pbar:
-        ngroups_processed = 0
-        remaining = True
-        while remaining is True:
-            data_key_location_hash_digests = out_queue.get(True, 10)
-            ngroups_processed += 1
-            for saved in data_key_location_hash_digests:
-                pbar.update(1)
-                out.append(saved)
-            try:
-                while not in_queue.full():
-                    keys_kwargs = next(grouped_keys_kwargs)
-                    in_queue.put(keys_kwargs)
-            except StopIteration:
-                if ngroups_processed == n_queue_tasks:
-                    remaining = False
-    for j in jobs:
-        j.join()
-    return out
+                        column = res.column
+                        data = res.data
+                        digest = self.schemas[column].data_hash_digest(data)
+                        location_spec = self.backend_instances[column].write_data(data)
+                        res = _WrittenContentDescription(digest, location_spec)
+                        written_digests_locations.append(res)
+                        try:
+                            desired_udf_idx = next(relevant_udf_indices)
+                        except StopIteration:
+                            break
+                self.out_queue.put(written_digests_locations)
 
 
 def _run_write_recipe_data(
-        tmp_dir: Path, columns, schemas, udf: UDF_T, recipe_tasks: List[_Task],
+        tmp_dir: Path,
+        columns: Dict[str, 'ModifierTypes'],
+        schemas: Dict[str, 'ColumnBase'],
+        udf: bytes,
+        recipe_tasks: List[_Task],
         *,
-        ncpu=0, batch_size=10
-):
-    if ncpu <= 0:
-        ncpu = os.cpu_count() // 2
-    q_size = ncpu * 2
+        ncpu=0,
+        batch_size=10
+) -> List[_WrittenContentDescription]:
 
-    # setup queues
-    in_queue = mp.Queue(maxsize=q_size)
-    out_queue = mp.Queue(maxsize=q_size)
+    # Setup & populate queue with batched arguments
+    in_queue = mp.Queue()
+    out_queue = mp.Queue()
+    n_queue_tasks = ceil(len(recipe_tasks) / batch_size)
+    for keys_kwargs in grouper(recipe_tasks, batch_size):
+        in_queue.put_nowait(keys_kwargs)
 
-    dummy_groups = grouper(recipe_tasks, batch_size)
-    n_queue_tasks = ilen(dummy_groups)
-    grouped_keys_kwargs = grouper(recipe_tasks, batch_size)
-
-    # start worker processes
     out, jobs = [], []
-    for i in range(ncpu):
+    try:
+        # start worker processes
         backends = {}
         for col_name, column in columns.items():
             backends[col_name] = column.backend
-        t = _BatchProcessWriter(
-            udf=udf, backends=backends, schemas=schemas, tmp_pth=tmp_dir,
-            in_queue=in_queue, out_queue=out_queue)
-        jobs.append(t)
-        t.start()
+        for _ in range(ncpu):
+            t = _BatchProcessWriter(
+                udf=udf,
+                backends=backends,
+                schemas=schemas,
+                tmp_pth=tmp_dir,
+                in_queue=in_queue,
+                out_queue=out_queue)
+            jobs.append(t)
+            t.start()
 
-    # Populate queue with batched arguments
-    for i in range(q_size):
-        initial_keys_kwargs_group = next(grouped_keys_kwargs)
-        in_queue.put(initial_keys_kwargs_group)
-
-    # collect outputs and fill queue with more work if low
-    # terminate if no more work should be done.
-    nsteps = _num_steps_in_task_list(recipe_tasks)
-    with tqdm(total=nsteps, desc='Executing Data Import Recipe') as pbar:
-        ngroups_processed = 0
-        remaining = True
-        while remaining is True:
-            data_key_location_hash_digests = out_queue.get()
-            ngroups_processed += 1
-            for saved in data_key_location_hash_digests:
-                pbar.update(1)
-                out.append(saved)
+        # collect outputs and fill queue with more work if low
+        # terminate if no more work should be done.
+        nsteps = _num_steps_in_task_list(recipe_tasks)
+        with tqdm(total=nsteps, desc='Executing Data Import Recipe') as pbar:
+            ngroups_processed = 0
+            while ngroups_processed < n_queue_tasks:
+                data_key_location_hash_digests = out_queue.get(True)
+                ngroups_processed += 1
+                for saved in data_key_location_hash_digests:
+                    pbar.update(1)
+                    out.append(saved)
+        for j in jobs:
             try:
-                while not in_queue.full():
-                    keys_kwargs = next(grouped_keys_kwargs)
-                    in_queue.put(keys_kwargs)
-            except StopIteration:
-                if ngroups_processed == n_queue_tasks:
-                    remaining = False
-    for j in jobs:
-        j.join()
+                j.join(timeout=5)
+            except mp.TimeoutError:
+                j.terminate()
+    except (KeyboardInterrupt, InterruptedError) as e:
+        while jobs:
+            j = jobs.pop()
+            if j.is_alive():
+                print(f'terminating PID {j.pid}')
+                j.terminate()
+            else:
+                exitcode = j.exitcode
+                if exitcode:
+                    print(f'PID {j.pid} exitcode: {exitcode}')
+        raise e
+    finally:
+        in_queue.close()
+        out_queue.close()
+        in_queue.join_thread()
+        out_queue.join_thread()
     return out
 
 
@@ -634,15 +1038,15 @@ def _move_tmpdir_data_files_to_repodir(repodir: Path, tmpdir: Path):
                         hangar_data_fp = hangar_data_dir.joinpath(be_pth.name, fpth.name)
                     task_list.append((tmp_data_fp, hangar_data_fp))
 
-    _MoveException = False
-    with ThreadPoolExecutor(max_workers=10) as e:
+    _MoveException = None
+    num_workers = bound(5, 32, os.cpu_count() + 4)
+    with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix='hangar_import_shutil') as e:
         future_result = [e.submit(shutil.move, str(src), str(dst)) for src, dst in task_list]
         for future in concurrent.futures.as_completed(future_result):
-            try:
-                future.result()
-            except Exception:
+            if future.exception() is not None:
                 _MoveException = future.exception()
-    if _MoveException is not False:
+
+    if _MoveException is not None:
         print(f'Error encountered while persisting imported data in hangar repo directory.')
         print(f'Begining change set roll back.')
         for _, dest_fp in task_list:
@@ -655,87 +1059,3 @@ def _move_tmpdir_data_files_to_repodir(repodir: Path, tmpdir: Path):
         print(f'Roll back completed successfully')
         raise _MoveException
     return True
-
-
-def run_bulk_import(
-        repo: 'Repository',
-        branch_name: str,
-        column_names: List[str],
-        udf: UDF_T,
-        udf_kwargs: List[dict],
-        *,
-        ncpus: int = 0,
-        autocommit: bool = True
-):
-    """Perform a bulk import operation.
-
-    Parameters
-    ----------
-    repo : Repository
-        Initialized repository object to import data into.
-    branch_name : str
-        Name of the branch to checkout and import data into.
-    column_names : List[str]
-        Names of all columns which data should be saved to.
-    udf : UDF_T
-        User-Defined Function (generator style; yielding an arbitrary number
-        of values when iterated on) which is passed an unpacked kwarg dict as input
-        and yields a single :class:`~.UDF_Return` instance at a time when iterated over.
-        Cannot contain
-    udf_kwargs : List[dict]
-    ncpus : int, optional, default=0
-    autocommit : bool, optional, default=True
-
-    Returns
-    -------
-    """
-    with closing(repo.checkout(write=True, branch=branch_name)) as co:
-        columns, column_layouts, schemas = {}, {}, {}
-        for name in column_names:
-            _col = co.columns[name]
-            _schema = _col._schema
-            columns[name] = _col
-            column_layouts[name] = _col.column_layout
-            schemas[name] = _schema
-
-        print(f'Validating Reader Function and Argument Input')
-        _check_user_input_func(columns, udf, udf_kwargs)
-
-        recipe = _run_prepare_recipe(column_layouts, schemas, udf, udf_kwargs, ncpu=ncpus)
-        print('Unifying naieve recipe task set.')
-        unified_recipe = _unify_recipe_contents(recipe)
-        print('Pruning redundant ingest steps & eliminating tasks for data previously stored in hangar.')
-        reduced_recipe = _reduce_recipe_on_required_digests(recipe, co._hashenv)
-
-        nsteps_reduced_recipe = _num_steps_in_task_list(reduced_recipe)
-        optim_percent = ((len(unified_recipe) - nsteps_reduced_recipe) / len(unified_recipe)) * 100
-        print(f'Reduced recipe workload tasks by: {optim_percent:.2f}%')
-        print(f' - Num tasks for naieve ingest  : {len(unified_recipe)}')
-        print(f' - Num tasks after optimization : {nsteps_reduced_recipe}')
-
-        hangardirpth = repo._repo_path
-        if len(reduced_recipe) >= 1:
-            print('Starting multiprocessed data importer.')
-            with TemporaryDirectory(dir=str(hangardirpth)) as tmpdirname:
-                tmpdirpth = _mock_hangar_directory_structure(tmpdirname)
-                written_data_steps = _run_write_recipe_data(tmpdirpth, columns, schemas, udf, reduced_recipe, ncpu=4)
-                print(f'Finalizing written data pieces in hangar repo directory...')
-                _move_tmpdir_data_files_to_repodir(hangardirpth, tmpdirpth)
-            _write_digest_to_bespec_mapping(written_data_steps, co._hashenv, co._stagehashenv)
-        else:
-            print('No actions requiring the data importer remain after optimizations. Skipping this step...')
-
-        print(f'Mapping full recipe requested via UDF to optimized task set actually processed.')
-        _write_full_recipe_sample_key_to_digest_mapping(unified_recipe, co._stageenv)
-
-        if autocommit:
-            print(f'autocommiting changes.')
-            co.commit(f'Auto commit after bulk import of {len(unified_recipe)} samples to '
-                      f'column {column_names} on branch {branch_name}')
-        else:
-            print(f'skipping autocommit')
-
-        print('Buld data importer operation completed successfuly')
-        return True
-
-

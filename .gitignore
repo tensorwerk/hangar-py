@@ -79,6 +79,8 @@ docs/_build
 
 # Mypy Cache
 .mypy_cache/
+.dmypy.json
+monkeytype.sqlite3
 
 # IDE Settings
 .vscode/

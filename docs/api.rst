@@ -71,6 +71,13 @@ Differ
    :exclude-members: __init__
 
 
+Bulk Importer
+-------------
+
+.. automodule:: hangar.bulk_importer
+   :members:
+
+
 Read Only Checkout
 ==================
 
@@ -87,10 +94,10 @@ Checkout
 Flat Column Layout Container
 ----------------------------
 
-.. autoclass:: hangar.columns.layout_flat.FlatSampleWriter()
+.. autoclass:: hangar.columns.layout_flat.FlatSampleReader()
    :members:
    :inherited-members:
-   :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
+   :special-members: __getitem__, __setitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
 

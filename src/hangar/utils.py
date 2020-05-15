@@ -49,6 +49,28 @@ class LazyLoader(types.ModuleType):
         return dir(module)
 
 
+NumType = Union[int, float]
+
+
+def bound(low: NumType, high: NumType, value: NumType) -> NumType:
+    """Bound value such that ``low <= value <= high``
+
+    >>> bound(0, 100, 10)
+    10
+    >>> bound(0, 100, -1)
+    -1
+    >>> bound(0, 100, 500)
+    100
+    >>> bound(-5, -2, -3)
+    -3
+    >>> bound(-6.0, -5.0, 0.1)
+    -5.0
+    >>> bound(0.0, 5, 3.5)
+    3.5
+    """
+    return max(low, min(high, value))
+
+
 def is_64bits():
     """bool indicating if running on atleast a 64 bit machine
     """
@@ -247,7 +269,7 @@ def grouper(iterable, n, fillvalue=None):
     [(4, 8), ('FOO', 'BAR')]
     """
     args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=(None, None))
+    return zip_longest(*args, fillvalue=fillvalue)
 
 
 def find_next_prime(N: int) -> int:
@@ -371,24 +393,6 @@ def is_valid_directory_path(p: Path) -> Path:
         raise PermissionError(msg)
 
     return usr_path
-
-
-def isiterable(obj, ignore_types=(str, bytes)) -> bool:
-    """Determine if input object is iterable.
-
-    Parameters
-    ----------
-    obj
-        object to check if it is iterable
-    ignore_types
-        Tuple of types to ignore
-
-    Returns
-    -------
-    bool
-    """
-    res = isinstance(obj, Iterable) and not isinstance(obj, ignore_types)
-    return res
 
 
 # ----------------- human & machine nbytes ------------------------------------
