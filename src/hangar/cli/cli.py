@@ -5,7 +5,7 @@ Why does this file exist, and why not put this in __main__?
    You might be tempted to import things from __main__ later, but that will cause
    problems: the code will get executed twice:
 
-      - When you run `python -mhangar` python will execute
+      - When you run `python -m hangar` python will execute
         ``__main__.py`` as a script. That means there won't be any
         ``hangar.__main__`` in ``sys.modules``.
       - When you import __main__ it will get executed again (as a module) because
@@ -46,7 +46,7 @@ def main(ctx):  # pragma: no cover
               help='overwrite a repository if it exists at the current path')
 @pass_repo
 def init(repo: Repository, name, email, overwrite):
-    """Initialize an empty repository at the current path
+    """Initialize an empty repository at the current path.
     """
     if repo.initialized and (not overwrite):
         click.echo(f'Repo already exists at: {repo.path}')
@@ -64,7 +64,7 @@ def init(repo: Repository, name, email, overwrite):
 def writer_lock_held(repo: Repository, force_release_):
     """Determine if the writer lock is held for a repository.
 
-    Passing the --force-release flag will instantly release the writer lock,
+    Passing the ``--force-release`` flag will instantly release the writer lock,
     invalidating any process which currently holds it.
     """
     if force_release_:
@@ -183,7 +183,7 @@ def create_column(repo: Repository, name, dtype, shape, variable_, subsamples_):
 
     Examples:
 
-    To specify, an column for some training images of dtype uint8 and shape
+    To specify, a column for some training images of dtype uint8 and shape
     (256, 256, 3) we should say:
 
        .. code-block:: console
@@ -303,7 +303,7 @@ def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
     """Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
-    commit of a branch. Please review optional arguments for other behaviors
+    commit of a branch. Please review optional arguments for other behaviors.
     """
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit
@@ -372,7 +372,7 @@ def add_remote(repo: Repository, name, address):
     """Add a new remote server NAME with url ADDRESS to the local client.
 
     This name must be unique. In order to update an old remote, please remove it
-    and re-add the remote NAME / ADDRESS combination
+    and re-add the remote NAME / ADDRESS combination.
     """
     click.echo(repo.remote.add(name=name, address=address))
 
@@ -466,7 +466,7 @@ def log(repo: Repository, startpoint):
 @main.command()
 @pass_repo
 def status(repo: Repository):
-    """Display changes made in the staging area compared to it's base commit
+    """Display changes made in the staging area compared to its base commit.
     """
     from hangar.records.summarize import status
     co = repo.checkout(write=True)
@@ -483,7 +483,7 @@ def status(repo: Repository):
 @main.group(no_args_is_help=True, add_help_option=True)
 @click.pass_context
 def branch(ctx):  # pragma: no cover
-    """operate on and list branch pointers.
+    """Operate on and list branch pointers.
     """
     pass
 
@@ -491,7 +491,7 @@ def branch(ctx):  # pragma: no cover
 @branch.command(name='list')
 @pass_repo
 def branch_list(repo: Repository):
-    """list all branch names
+    """List all branch names.
 
     Includes both remote branches as well as local branches.
     """
@@ -539,7 +539,7 @@ def branch_create(repo: Repository, name, startpoint):
               help='flag to force delete branch which has un-merged history.')
 @pass_repo
 def branch_remove(repo: Repository, name, force):
-    """Remove a branch pointer with the provided NAME
+    """Remove a branch pointer with the provided NAME.
 
     The NAME must be a branch present on the local machine.
     """
@@ -622,8 +622,7 @@ def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
     """Import file or directory of files at PATH to COLUMN in the staging area.
 
     If passing in a directory, all files in the directory will be imported, if
-    passing in a file, just that files specified will be
-    imported
+    passing in a file, just that files specified will be imported.
     """
     # TODO: ignore warning through env variable
     from types import GeneratorType
@@ -677,11 +676,11 @@ def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
               default=None,
               type=StrOrIntType(),
               help=('Sample name to export. Default implementation is to interpret all input '
-                    'names as string type. As an column can contain samples with both ``str`` '
+                    'names as string type. As a column can contain samples with both ``str`` '
                     'and ``int`` types, we allow you to specify ``name type`` of the sample. To '
                     'identify a potentially ambiguous name, we allow you to prepend the type of '
                     'sample name followed by a colon and then the sample name (ex. ``str:54`` '
-                    'or ``int:54``). this can be done for any sample key.'))
+                    'or ``int:54``). This can be done for any sample key.'))
 @click.option('-f', '--format', 'format_',
               nargs=1,
               required=False,
@@ -794,7 +793,7 @@ def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin
 def lmdb_record_details(repo: Repository, a, b, r, d, s, z, limit):
     """DEVELOPER TOOL ONLY
 
-    display key/value pairs making up the dbs
+    Display key/value pairs making up the dbs.
     """
     from hangar.context import Environments
     from hangar.records.summarize import details
