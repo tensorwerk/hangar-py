@@ -29,7 +29,7 @@ class Columns:
     """Common access patterns and initialization/removal of columns in a checkout.
 
     This object is the entry point to all data stored in their
-    individual columns. Each column. contains a common schema which dictates
+    individual columns. Each column contains a common schema which dictates
     the general shape, dtype, and access patters which the backends optimize
     access for. The methods contained within allow us to create, remove, query,
     and access these collections of common data pieces.
@@ -265,7 +265,7 @@ class Columns:
         return list(self._columns.keys())
 
     def values(self) -> Iterable[ModifierTypes]:
-        """yield all column object instances in the checkout.
+        """Yield all column object instances in the checkout.
 
         Yields
         -------
@@ -278,7 +278,7 @@ class Columns:
             yield asetObj
 
     def items(self) -> Iterable[Tuple[str, ModifierTypes]]:
-        """generator providing access to column_name, :class:`Columns`
+        """Generator providing access to column_name, :class:`Columns`
 
         Yields
         ------
@@ -311,14 +311,14 @@ class Columns:
 
     @writer_checkout_only
     def __delitem__(self, key: str) -> str:
-        """remove a column and all data records if write-enabled process.
+        """Remove a column and all data records if write-enabled process.
 
         Parameters
         ----------
         key : str
             Name of the column to remove from the repository. This will remove
             all records from the staging area (though the actual data and all
-            records are still accessible) if they were previously committed
+            records are still accessible) if they were previously committed.
 
         Returns
         -------
@@ -337,7 +337,7 @@ class Columns:
 
     @writer_checkout_only
     def delete(self, column: str) -> str:
-        """remove the column and all data contained within it.
+        """Remove the column and all data contained within it.
 
         Parameters
         ----------
@@ -405,7 +405,7 @@ class Columns:
             environment where tensor data hash records are open in write mode.
         stageenv : lmdb.Environment
             environment where staging records (dataenv) are opened in write mode.
-        stagehashenv: lmdb.Environment
+        stagehashenv : lmdb.Environment
             environment where the staged hash records are stored in write mode
 
         Returns
