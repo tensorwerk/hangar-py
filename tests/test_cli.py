@@ -22,7 +22,7 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  --help     Show this message and exit.\n'\
            '\n'\
            'Commands:\n'\
-           '  branch       operate on and list branch pointers.\n'\
+           '  branch       Operate on and list branch pointers.\n'\
            '  checkout     Checkout writer head branch at BRANCHNAME.\n'\
            '  clone        Initialize a repository at the current path and fetch updated...\n'\
            '  column       Operations for working with columns in the writer checkout.\n'\
@@ -32,12 +32,12 @@ help_res = 'Usage: main [OPTIONS] COMMAND [ARGS]...\n'\
            '  fetch        Retrieve the commit history from REMOTE for BRANCH.\n'\
            '  fetch-data   Get data from REMOTE referenced by STARTPOINT (short-commit or...\n'\
            '  import       Import file or directory of files at PATH to COLUMN in the...\n'\
-           '  init         Initialize an empty repository at the current path\n'\
+           '  init         Initialize an empty repository at the current path.\n'\
            '  log          Display commit graph starting at STARTPOINT (short-digest or...\n'\
            '  push         Upload local BRANCH commit history / data to REMOTE server.\n'\
            '  remote       Operations for working with remote server references\n'\
            '  server       Start a hangar server, initializing one if does not exist.\n'\
-           '  status       Display changes made in the staging area compared to it\'s base...\n'\
+           '  status       Display changes made in the staging area compared to its base...\n'\
            '  summary      Display content summary at STARTPOINT (short-digest or branch).\n'\
            '  view         Use a plugin to view the data of some SAMPLE in COLUMN at...\n'\
            '  writer-lock  Determine if the writer lock is held for a repository.\n'
