@@ -196,6 +196,21 @@ def run_bulk_import(
        processing time, we recomend trying to yield data pieces which are likely
        to be unique first from the UDF.
 
+    Warnings
+    --------
+
+    *  Please be aware that these methods should not be executed within a
+       Jupyter Notebook / Jupyter Lab when running the bulk importer at scale.
+       The internal implemenation makes significant use of multiprocess Queues
+       for work distribution and recording. The heavy loads placed on the system
+       have been observed to place strain on Jupyters ZeroMQ implementation,
+       resulting in random failures which may or may not even display a traceback
+       to indicate failure mode.
+
+       A small sample set of data can be used within jupyter to test an
+       implementation without problems, but for full scale operations it is best
+       run in a script with the operations protected by a ``__main__`` block.
+
     Examples
     --------
 
@@ -552,7 +567,7 @@ class _MPQueue(mpq.Queue):
         ctx = mp.get_context()
         super().__init__(*args, **kwargs, ctx=ctx)
 
-    def safe_get(self, timeout=0.02):
+    def safe_get(self, timeout=0.5):
         try:
             if timeout is None:
                 return self.get(False)
@@ -561,7 +576,7 @@ class _MPQueue(mpq.Queue):
         except queue.Empty:
             return None
 
-    def safe_put(self, item, timeout=0.02) -> bool:
+    def safe_put(self, item, timeout=0.5) -> bool:
         try:
             self.put(item, False, timeout)
             return True
@@ -625,7 +640,7 @@ class _BatchProcessPrepare(mp.Process):
         self.udf = _deserialize_udf(self._udf_raw)
 
     def _input_tasks(self) -> Iterator[List[dict]]:
-        udf_kwargs = self.in_queue.safe_get()
+        udf_kwargs = self.in_queue.safe_get(timeout=2.0)
         while udf_kwargs is not None:
             yield udf_kwargs
             udf_kwargs = self.in_queue.safe_get()
@@ -694,7 +709,9 @@ def _run_prepare_recipe(
         with tqdm(total=len(udf_kwargs), desc='Constructing task recipe') as pbar:
             ngroups_processed = 0
             while ngroups_processed < n_queue_tasks:
-                data_key_location_hash_digests = out_queue.get(True)
+                data_key_location_hash_digests = out_queue.safe_get(timeout=30)
+                if data_key_location_hash_digests is None:
+                    continue
                 ngroups_processed += 1
                 for saved in data_key_location_hash_digests:
                     pbar.update(1)
@@ -704,7 +721,7 @@ def _run_prepare_recipe(
         out_queue.safe_close()
         for j in jobs:
             try:
-                j.join(timeout=5)
+                j.join(timeout=0.2)
             except mp.TimeoutError:
                 j.terminate()
     except (KeyboardInterrupt, InterruptedError):
@@ -783,7 +800,7 @@ class _BatchProcessWriter(mp.Process):
             self.backend_instances[column_name] = be_instance
 
     def _input_tasks(self) -> Iterator[List[_Task]]:
-        tasks_list = self.in_queue.safe_get()
+        tasks_list = self.in_queue.safe_get(timeout=2)
         while tasks_list is not None:
             yield tasks_list
             tasks_list = self.in_queue.safe_get()
@@ -867,7 +884,9 @@ def _run_write_recipe_data(
         with tqdm(total=nsteps, desc='Executing Data Import Recipe') as pbar:
             ngroups_processed = 0
             while ngroups_processed < n_queue_tasks:
-                data_key_location_hash_digests = out_queue.get(True)
+                data_key_location_hash_digests = out_queue.safe_get(timeout=30)
+                if data_key_location_hash_digests is None:
+                    continue
                 ngroups_processed += 1
                 for saved in data_key_location_hash_digests:
                     pbar.update(1)
@@ -876,7 +895,7 @@ def _run_write_recipe_data(
         out_queue.safe_close()
         for j in jobs:
             try:
-                j.join(timeout=5)
+                j.join(timeout=0.2)
             except mp.TimeoutError:
                 j.terminate()
     except (KeyboardInterrupt, InterruptedError):

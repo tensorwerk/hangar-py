@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-from math import prod
 
 
 def assert_equal(arr, arr2):
@@ -13,7 +12,7 @@ def test_bulk_importer_ndarray(repo):
     from hangar.bulk_importer import UDF_Return
 
     def make_ndarray(column, key, shape, dtype, multiplier):
-        size = prod(shape)
+        size = np.prod(shape)
         arr = np.arange(size, dtype=dtype).reshape(shape) * multiplier
         yield UDF_Return(column=column, key=key, data=arr)
 
