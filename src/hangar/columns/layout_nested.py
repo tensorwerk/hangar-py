@@ -491,7 +491,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         """Store some data in a subsample with an automatically generated key.
 
         This method should only be used if the context some piece of data is
-        used in is independent from it's value (ie. when reading data back,
+        used in is independent from its value (ie. when reading data back,
         there is no useful information which needs to be conveyed between the
         data source's name/id and the value of that piece of information.)
         Think carefully before going this route, as this posit does not apply
