@@ -97,6 +97,9 @@ class StringSchemaBase(ColumnBase):
             self._backend_options = self._beopts.backend_options
             raise e from None
 
+    def data_nbytes(self, obj: str):
+        return len(obj.encode())
+
 
 @OneOf(['30', '50', None])
 class StringVariableShapeBackends(OptionalString):

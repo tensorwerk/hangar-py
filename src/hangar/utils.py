@@ -7,9 +7,10 @@ import sys
 import time
 import types
 from collections import deque
+from collections.abc import Iterable
 from io import StringIO
-from itertools import tee, filterfalse, count
 from pathlib import Path
+from itertools import tee, filterfalse, count, zip_longest
 from typing import Union
 
 import blosc
@@ -46,6 +47,28 @@ class LazyLoader(types.ModuleType):
     def __dir__(self):
         module = self._load()
         return dir(module)
+
+
+NumType = Union[int, float]
+
+
+def bound(low: NumType, high: NumType, value: NumType) -> NumType:
+    """Bound value such that ``low <= value <= high``
+
+    >>> bound(0, 100, 10)
+    10
+    >>> bound(0, 100, -1)
+    -1
+    >>> bound(0, 100, 500)
+    100
+    >>> bound(-5, -2, -3)
+    -3
+    >>> bound(-6.0, -5.0, 0.1)
+    -5.0
+    >>> bound(0.0, 5, 3.5)
+    3.5
+    """
+    return max(low, min(high, value))
 
 
 def is_64bits():
@@ -226,6 +249,27 @@ def ilen(iterable):
     counter = count()
     deque(zip(iterable, counter), maxlen=0)
     return next(counter)
+
+
+def grouper(iterable, n, fillvalue=None):
+    """split iterable into n sized groups upon each call to `next()`
+
+    >>> for grp in grouper([(x, x*2) for x in range(4)], 2):
+    ...     print(grp)
+    [(0, 0), (1, 2)]
+    [(2, 4), (3, 6)]
+    >>> for grp in grouper([x for x in range(5)], 2, fillvalue=None):
+    ...     print(grp)
+    [0, 1]
+    [2, 3]
+    >>> for grp in grouper([(x, x*2) for x in range(5)], 2, fillvalue=('FOO', 'BAR')):
+    ...     print(grp)
+    [(0, 0), (1, 2)]
+    [(2, 4), (3, 6)]
+    [(4, 8), ('FOO', 'BAR')]
+    """
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
 
 
 def find_next_prime(N: int) -> int:

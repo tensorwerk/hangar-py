@@ -162,6 +162,7 @@ SETUP_REQUIRES = [
 
 INSTALL_REQUIRES = [
     'blosc>=1.8',
+    'cloudpickle>=1.4',
     'click',
     'grpcio',
     'protobuf',

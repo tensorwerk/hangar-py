@@ -16,14 +16,23 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx_click.ext',
     'nbsphinx',
+    'sphinx_copybutton',
     'sphinx.ext.mathjax',
     'recommonmark',
     'IPython.sphinxext.ipython_console_highlighting',
 ]
+
+
 if os.getenv('SPELLCHECK'):
     extensions += 'sphinxcontrib.spelling',
     spelling_show_suggestions = True
     spelling_lang = 'en_US'
+
+# to exclude traditional Python prompts from your copied code
+copybutton_prompt_text = ">>> "
+# All lines of the code blocks will be copied after the prompts are stripped.
+copybutton_only_copy_prompt_lines = False
+
 
 nbsphinx_execute = 'never'
 
