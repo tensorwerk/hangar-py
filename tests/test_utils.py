@@ -77,7 +77,7 @@ def test_parse_bytes(arg, expected):
     [104721, 104723],
 ])
 def test_find_next_prime(arg, expected):
-    from hangar.utils import find_next_prime
+    from hangar.optimized_utils import find_next_prime
 
     res = find_next_prime(arg)
     assert res == expected

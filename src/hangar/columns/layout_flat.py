@@ -7,6 +7,7 @@ All backends are supported.
 """
 from contextlib import ExitStack
 from pathlib import Path
+from operator import attrgetter as op_attrgetter
 from typing import Tuple, Union, Iterable, Optional, Any
 
 from .common import open_file_handles
@@ -23,7 +24,8 @@ from ..records import (
 from ..records.parsing import generate_sample_name
 from ..backends import backend_decoder
 from ..op_state import reader_checkout_only
-from ..utils import is_suitable_user_key, valfilter, valfilterfalse
+from ..utils import is_suitable_user_key
+from ..optimized_utils import valfilter, valfilterfalse
 
 
 KeyType = Union[str, int]
@@ -324,7 +326,8 @@ class FlatSampleReader:
             on some remote server. True if all sample data is available on the
             machine's local disk.
         """
-        return not all(map(lambda x: x.islocal, self._samples.values()))
+        _islocal_func = op_attrgetter('islocal')
+        return not all(map(_islocal_func, self._samples.values()))
 
     @property
     def remote_reference_keys(self) -> Tuple[KeyType]:
@@ -336,7 +339,8 @@ class FlatSampleReader:
             list of sample keys in the column whose data references indicate
             they are stored on a remote server.
         """
-        return tuple(valfilterfalse(lambda x: x.islocal, self._samples).keys())
+        _islocal_func = op_attrgetter('islocal')
+        return tuple(valfilterfalse(_islocal_func, self._samples).keys())
 
     def _mode_local_aware_key_looper(self, local: bool) -> Iterable[KeyType]:
         """Generate keys for iteration with dict update safety ensured.
@@ -352,11 +356,12 @@ class FlatSampleReader:
         Iterable[KeyType]
             Sample keys conforming to the `local` argument spec.
         """
+        _islocal_func = op_attrgetter('islocal')
         if local:
             if self._mode == 'r':
-                yield from valfilter(lambda x: x.islocal, self._samples).keys()
+                yield from valfilter(_islocal_func, self._samples).keys()
             else:
-                yield from tuple(valfilter(lambda x: x.islocal, self._samples).keys())
+                yield from tuple(valfilter(_islocal_func, self._samples).keys())
         else:
             if self._mode == 'r':
                 yield from self._samples.keys()

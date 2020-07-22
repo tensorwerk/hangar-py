@@ -16,6 +16,7 @@ URL:     https://github.com/pypa/packaging/blob/6a09d4015b/LICENSE
          https://github.com/pypa/packaging/blob/6a09d4015b/LICENSE.BSD
 """
 import re
+import typing
 from collections import namedtuple
 from itertools import dropwhile
 from typing import Callable, Optional, SupportsInt, Tuple, Union
@@ -99,24 +100,25 @@ NegativeInfinity = NegativeInfinityType()
 
 # -------------------- Type Definitions ---------------------------------------
 
-InfiniteTypes = Union[InfinityType, NegativeInfinityType]
-PrePostDevType = Union[InfiniteTypes, Tuple[str, int]]
-SubLocalType = Union[InfiniteTypes, int, str]
-LocalType = Union[
-    NegativeInfinityType,
-    Tuple[
-        Union[
-            SubLocalType,
-            Tuple[SubLocalType, str],
-            Tuple[NegativeInfinityType, SubLocalType],
+if typing.TYPE_CHECKING:
+    InfiniteTypes = Union[InfinityType, NegativeInfinityType]
+    PrePostDevType = Union[InfiniteTypes, Tuple[str, int]]
+    SubLocalType = Union[InfiniteTypes, int, str]
+    LocalType = Union[
+        NegativeInfinityType,
+        Tuple[
+            Union[
+                SubLocalType,
+                Tuple[SubLocalType, str],
+                Tuple[NegativeInfinityType, SubLocalType],
+            ],
+            ...,
         ],
-        ...,
-    ],
-]
-CmpKey = Tuple[
-    int, Tuple[int, ...], PrePostDevType, PrePostDevType, PrePostDevType, LocalType
-]
-VersionComparisonMethod = Callable[[CmpKey, CmpKey], bool]
+    ]
+    CmpKey = Tuple[
+        int, Tuple[int, ...], PrePostDevType, PrePostDevType, PrePostDevType, LocalType
+    ]
+    VersionComparisonMethod = Callable[[CmpKey, CmpKey], bool]
 
 
 # ---------------------------- Version Parsing --------------------------------
@@ -142,7 +144,7 @@ class _BaseVersion(object):
     __slots__ = ('_key',)
 
     def __init__(self):
-        self._key: CmpKey = None
+        self._key: 'CmpKey' = None
 
     def __hash__(self) -> int:
         return hash(self._key)
@@ -165,7 +167,7 @@ class _BaseVersion(object):
     def __ne__(self, other: object) -> bool:
         return self._compare(other, ne)
 
-    def _compare(self, other: object, method: VersionComparisonMethod
+    def _compare(self, other: object, method: 'VersionComparisonMethod'
                  ) -> Union[bool, type(NotImplemented)]:
         if isinstance(other, _BaseVersion):
             return method(self._key, other._key)
@@ -385,7 +387,7 @@ def _parse_letter_version(
 _local_version_separators = re.compile(r"[\._-]")
 
 
-def _parse_local_version(local: str) -> Optional[LocalType]:
+def _parse_local_version(local: str) -> Optional['LocalType']:
     """
     Takes a string like abc.1.twelve and turns it into ("abc", 1, "twelve").
     """
@@ -403,8 +405,8 @@ def _cmpkey(
         pre: Optional[Tuple[str, int]],
         post: Optional[Tuple[str, int]],
         dev: Optional[Tuple[str, int]],
-        local: Optional[Tuple[SubLocalType]],
-) -> CmpKey:
+        local: Optional[Tuple['SubLocalType']],
+) -> 'CmpKey':
 
     # When we compare a release version, we want to compare it with all of the
     # trailing zeros removed. So we'll use a reverse the list, drop all the now

@@ -1,52 +1,16 @@
-import importlib
 import os
 import re
 import secrets
 import string
 import sys
 import time
-import types
 from collections import deque
-from collections.abc import Iterable
 from io import StringIO
 from pathlib import Path
 from itertools import tee, filterfalse, count, zip_longest
 from typing import Union
 
 import blosc
-
-
-class LazyLoader(types.ModuleType):
-    """Lazily import a module, mainly to avoid pulling in large dependencies.
-    `tensorflow`, and `pytorch` are examples of modules that are large and not always
-    needed, and this allows them to only be loaded when they are used.
-    """
-
-    def __init__(self, local_name, parent_module_globals, name):
-        self._local_name = local_name
-        self._parent_module_globals = parent_module_globals
-        super(LazyLoader, self).__init__(name)
-
-    def _load(self):
-        """Load the module and insert it into the parent's globals.
-        """
-        # Import the target module and insert it into the parent's namespace
-        module = importlib.import_module(self.__name__)
-        self._parent_module_globals[self._local_name] = module
-
-        # Update this object's dict so that if someone keeps a reference to the
-        #   LazyLoader, lookups are efficient (__getattr__ is only called on lookups
-        #   that fail).
-        self.__dict__.update(module.__dict__)
-        return module
-
-    def __getattr__(self, item):
-        module = self._load()
-        return getattr(module, item)
-
-    def __dir__(self):
-        module = self._load()
-        return dir(module)
 
 
 NumType = Union[int, float]
@@ -170,42 +134,6 @@ def is_ascii(str_data: str) -> bool:
     return True
 
 
-def valfilter(predicate, d, factory=dict):
-    """ Filter items in dictionary by values that are true.
-
-    >>> iseven = lambda x: x % 2 == 0
-    >>> d = {1: 2, 2: 3, 3: 4, 4: 5}
-    >>> valfilter(iseven, d)
-    {1: 2, 3: 4}
-
-    See Also:
-        valfilterfalse
-    """
-    rv = factory()
-    for k, v in d.items():
-        if predicate(v):
-            rv[k] = v
-    return rv
-
-
-def valfilterfalse(predicate, d, factory=dict):
-    """ Filter items in dictionary by values which are false.
-
-    >>> iseven = lambda x: x % 2 == 0
-    >>> d = {1: 2, 2: 3, 3: 4, 4: 5}
-    >>> valfilterfalse(iseven, d)
-    {2: 3, 4: 5}
-
-    See Also:
-        valfilter
-    """
-    rv = factory()
-    for k, v in d.items():
-        if not predicate(v):
-            rv[k] = v
-    return rv
-
-
 def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
     a, b = tee(iterable)
@@ -270,39 +198,6 @@ def grouper(iterable, n, fillvalue=None):
     """
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=fillvalue)
-
-
-def find_next_prime(N: int) -> int:
-    """Find next prime >= N
-
-    Parameters
-    ----------
-    N : int
-        Starting point to find the next prime >= N.
-
-    Returns
-    -------
-    int
-        the next prime found after the number N
-    """
-    def is_prime(n):
-        if n % 2 == 0:
-            return False
-        i = 3
-        while i * i <= n:
-            if n % i != 0:
-                i += 2
-            else:
-                return False
-        return True
-
-    if N < 3:
-        return 2
-    if N % 2 == 0:
-        N += 1
-    for n in range(N, 2 * N, 2):
-        if is_prime(n):
-            return n
 
 
 def file_size(p: Path) -> int:  # pragma: no cover

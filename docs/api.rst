@@ -132,9 +132,14 @@ ML Framework Dataloaders
 Tensorflow
 ----------
 
-.. autofunction:: hangar.make_tf_dataset
+.. autofunction:: hangar.dataset.make_tensorflow_dataset
 
 Pytorch
 -------
 
-.. autofunction:: hangar.make_torch_dataset
+.. autofunction:: hangar.dataset.make_torch_dataset
+
+Numpy
+-----
+
+.. autofunction:: hangar.dataset.make_numpy_dataset
