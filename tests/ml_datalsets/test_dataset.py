@@ -24,7 +24,7 @@ class TestInternalDatasetClass:
         dataset = HangarDataset((first_col, second_col))
         key = dataset._keys[0]
         target = array5by7[:] = int(key)
-        assert np.allclose(dataset[0], target)
+        assert np.allclose(dataset.index_get(0), target)
         co.close()
 
     def test_no_column(self):
@@ -86,7 +86,7 @@ class TestInternalDatasetClass:
         keys = ['w', 'r', 'o', 'n', 'g']
         dataset = HangarDataset((first_col,), keys=keys)
         with pytest.raises(KeyError):
-            dataset[1]
+            dataset.index_get(1)
         co.close()
 
     @pytest.mark.filterwarnings("ignore:Column.* writtenaset contains `reference-only` samples")
@@ -105,7 +105,7 @@ class TestInternalDatasetClass:
         dataset = HangarDataset((col,), keys=('0', *col_reported_remote_keys))
         with pytest.raises(KeyError):
             # TODO: hangar internal should raise FileNotFoundError?
-            dataset[1]
+            dataset.index_get(1)
         co.close()
 
 
@@ -114,13 +114,6 @@ class TestInternalDatasetClass:
 
 @pytest.mark.filterwarnings("ignore:.* experimental method")
 class TestNumpyDataset:
-    def test_warns_experimental(self, repo_20_filled_samples):
-        co = repo_20_filled_samples.checkout()
-        first_aset = co.columns['writtenaset']
-        with pytest.warns(UserWarning, match='This is an experimental'):
-            aset = make_numpy_dataset([first_aset])
-        co.close()
-
     def test_multiple_dataset_batched_loader(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
         first_aset = co.columns['writtenaset']
@@ -172,13 +165,6 @@ class TestNumpyDataset:
 
 
 class TestTorchDataset(object):
-
-    def test_warns_experimental(self, repo_20_filled_samples):
-        co = repo_20_filled_samples.checkout()
-        first_aset = co.columns['writtenaset']
-        with pytest.warns(UserWarning, match='This is an experimental'):
-            make_torch_dataset([first_aset])
-        co.close()
 
     def test_multiple_dataset_loader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
@@ -257,13 +243,6 @@ class TestTorchDataset(object):
 
 class TestTfDataset(object):
     # TODO: Add TF2.0 and 1.0 test cases
-
-    def test_warns_experimental(self, repo_20_filled_samples):
-        co = repo_20_filled_samples.checkout()
-        first_aset = co.columns['writtenaset']
-        with pytest.warns(UserWarning, match='This is an experimental'):
-            make_tensorflow_dataset([first_aset])
-        co.close()
 
     def test_dataset_loader(self, repo_20_filled_samples):
         repo = repo_20_filled_samples

@@ -1,6 +1,5 @@
 from typing import Sequence, TYPE_CHECKING
 from collections import OrderedDict
-import warnings
 
 try:
     import torch
@@ -33,9 +32,9 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index: int):
         if self._as_dict:
-            return OrderedDict(zip(self.column_names, self.dataset[index]))
+            return OrderedDict(zip(self.column_names, self.dataset.index_get(index)))
         else:
-            return self.dataset[index]
+            return self.dataset.index_get(index)
 
 
 def _make_torch_dataset(columns: Sequence['Columns'],
@@ -114,9 +113,5 @@ def _make_torch_dataset(columns: Sequence['Columns'],
       equivalent loader function in hangar/dataset/__init__.py. This function is
       "coppied" to a top level __init__.py to allow unified API and lazyloader access
     """
-    warn_msg = ('This is an experimental method in the current Hangar version. '
-                'Please be aware that Significant changes may be introduced in '
-                'future releases without advance notice / deprication warnings.')
-    warnings.warn(warn_msg, UserWarning)
     hangar_dataset = HangarDataset(columns, keys)
     return TorchDataset(hangar_dataset, as_dict)

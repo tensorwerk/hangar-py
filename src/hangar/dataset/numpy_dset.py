@@ -1,6 +1,5 @@
 from typing import Sequence, Callable, TYPE_CHECKING
 import random
-import warnings
 
 import numpy as np
 
@@ -12,8 +11,8 @@ if TYPE_CHECKING:
 
 
 def default_collate_fn(col_functions):
-    # data_arr -> array of data samples from each column
     def wrapper(data_arr):
+        # data_arr -> array of data samples from each column
         return tuple([fn(d) for fn, d in zip(col_functions, zip(*data_arr))])
     return wrapper
 
@@ -38,9 +37,26 @@ class NumpyDataset:
         Should drop the last incomplete batch
     shuffle : bool
         Should shuffle the batch on each epoch
+    collate_fn : Callable
+        A function to collate samples together in a batch. In case this option is absent,
+        the heuristics to collate the batch is
+            1. If the column is an ndarray flat column, then `np.stack` will be used
+            2. If the column is with any other properties, `list.append` will be used
+        Note that the batch of data that comes to callate_fn will have each elements consist
+        of datapoints from all the columns. For example, if the columns from where the data
+        being fetched are col1 and col2 then the batch would look like
+
+        ```python
+        [
+            (data0_col1, data0_col2),
+            (data1_col1, data1_col2),
+            (data2_col1, data2_col2),
+            ...
+        ]
+        ```
     """
     def __init__(self, dataset: HangarDataset, batch_size: int, drop_last: bool,
-                 shuffle: bool, collate_fn=None):
+                 shuffle: bool, collate_fn: Callable = None):
         self._dataset = dataset
         if not collate_fn:
             collate_colfn = []
@@ -120,13 +136,13 @@ class NumpyDataset:
             random.shuffle(self._indices)
         if self._num_batches is None:
             for i in self._indices:
-                yield self._dataset[i]
+                yield self._dataset.index_get(i)
         else:
             start = 0
             end = self._batch_size
             for i in range(self._num_batches):
                 batch = self._indices[start:end]
-                out = [self._dataset[i] for i in batch]
+                out = [self._dataset.index_get(i) for i in batch]
                 start = end
                 end = end + self._batch_size
                 yield self.collate_fn(out)
@@ -180,6 +196,18 @@ def _make_numpy_dataset(columns: Sequence['Columns'],
         the heuristics to collate the batch is
             1. If the column is an ndarray flat column, then `np.stack` will be used
             2. If the column is with any other properties, `list.append` will be used
+        Note that the batch of data that comes to callate_fn will have each elements consist
+        of datapoints from all the columns. For example, if the columns from where the data
+        being fetched are col1 and col2 then the batch would look like
+
+        ```python
+        [
+            (data0_col1, data0_col2),
+            (data1_col1, data1_col2),
+            (data2_col1, data2_col2),
+            ...
+        ]
+        ```
 
     Returns
     -------
@@ -191,10 +219,6 @@ def _make_numpy_dataset(columns: Sequence['Columns'],
       equivalent loader function in hangar/dataset/__init__.py. This function is
       "copied" to a top level __init__.py to allow unified API and lazyloader access
     """
-    warn_msg = ('This is an experimental method in the current Hangar version. '
-                'Please be aware that Significant changes may be introduced in '
-                'future releases without advance notice / deprication warnings.')
-    warnings.warn(warn_msg, UserWarning)
     dataset = HangarDataset(columns, keys)
     dataset = NumpyDataset(dataset, batch_size, drop_last, shuffle, collate_fn)
     return dataset

@@ -14,10 +14,11 @@ class HangarDataset:
     """Dataset class that does the initial checks to verify whether the provided
     columns can be arranged together as a dataset. These verifications are done on the
     keys of each column. If ``keys`` argument is ``None``, initializer of this class
-    makes the viable key list by checking the local and common keys across all columns.
-    If ``keys`` argument is provided, then it verifies whether the provided keys are
-    good candidates or not. After all the verification, It provides the ``__getitem__``
-    method to the callee for consumption
+    makes the key list by checking the local keys across all columns.
+    If ``keys`` argument is provided, then it assumes the provided keys are valid and
+    restrain from doing any more check on it.
+    It provides the ``__getitem__`` accessor for downstream process to consume the
+    grouped data
 
 
     Parameters
@@ -48,7 +49,6 @@ class HangarDataset:
                     f'checkout. Please close the checkout and reopen the column in '
                     f'via a new checkout opened in `read-only` mode.')
 
-        # ======= Process keys for efficient downstream handling (inefficient) =======
         if not keys:
             # If no keys, we expect all columns have same key names
             keys = tuple(columns[0].keys(local=True))
@@ -70,13 +70,7 @@ class HangarDataset:
     def __len__(self):
         return len(self._keys)
 
-    def __getitem__(self, index: int) -> Tuple[Any]:
-        """It takes one sample index and returns a tuple of items from each column for
-        the given sample name for the given index.
-        """
-        # TODO should handle excpetion missing
-        # TODO: explicit naming for getitem_from_index
-        keys = self._keys[index]
+    def __getitem__(self, keys):
         if isinstance(keys, (int, str)):
             ret = tuple((col[keys] for col in self._columns))
         elif isinstance(keys, (list, tuple)) and len(self._columns) == 1:
@@ -89,3 +83,10 @@ class HangarDataset:
                             "int/str/list/tuple. Check the documentation for more"
                             " details")
         return ret
+
+    def index_get(self, index: int) -> Tuple[Any]:
+        """It takes one sample index and returns a tuple of items from each column for
+        the given sample name for the given index.
+        """
+        keys = self._keys[index]
+        return self[keys]

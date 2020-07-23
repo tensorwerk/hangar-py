@@ -25,18 +25,6 @@ def make_numpy_dataset(
     possible here to do just that. This API also acts as an entry point for other
     non-supported frameworks to load data from hangar as batches into the training loop.
 
-    .. note::
-
-        Column with layouts ``str`` or ``ndarray nested`` are not compatible with the
-        dataset APIs in the current release. So making dataset is only possible for
-        columns with layout ``ndarray flat``
-
-    .. note::
-
-        This is an experimental method in the current Hangar version. Please be aware
-        that Significant changes may be introduced in future releases without advance
-        notice or deprication warnings.
-
     Parameters
     ----------
     columns : :class:`~hangar.columns.column.Columns` or Sequence
@@ -58,6 +46,31 @@ def make_numpy_dataset(
         the heuristics to collate the batch is
             1. If the column is an ndarray flat column, then `np.stack` will be used
             2. If the column is with any other properties, `list.append` will be used
+        Note that the batch of data that comes to callate_fn will have each elements consist
+        of datapoints from all the columns. For example, if the columns from where the data
+        being fetched are col1 and col2 then the batch would look like
+
+        ```python
+        [
+            (data0_col1, data0_col2),
+            (data1_col1, data1_col2),
+            (data2_col1, data2_col2),
+            ...
+        ]
+        ```
+
+    Examples
+    --------
+    >>> from hangar import Repository
+    >>> from hangar.dataset import make_numpy_dataset
+    >>> repo = Repository('.')
+    >>> co = repo.checkout()
+    >>> imgcol = co.columns['images']
+    >>> classcol = co.columns['classes']
+    >>> dataset = make_numpy_dataset((imgcol, classcol), batch_size=64)
+    >>> for batch in dataset:
+    ...     out = train_model(batch[0])
+    ...     loss = loss_fn(out, batch[1])
 
     Returns
     -------
@@ -82,12 +95,6 @@ def make_torch_dataset(
 
     .. note::
 
-        Column with layouts ``str`` or ``ndarray nested`` are not compatible with the
-        dataset APIs in the current release. So making dataset is only possible for
-        columns with layout ``ndarray flat``
-
-    .. note::
-
         PyTorch's :class:`torch.utils.data.DataLoader` can effectively do custom
         operations such as shuffling, batching, multiprocessed read etc and hence we
         limit the surface area of the dataset API here just to open the channel for
@@ -102,12 +109,6 @@ def make_torch_dataset(
        (``num_workers=0``) will let the DataLoader work in single process mode
        as expected.
 
-    .. note::
-
-        This is an experimental method in the current Hangar version. Please be aware
-        that Significant changes may be introduced in future releases without advance
-        notice or deprication warnings.
-
     Parameters
     ----------
     columns : :class:`~hangar.columns.column.Columns` or Sequence
@@ -119,10 +120,6 @@ def make_torch_dataset(
     as_dict : bool
         Return the data as an OrderedDict with column names as keys. If False, it returns
         a tuple of arrays
-
-    Returns
-    -------
-    dict or tuple
 
     Examples
     --------
@@ -160,12 +157,6 @@ def make_tensorflow_dataset(
     This is convenient since Tensorflow Dataset does shuffling by loading the subset
     of data which can fit into the memory and shuffle that subset.
 
-    .. Note::
-
-        Column with layouts ``str`` or ``ndarray nested`` are not compatible with the
-        dataset APIs in the current release. So making dataset is only possible for
-        columns with layout ``ndarray flat``
-
     .. warning::
 
         This function relies on `tf.data.Dataset.from_generator` and which calls into the
@@ -176,12 +167,6 @@ def make_tensorflow_dataset(
         we'll have the GIL problem and is not parellel-izable even with a `Dataset.map`
         call. In fact, any attempts to parellelize the read will result in worse
         performance
-
-    .. note::
-
-        This is an experimental method in the current Hangar version. Please be aware
-        that Significant changes may be introduced in future releases without advance
-        notice or deprication warnings.
 
     Parameters
     ----------

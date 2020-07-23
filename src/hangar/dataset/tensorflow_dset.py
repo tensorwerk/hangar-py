@@ -2,7 +2,6 @@ from typing import Sequence, Callable, List, Tuple
 import typing
 from functools import partial
 import random
-import warnings
 
 try:
     import tensorflow as tf
@@ -26,7 +25,7 @@ def yield_data(dataset: HangarDataset, indices: list,
     if shuffle:
         random.shuffle(indices)
     for i in indices:
-        yield dataset[i]
+        yield dataset.index_get(i)
 
 
 def _make_tensorflow_dataset(columns: Sequence['Columns'],
@@ -101,10 +100,6 @@ def _make_tensorflow_dataset(columns: Sequence['Columns'],
       equivalent loader function in hangar/dataset/__init__.py. This function is
       "coppied" to a top level __init__.py to allow unified API and lazyloader access
     """
-    warn_msg = ('This is an experimental method in the current Hangar version. '
-                'Please be aware that Significant changes may be introduced in '
-                'future releases without advance notice / deprication warnings.')
-    warnings.warn(warn_msg, UserWarning)
 
     dataset = HangarDataset(columns, keys)
     indices = list(range(len(dataset)))
