@@ -1,4 +1,4 @@
-from typing import Sequence, Callable, List, Tuple
+from typing import Sequence, Callable, List, Tuple, Union
 import typing
 from functools import partial
 import random
@@ -16,6 +16,7 @@ if typing.TYPE_CHECKING:
     tf_TensorType = tf.python.framework.dtypes.DType
     tf_TensorShape = tf.TensorShape
     tf_Dataset = tf.data.Dataset
+    KeyType = Union[str, int, List, Tuple]
     from ..columns.column import ModifierTypes as Columns
     import numpy as np
 
@@ -29,7 +30,7 @@ def yield_data(dataset: HangarDataset, indices: list,
 
 
 def _make_tensorflow_dataset(columns: Sequence['Columns'],
-                             keys: Sequence[str] = None,
+                             keys: 'KeyType' = None,
                              shuffle: bool = False) -> 'tf_Dataset':
     """Make a tensorflow dataset from a hangar column.
 
@@ -66,7 +67,7 @@ def _make_tensorflow_dataset(columns: Sequence['Columns'],
     ----------
     columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column objects`
-    keys : Sequence[str]
+    keys : Union[str, int, List, Tuple]
         An sequence of sample names. If given only those samples will fetched from
         the column
     shuffle : bool

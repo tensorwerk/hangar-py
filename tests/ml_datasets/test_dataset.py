@@ -29,7 +29,7 @@ class TestInternalDatasetClass:
 
     def test_no_column(self):
         with pytest.raises(TypeError):
-            dataset = HangarDataset([])
+            HangarDataset([])
 
     def test_fails_on_write_enabled_columns(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
@@ -43,11 +43,19 @@ class TestInternalDatasetClass:
     def test_columns_without_local_data_and_without_key_argument(self, repo_20_filled_samples):
         repo = repo_20_filled_samples
         co = repo.checkout()
-        # perform a mock for nonlocal data
         from hangar.backends import backend_decoder
+
+        # perform a mock for nonlocal data
+        for k in co._columns._columns['writtenaset']._samples:
+            co._columns._columns['writtenaset']._samples[k] = backend_decoder(b'50:daeaaeeaebv')
+        col = co.columns['writtenaset']
+        with pytest.raises(RuntimeError):
+            HangarDataset((col,))
+
+        # perform a mock for nonlocal data
+        co = repo.checkout()
         template = backend_decoder(b'50:daeaaeeaebv')
         co._columns._columns['writtenaset']._samples['4'] = template
-
         col = co.columns['writtenaset']
         dataset = HangarDataset((col,))
         dataset_available_keys = dataset._keys
@@ -72,13 +80,34 @@ class TestInternalDatasetClass:
             HangarDataset((first_col, second_col))
         co.close()
 
-    def test_keys_success(self, repo_20_filled_samples):
+    def test_keys_single_column_success(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
         first_col = co.columns['writtenaset']
         keys = ['1', '2', '3']
         dataset = HangarDataset((first_col,), keys=keys)
         assert dataset._keys == keys
         co.close()
+
+    def test_keys_multiple_column_success(self, repo_20_filled_samples):
+        co = repo_20_filled_samples.checkout()
+        first_col = co.columns['writtenaset']
+        second_col = co.columns['second_aset']
+        keys = [('1', '2'), ('2', '3'), ('3', '4')]
+        dataset = HangarDataset((first_col, second_col), keys=keys)
+        for i, key in enumerate(keys):
+            data = dataset.index_get(i)
+            assert np.allclose(data[0], first_col[key[0]])
+            assert np.allclose(data[1], second_col[key[1]])
+
+    def test_keys_nested_column_success(self, repo_20_filled_subsamples):
+        co = repo_20_filled_subsamples.checkout()
+        col1 = co['writtenaset']
+        col2 = co['second_aset']
+        keys = (((0, ...), (0, 1)), ((1, ...), (1, 4)))
+        dataset = HangarDataset([col1, col2], keys=keys)
+        data = dataset.index_get(1)
+        assert tuple(data[0].keys()) == (4, 5, 6)
+        assert np.allclose(data[1], col2[1][4])
 
     def test_keys_not_valid(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
@@ -159,6 +188,39 @@ class TestNumpyDataset:
             recieved_shuffled_content.append(int(data[0][0][0]))
         assert recieved_shuffled_content != expected_unshuffled_content
         co.close()
+
+    def test_collate_fn(self, repo_20_filled_subsamples):
+        co = repo_20_filled_subsamples.checkout()
+        col1 = co['writtenaset']
+        col2 = co['second_aset']
+        keys = (((0, ...), (0, 1)), ((1, ...), (1, 4)))
+
+        dataset = make_numpy_dataset([col1, col2], keys=keys,
+                                     shuffle=False, batch_size=2)
+        col1data, col2data = next(iter(dataset))
+        assert isinstance(col1data, tuple)
+        assert isinstance(col2data, tuple)
+        assert list(col1data[0].keys()) == [1, 2, 3]
+        assert list(col1data[1].keys()) == [4, 5, 6]
+        assert np.allclose(np.stack(col2data), np.stack((col2[0][1], col2[1][4])))
+
+        def collate_fn(data_arr):
+            arr1 = []
+            arr2 = []
+            for elem in data_arr:
+                # picking one arbitrary subsample
+                k = list(elem[0].keys())[2]
+                data1 = elem[0][k]
+                data2 = elem[1]
+                arr1.append(data1)
+                arr2.append(data2)
+            return np.stack(arr1), np.stack(arr2)
+
+        dataset = make_numpy_dataset([col1, col2], keys=keys, shuffle=False,
+                                     batch_size=2, collate_fn=collate_fn)
+        col1data, col2data = next(iter(dataset))
+        assert np.allclose(col1data, np.stack((col1[0][3], col1[1][6])))
+        assert np.allclose(col2data, np.stack((col2[0][1], col2[1][4])))
 
 
 # ====================================   PyTorch  ====================================

@@ -1,4 +1,4 @@
-from typing import Sequence, Callable, TYPE_CHECKING
+from typing import Sequence, Callable, TYPE_CHECKING, Union, List, Tuple
 import random
 
 import numpy as np
@@ -8,6 +8,7 @@ from .common import HangarDataset
 if TYPE_CHECKING:
     from ..columns import ModifierTypes
     Columns = ModifierTypes
+    KeyType = Union[str, int, List, Tuple]
 
 
 def default_collate_fn(col_functions):
@@ -58,21 +59,25 @@ class NumpyDataset:
     def __init__(self, dataset: HangarDataset, batch_size: int, drop_last: bool,
                  shuffle: bool, collate_fn: Callable = None):
         self._dataset = dataset
-        if not collate_fn:
-            collate_colfn = []
-            for col in dataset.columns:
-                if col.column_type == 'ndarray' and col.column_layout == 'flat':
-                    collate_colfn.append(np.stack)
-                else:
-                    collate_colfn.append(lambda x: x)
-            self.collate_fn = default_collate_fn(collate_colfn)
-        else:
-            self.collate_fn = collate_fn
         self._dataset = dataset
         self._num_batches = None
         self._batch_size = None
         if batch_size:
+            if not collate_fn:
+                collate_colfn = []
+                for col in dataset.columns:
+                    if col.column_type == 'ndarray' and col.column_layout == 'flat':
+                        collate_colfn.append(np.stack)
+                    else:
+                        collate_colfn.append(lambda x: x)
+                self.collate_fn = default_collate_fn(collate_colfn)
+            else:
+                self.collate_fn = collate_fn
             self._batch(batch_size, drop_last)
+        else:
+            if collate_fn:
+                raise RuntimeError("Found `collate_fn` in the argument which is a no-op "
+                                   "since batching is not enabled")
         self._shuffle = shuffle
         self._indices = list(range(len(self._dataset)))
 
@@ -149,7 +154,7 @@ class NumpyDataset:
 
 
 def _make_numpy_dataset(columns: Sequence['Columns'],
-                        keys: Sequence[str] = None,
+                        keys: 'KeyType' = None,
                         batch_size: int = None,
                         drop_last: bool = False,
                         shuffle: bool = True,
@@ -180,7 +185,7 @@ def _make_numpy_dataset(columns: Sequence['Columns'],
     columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column
         objects.
-    keys : Sequence[str]
+    keys : Union[str, int, List, Tuple]
         An sequence collection of sample names. If given only those samples will
         fetched from the column
     batch_size : int

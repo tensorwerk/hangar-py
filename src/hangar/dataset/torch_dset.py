@@ -1,4 +1,4 @@
-from typing import Sequence, TYPE_CHECKING
+from typing import Sequence, TYPE_CHECKING, Union, List, Tuple
 from collections import OrderedDict
 
 try:
@@ -12,6 +12,7 @@ from .common import HangarDataset
 
 if TYPE_CHECKING:
     from ..columns.column import ModifierTypes as Columns
+    KeyType = Union[str, int, List, Tuple]
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -38,7 +39,7 @@ class TorchDataset(torch.utils.data.Dataset):
 
 
 def _make_torch_dataset(columns: Sequence['Columns'],
-                        keys: Sequence[str] = None,
+                        keys: 'KeyType' = None,
                         as_dict: bool = False) -> TorchDataset:
     """Returns a :class:`torch.utils.data.Dataset` object which can be loaded into
     a :class:`torch.utils.data.DataLoader`.
@@ -76,7 +77,7 @@ def _make_torch_dataset(columns: Sequence['Columns'],
     columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column
         objects.
-    keys : Sequence[str]
+    keys : Union[str, int, List, Tuple]
         An sequence collection of sample names. If given only those samples will
         fetched from the column
     as_dict : bool

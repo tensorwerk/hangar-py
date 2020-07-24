@@ -1,17 +1,18 @@
 __all__ = ('make_numpy_dataset', 'make_torch_dataset', 'make_tensorflow_dataset')
 
-from typing import Sequence, Callable, TYPE_CHECKING
+from typing import Sequence, Callable, TYPE_CHECKING, Union, List, Tuple
 
 if TYPE_CHECKING:
     from ..columns import ModifierTypes as Columns
     from .torch_dset import TorchDataset
     from .numpy_dset import NumpyDataset
     from .tensorflow_dset import tf_Dataset
+    KeyType = Union[str, int, List, Tuple]
 
 
 def make_numpy_dataset(
         columns: Sequence['Columns'],
-        keys: Sequence[str] = None,
+        keys: 'KeyType' = None,
         batch_size: int = None,
         drop_last: bool = False,
         shuffle: bool = True,
@@ -30,7 +31,7 @@ def make_numpy_dataset(
     columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column
         objects.
-    keys : Sequence[str]
+    keys : Union[str, int, List, Tuple]
         An sequence collection of sample names. If given only those samples will
         fetched from the column
     batch_size : int
@@ -88,7 +89,7 @@ def make_numpy_dataset(
 
 def make_torch_dataset(
         columns: Sequence['Columns'],
-        keys: Sequence[str] = None,
+        keys: 'KeyType' = None,
         as_dict: bool = False) -> 'TorchDataset':
     """Returns a :class:`torch.utils.data.Dataset` object which can be loaded into
     a :class:`torch.utils.data.DataLoader`.
@@ -114,7 +115,7 @@ def make_torch_dataset(
     columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column
         objects.
-    keys : Sequence[str]
+    keys : Union[str, int, List, Tuple]
         An sequence collection of sample names. If given only those samples will
         fetched from the column
     as_dict : bool
@@ -147,7 +148,7 @@ def make_torch_dataset(
 
 def make_tensorflow_dataset(
         columns: Sequence['Columns'],
-        keys: Sequence[str] = None,
+        keys: 'KeyType' = None,
         shuffle: bool = False) -> 'tf_Dataset':
     """Make a tensorflow dataset from a hangar column.
 
@@ -172,7 +173,7 @@ def make_tensorflow_dataset(
     ----------
     columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column objects`
-    keys : Sequence[str]
+    keys : Union[str, int, List, Tuple]
         An sequence of sample names. If given only those samples will fetched from
         the column
     shuffle : bool

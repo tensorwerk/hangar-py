@@ -1,13 +1,13 @@
 from functools import reduce
 from operator import getitem as op_getitem
 import typing
-from typing import Union, Sequence, Tuple, Any
+from typing import Union, Sequence, Tuple, List, Any
 from ..columns import is_column, is_writer_column
 from ..optimized_utils import is_ordered_sequence, is_iterable
 
 if typing.TYPE_CHECKING:
     from hangar.columns.column import ModifierTypes as Columns
-    KeyType = Union[str, int]
+    KeyType = Union[str, int, List, Tuple]
 
 
 class HangarDataset:
@@ -32,7 +32,7 @@ class HangarDataset:
 
     def __init__(self,
                  columns: Union['Columns', Sequence['Columns']],
-                 keys: Sequence['KeyType'] = None):
+                 keys: 'KeyType' = None):
 
         if is_ordered_sequence(columns):
             if len(columns) == 0:
@@ -76,7 +76,7 @@ class HangarDataset:
         elif isinstance(keys, (list, tuple)) and len(self._columns) == 1:
             ret = reduce(op_getitem, keys, self._columns)
         elif isinstance(keys, (list, tuple)):
-            ret = tuple([reduce(op_getitem, keys, col)
+            ret = tuple([reduce(op_getitem, key, col)
                          for key, col in zip(keys, self._columns)])
         else:
             raise TypeError("Keys are not parsable. Try with a list/tuple of "
