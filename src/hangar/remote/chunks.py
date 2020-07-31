@@ -1,6 +1,7 @@
+from io import BytesIO
 import math
 import struct
-from typing import NamedTuple, List, Union, Tuple
+from typing import NamedTuple, List, Union, Tuple, Iterable
 
 import blosc
 import numpy as np
@@ -11,20 +12,21 @@ from ..utils import set_blosc_nthreads
 set_blosc_nthreads()
 
 
-def chunk_bytes(bytesData):
+def chunk_bytes(bytesData, *, chunkSize: int = 32_000) -> Iterable[bytes]:
     """Slice a bytestring into subelements and store the data in a list
 
     Arguments
     ---------
         bytesData : bytes
             bytestring buffer of the array data
+        chunkSize : int, optional, kwarg-only
+            number of bytes which each chunk should be split into.
 
     Yields
     ------
     bytes
         data split into 32kb chunk sizes.
     """
-    chunkSize = 32_000
     numIters = math.ceil(len(bytesData) / chunkSize)
     currentStart = 0
     currentEnd = chunkSize
@@ -68,7 +70,9 @@ def clientCommitChunkedIterator(commit: str, parentVal: bytes, specVal: bytes,
         yield request
 
 
-def tensorChunkedIterator(buf, uncomp_nbytes, pb2_request, *, err=None):
+def tensorChunkedIterator(buf, uncomp_nbytes, pb2_request,
+                          *,
+                          err=None, chunkSize: int = 32_000):
 
     compBytes = blosc.compress(
         buf, clevel=3, cname='blosclz', shuffle=blosc.NOSHUFFLE)
@@ -77,7 +81,8 @@ def tensorChunkedIterator(buf, uncomp_nbytes, pb2_request, *, err=None):
         comp_nbytes=len(compBytes),
         uncomp_nbytes=uncomp_nbytes,
         error=err)
-    chunkIterator = chunk_bytes(compBytes)
+
+    chunkIterator = chunk_bytes(compBytes, chunkSize=chunkSize)
     for dchunk in chunkIterator:
         request.raw_data = dchunk
         yield request
@@ -130,18 +135,24 @@ def _serialize_arr(arr: np.ndarray) -> bytes:
     """
     dtype_num ndim dim1_size dim2_size ... dimN_size array_bytes
     """
-    raw = struct.pack(
-        f'<bb{len(arr.shape)}i{arr.nbytes}s',
-        arr.dtype.num, arr.ndim, *arr.shape, arr.tobytes()
-    )
+    buf = BytesIO()
+    np.save(buf, arr, allow_pickle=False, fix_imports=False)
+    raw = buf.getvalue()
+    # raw = struct.pack(
+    #     f'<bb{len(arr.shape)}i{arr.nbytes}s',
+    #     arr.dtype.num, arr.ndim, *arr.shape, arr.tobytes()
+    # )
     return raw
 
 
 def _deserialize_arr(raw: bytes) -> np.ndarray:
-    dtnum, ndim = struct.unpack('<bb', raw[0:2])
-    end = 2 + (4 * ndim)
-    arrshape = struct.unpack(f'<{ndim}i', raw[2:end])
-    arr = np.frombuffer(raw, dtype=np.typeDict[dtnum], offset=end).reshape(arrshape)
+    buf = BytesIO(initial_bytes=raw)
+    buf.seek(0)
+    arr = np.load(buf, allow_pickle=False, fix_imports=False)
+    # dtnum, ndim = struct.unpack('<bb', raw[0:2])
+    # end = 2 + (4 * ndim)
+    # arrshape = struct.unpack(f'<{ndim}i', raw[2:end])
+    # arr = np.frombuffer(raw, dtype=np.typeDict[dtnum], offset=end).reshape(arrshape)
     return arr
 
 

@@ -349,11 +349,12 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
                     err = hangar_service_pb2.ErrorProto(code=8, message=msg)
                     totalSize, records = 0, []
-                    yield hangar_service_pb2.FetchDataReply(error=err, raw_data=b'')
+                    yield hangar_service_pb2.FetchDataReply(error=err)
                     raise StopIteration()
         except StopIteration:
             totalSize, records = 0, []
         finally:
+            self.txnregister.abort_reader_txn(self.env.hashenv)
             # finish sending all remaining tensors if max size hash not been hit.
             if totalSize > 0:
                 pack = chunks.serialize_record_pack(records)
@@ -361,7 +362,6 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
                                                      pb2_request=hangar_service_pb2.FetchDataReply, err=err)
                 yield from cIter
-            self.txnregister.abort_reader_txn(self.env.hashenv)
 
     def PushData(self, request_iterator, context):
         """Receive compressed streams of binary data from the client.
