@@ -284,34 +284,29 @@ def test_server_push_second_branch_with_new_commit_then_clone_partial_fetch(
     newRepo._env._close_environments()
 
 
-@pytest.mark.filterwarnings('ignore::UserWarning')
-@pytest.mark.parametrize('nMasterCommits,nMasterSamples', [[2, 10]])
-@pytest.mark.parametrize('nDevCommits,nDevSamples', [[1, 16]])
-@pytest.mark.parametrize('fetchAsetns', [
-    None, ('writtenaset',), ('_two',), ('str_col',), ('bytes_col',),
-])
-@pytest.mark.parametrize('fetchBranch', [None, 'testbranch'])
-@pytest.mark.parametrize('fetchCommit', [None, 'ma'])
-@pytest.mark.parametrize('fetchAll_history', [False, True])
-@pytest.mark.parametrize('fetchNbytes', [None, 1000])
-def test_server_push_two_branch_then_clone_fetch_data_options(
-        server_instance, repo, managed_tmpdir, array5by7, nMasterCommits,
-        nMasterSamples, nDevCommits, nDevSamples, fetchBranch, fetchCommit,
-        fetchAsetns, fetchNbytes, fetchAll_history):
-    from hangar import Repository
+@pytest.fixture(scope='class')
+def array5by7_class():
+    return np.random.random((5, 7))
+
+@pytest.fixture(scope='class')
+def two_branch_multi_commit_repo_class(server_instance_class, classrepo, array5by7_class):
     from hangar.records.summarize import list_history
-    from operator import eq
+
+    nMasterCommits = 2
+    nMasterSamples = 10
+    nDevCommits = 1
+    nDevSamples = 16
 
     # Push master branch test
     masterCmts = {}
-    co = repo.checkout(write=True)
+    co = classrepo.checkout(write=True)
     co.add_ndarray_column(name='writtenaset', shape=(5, 7), dtype=np.float32)
     co.add_ndarray_column(name='_two', shape=(20), dtype=np.float32)
     co.add_str_column('str_col')
     co.add_bytes_column('bytes_col')
     for cIdx in range(nMasterCommits):
         if cIdx != 0:
-            co = repo.checkout(write=True)
+            co = classrepo.checkout(write=True)
         masterSampList1 = []
         masterSampList2 = []
         masterSampList3 = []
@@ -327,7 +322,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                 del bcol[prevKey]
 
             for sIdx in range(nMasterSamples):
-                arr1 = np.random.randn(*array5by7.shape).astype(np.float32) * 100
+                arr1 = np.random.randn(*array5by7_class.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr1
                 masterSampList1.append(arr1)
                 arr2 = np.random.randn(20).astype(np.float32)
@@ -344,16 +339,16 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         masterCmts[cmt] = (masterSampList1, masterSampList2, masterSampList3, masterSampList4)
         co.close()
 
-    repo.remote.add('origin', server_instance)
-    push1 = repo.remote.push('origin', 'master')
+    classrepo.remote.add('origin', server_instance_class)
+    push1 = classrepo.remote.push('origin', 'master')
     assert push1 == 'master'
-    masterHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name='master')
+    masterHist = list_history(classrepo._env.refenv, classrepo._env.branchenv, branch_name='master')
 
     # Push dev branch test
     devCmts = masterCmts.copy()
-    branch = repo.create_branch('testbranch')
+    branch = classrepo.create_branch('testbranch')
     for cIdx in range(nDevCommits):
-        co = repo.checkout(write=True, branch=branch.name)
+        co = classrepo.checkout(write=True, branch=branch.name)
         devSampList1 = []
         devSampList2 = []
         devSampList3 = []
@@ -369,7 +364,7 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
                 del bcol[prevKey]
 
             for sIdx in range(nDevSamples):
-                arr1 = np.random.randn(*array5by7.shape).astype(np.float32) * 100
+                arr1 = np.random.randn(*array5by7_class.shape).astype(np.float32) * 100
                 d[str(sIdx)] = arr1
                 devSampList1.append(arr1)
                 arr2 = np.random.randn(20).astype(np.float32)
@@ -386,140 +381,160 @@ def test_server_push_two_branch_then_clone_fetch_data_options(
         devCmts[cmt] = (devSampList1, devSampList2, devSampList3, devSampList4)
         co.close()
 
-    push2 = repo.remote.push('origin', branch.name)
+    push2 = classrepo.remote.push('origin', branch.name)
     assert push2 == branch.name
-    branchHist = list_history(repo._env.refenv, repo._env.branchenv, branch_name=branch.name)
+    branchHist = list_history(classrepo._env.refenv, classrepo._env.branchenv, branch_name=branch.name)
 
-    # -------------------------- end setup ------------------------------------
+    yield branch, branchHist, devCmts, masterHist, server_instance_class
+    pass
 
-    # Clone test (master branch)
-    new_tmpdir = pjoin(managed_tmpdir, 'new')
-    mkdir(new_tmpdir)
-    newRepo = Repository(path=new_tmpdir, exists=False)
-    newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
-    newRepo.remote.fetch('origin', branch=branch.name)
-    newRepo.create_branch('testbranch', base_commit=branchHist['head'])
-    assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch.name}', branch.name]
 
-    # ------------------ format arguments dependingon options -----------------
+class TestLargeRemoteServer:
 
-    kwargs = {
-        'column_names': fetchAsetns,
-        'max_num_bytes': fetchNbytes,
-        'retrieve_all_history': fetchAll_history,
-    }
-    if fetchBranch is not None:
-        func = branchHist if fetchBranch == 'testbranch' else masterHist
-        kwargs['branch'] = fetchBranch
-        kwargs['commit'] = None
-    else:
-        func = branchHist if fetchBranch == 'br' else masterHist
-        kwargs['branch'] = None
-        kwargs['commit'] = func['head']
+    @pytest.mark.filterwarnings('ignore::UserWarning')
+    @pytest.mark.parametrize('fetchAsetns', [
+        None, ('writtenaset',), ('_two',), ('str_col',), ('bytes_col',),
+    ])
+    @pytest.mark.parametrize('fetchBranch', [None, 'testbranch'])
+    @pytest.mark.parametrize('fetchCommit', [None, 'ma'])
+    @pytest.mark.parametrize('fetchAll_history', [False, True])
+    @pytest.mark.parametrize('fetchNbytes', [None, 1000])
+    def test_server_push_two_branch_then_clone_fetch_data_options(
+            self, two_branch_multi_commit_repo_class, managed_tmpdir_class, array5by7_class,
+            fetchBranch, fetchCommit, fetchAsetns, fetchNbytes, fetchAll_history, tmp_path_factory):
+        from hangar import Repository
+        from operator import eq
 
-    if fetchAll_history is True:
-        commits_to_check = func['order']
-    else:
-        commits_to_check = [func['head']]
+        branch, branchHist, devCmts, masterHist, server_instance = two_branch_multi_commit_repo_class
 
-    # ----------------------- retrieve data with desired options --------------
+        # Clone test (master branch)
+        _new_tmpdir = tmp_path_factory.mktemp('newclone', numbered=True)
+        new_tmpdir = str(_new_tmpdir)
+        newRepo = Repository(path=new_tmpdir, exists=False)
+        newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+        newRepo.remote.fetch('origin', branch=branch.name)
+        newRepo.create_branch('testbranch', base_commit=branchHist['head'])
+        assert newRepo.list_branches() == ['master', 'origin/master', f'origin/{branch.name}', branch.name]
 
-    # This case should fail
-    if (fetchAll_history is True) and isinstance(fetchNbytes, int):
-        try:
-            with pytest.raises(ValueError):
-                fetch_commits = newRepo.remote.fetch_data(remote='origin', **kwargs)
-        finally:
-            newRepo._env._close_environments()
-        return True
-    # get data
-    fetch_commits = newRepo.remote.fetch_data(remote='origin', **kwargs)
-    assert commits_to_check == fetch_commits
+        # ------------------ format arguments depending on options -----------------
 
-    # ------------- check that you got everything you expected ----------------
-
-    for fCmt in fetch_commits:
-        co = newRepo.checkout(commit=fCmt)
-        assert co.commit_hash == fCmt
-
-        # when we are checking one aset only
-        if isinstance(fetchAsetns, tuple):
-            d = co.columns[fetchAsetns[0]]
-            # ensure we didn't fetch the other data simultaneously
-
-            ds1SampList, ds2SampList, ds3SampList, ds4SampList = devCmts[fCmt]
-            if fetchAsetns[0] == 'writtenaset':
-                compare = ds1SampList
-                cmp_func = np.allclose
-            elif fetchAsetns[0] == '_two':
-                compare = ds2SampList
-                cmp_func = np.allclose
-            elif fetchAsetns[0] == 'str_col':
-                compare = ds3SampList
-                cmp_func = eq
-            else:
-                compare = ds4SampList
-                cmp_func = eq
-
-            totalSeen = 0
-            for idx, samp in enumerate(compare):
-                if fetchNbytes is None:
-                    assert cmp_func(samp, d[str(idx)])
-                else:
-                    try:
-                        arr = d[str(idx)]
-                        assert cmp_func(samp, arr)
-                        try:
-                            totalSeen += arr.nbytes
-                        except AttributeError:
-                            totalSeen += len(arr)
-                    except FileNotFoundError:
-                        pass
-                    assert totalSeen <= fetchNbytes
-
-        # compare both asets at the same time
+        kwargs = {
+            'column_names': fetchAsetns,
+            'max_num_bytes': fetchNbytes,
+            'retrieve_all_history': fetchAll_history,
+        }
+        if fetchBranch is not None:
+            func = branchHist if fetchBranch == 'testbranch' else masterHist
+            kwargs['branch'] = fetchBranch
+            kwargs['commit'] = None
         else:
-            d = co.columns['writtenaset']
-            dd = co.columns['_two']
-            str_col = co.columns['str_col']
-            bytes_col = co.columns['bytes_col']
-            ds1List, ds2List, ds3List, ds4List = devCmts[fCmt]
-            totalSeen = 0
-            for idx, ds1ds2ds3ds4 in enumerate(zip(ds1List, ds2List, ds3List, ds4List)):
-                ds1, ds2, ds3, ds4 = ds1ds2ds3ds4
-                if fetchNbytes is None:
-                    assert np.allclose(ds1, d[str(idx)])
-                    assert np.allclose(ds2, dd[str(idx)])
-                    assert ds3 == str_col[str(idx)]
-                    assert ds4 == bytes_col[str(idx)]
+            func = branchHist if fetchBranch == 'br' else masterHist
+            kwargs['branch'] = None
+            kwargs['commit'] = func['head']
+
+        if fetchAll_history is True:
+            commits_to_check = func['order']
+        else:
+            commits_to_check = [func['head']]
+
+        # ----------------------- retrieve data with desired options --------------
+
+        # This case should fail
+        if (fetchAll_history is True) and isinstance(fetchNbytes, int):
+            try:
+                with pytest.raises(ValueError):
+                    fetch_commits = newRepo.remote.fetch_data(remote='origin', **kwargs)
+            finally:
+                newRepo._env._close_environments()
+            return True
+        # get data
+        fetch_commits = newRepo.remote.fetch_data(remote='origin', **kwargs)
+        assert commits_to_check == fetch_commits
+
+        # ------------- check that you got everything you expected ----------------
+
+        for fCmt in fetch_commits:
+            co = newRepo.checkout(commit=fCmt)
+            assert co.commit_hash == fCmt
+
+            # when we are checking one aset only
+            if isinstance(fetchAsetns, tuple):
+                d = co.columns[fetchAsetns[0]]
+                # ensure we didn't fetch the other data simultaneously
+
+                ds1SampList, ds2SampList, ds3SampList, ds4SampList = devCmts[fCmt]
+                if fetchAsetns[0] == 'writtenaset':
+                    compare = ds1SampList
+                    cmp_func = np.allclose
+                elif fetchAsetns[0] == '_two':
+                    compare = ds2SampList
+                    cmp_func = np.allclose
+                elif fetchAsetns[0] == 'str_col':
+                    compare = ds3SampList
+                    cmp_func = eq
                 else:
-                    try:
-                        arr1 = d[str(idx)]
-                        assert np.allclose(ds1, arr1)
-                        totalSeen += arr1.nbytes
-                    except FileNotFoundError:
-                        pass
-                    try:
-                        arr2 = dd[str(idx)]
-                        assert np.allclose(ds2, arr2)
-                        totalSeen += arr2.nbytes
-                    except FileNotFoundError:
-                        pass
-                    try:
-                        sval = str_col[str(idx)]
-                        assert ds3 == sval
-                        totalSeen += len(sval.encode())
-                    except FileNotFoundError:
-                        pass
-                    try:
-                        bval = bytes_col[str(idx)]
-                        assert ds4 == bval
-                        totalSeen += len(bval)
-                    except FileNotFoundError:
-                        pass
-                    assert totalSeen <= fetchNbytes
-        co.close()
-    newRepo._env._close_environments()
+                    compare = ds4SampList
+                    cmp_func = eq
+
+                totalSeen = 0
+                for idx, samp in enumerate(compare):
+                    if fetchNbytes is None:
+                        assert cmp_func(samp, d[str(idx)])
+                    else:
+                        try:
+                            arr = d[str(idx)]
+                            assert cmp_func(samp, arr)
+                            try:
+                                totalSeen += arr.nbytes
+                            except AttributeError:
+                                totalSeen += len(arr)
+                        except FileNotFoundError:
+                            pass
+                        assert totalSeen <= fetchNbytes
+
+            # compare both asets at the same time
+            else:
+                d = co.columns['writtenaset']
+                dd = co.columns['_two']
+                str_col = co.columns['str_col']
+                bytes_col = co.columns['bytes_col']
+                ds1List, ds2List, ds3List, ds4List = devCmts[fCmt]
+                totalSeen = 0
+                for idx, ds1ds2ds3ds4 in enumerate(zip(ds1List, ds2List, ds3List, ds4List)):
+                    ds1, ds2, ds3, ds4 = ds1ds2ds3ds4
+                    if fetchNbytes is None:
+                        assert np.allclose(ds1, d[str(idx)])
+                        assert np.allclose(ds2, dd[str(idx)])
+                        assert ds3 == str_col[str(idx)]
+                        assert ds4 == bytes_col[str(idx)]
+                    else:
+                        try:
+                            arr1 = d[str(idx)]
+                            assert np.allclose(ds1, arr1)
+                            totalSeen += arr1.nbytes
+                        except FileNotFoundError:
+                            pass
+                        try:
+                            arr2 = dd[str(idx)]
+                            assert np.allclose(ds2, arr2)
+                            totalSeen += arr2.nbytes
+                        except FileNotFoundError:
+                            pass
+                        try:
+                            sval = str_col[str(idx)]
+                            assert ds3 == sval
+                            totalSeen += len(sval.encode())
+                        except FileNotFoundError:
+                            pass
+                        try:
+                            bval = bytes_col[str(idx)]
+                            assert ds4 == bval
+                            totalSeen += len(bval)
+                        except FileNotFoundError:
+                            pass
+                        assert totalSeen <= fetchNbytes
+            co.close()
+        newRepo._env._close_environments()
 
 
 def test_push_unchanged_repo_makes_no_modifications(written_two_cmt_server_repo):

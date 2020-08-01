@@ -16,6 +16,14 @@ variable_shape_backend_params = ['00', '10']
 fixed_shape_backend_params = ['00', '01', '10']
 
 
+@pytest.fixture(scope="session")
+def monkeysession(request):
+    from _pytest.monkeypatch import MonkeyPatch
+    mpatch = MonkeyPatch()
+    yield mpatch
+    mpatch.undo()
+
+
 @pytest.fixture(scope='class')
 def classrepo(tmp_path_factory) -> Repository:
     old00_count = hangar.backends.hdf5_00.COLLECTION_COUNT
@@ -65,6 +73,26 @@ def managed_tmpdir(monkeypatch, tmp_path):
     hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
+
+
+
+@pytest.fixture(scope='class')
+def managed_tmpdir_class(monkeysession, tmp_path_factory):
+    pth = tmp_path_factory.mktemp('classrepo2', numbered=True)
+    tmp_path = str(pth)
+    monkeysession.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
+    monkeysession.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeysession.setitem(hangar.backends.lmdb_31.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 5)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 20)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 5)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
+    monkeysession.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 50)
+    hangar.txnctx.TxnRegisterSingleton._instances = {}
+    yield tmp_path
+    shutil.rmtree(tmp_path)
+
+
 
 
 @pytest.fixture()
@@ -250,6 +278,25 @@ def server_instance(monkeypatch, managed_tmpdir, worker_id):
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
     mkdir(base_tmpdir)
     server, hangserver, _ = server.serve(base_tmpdir, overwrite=True, channel_address=address)
+    server.start()
+    yield address
+
+    hangserver.close()
+    server.stop(0.1)
+    server.wait_for_termination(timeout=2)
+
+
+@pytest.fixture(scope='class')
+def server_instance_class(monkeysession, tmp_path_factory, worker_id):
+    from secrets import choice
+    from hangar.remote import server
+    monkeysession.setattr(server, 'server_config', mock_server_config)
+
+    possibble_addresses = [x for x in range(50000, 59999)]
+    chosen_address = choice(possibble_addresses)
+    address = f'localhost:{chosen_address}'
+    base_tmpdir = tmp_path_factory.mktemp(f'{worker_id[-1]}')
+    server, hangserver, _ = server.serve(str(base_tmpdir), overwrite=True, channel_address=address)
     server.start()
     yield address
 
