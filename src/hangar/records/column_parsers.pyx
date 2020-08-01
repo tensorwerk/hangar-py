@@ -28,6 +28,7 @@ __all__ = [
     'nested_data_record_from_db_key',
     'dynamic_layout_data_record_from_db_key',
     'dynamic_layout_data_record_db_start_range_key',
+    'dynamic_layout_data_record_db_key_from_names',
     'hash_schema_db_key_from_raw_key',
     'hash_data_db_key_from_raw_key',
     'hash_schema_raw_key_from_db_key',
@@ -223,6 +224,17 @@ cpdef bytes dynamic_layout_data_record_db_start_range_key(ColumnSchemaKey column
     else:
         raise ValueError(column_record)
     return res
+
+
+def dynamic_layout_data_record_db_key_from_names(layout, column, *sample):
+    if layout == 'flat':
+        db_key = flat_data_db_key_from_names(column, sample[0])
+    elif layout == 'nested':
+        db_key = nested_data_db_key_from_names(column, sample[0], sample[1])
+    else:
+        raise ValueError(layout)
+    return db_key
+
 
 
 #

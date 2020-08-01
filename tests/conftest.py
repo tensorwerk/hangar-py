@@ -291,6 +291,14 @@ def server_instance_class(monkeysession, tmp_path_factory, worker_id):
     from secrets import choice
     from hangar.remote import server
     monkeysession.setattr(server, 'server_config', mock_server_config)
+    monkeysession.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
+    monkeysession.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeysession.setitem(hangar.backends.lmdb_31.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 5)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 20)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 5)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
+    monkeysession.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 50)
 
     possibble_addresses = [x for x in range(50000, 59999)]
     chosen_address = choice(possibble_addresses)

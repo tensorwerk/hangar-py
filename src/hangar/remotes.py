@@ -5,7 +5,7 @@ import warnings
 from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
-from typing import List, NamedTuple, Optional, Sequence
+from typing import List, NamedTuple, Optional, Sequence, Union, Tuple, TYPE_CHECKING
 
 import grpc
 import lmdb
@@ -30,6 +30,9 @@ from .utils import is_suitable_user_key
 logger = logging.getLogger(__name__)
 
 RemoteInfo = NamedTuple('RemoteInfo', [('name', str), ('address', str)])
+
+if TYPE_CHECKING:
+    KeyType = Union[str, int]
 
 
 class Remotes(object):
@@ -273,6 +276,166 @@ class Remotes(object):
                     self._env.branchenv, branch_name=fetchBranchName, commit_hash=sHEAD)
 
             return fetchBranchName
+
+    def fetch_data_sample(self,
+                          remote: str,
+                          column: str,
+                          samples: Union['KeyType', Sequence['KeyType'],
+                                         Sequence[Union[Tuple['KeyType', 'KeyType'], Tuple['KeyType'], 'KeyType']]],
+                          branch: str = None,
+                          commit: str = None) -> str:
+        """Granular fetch data operation allowing selection of individual samples.
+
+        .. warning:
+
+            This is a specialized version of the :meth:`fetch_data` method for use
+            in specilized situations where some prior knowledge is known about the data.
+            Most users should prefer :meth:`fetch_data` over this version.
+
+
+        In some cases, it may be desireable to only perform a fetch data operation
+        for some particular samples within a column (without needing to download any
+        other data contained in the column). This method allows for the granular
+        specification of keys to fetch in a certain column at the selected `branch` /
+        `commit` time point.
+
+
+        Parameters
+        ----------
+        remote
+            name of the remote server to pull data from
+        column
+            name of the column which data is being fetched from.
+        samples
+            key, or sequence of sample keys to select.
+
+            Flat column layouts should provide just a single key, or flat sequence of
+            keys which will be fetched from the server. ie. `sample1` OR
+            [`sample1`, `sample2`, `sample3`, etc.]
+
+            Nested column layouts can provide tuples specifying `(sample, subsample)`
+            records to retrieve, tuples with an `Ellipsis` character in the `subsample`
+            index `(sample, ...)` (which will fetch all subsamples for the given sample),
+            or can provide lone sample keys in the sequences `sample` (which will also fetch
+            all subsamples listed under the sample) OR ANY COMBINATION of the above.
+        branch, optional, default = None
+            branch head to operate on, either `branch` or `commit` argument must be passed,
+            but NOT both.
+        commit
+            commit to operate on, either `branch` or `commit` argument must be passed,
+            but NOT both.
+
+        Returns
+        -------
+        str
+            On success, the commit hash which data was fetched into.
+        """
+
+        self.__verify_repo_initialized()
+        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
+        self._client = HangarClient(envs=self._env, address=address)
+        CW = ContentWriter(self._env)
+
+        # ----------------- setup / validate operations -----------------------
+
+        if all([branch, commit]):
+            raise ValueError(f'``branch`` and ``commit`` args cannot be set simultaneously')
+        if branch is not None:
+            cmt = heads.get_branch_head_commit(self._env.branchenv, branch_name=branch)
+        else:
+            cmt = commit
+            cmtExist = check_commit_hash_in_history(self._env.refenv, commit)
+            if not cmtExist:
+                raise ValueError(f'specified commit: {commit} does not exist in the repo.')
+
+        if not isinstance(samples, (list, tuple)):
+            samples = (samples,)
+
+        # ------------------ Determine which data to fetch --------------------
+
+        with tempfile.TemporaryDirectory() as tempD:
+            # share unpacked ref db between dependent methods
+            tmpDF = Path(tempD, 'test.lmdb')
+            tmpDB = lmdb.open(path=str(tmpDF), **LMDB_SETTINGS)
+            try:
+                with tmpDB.begin(write=True) as txn:
+                    with txn.cursor() as curs:
+                        notEmpty = curs.first()
+                        while notEmpty:
+                            notEmpty = curs.delete()
+                unpack_commit_ref(self._env.refenv, tmpDB, cmt)
+                recQuery = queries.RecordQuery(tmpDB)
+
+                # handle column_names option
+                cmt_column_names = recQuery.column_names()
+                if column not in cmt_column_names:
+                    raise KeyError(f'column name {column} does not exist in repo at commit {cmt}')
+
+                column_layout = recQuery.column_schema_layout(column=column)
+                if column_layout == 'flat':
+                    sspecs = {}
+                    asetNamesSpec = recQuery.column_data_records(column)
+                    for asetNames, dataSpec in asetNamesSpec:
+                        sspecs[asetNames.sample] = dataSpec
+                    dataSpecs = []
+                    for _key in samples:
+                        dataSpecs.append(sspecs[_key])
+
+                elif column_layout == 'nested':
+                    sspecs = defaultdict(dict)
+                    asetNamesSpec = recQuery.column_data_records(column)
+                    for asetNames, dataSpec in asetNamesSpec:
+                        sspecs[asetNames.sample].update({asetNames.subsample: dataSpec})
+
+                    dataSpecs = []
+                    for _key in samples:
+                        if isinstance(_key, (list, tuple)) and len(_key) == 2:
+                            if _key[1] != Ellipsis:
+                                dataSpecs.append(sspecs[_key[0]][_key[1]])
+                            else:
+                                for _spec in sspecs[_key[0]].values():
+                                    dataSpecs.append(_spec)
+                        elif isinstance(_key, (list, tuple)) and len(_key) == 1:
+                            for _spec in sspecs[_key[0]].values():
+                                dataSpecs.append(_spec)
+                        elif isinstance(_key, (str, int)):
+                            for _spec in sspecs[_key].values():
+                                dataSpecs.append(_spec)
+                        else:
+                            raise TypeError(_key)
+
+                dataSpecs = set(dataSpecs)
+            finally:
+                tmpDB.close()
+
+            try:
+                hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
+                m_schema_hash_map = defaultdict(list)
+                for hashVal in dataSpecs:
+                    hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
+                    hashRef = hashTxn.get(hashKey)
+                    be_loc = backend_decoder(hashRef)
+                    if be_loc.backend == '50':
+                        m_schema_hash_map[be_loc.schema_hash].append(hashVal.digest)
+            finally:
+                TxnRegister().abort_reader_txn(self._env.hashenv)
+
+            # -------------------- download missing data --------------------------
+
+            total_data = sum(len(v) for v in m_schema_hash_map.values())
+            with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar:
+                client: HangarClient  # type hint
+                stop = False
+                for schema in m_schema_hash_map.keys():
+                    hashes = set(m_schema_hash_map[schema])
+                    while (len(hashes) > 0) and (not stop):
+                        ret = client.fetch_data(schema, hashes)
+                        saved_digests = CW.data(schema, ret)
+                        pbar.update(len(saved_digests))
+                        hashes = hashes.difference(set(saved_digests))
+
+            move_process_data_to_store(self._repo_path, remote_operation=True)
+            return cmt
 
     def fetch_data(self,
                    remote: str,
