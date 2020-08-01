@@ -59,13 +59,12 @@ class NumpyDataset:
     def __init__(self, dataset: HangarDataset, batch_size: int, drop_last: bool,
                  shuffle: bool, collate_fn: Callable = None):
         self._dataset = dataset
-        self._dataset = dataset
         self._num_batches = None
         self._batch_size = None
         if batch_size:
             if not collate_fn:
                 collate_colfn = []
-                for col in dataset.columns:
+                for col in dataset.columns.values():
                     if col.column_type == 'ndarray' and col.column_layout == 'flat':
                         collate_colfn.append(np.stack)
                     else:
@@ -148,6 +147,7 @@ class NumpyDataset:
             for i in range(self._num_batches):
                 batch = self._indices[start:end]
                 out = [self._dataset.index_get(i) for i in batch]
+
                 start = end
                 end = end + self._batch_size
                 yield self.collate_fn(out)
