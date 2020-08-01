@@ -14,7 +14,11 @@ if TYPE_CHECKING:
 def default_collate_fn(col_functions):
     def wrapper(data_arr):
         # data_arr -> array of data samples from each column
-        return tuple([fn(d) for fn, d in zip(col_functions, zip(*data_arr))])
+        collated = []
+        for fn in col_functions:
+            grouped = fn(data_arr)
+            collated.append(grouped)
+        return tuple(collated)
     return wrapper
 
 
@@ -65,10 +69,12 @@ class NumpyDataset:
             if not collate_fn:
                 collate_colfn = []
                 for col in dataset.columns.values():
+                    print(col.column_type)
                     if col.column_type == 'ndarray' and col.column_layout == 'flat':
                         collate_colfn.append(np.stack)
                     else:
                         collate_colfn.append(lambda x: x)
+
                 self.collate_fn = default_collate_fn(collate_colfn)
             else:
                 self.collate_fn = collate_fn

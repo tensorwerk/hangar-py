@@ -29,6 +29,9 @@ jobs:
           # build time with limited macos jobs
           - platform: macos-latest
             python-version: 3.7
+          - platform: windows-latest
+            python-version: 3.7
+            testml: yes
 
     steps:
     - uses: actions/checkout@v2
