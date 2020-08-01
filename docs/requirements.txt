@@ -1,5 +1,5 @@
-sphinx>=1.3
-sphinx-rtd-theme
+sphinx>=2.0
+sphinx-material
 sphinx-click
 nbsphinx
 sphinx-copybutton
