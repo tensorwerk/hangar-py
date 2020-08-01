@@ -88,3 +88,6 @@ monkeytype.sqlite3
 
 # Testing data
 *.pkl.gz
+
+*.sqlite3
+*.dmypy.json

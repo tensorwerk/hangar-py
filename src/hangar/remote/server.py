@@ -349,11 +349,12 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                     context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
                     err = hangar_service_pb2.ErrorProto(code=8, message=msg)
                     totalSize, records = 0, []
-                    yield hangar_service_pb2.FetchDataReply(error=err, raw_data=b'')
+                    yield hangar_service_pb2.FetchDataReply(error=err)
                     raise StopIteration()
         except StopIteration:
             totalSize, records = 0, []
         finally:
+            self.txnregister.abort_reader_txn(self.env.hashenv)
             # finish sending all remaining tensors if max size hash not been hit.
             if totalSize > 0:
                 pack = chunks.serialize_record_pack(records)
@@ -361,7 +362,6 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
                                                      pb2_request=hangar_service_pb2.FetchDataReply, err=err)
                 yield from cIter
-            self.txnregister.abort_reader_txn(self.env.hashenv)
 
     def PushData(self, request_iterator, context):
         """Receive compressed streams of binary data from the client.
@@ -371,6 +371,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         is. If an error is detected, no sample in the entire stream will be
         saved to disk.
         """
+
         for idx, request in enumerate(request_iterator):
             if idx == 0:
                 uncomp_nbytes = request.uncomp_nbytes
@@ -389,14 +390,15 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             reply = hangar_service_pb2.PushDataReply(error=err)
             return reply
 
-        unpacked_records = chunks.deserialize_record_pack(uncompBytes)
         received_data = []
+        unpacked_records = chunks.deserialize_record_pack(uncompBytes)
         for record in unpacked_records:
             data = chunks.deserialize_record(record)
             schema_hash = data.schema
             expected_hasher_tcode = hash_type_code_from_digest(data.digest)
             hash_func = hash_func_from_tcode(expected_hasher_tcode)
             received_hash = hash_func(data.data)
+
             if received_hash != data.digest:
                 msg = f'HASH MANGLED, received: {received_hash} != expected digest: {data.digest}'
                 context.set_details(msg)
@@ -405,6 +407,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 reply = hangar_service_pb2.PushDataReply(error=err)
                 return reply
             received_data.append((received_hash, data.data))
+
         _ = self.CW.data(schema_hash, received_data)  # returns saved)_digests
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
