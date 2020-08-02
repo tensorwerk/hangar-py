@@ -5,7 +5,9 @@ import warnings
 from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
-from typing import List, NamedTuple, Optional, Sequence, Union, Tuple, TYPE_CHECKING
+from typing import (
+    List, NamedTuple, Optional, Sequence, Union, Tuple, Set, Dict, TYPE_CHECKING
+)
 
 import grpc
 import lmdb
@@ -318,9 +320,9 @@ class Remotes(object):
             index `(sample, ...)` (which will fetch all subsamples for the given sample),
             or can provide lone sample keys in the sequences `sample` (which will also fetch
             all subsamples listed under the sample) OR ANY COMBINATION of the above.
-        branch, optional, default = None
-            branch head to operate on, either `branch` or `commit` argument must be passed,
-            but NOT both.
+        branch : optional
+            branch head to operate on, either ``branch`` or ``commit`` argument must be
+            passed, but NOT both. Default is ``None``
         commit
             commit to operate on, either `branch` or `commit` argument must be passed,
             but NOT both.
@@ -330,7 +332,6 @@ class Remotes(object):
         str
             On success, the commit hash which data was fetched into.
         """
-
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
         self._client = HangarClient(envs=self._env, address=address)
@@ -365,60 +366,15 @@ class Remotes(object):
                             notEmpty = curs.delete()
                 unpack_commit_ref(self._env.refenv, tmpDB, cmt)
                 recQuery = queries.RecordQuery(tmpDB)
-
-                # handle column_names option
-                cmt_column_names = recQuery.column_names()
-                if column not in cmt_column_names:
-                    raise KeyError(f'column name {column} does not exist in repo at commit {cmt}')
-
-                column_layout = recQuery.column_schema_layout(column=column)
-                if column_layout == 'flat':
-                    sspecs = {}
-                    asetNamesSpec = recQuery.column_data_records(column)
-                    for asetNames, dataSpec in asetNamesSpec:
-                        sspecs[asetNames.sample] = dataSpec
-                    dataSpecs = []
-                    for _key in samples:
-                        dataSpecs.append(sspecs[_key])
-
-                elif column_layout == 'nested':
-                    sspecs = defaultdict(dict)
-                    asetNamesSpec = recQuery.column_data_records(column)
-                    for asetNames, dataSpec in asetNamesSpec:
-                        sspecs[asetNames.sample].update({asetNames.subsample: dataSpec})
-
-                    dataSpecs = []
-                    for _key in samples:
-                        if isinstance(_key, (list, tuple)) and len(_key) == 2:
-                            if _key[1] != Ellipsis:
-                                dataSpecs.append(sspecs[_key[0]][_key[1]])
-                            else:
-                                for _spec in sspecs[_key[0]].values():
-                                    dataSpecs.append(_spec)
-                        elif isinstance(_key, (list, tuple)) and len(_key) == 1:
-                            for _spec in sspecs[_key[0]].values():
-                                dataSpecs.append(_spec)
-                        elif isinstance(_key, (str, int)):
-                            for _spec in sspecs[_key].values():
-                                dataSpecs.append(_spec)
-                        else:
-                            raise TypeError(_key)
-
-                dataSpecs = set(dataSpecs)
+                selectedDataRecords = self._select_digests_fetch_data_sample(
+                    cmt=cmt, column=column, recQuery=recQuery, samples=samples
+                )
             finally:
                 tmpDB.close()
 
-            try:
-                hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
-                m_schema_hash_map = defaultdict(list)
-                for hashVal in dataSpecs:
-                    hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
-                    hashRef = hashTxn.get(hashKey)
-                    be_loc = backend_decoder(hashRef)
-                    if be_loc.backend == '50':
-                        m_schema_hash_map[be_loc.schema_hash].append(hashVal.digest)
-            finally:
-                TxnRegister().abort_reader_txn(self._env.hashenv)
+            m_schema_hash_map = self._form_missing_schema_digest_map(
+                selectedDataRecords=selectedDataRecords, hashenv=self._env.hashenv
+            )
 
             # -------------------- download missing data --------------------------
 
@@ -436,6 +392,95 @@ class Remotes(object):
 
             move_process_data_to_store(self._repo_path, remote_operation=True)
             return cmt
+
+    @staticmethod
+    def _select_digests_fetch_data_sample(
+            cmt: str,
+            column: str,
+            recQuery: queries.RecordQuery,
+            samples: Union['KeyType', Sequence['KeyType'],
+                           Sequence[Union[Tuple['KeyType', 'KeyType'], Tuple['KeyType'], 'KeyType']]]
+    ) -> Set[queries.DataRecordVal]:
+        """Map sample keys to data record digest
+
+        Depending on column layout, the mapping of samples -> digests
+        is handled differently.
+
+        "flat" columns:
+            There is a direct map of sample key -> digest. If a sample
+            does not exist in the column, it is a key error.
+        "nested" column:
+            There is a layered mapping of sample key -> subsamples -> digests
+            We take the approach that only specifying a sample key results
+            in fetching all subsamples contained under it.
+
+        Parameters
+        ----------
+        cmt
+            commit which is being operated on
+        column
+            column name
+        recQuery
+            record query object set up with necessary `dataenv`
+        samples
+            specified samples to query
+
+        Returns
+        -------
+        Set[queries.DataRecordVal]
+            data records which should be fetched (includes digests)
+        """
+        # handle column_names option
+        cmt_column_names = recQuery.column_names()
+        if column not in cmt_column_names:
+            raise KeyError(f'column name {column} does not exist in repo at commit {cmt}')
+
+        selectedDataRecords = set()
+        column_layout = recQuery.column_schema_layout(column=column)
+        if column_layout == 'flat':
+            sampleRecords = {}
+            for keyRecord, dataRecord in recQuery.column_data_records(column):
+                sampleRecords[keyRecord.sample] = dataRecord
+            for _key in samples:
+                selectedDataRecords.add(sampleRecords[_key])
+
+        elif column_layout == 'nested':
+            sampleRecords = defaultdict(dict)
+            for keyRecord, dataRecord in recQuery.column_data_records(column):
+                sampleRecords[keyRecord.sample].update(
+                    {keyRecord.subsample: dataRecord}
+                )
+
+            for _key in samples:
+                if isinstance(_key, (list, tuple)):
+                    if len(_key) == 2:
+                        # sequence specifying `(sample, subsample)`
+                        if _key[1] == Ellipsis:
+                            # Ellipsis indicator ``...`` is intepreted as:
+                            # "get all subsamples under this sample key"
+                            for _spec in sampleRecords[_key[0]].values():
+                                selectedDataRecords.add(_spec)
+                        else:
+                            # otherwise "get sample + subsample named as specified"
+                            selectedDataRecords.add(sampleRecords[_key[0]][_key[1]])
+                    elif len(_key) == 1:
+                        # sequence specifying `(sample,)` interpreted as:
+                        # "get all subsamples under this key"
+                        for _spec in sampleRecords[_key[0]].values():
+                            selectedDataRecords.add(_spec)
+                    else:
+                        raise ValueError(
+                            f'nested column specifier sequence len() must be '
+                            f'either length ``1`` or ``2``. key {_key} has length '
+                            f'{len(_key)}.')
+                elif isinstance(_key, (str, int)):
+                    # if not sequence, then `key` == `sample`; interpreted as:
+                    # "get all subsamples under this key"
+                    for _spec in sampleRecords[_key].values():
+                        selectedDataRecords.add(_spec)
+                else:
+                    raise TypeError(_key)
+        return selectedDataRecords
 
     def fetch_data(self,
                    remote: str,
@@ -518,9 +563,10 @@ class Remotes(object):
             # share unpacked ref db between dependent methods
             tmpDF = Path(tempD, 'test.lmdb')
             tmpDB = lmdb.open(path=str(tmpDF), **LMDB_SETTINGS)
+
             try:
-                allHashs = set()
                 # all history argument
+                selectedDataRecords = set()
                 for commit in tqdm(commits, desc='counting objects'):
                     with tmpDB.begin(write=True) as txn:
                         with txn.cursor() as curs:
@@ -529,30 +575,16 @@ class Remotes(object):
                                 notEmpty = curs.delete()
                     unpack_commit_ref(self._env.refenv, tmpDB, commit)
                     recQuery = queries.RecordQuery(tmpDB)
-
-                    # handle column_names option
-                    cmt_column_names = recQuery.column_names()
-                    if column_names is None:
-                        cmt_columns = cmt_column_names
-                    else:
-                        cmt_columns = [col for col in column_names if col in cmt_column_names]
-                    for col in cmt_columns:
-                        cmtData_hashs = recQuery.column_data_hashes(col)
-                        allHashs.update(cmtData_hashs)
+                    commitDataRecords = self._select_digest_fetch_data(
+                        column_names=column_names, recQuery=recQuery
+                    )
+                    selectedDataRecords.update(commitDataRecords)
             finally:
                 tmpDB.close()
 
-        try:
-            hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
-            m_schema_hash_map = defaultdict(list)
-            for hashVal in allHashs:
-                hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
-                hashRef = hashTxn.get(hashKey)
-                be_loc = backend_decoder(hashRef)
-                if be_loc.backend == '50':
-                    m_schema_hash_map[be_loc.schema_hash].append(hashVal.digest)
-        finally:
-            TxnRegister().abort_reader_txn(self._env.hashenv)
+        m_schema_hash_map = self._form_missing_schema_digest_map(
+            selectedDataRecords=selectedDataRecords, hashenv=self._env.hashenv
+        )
 
         # -------------------- download missing data --------------------------
 
@@ -582,6 +614,69 @@ class Remotes(object):
 
         move_process_data_to_store(self._repo_path, remote_operation=True)
         return commits
+
+    @staticmethod
+    def _form_missing_schema_digest_map(
+            selectedDataRecords: Set[queries.DataRecordVal],
+            hashenv: lmdb.Environment
+    ) -> Dict[str, List[str]]:
+        """Calculate mapping of schemas to data digests.
+
+        Parameters
+        ----------
+        selectedDataRecords : Set[queries.DataRecordVal]
+        hashenv : lmdb.Environment
+
+        Returns
+        -------
+        Dict[str, List[str]]
+            map of all schema digests -> sequence of all data hash digests
+            registered under that schema.
+        """
+
+        try:
+            hashTxn = TxnRegister().begin_reader_txn(hashenv)
+            m_schema_hash_map = defaultdict(list)
+            for hashVal in selectedDataRecords:
+                hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
+                hashRef = hashTxn.get(hashKey)
+                be_loc = backend_decoder(hashRef)
+                if be_loc.backend == '50':
+                    m_schema_hash_map[be_loc.schema_hash].append(hashVal.digest)
+        finally:
+            TxnRegister().abort_reader_txn(hashenv)
+        return m_schema_hash_map
+
+    @staticmethod
+    def _select_digest_fetch_data(
+            column_names: Union[None, Sequence[str]],
+            recQuery: queries.RecordQuery
+    ) -> Set[queries.DataRecordVal]:
+        """Map column names to data digests.
+
+        Parameters
+        ----------
+        column_names : Union[None, Sequence[str]]
+            column names to fetch data for. If ``None``, download all column data.
+        recQuery : queries.RecordQuery
+            initialized record query object set up with appropriate ``dataenv``.
+
+        Returns
+        -------
+        Set[queries.DataRecordVal]
+            data records which should be fetched (includes digests)
+        """
+        selectedDataRecords = set()
+        cmt_column_names = recQuery.column_names()
+        if column_names is None:
+            # handle column_names option
+            cmt_columns = cmt_column_names
+        else:
+            cmt_columns = [col for col in column_names if col in cmt_column_names]
+        for col in cmt_columns:
+            cmtData_hashs = recQuery.column_data_hashes(col)
+            selectedDataRecords.update(cmtData_hashs)
+        return selectedDataRecords
 
     def push(self, remote: str, branch: str,
              *, username: str = '', password: str = '') -> str:

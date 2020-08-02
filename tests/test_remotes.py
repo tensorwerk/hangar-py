@@ -537,6 +537,128 @@ class TestLargeRemoteServer:
         newRepo._env._close_environments()
 
 
+@pytest.fixture(scope='class')
+def two_multi_format_repo_class(server_instance_class, classrepo):
+
+    co = classrepo.checkout(write=True)
+    array_flat = co.add_ndarray_column(name='array_flat', shape=(5, 7), dtype=np.float32)
+    array_nested = co.add_ndarray_column(name='array_nested', shape=(20,), dtype=np.float32, contains_subsamples=True)
+    str_flat = co.add_str_column('str_flat')
+    str_nested = co.add_str_column('str_nested', contains_subsamples=True)
+    bytes_flat = co.add_bytes_column('bytes_flat')
+    bytes_nested = co.add_bytes_column('bytes_nested', contains_subsamples=True)
+
+    for i in range(5):
+        arr = np.random.randn(5, 7).astype(np.float32)
+        array_flat[i] = arr
+    for i in range(5):
+        data = {f'{idx}': np.random.randn(20).astype(np.float32) for idx in range(4)}
+        array_nested[i] = data
+
+    for i in range(5):
+        str_flat[i] = f'string_{i}' * (i + 1)
+    for i in range(5):
+        data = {f'{idx}': f'string_{idx}' * (idx + 1) for idx in range(4)}
+        str_nested[i] = data
+
+    for i in range(5):
+        bytes_flat[i] = f'bytes_{i}'.encode() * (i + 1)
+    for i in range(5):
+        data = {f'{idx}': f'bytes_{idx}'.encode() * (idx + 1) for idx in range(4)}
+        bytes_nested[i] = data
+
+    cmt = co.commit('first commit')
+    co.close()
+    classrepo.remote.add('origin', server_instance_class)
+    classrepo.remote.push('origin', 'master')
+
+    yield cmt, server_instance_class
+    pass
+
+
+class TestRemoteServerFetchDataSample:
+
+    @pytest.mark.filterwarnings('ignore::UserWarning')
+    @pytest.mark.parametrize('fetchOp', ['branch', 'commit'])
+    @pytest.mark.parametrize('column_name,keys', [
+        ('array_flat', 0),
+        ('array_flat', [0, 1]),
+        ('array_nested', 0),
+        ('array_nested', [0, 1]),
+        ('array_nested', [(0, '0')]),
+        ('array_nested', [(0, '0'), (1, '1')]),
+        ('array_nested', [0, (1, '1')]),
+        ('array_nested', [(0, ...)]),
+        ('array_nested', [(0, ...), 1, (2, '2')]),
+        ('str_flat', 0),
+        ('str_flat', [0, 1]),
+        ('str_nested', 0),
+        ('str_nested', [0, 1]),
+        ('str_nested', [(0, '0')]),
+        ('str_nested', [(0, '0'), (1, '1')]),
+        ('str_nested', [0, (1, '1')]),
+        ('str_nested', [(0, ...)]),
+        ('str_nested', [(0, ...), 1, (2, '2')]),
+        ('bytes_flat', 0),
+        ('bytes_flat', [0, 1]),
+        ('bytes_nested', 0),
+        ('bytes_nested', [0, 1]),
+        ('bytes_nested', [(0, '0')]),
+        ('bytes_nested', [(0, '0'), (1, '1')]),
+        ('bytes_nested', [0, (1, '1')]),
+        ('bytes_nested', [(0, ...)]),
+        ('bytes_nested', [(0, ...), 1, (2, '2')]),
+    ])
+    def test_server_fetch_data_sample(
+            self, two_multi_format_repo_class, managed_tmpdir_class,
+            fetchOp, column_name, keys, tmp_path_factory
+    ):
+        from hangar import Repository
+        from operator import eq
+
+        cmt, server_instance = two_multi_format_repo_class
+
+        # Clone test (master branch)
+        _new_tmpdir = tmp_path_factory.mktemp('newclone', numbered=True)
+        new_tmpdir = str(_new_tmpdir)
+        newRepo = Repository(path=new_tmpdir, exists=False)
+        newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+
+        # ------------------ format arguments depending on options -----------------
+
+        kwargs = {
+            'column': column_name,
+            'samples': keys
+        }
+        if fetchOp == 'branch':
+            kwargs['branch'] = 'master'
+        elif fetchOp == 'commit':
+            kwargs['commit'] = cmt
+        else:
+            raise ValueError(f'fetchOp unknown: {fetchOp}')
+
+        fetch_commit = newRepo.remote.fetch_data_sample(remote='origin', **kwargs)
+        assert fetch_commit == cmt
+
+        co = newRepo.checkout()
+        try:
+            col = co[column_name]
+            if isinstance(keys, (list, tuple)):
+                if column_name.endswith('flat'):
+                    for key in keys:
+                        assert col[key] is not None
+                else:
+                    for sample in keys:
+                        if isinstance(sample, (list, tuple)):
+                            assert col[sample[0]][sample[1]] is not None
+                        else:
+                            assert col[sample][...] is not None
+        finally:
+            co.close()
+            newRepo._env._close_environments()
+
+
+
 def test_push_unchanged_repo_makes_no_modifications(written_two_cmt_server_repo):
     _, repo = written_two_cmt_server_repo
     with pytest.warns(UserWarning):

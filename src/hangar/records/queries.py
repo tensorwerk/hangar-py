@@ -182,38 +182,6 @@ class RecordQuery(CursorRangeIterator):
             data_rec_val = data_record_digest_val_from_db_val(data_val)
             yield (data_rec_key, data_rec_val)
 
-    def column_data_sample_records(
-            self,
-            column_name: str,
-            sample_names: Union[Sequence[KeyType], Sequence[Tuple[KeyType, KeyType]]]
-    ):
-        column_layout = self.column_schema_layout(column_name)
-
-        for sample_name in sample_names:
-            if isinstance(sample_name, (str, int)):
-                db_key = dynamic_layout_data_record_db_key_from_names(column_layout, column_name, sample_names)
-            else:
-                dynamic_layout_data_record_db_key_from_names(column_layout, column_name, *sample_names)
-
-        try:
-            datatxn = TxnRegister().begin_reader_txn(self._dataenv)
-
-
-
-
-            schemaColumnRangeKey = schema_db_range_key_from_column_unknown_layout(column_name)
-            with datatxn.cursor() as cur:
-                if not cur.set_range(schemaColumnRangeKey):
-                    raise KeyError(f'Traversal of commit references failed. '
-                                   f'No column named `{column_name}` exists.')
-                schemaColumnKey = cur.key()
-            column_record = schema_column_record_from_db_key(schemaColumnKey)
-            startRangeKey = dynamic_layout_data_record_db_start_range_key(column_record)
-            yield from self.cursor_range_iterator(datatxn, startRangeKey, keys, values)
-        finally:
-            TxnRegister().abort_reader_txn(self._dataenv)
-
-
     def column_data_hashes(self, column_name: str) -> Set[DataRecordVal]:
         """Find all data hashes contained within a particular column
 

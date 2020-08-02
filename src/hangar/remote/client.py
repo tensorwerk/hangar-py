@@ -50,7 +50,7 @@ class HangarClient(object):
         If the client should wait before erring for a short period of time
         while a server is `UNAVAILABLE`, typically due to it just starting up
         at the time the connection was made
-    wait_for_read_timeout : float, optional, kwarg-only, by default 5.
+    wait_for_ready_timeout : float, optional, kwarg-only, by default 5.
         If `wait_for_ready` is True, the time in seconds which the client should
         wait before raising an error. Must be positive value (greater than 0)
     """
