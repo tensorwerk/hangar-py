@@ -25,7 +25,7 @@ from .records.commiting import (
     unpack_commit_ref,
 )
 from .remote.client import HangarClient
-from .remote.content import ContentWriter, ContentReader
+from .remote.content import ContentWriter, ContentReader, DataWriter
 from .txnctx import TxnRegister
 from .utils import is_suitable_user_key
 
@@ -257,8 +257,15 @@ class Remotes(object):
                 m_schema_hash_map = defaultdict(list)
                 for digest, schema_hash in m_hashes:
                     m_schema_hash_map[schema_hash].append((digest, schema_hash))
-                for schema_hash, received_data in m_schema_hash_map.items():
-                    CW.data(schema_hash, received_data, backend='50')
+
+                DW = DataWriter(self._env)
+                with DW as DW_CM:
+                    for schema_hash, m_digests_schemas in m_schema_hash_map.items():
+                        for data_digest, data_schema_hash in m_digests_schemas:
+                            DW_CM.data(schema_hash,
+                                       data_digest=data_digest,
+                                       data=data_schema_hash,
+                                       backend='50')
 
             # Get missing commit reference specification
             for commit in tqdm(m_cmts, desc='fetching commit spec'):
@@ -376,17 +383,16 @@ class Remotes(object):
 
             # -------------------- download missing data --------------------------
 
+            DW = DataWriter(self._env)
             total_data = sum(len(v) for v in m_schema_hash_map.values())
-            with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar:
+            with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar,  DW as DW_CM:
                 client: HangarClient  # type hint
-                stop = False
                 for schema in m_schema_hash_map.keys():
                     hashes = set(m_schema_hash_map[schema])
-                    while (len(hashes) > 0) and (not stop):
-                        ret = client.fetch_data(schema, hashes)
-                        saved_digests = CW.data(schema, ret)
-                        pbar.update(len(saved_digests))
-                        hashes = hashes.difference(set(saved_digests))
+                    origins = client.fetch_data_origin(hashes)
+                    for returned_digest, returned_data in client.fetch_data(origins):
+                        _ = DW_CM.data(schema, data_digest=returned_digest, data=returned_data)
+                        pbar.update(1)
 
             move_process_data_to_store(self._repo_path, remote_operation=True)
             return cmt
@@ -589,29 +595,36 @@ class Remotes(object):
 
         # -------------------- download missing data --------------------------
 
+        DW = DataWriter(self._env)
         total_nbytes_seen = 0
         total_data = sum(len(v) for v in m_schema_hash_map.values())
-        with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar:
+
+        with closing(self._client) as client, \
+                tqdm(total=total_data, desc='fetching data') as pbar, \
+                DW as DW_CM:
             client: HangarClient  # type hint
             stop = False
             for schema in m_schema_hash_map.keys():
                 hashes = set(m_schema_hash_map[schema])
-                while (len(hashes) > 0) and (not stop):
-                    ret = client.fetch_data(schema, hashes)
-                    # max_num_bytes option
+                origins = client.fetch_data_origin(hashes)
+                for returned_digest, returned_data in client.fetch_data(origins):
+                    if stop is True:
+                        break
                     if isinstance(max_num_bytes, int):
-                        for idx, r_kv in enumerate(ret):
-                            try:
-                                total_nbytes_seen += r_kv[1].nbytes
-                            except AttributeError:
-                                total_nbytes_seen += len(r_kv[1])
-                            if total_nbytes_seen >= max_num_bytes:
-                                ret = ret[0:idx]
-                                stop = True
-                                break
-                    saved_digests = CW.data(schema, ret)
-                    pbar.update(len(saved_digests))
-                    hashes = hashes.difference(set(saved_digests))
+                        if isinstance(returned_data, np.ndarray):
+                            total_nbytes_seen += returned_data.nbytes
+                        elif isinstance(returned_data, str):
+                            total_nbytes_seen += len(returned_data.encode())
+                        elif isinstance(returned_data, bytes):
+                            total_nbytes_seen += len(returned_data)
+                        else:
+                            raise TypeError(
+                                f'type {type(returned_data)} value: {returned_data}')
+                        if total_nbytes_seen >= max_num_bytes:
+                            stop = True
+                            break
+                    _ = DW_CM.data(schema, data_digest=returned_digest, data=returned_data)
+                    pbar.update(1)
 
         move_process_data_to_store(self._repo_path, remote_operation=True)
         return commits
@@ -798,9 +811,13 @@ class Remotes(object):
             # data
             total_data = sum([len(v) for v in m_schema_hashs.values()])
             with tqdm(total=total_data, desc='pushing data') as p:
-                for dataSchema, dataHashes in m_schema_hashs.items():
-                    client.push_data(dataSchema, dataHashes, pbar=p)
-                    p.update(1)
+                client.push_data_begin_context()
+                try:
+                    for dataSchema, dataHashes in m_schema_hashs.items():
+                        client.push_data(dataSchema, dataHashes, pbar=p)
+                        p.update(1)
+                finally:
+                    client.push_data_end_context()
             # commit refs
             for commit in tqdm(m_commits, desc='pushing commit refs'):
                 cmtContent = CR.commit(commit)

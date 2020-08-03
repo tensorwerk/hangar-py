@@ -138,10 +138,6 @@ def _serialize_arr(arr: np.ndarray) -> bytes:
     buf = BytesIO()
     np.save(buf, arr, allow_pickle=False, fix_imports=False)
     raw = buf.getvalue()
-    # raw = struct.pack(
-    #     f'<bb{len(arr.shape)}i{arr.nbytes}s',
-    #     arr.dtype.num, arr.ndim, *arr.shape, arr.tobytes()
-    # )
     return raw
 
 
@@ -149,10 +145,6 @@ def _deserialize_arr(raw: bytes) -> np.ndarray:
     buf = BytesIO(initial_bytes=raw)
     buf.seek(0)
     arr = np.load(buf, allow_pickle=False, fix_imports=False)
-    # dtnum, ndim = struct.unpack('<bb', raw[0:2])
-    # end = 2 + (4 * ndim)
-    # arrshape = struct.unpack(f'<{ndim}i', raw[2:end])
-    # arr = np.frombuffer(raw, dtype=np.typeDict[dtnum], offset=end).reshape(arrshape)
     return arr
 
 
