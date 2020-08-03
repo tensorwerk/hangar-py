@@ -442,7 +442,10 @@ class Remotes(object):
             for keyRecord, dataRecord in recQuery.column_data_records(column):
                 sampleRecords[keyRecord.sample] = dataRecord
             for _key in samples:
-                selectedDataRecords.add(sampleRecords[_key])
+                if isinstance(_key, (str, int)):
+                    selectedDataRecords.add(sampleRecords[_key])
+                else:
+                    raise TypeError(_key)
 
         elif column_layout == 'nested':
             sampleRecords = defaultdict(dict)

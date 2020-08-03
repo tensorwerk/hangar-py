@@ -588,6 +588,7 @@ class TestRemoteServerFetchDataSample:
         ('array_nested', [(0, '0')]),
         ('array_nested', [(0, '0'), (1, '1')]),
         ('array_nested', [0, (1, '1')]),
+        ('array_nested', [(0,)]),
         ('array_nested', [(0, ...)]),
         ('array_nested', [(0, ...), 1, (2, '2')]),
         ('str_flat', 0),
@@ -597,6 +598,7 @@ class TestRemoteServerFetchDataSample:
         ('str_nested', [(0, '0')]),
         ('str_nested', [(0, '0'), (1, '1')]),
         ('str_nested', [0, (1, '1')]),
+        ('str_nested', [(0,)]),
         ('str_nested', [(0, ...)]),
         ('str_nested', [(0, ...), 1, (2, '2')]),
         ('bytes_flat', 0),
@@ -606,6 +608,7 @@ class TestRemoteServerFetchDataSample:
         ('bytes_nested', [(0, '0')]),
         ('bytes_nested', [(0, '0'), (1, '1')]),
         ('bytes_nested', [0, (1, '1')]),
+        ('bytes_nested', [(0,)]),
         ('bytes_nested', [(0, ...)]),
         ('bytes_nested', [(0, ...), 1, (2, '2')]),
     ])
@@ -614,7 +617,6 @@ class TestRemoteServerFetchDataSample:
             fetchOp, column_name, keys, tmp_path_factory
     ):
         from hangar import Repository
-        from operator import eq
 
         cmt, server_instance = two_multi_format_repo_class
 
@@ -650,13 +652,147 @@ class TestRemoteServerFetchDataSample:
                 else:
                     for sample in keys:
                         if isinstance(sample, (list, tuple)):
-                            assert col[sample[0]][sample[1]] is not None
+                            if len(sample) == 2:
+                                assert col[sample[0]][sample[1]] is not None
+                            elif len(sample) == 1:
+                                assert col[sample[0]][...] is not None
                         else:
                             assert col[sample][...] is not None
         finally:
             co.close()
             newRepo._env._close_environments()
 
+    def test_server_fetch_data_sample_commit_not_existing(
+            self, two_multi_format_repo_class, managed_tmpdir_class, tmp_path_factory
+    ):
+        from hangar import Repository
+
+        cmt, server_instance = two_multi_format_repo_class
+
+        # Clone test (master branch)
+        _new_tmpdir = tmp_path_factory.mktemp('newclone', numbered=True)
+        new_tmpdir = str(_new_tmpdir)
+        newRepo = Repository(path=new_tmpdir, exists=False)
+        newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+
+        with pytest.raises(ValueError, match='specified commit'):
+            newRepo.remote.fetch_data_sample(
+                remote='origin',
+                commit='DOESNOTEXISTCOMMIT',
+                column='array_flat',
+                samples=[0, 1])
+
+        newRepo._env._close_environments()
+
+    def test_server_fetch_data_sample_branch_not_existing(
+            self, two_multi_format_repo_class, managed_tmpdir_class, tmp_path_factory
+    ):
+        from hangar import Repository
+
+        cmt, server_instance = two_multi_format_repo_class
+
+        # Clone test (master branch)
+        _new_tmpdir = tmp_path_factory.mktemp('newclone', numbered=True)
+        new_tmpdir = str(_new_tmpdir)
+        newRepo = Repository(path=new_tmpdir, exists=False)
+        newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+
+        with pytest.raises(ValueError, match='branch with name'):
+            newRepo.remote.fetch_data_sample(
+                remote='origin',
+                branch='DOESNOTEXISTBRANCH',
+                column='array_flat',
+                samples=[0, 1])
+
+        newRepo._env._close_environments()
+
+    def test_server_fetch_data_sample_branch_and_commit_args_passed_fails(
+            self, two_multi_format_repo_class, managed_tmpdir_class, tmp_path_factory
+    ):
+        from hangar import Repository
+
+        cmt, server_instance = two_multi_format_repo_class
+
+        # Clone test (master branch)
+        _new_tmpdir = tmp_path_factory.mktemp('newclone', numbered=True)
+        new_tmpdir = str(_new_tmpdir)
+        newRepo = Repository(path=new_tmpdir, exists=False)
+        newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+
+        with pytest.raises(ValueError, match='``branch`` and ``commit``'):
+            newRepo.remote.fetch_data_sample(
+                remote='origin',
+                branch='master',  # actual value which might otherwise work
+                commit=cmt,  # actual value which might otherwise work
+                column='array_flat',
+                samples=[0, 1])
+
+        newRepo._env._close_environments()
+
+    def test_server_fetch_data_sample_not_existing_fails(
+            self, two_multi_format_repo_class, managed_tmpdir_class, tmp_path_factory
+    ):
+        from hangar import Repository
+
+        cmt, server_instance = two_multi_format_repo_class
+
+        # Clone test (master branch)
+        _new_tmpdir = tmp_path_factory.mktemp('newclone', numbered=True)
+        new_tmpdir = str(_new_tmpdir)
+        newRepo = Repository(path=new_tmpdir, exists=False)
+        newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+
+        with pytest.raises(KeyError):
+            newRepo.remote.fetch_data_sample(
+                remote='origin',
+                branch='master',
+                column='array_flat',
+                samples=['DOESNOTEXIST'])
+
+        with pytest.raises(KeyError):
+            newRepo.remote.fetch_data_sample(
+                remote='origin',
+                branch='master',
+                column='array_nested',
+                samples=[(1, 'DOESNOTEXIST')])
+
+        with pytest.raises(KeyError):
+            newRepo.remote.fetch_data_sample(
+                remote='origin',
+                branch='master',
+                column='array_nested',
+                samples=[('DOESNOTEXIST', 0)])
+
+        newRepo._env._close_environments()
+
+    def test_server_fetch_data_sample_not_valid_type(
+            self, two_multi_format_repo_class, managed_tmpdir_class, tmp_path_factory
+    ):
+        from hangar import Repository
+
+        cmt, server_instance = two_multi_format_repo_class
+
+        # Clone test (master branch)
+        _new_tmpdir = tmp_path_factory.mktemp('newclone', numbered=True)
+        new_tmpdir = str(_new_tmpdir)
+        newRepo = Repository(path=new_tmpdir, exists=False)
+        newRepo.clone('Test User', 'tester@foo.com', server_instance, remove_old=True)
+
+        with pytest.raises(TypeError):
+            newRepo.remote.fetch_data_sample(
+                remote='origin',
+                branch='master',
+                column='array_flat',
+                samples=[b'BYTES_TYPE_NOT_VALID'])
+
+        with pytest.raises(ValueError, match='nested column specifier sequence'):
+            newRepo.remote.fetch_data_sample(
+                remote='origin',
+                branch='master',
+                column='array_nested',
+                samples=[(0, 1, 'ARRAY_NOT_VALID')])
+
+        newRepo._env._close_environments()
 
 
 def test_push_unchanged_repo_makes_no_modifications(written_two_cmt_server_repo):
