@@ -109,7 +109,7 @@ html_theme_options = {
 
     # Set the color and the accent color
     'color_primary': 'deep-purple',
-    'color_accent': 'purple',
+    'color_accent': 'blue',
 
     # Set the repo location to get a badge with stats
     'repo_url': 'https://github.com/tensorwerk/hangar-py/',

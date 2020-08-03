@@ -14,7 +14,7 @@ Repository
    :members:
 
 Remotes
--------
+=======
 
 .. autoclass:: Remotes()
    :members:
