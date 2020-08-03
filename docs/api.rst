@@ -13,6 +13,9 @@ Repository
 .. automodule:: hangar.repository
    :members:
 
+Remotes
+=======
+
 .. autoclass:: Remotes()
    :members:
    :exclude-members: __init__
@@ -62,14 +65,12 @@ Nested Column Layout Container
    :special-members: __getitem__, __setitem__, __delitem__, __contains__, __len__, __iter__
    :exclude-members: __init__
 
-
 Differ
 ------
 
 .. autoclass:: hangar.diff.WriterUserDiff()
    :members:
    :exclude-members: __init__
-
 
 Bulk Importer
 -------------

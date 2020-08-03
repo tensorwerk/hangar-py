@@ -109,7 +109,7 @@ html_theme_options = {
 
     # Set the color and the accent color
     'color_primary': 'deep-purple',
-    'color_accent': 'purple',
+    'color_accent': 'blue',
 
     # Set the repo location to get a badge with stats
     'repo_url': 'https://github.com/tensorwerk/hangar-py/',
@@ -118,9 +118,9 @@ html_theme_options = {
 
 
     # Visible levels of the global TOC; -1 means unlimited
-    'globaltoc_depth': 1,
+    'globaltoc_depth': -1,
     # If False, expand all TOC entries
-    'globaltoc_collapse': False,
+    'globaltoc_collapse': True,
     # If True, show hidden TOC entries
-    'globaltoc_includehidden': False,
+    'globaltoc_includehidden': True,
 }

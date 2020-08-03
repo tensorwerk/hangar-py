@@ -372,9 +372,9 @@ class TestDataWithFixedSizedColumn(object):
     def test_get_sample_with_default_works(self, aset_samples_initialized_repo, array5by7):
         co = aset_samples_initialized_repo.checkout(write=True)
         res = co.columns['writtenaset'].get('doesnotexist', default=500)
-        assert res is 500
+        assert res == 500
         res = co.columns['writtenaset'].get('doesnotexist', 500)
-        assert res is 500
+        assert res == 500
         co.close()
 
     def test_get_multiple_samples_fails(self, aset_samples_initialized_repo, array5by7):
