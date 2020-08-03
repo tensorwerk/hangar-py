@@ -485,6 +485,20 @@ def test_summary(written_two_cmt_server_repo, capsys):
             new_repo._env._close_environments
 
 
+def test_summary_before_commit_made():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        P = getcwd()
+        new_repo = Repository(P, exists=False)
+        new_repo.init('Test User', 'Test@test.com')
+        try:
+            res = runner.invoke(cli.summary, obj=new_repo)
+            assert res.exit_code == 0
+            assert 'No commits have been made in the repository' in res.stdout
+        finally:
+            new_repo._env._close_environments
+
+
 def test_log(written_two_cmt_server_repo, capsys):
     server, base_repo = written_two_cmt_server_repo
     runner = CliRunner()

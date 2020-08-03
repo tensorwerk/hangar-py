@@ -2,6 +2,7 @@ from pathlib import Path
 import weakref
 import warnings
 from typing import Union, Optional, List
+from io import StringIO
 
 from .merger import select_merge_algorithm
 from .constants import DIR_HANGAR
@@ -433,7 +434,15 @@ class Repository(object):
             (Default value = '')
         """
         self.__verify_repo_initialized()
-        ppbuf = summarize.summary(self._env, branch=branch, commit=commit)
+        try:
+            ppbuf = summarize.summary(self._env, branch=branch, commit=commit)
+        except ValueError:
+            if commiting.number_commits_recorded(self._env.refenv) == 0:
+                ppbuf = StringIO()
+                ppbuf.write(f'No commits have been made in the repository. \n')
+                ppbuf.write(f'Please make a commit and try again.')
+            else:
+                raise
         print(ppbuf.getvalue())
         return None
 
