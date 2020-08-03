@@ -118,9 +118,9 @@ html_theme_options = {
 
 
     # Visible levels of the global TOC; -1 means unlimited
-    'globaltoc_depth': 2,
+    'globaltoc_depth': -1,
     # If False, expand all TOC entries
     'globaltoc_collapse': True,
     # If True, show hidden TOC entries
-    'globaltoc_includehidden': False,
+    'globaltoc_includehidden': True,
 }

@@ -33,8 +33,7 @@ logger = logging.getLogger(__name__)
 
 RemoteInfo = NamedTuple('RemoteInfo', [('name', str), ('address', str)])
 
-if TYPE_CHECKING:
-    KeyType = Union[str, int]
+KeyType = Union[str, int]
 
 
 class Remotes(object):
@@ -282,18 +281,17 @@ class Remotes(object):
     def fetch_data_sample(self,
                           remote: str,
                           column: str,
-                          samples: Union['KeyType', Sequence['KeyType'],
-                                         Sequence[Union[Tuple['KeyType', 'KeyType'], Tuple['KeyType'], 'KeyType']]],
-                          branch: str = None,
-                          commit: str = None) -> str:
+                          samples: Union[KeyType, Sequence[KeyType],
+                                         Sequence[Union[Tuple[KeyType, KeyType], Tuple[KeyType], KeyType]]],
+                          branch: Optional[str] = None,
+                          commit: Optional[str] = None) -> str:
         """Granular fetch data operation allowing selection of individual samples.
 
-        .. warning:
+        .. warning::
 
             This is a specialized version of the :meth:`fetch_data` method for use
             in specilized situations where some prior knowledge is known about the data.
             Most users should prefer :meth:`fetch_data` over this version.
-
 
         In some cases, it may be desireable to only perform a fetch data operation
         for some particular samples within a column (without needing to download any
@@ -301,29 +299,29 @@ class Remotes(object):
         specification of keys to fetch in a certain column at the selected `branch` /
         `commit` time point.
 
-
         Parameters
         ----------
-        remote
+        remote : str
             name of the remote server to pull data from
-        column
+        column : str
             name of the column which data is being fetched from.
-        samples
-            key, or sequence of sample keys to select.
+        samples : Union[KeyType, Sequence[KeyType],
+                        Sequence[Union[Tuple[KeyType, KeyType], Tuple[KeyType], KeyType]]]
+            Key, or sequence of sample keys to select.
 
-            Flat column layouts should provide just a single key, or flat sequence of
-            keys which will be fetched from the server. ie. `sample1` OR
-            [`sample1`, `sample2`, `sample3`, etc.]
+            *  Flat column layouts should provide just a single key, or flat sequence of
+               keys which will be fetched from the server. ie. `sample1` OR
+               [`sample1`, `sample2`, `sample3`, etc.]
 
-            Nested column layouts can provide tuples specifying `(sample, subsample)`
-            records to retrieve, tuples with an `Ellipsis` character in the `subsample`
-            index `(sample, ...)` (which will fetch all subsamples for the given sample),
-            or can provide lone sample keys in the sequences `sample` (which will also fetch
-            all subsamples listed under the sample) OR ANY COMBINATION of the above.
-        branch : optional
+            *  Nested column layouts can provide tuples specifying `(sample, subsample)`
+               records to retrieve, tuples with an `Ellipsis` character in the `subsample`
+               index `(sample, ...)` (which will fetch all subsamples for the given sample),
+               or can provide lone sample keys in the sequences `sample` (which will also fetch
+               all subsamples listed under the sample) OR ANY COMBINATION of the above.
+        branch : Optional[str]
             branch head to operate on, either ``branch`` or ``commit`` argument must be
             passed, but NOT both. Default is ``None``
-        commit
+        commit : Optional[str]
             commit to operate on, either `branch` or `commit` argument must be passed,
             but NOT both.
 
@@ -398,8 +396,8 @@ class Remotes(object):
             cmt: str,
             column: str,
             recQuery: queries.RecordQuery,
-            samples: Union['KeyType', Sequence['KeyType'],
-                           Sequence[Union[Tuple['KeyType', 'KeyType'], Tuple['KeyType'], 'KeyType']]]
+            samples: Union[KeyType, Sequence[KeyType],
+                           Sequence[Union[Tuple[KeyType, KeyType], Tuple[KeyType], KeyType]]]
     ) -> Set[queries.DataRecordVal]:
         """Map sample keys to data record digest
 
