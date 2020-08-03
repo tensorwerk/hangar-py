@@ -485,7 +485,7 @@ def test_summary(written_two_cmt_server_repo, capsys):
             new_repo._env._close_environments
 
 
-def test_summary_before_commit_made():
+def test_summary_before_commit_made(managed_tmpdir):
     runner = CliRunner()
     with runner.isolated_filesystem():
         P = getcwd()
