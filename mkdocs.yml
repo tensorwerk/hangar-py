@@ -1,0 +1,83 @@
+site_name: hangar
+site_description: Version control for software 2.0
+site_url: https://hangar-py.readthedocs.io
+repo_name: tensorwerk/hangar-py
+repo_url: https://github.com/tensorwerk/hangar-py
+edit_uri: ''
+
+extra_css:
+  - stylesheets/termynal.css
+  - stylesheets/extra.css
+extra_javascript:
+  - js/termynal.js
+  - js/custom.js
+
+theme:
+  name: material
+  language: en
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          docstring_style: Numpy  # this is the default
+          rendering:
+            show_source: false
+      watch:
+        - src/hangar
+  - markdownextradata:
+      data: data
+  - mkdocs-jupyter:
+      execute: False
+
+markdown_extensions:
+  - markdown.extensions.codehilite:
+      guess_lang: false
+  - codehilite
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
+extra:
+  social:
+    - icon: fontawesome/brands/github-alt
+      link: https://github.com/tensorwerk/hangar-py
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/hangardata
+    - icon: fontawesome/brands/medium
+      link: https://medium.com/@tensorwerk
+    - icon: fontawesome/solid/globe
+      link: https://tensorwerk.com
+
+nav:
+  - Home: README.md
+  - Quickstart: quickstart.md
+  - Installation: installation.md
+  - Concepts: concepts.md
+  - API: api.md
+  - Tutorials:
+      - Tutorial-001.ipynb
+      - Tutorial-002.ipynb
+      - Tutorial-003.ipynb
+      - Tutorial-Dataloader.ipynb
+      - Tutorial-QuickStart.ipynb
+      - Tutorial-RealQuickStart.ipynb
+  - Design: design.md
+  #- CLI: cli.md
+  - Externals: externals.md
+  - FAQ: faq.md
+  - Backends:
+    - Backend Selection: backends/backends.md
+    - HDF5_00: backends/hdf5_00.md
+    - HDF5_01: backends/hdf5_01.md
+    - NUMPY_10: backends/numpy_10.md
+    - LMDB_30: backends/lmdb_30.md
+    - REMOTE_50: backends/remote_50.md
+  - Contributing:
+      Contributing: contributing.md
+      Codeofconduct: codeofconduct.md
+      Benchmarking: benchmarking.md
+  - Authors: authors.md
+  - Changelog: changelog.md

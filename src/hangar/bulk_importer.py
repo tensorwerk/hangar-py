@@ -161,15 +161,15 @@ def run_bulk_import(
 
     Define some arbitrary function (ie "user-defined function" / "UDF") which
     accepts some arguments and yields data. The UDF must be a generator function,
-    yielding only values which are of :class:`~.UDF_Return` type. The results
+    yielding only values which are of :class:`UDF_Return` type. The results
     yielded by the UDF must be deterministic for a given set of  inputs. This
-    includes all values of the :class:`~.UDF_Return` (``columns`` and ``keys``,
+    includes all values of the :class:`UDF_Return` (``columns`` and ``keys``,
     as well as ``data``).
 
     A list of input arguments to the UDF must be provided, this is formatted as a
     sequence  (list / tuple) of keyword-arg dictionaries, each of which must be
     valid when unpacked and bound to the UDF signature. Additionally, all columns
-    must be  specified up front. If any columns are named a :class:`~.UDF_Return`
+    must be  specified up front. If any columns are named a :class:`UDF_Return`
     which were not pre-specified, the entire operation will fail.
 
     Notes
@@ -196,20 +196,19 @@ def run_bulk_import(
        processing time, we recomend trying to yield data pieces which are likely
        to be unique first from the UDF.
 
-    Warnings
-    --------
+    .. warning::
 
-    *  Please be aware that these methods should not be executed within a
-       Jupyter Notebook / Jupyter Lab when running the bulk importer at scale.
-       The internal implemenation makes significant use of multiprocess Queues
-       for work distribution and recording. The heavy loads placed on the system
-       have been observed to place strain on Jupyters ZeroMQ implementation,
-       resulting in random failures which may or may not even display a traceback
-       to indicate failure mode.
+        *  Please be aware that these methods should not be executed within a
+           Jupyter Notebook / Jupyter Lab when running the bulk importer at scale.
+           The internal implemenation makes significant use of multiprocess Queues
+           for work distribution and recording. The heavy loads placed on the system
+           have been observed to place strain on Jupyters ZeroMQ implementation,
+           resulting in random failures which may or may not even display a traceback
+           to indicate failure mode.
 
-       A small sample set of data can be used within jupyter to test an
-       implementation without problems, but for full scale operations it is best
-       run in a script with the operations protected by a ``__main__`` block.
+           A small sample set of data can be used within jupyter to test an
+           implementation without problems, but for full scale operations it is best
+           run in a script with the operations protected by a ``__main__`` block.
 
     Examples
     --------
@@ -217,8 +216,7 @@ def run_bulk_import(
     >>> import os
     >>> import numpy as np
     >>> from PIL import Image
-    >>> from hangar.bulk_importer import UDF_Return
-
+    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
     >>> def image_loader(file_path):
     ...     im = Image.open(file_name)
     ...     arr = np.array(im.resize(512, 512))
@@ -239,13 +237,13 @@ def run_bulk_import(
     ...     {'file_path': '/foo/bird/image_003.jpeg'}
     ... ]
     >>> repo = Repository('foo/path/to/repo')
-    >>> from hangar.bulk_importer import run_bulk_import
     >>> run_bulk_import(
     ...     repo, branch_name='master', column_names=['file_str', 'image'],
     ...     udf=image_loader, udf_kwargs=udf_kwargs)
 
     However, the following will not work, since the output is non-deterministic.
 
+    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
     >>> def nondeterminstic(x, y):
     ...     first = str(x * y)
     ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=first)
@@ -262,7 +260,7 @@ def run_bulk_import(
     ...     repo, branch_name='master', column_names=['valstr'],
     ...     udf=image_loader, udf_kwargs=udf_kwargs)
     Traceback (most recent call last):
-      File "<stdin>", line 1, in <module>
+      `File "<stdin>", line 1, in <module>`
     TypeError: contents returned in subbsequent calls to UDF with identical
       kwargs yielded different results. UDFs MUST generate deterministic
       results for the given inputs. Input kwargs generating this result:
@@ -272,6 +270,8 @@ def run_bulk_import(
     data pieces yielded can also vary arbitrarily (so long as the results are
     deterministic for a particular set of inputs)
 
+    >>> import numpy as np
+    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
     >>> def maybe_load(x_arr, y_arr, sample_name, columns=['default']):
     ...     for column in columns:
     ...         arr = np.multiply(x_arr, y_arr)

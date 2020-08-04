@@ -1,8 +1,0 @@
-sphinx>=2.0
-sphinx-material
-sphinx-click
-nbsphinx
-sphinx-copybutton
-recommonmark
-IPython
-Cython
