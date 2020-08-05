@@ -497,7 +497,6 @@ class Remotes(object):
                    commit: str = None,
                    *,
                    column_names: Optional[Sequence[str]] = None,
-                   max_num_bytes: int = None,
                    retrieve_all_history: bool = False) -> List[str]:
         """Retrieve the data for some commit which exists in a `partial` state.
 
@@ -515,11 +514,6 @@ class Remotes(object):
             Names of the columns which should be retrieved for the particular
             commits, any columns not named will not have their data fetched
             from the server. Default behavior is to retrieve all columns
-        max_num_bytes : Optional[int]
-            If you wish to limit the amount of data sent to the local machine,
-            set a `max_num_bytes` parameter. This will retrieve only this
-            amount of data from the server to be placed on the local disk.
-            Default is to retrieve all data regardless of how large.
         retrieve_all_history : Optional[bool]
             if data should be retrieved for all history accessible by the parents
             of this commit HEAD. by default False
@@ -531,12 +525,12 @@ class Remotes(object):
 
         Raises
         ------
-            ValueError
-                if branch and commit args are set simultaneously.
-            ValueError
-                if specified commit does not exist in the repository.
-            ValueError
-                if branch name does not exist in the repository.
+        ValueError
+            if branch and commit args are set simultaneously.
+        ValueError
+            if specified commit does not exist in the repository.
+        ValueError
+            if branch name does not exist in the repository.
         """
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
@@ -558,13 +552,8 @@ class Remotes(object):
         # --------------- negotiate missing data to get -----------------------
 
         if retrieve_all_history is True:
-            if isinstance(max_num_bytes, int):
-                raise ValueError(
-                    f'setting the maximum number of bytes transferred and requesting '
-                    f'all history are incompatible arguments.')
-            else:
-                hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)
-                commits = hist['order']
+            hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)
+            commits = hist['order']
         else:
             commits = [cmt]
 
@@ -598,14 +587,12 @@ class Remotes(object):
         # -------------------- download missing data --------------------------
 
         DW = DataWriter(self._env)
-        total_nbytes_seen = 0
         total_data = sum(len(v) for v in m_schema_hash_map.values())
 
         with closing(self._client) as client, \
                 tqdm(total=total_data, desc='fetching data') as pbar, \
                 DW as DW_CM:
             client: HangarClient  # type hint
-            stop = False
             for schema in m_schema_hash_map.keys():
                 hashes = set(m_schema_hash_map[schema])
                 origins = client.fetch_data_origin(hashes)
@@ -614,25 +601,6 @@ class Remotes(object):
                     datawriter_cm=DW_CM,
                     schema=schema,
                     pbar=pbar)
-
-                # for returned_digest, returned_data in client.fetch_data(origins):
-                #     if stop is True:
-                #         break
-                #     if isinstance(max_num_bytes, int):
-                #         if isinstance(returned_data, np.ndarray):
-                #             total_nbytes_seen += returned_data.nbytes
-                #         elif isinstance(returned_data, str):
-                #             total_nbytes_seen += len(returned_data.encode())
-                #         elif isinstance(returned_data, bytes):
-                #             total_nbytes_seen += len(returned_data)
-                #         else:
-                #             raise TypeError(
-                #                 f'type {type(returned_data)} value: {returned_data}')
-                #         if total_nbytes_seen >= max_num_bytes:
-                #             stop = True
-                #             break
-                #     _ = DW_CM.data(schema, data_digest=returned_digest, data=returned_data)
-                #     pbar.update(1)
 
         move_process_data_to_store(self._repo_path, remote_operation=True)
         return commits

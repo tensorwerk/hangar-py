@@ -35,6 +35,11 @@ def bound(low: NumType, high: NumType, value: NumType) -> NumType:
     return max(low, min(high, value))
 
 
+def calc_num_threadpool_workers() -> int:
+    nCores = os.cpu_count()  # includes hyperthreads
+    return bound(2, 10, nCores * 2)
+
+
 def is_64bits():
     """bool indicating if running on atleast a 64 bit machine
     """

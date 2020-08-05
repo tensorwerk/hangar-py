@@ -105,7 +105,7 @@ LMDB_SETTINGS = {
     'map_size': 300_000_000,
     'meminit': False,
     'subdir': True,
-    'lock': True,
+    'lock': False,
     'max_spare_txns': 4,
 }
 _FmtCode = '30'

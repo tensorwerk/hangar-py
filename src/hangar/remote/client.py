@@ -9,7 +9,6 @@ from typing import Tuple, Sequence, List, Iterable, TYPE_CHECKING
 import blosc
 import grpc
 import lmdb
-import numpy as np
 from tqdm import tqdm
 
 
@@ -27,7 +26,7 @@ from ..records.hashmachine import hash_type_code_from_digest, hash_func_from_tco
 from ..records import hash_data_db_key_from_raw_key
 from ..records import queries
 from ..records import summarize
-from ..utils import set_blosc_nthreads
+from ..utils import set_blosc_nthreads, calc_num_threadpool_workers
 
 
 if TYPE_CHECKING:
@@ -388,7 +387,8 @@ class HangarClient(object):
             return written_digest
 
         saved_digests = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        nWorkers = calc_num_threadpool_workers()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
             futures = [executor.submit(fetch_write_data_parallel,
                 pb, datawriter_cm, schema, self.data_writer_lock) for pb in origins]
             for future in concurrent.futures.as_completed(futures):
@@ -409,18 +409,6 @@ class HangarClient(object):
         for reply in replies:
             output.append(reply)
         return output
-
-    def _transfer_push_data(
-            self,
-            records: List[bytes],
-            pbar: 'tqdm') -> 'hangar_service_pb2.PushDataReply':
-
-        pbar.update(len(records))
-        pack = chunks.serialize_record_pack(records)
-        cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
-                                             pb2_request=hangar_service_pb2.PushDataRequest)
-        response = self.stub.PushData(cIter)
-        return response
 
     def push_find_data_origin(self, digests):
         try:
@@ -548,7 +536,8 @@ class HangarClient(object):
                 push_data_response = self.stub.PushData(pushDataIter)
                 return push_data_response
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            nWorkers = calc_num_threadpool_workers()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
                 push_futures = tuple((executor.submit(push_data_parallel, reply) for reply in replies))
                 for future in concurrent.futures.as_completed(push_futures):
                     _ = future.result()
