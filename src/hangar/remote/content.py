@@ -109,14 +109,17 @@ class DataWriter:
 
     def __enter__(self):
         self._is_cm = True
+        self.hashTxn = self.txnctx.begin_writer_txn(self.env.hashenv)
         return self
 
     def __exit__(self, *exc):
         for be in self._schema_hash_be_accessors.values():
             be.close()
+        self.txnctx.commit_writer_txn(self.env.hashenv)
         self._schema_hash_be_accessors.clear()
         self._schema_hash_objects.clear()
         self._is_cm = False
+        self.hashTxn = None
 
     @property
     def is_cm(self):
@@ -132,11 +135,7 @@ class DataWriter:
 
     def _get_schema_object(self, schema_hash):
         schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-        hashTxn = self.txnctx.begin_reader_txn(self.env.hashenv)
-        try:
-            schemaVal = hashTxn.get(schemaKey)
-        finally:
-            self.txnctx.abort_reader_txn(self.env.hashenv)
+        schemaVal = self.hashTxn.get(schemaKey)
 
         schema_val = schema_spec_from_db_val(schemaVal)
         schema = column_type_object_from_schema(schema_val)
@@ -163,7 +162,7 @@ class DataWriter:
              data_digest: str,
              data: Union[str, int, np.ndarray],
              backend: Optional[str] = None,
-             backend_options: Optional[dict] = None) -> List[str]:
+             backend_options: Optional[dict] = None) -> str:
         """Write data content to the hash records database
 
         Parameters
@@ -182,7 +181,6 @@ class DataWriter:
         """
         if schema_hash not in self._schema_hash_objects:
             self._get_schema_object(schema_hash)
-
         schema = self._schema_hash_objects[schema_hash]
         if (backend is not None) and ((backend != schema.backend) or (backend_options is not None)):
             schema = self._get_changed_schema_object(schema_hash, backend, backend_options)
@@ -193,14 +191,9 @@ class DataWriter:
             self._open_new_backend(schema)
 
         be_accessor = self._schema_hash_be_accessors[final_schema_hash]
-
         hashVal = be_accessor.write_data(data, remote_operation=True)
         hashKey = hash_data_db_key_from_raw_key(data_digest)
-        try:
-            hashTxn = self.txnctx.begin_writer_txn(self.env.hashenv)
-            hashTxn.put(hashKey, hashVal)
-        finally:
-            self.txnctx.commit_writer_txn(self.env.hashenv)
+        self.hashTxn.put(hashKey, hashVal)
         return data_digest
 
 

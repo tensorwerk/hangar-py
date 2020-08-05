@@ -1,14 +1,17 @@
+import concurrent.futures
 import logging
 import os
 import tempfile
 import time
-from typing import Tuple, Sequence, List, Iterable
+from threading import Lock
+from typing import Tuple, Sequence, List, Iterable, TYPE_CHECKING
 
 import blosc
 import grpc
 import lmdb
 import numpy as np
 from tqdm import tqdm
+
 
 from . import chunks
 from . import hangar_service_pb2
@@ -25,6 +28,10 @@ from ..records import hash_data_db_key_from_raw_key
 from ..records import queries
 from ..records import summarize
 from ..utils import set_blosc_nthreads
+
+
+if TYPE_CHECKING:
+    from .content import DataWriter
 
 
 set_blosc_nthreads()
@@ -68,6 +75,7 @@ class HangarClient(object):
         self.address: str = address
         self.wait_ready: bool = wait_for_ready
         self.wait_ready_timeout: float = abs(wait_for_ready_timeout + 0.001)
+        self.data_writer_lock = Lock()
 
         self.channel: grpc.Channel = None
         self.stub: hangar_service_pb2_grpc.HangarServiceStub = None
@@ -304,9 +312,12 @@ class HangarClient(object):
         return response
 
     def fetch_data(
-            self, origins: Sequence[hangar_service_pb2.DataOriginReply],
-            # self, schema_hash: str, digests: Sequence[str]
-    ) -> Sequence[Tuple[str, np.ndarray]]:
+            self,
+            origins: Sequence[hangar_service_pb2.DataOriginReply],
+            datawriter_cm: 'DataWriter',
+            schema: str,
+            pbar: 'tqdm'
+    ) -> Sequence[str]:
         """Fetch data hash digests for a particular schema.
 
         As the total size of the data to be transferred isn't known before this
@@ -318,26 +329,33 @@ class HangarClient(object):
 
         Parameters
         ----------
-        schema_hash : str
-            hash of the schema each of the digests is associated with
-        digests : Sequence[str]
-            iterable of data digests to receive
+        origins : Sequence[hangar_service_pb2.DataOriginReply],
+        datawriter_cm : 'DataWriter',
+        schema : str,
+        pbar : 'tqdm'
 
         Returns
         -------
-        Sequence[Tuple[str, np.ndarray]]
-            iterable containing 2-tuples' of the hash digest and np.ndarray data.
+        Sequence[str]
 
         Raises
         ------
         RuntimeError
             if received digest != requested or what was reported to be sent.
+
+         client.fetch_data(origins, DW_CM, schema, pbar):
+            _ = DW_CM.data(schema, data_digest=returned_digest, data=returned_data)
         """
-        for pb in origins:
+
+        def fetch_write_data_parallel(
+                pb: 'hangar_service_pb2.DataOriginReply',
+                dw_cm: 'DataWriter',
+                schema: str,
+                lock: 'Lock'
+        ) -> str:
             requested_uri = pb.uri
             request = hangar_service_pb2.FetchDataRequest(uri=requested_uri)
             replies = self.stub.FetchData(request)
-
             for idx, reply in enumerate(replies):
                 if idx == 0:
                     dBytes = bytearray(reply.nbytes)
@@ -360,14 +378,23 @@ class HangarClient(object):
 
             dtype_code = pb.data_type
             returned_data = chunks.deserialize_data(dtype_code, returned_raw)
-
             hash_func = hash_func_from_tcode(str(dtype_code))
             received_hash = hash_func(returned_data)
-
             if received_hash != pb.digest:
                 raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {pb.digest}')
-            else:
-                yield (received_hash, returned_data)
+            with lock:
+                written_digest = dw_cm.data(
+                    schema, data_digest=received_hash, data=returned_data)
+            return written_digest
+
+        saved_digests = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(fetch_write_data_parallel,
+                pb, datawriter_cm, schema, self.data_writer_lock) for pb in origins]
+            for future in concurrent.futures.as_completed(futures):
+                saved_digests.append(future.result())
+                pbar.update(1)
+        return saved_digests
 
     def fetch_data_origin(self, digests: Sequence[str]) -> List[hangar_service_pb2.DataOriginReply]:
 
@@ -497,7 +524,7 @@ class HangarClient(object):
                     push_request.raw_data = raw_chunk
                     yield push_request
 
-            for reply in replies:
+            def push_data_parallel(reply):
                 be_loc = specs[reply.digest]
                 data = self._rFs[be_loc.backend].read_data(be_loc)
                 _, raw_data = chunks.serialize_data(data)
@@ -519,7 +546,13 @@ class HangarClient(object):
 
                 pushDataIter = push_request_iterator(compressed_record, reply.uri, dtype, schema_hash)
                 push_data_response = self.stub.PushData(pushDataIter)
-                pbar.update(1)
+                return push_data_response
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                push_futures = tuple((executor.submit(push_data_parallel, reply) for reply in replies))
+                for future in concurrent.futures.as_completed(push_futures):
+                    _ = future.result()
+                    pbar.update(1)
 
         except grpc.RpcError as rpc_error:
             logger.error(rpc_error)

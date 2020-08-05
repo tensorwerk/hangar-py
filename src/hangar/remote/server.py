@@ -9,6 +9,7 @@ import shutil
 import configparser
 from pprint import pprint as pp
 import traceback
+from threading import Lock
 
 import blosc
 import grpc
@@ -54,6 +55,18 @@ def server_config(server_dir, *, create: bool = True) -> configparser.ConfigPars
     return CFG
 
 
+def context_abort_with_traceback(
+        context: grpc.ServicerContext,
+        exc: Exception, status_code:
+        grpc.StatusCode
+):
+    context.abort(
+        code=status_code,
+        details=(f'Exception Type: {type(exc)} \n'
+                 f'Exception Message: {exc} \n'
+                 f'Traceback: \n {traceback.format_tb(exc.__traceback__)}'))
+
+
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
     def __init__(self, repo_path: Union[str, bytes, Path], overwrite=False):
@@ -65,6 +78,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             warnings.simplefilter('ignore', UserWarning)
             envs = Environments(pth=repo_path)
         self.env: Environments = envs
+        self.data_writer_lock = Lock()
+        self.hash_reader_lock = Lock()
 
         try:
             self.env.init_repo(
@@ -341,25 +356,24 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         the client figure out what it still needs and ask us again.
         """
         uri = request.uri
-
         hashKey = hash_data_db_key_from_raw_key(uri)
-        hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
         try:
-            hashVal = hashTxn.get(hashKey, default=False)
-            if hashVal is False:
-                msg = f'HASH DOES NOT EXIST: {hashKey}'
-                context.set_details(msg)
-                context.set_code(grpc.StatusCode.NOT_FOUND)
-                err = hangar_service_pb2.ErrorProto(code=5, message=msg)
-                reply = hangar_service_pb2.FetchDataReply(error=err)
-                yield reply
-                raise StopIteration()
-            else:
-                spec = backend_decoder(hashVal)
-                data = self._rFs[spec.backend].read_data(spec)
-        finally:
-            self.txnregister.abort_reader_txn(self.env.hashenv)
+            with self.hash_reader_lock:
+                hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
+                hashVal = hashTxn.get(hashKey, default=False)
+                self.txnregister.abort_reader_txn(self.env.hashenv)
+        except Exception as e:
+            context_abort_with_traceback(
+                context=context, exc=e, status_code=grpc.StatusCode.INTERNAL)
+            raise e
 
+        if hashVal is False:
+            exc = FileNotFoundError(f'request uri does not exist. URI: {uri}')
+            context_abort_with_traceback(
+                context=context, exc=exc, status_code=grpc.StatusCode.NOT_FOUND)
+
+        spec = backend_decoder(hashVal)
+        data = self._rFs[spec.backend].read_data(spec)
         dtype_code, raw_record = chunks.serialize_data(data)
         compressed_record = blosc.compress(
             raw_record, clevel=3, cname='blosclz', shuffle=blosc.NOSHUFFLE)
@@ -498,7 +512,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 details=f'HASH MANGLED, received: {recieved_hash} != expected digest: {uri}'
             )
         try:
-            _ = self.DW.data(schema_hash, data_digest=recieved_hash, data=recieved_data)  # returns saved)_digests
+            with self.data_writer_lock:
+                _ = self.DW.data(schema_hash, data_digest=recieved_hash, data=recieved_data)  # returns saved)_digests
         except Exception as e:
             context.abort(
                 code=grpc.StatusCode.INTERNAL,

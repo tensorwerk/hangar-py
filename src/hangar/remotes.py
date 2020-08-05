@@ -390,9 +390,11 @@ class Remotes(object):
                 for schema in m_schema_hash_map.keys():
                     hashes = set(m_schema_hash_map[schema])
                     origins = client.fetch_data_origin(hashes)
-                    for returned_digest, returned_data in client.fetch_data(origins):
-                        _ = DW_CM.data(schema, data_digest=returned_digest, data=returned_data)
-                        pbar.update(1)
+                    client.fetch_data(
+                        origins=origins,
+                        datawriter_cm=DW_CM,
+                        schema=schema,
+                        pbar=pbar)
 
             move_process_data_to_store(self._repo_path, remote_operation=True)
             return cmt
@@ -607,24 +609,30 @@ class Remotes(object):
             for schema in m_schema_hash_map.keys():
                 hashes = set(m_schema_hash_map[schema])
                 origins = client.fetch_data_origin(hashes)
-                for returned_digest, returned_data in client.fetch_data(origins):
-                    if stop is True:
-                        break
-                    if isinstance(max_num_bytes, int):
-                        if isinstance(returned_data, np.ndarray):
-                            total_nbytes_seen += returned_data.nbytes
-                        elif isinstance(returned_data, str):
-                            total_nbytes_seen += len(returned_data.encode())
-                        elif isinstance(returned_data, bytes):
-                            total_nbytes_seen += len(returned_data)
-                        else:
-                            raise TypeError(
-                                f'type {type(returned_data)} value: {returned_data}')
-                        if total_nbytes_seen >= max_num_bytes:
-                            stop = True
-                            break
-                    _ = DW_CM.data(schema, data_digest=returned_digest, data=returned_data)
-                    pbar.update(1)
+                client.fetch_data(
+                    origins=origins,
+                    datawriter_cm=DW_CM,
+                    schema=schema,
+                    pbar=pbar)
+
+                # for returned_digest, returned_data in client.fetch_data(origins):
+                #     if stop is True:
+                #         break
+                #     if isinstance(max_num_bytes, int):
+                #         if isinstance(returned_data, np.ndarray):
+                #             total_nbytes_seen += returned_data.nbytes
+                #         elif isinstance(returned_data, str):
+                #             total_nbytes_seen += len(returned_data.encode())
+                #         elif isinstance(returned_data, bytes):
+                #             total_nbytes_seen += len(returned_data)
+                #         else:
+                #             raise TypeError(
+                #                 f'type {type(returned_data)} value: {returned_data}')
+                #         if total_nbytes_seen >= max_num_bytes:
+                #             stop = True
+                #             break
+                #     _ = DW_CM.data(schema, data_digest=returned_digest, data=returned_data)
+                #     pbar.update(1)
 
         move_process_data_to_store(self._repo_path, remote_operation=True)
         return commits
