@@ -1,6 +1,6 @@
-from io import BytesIO
 import math
 import struct
+from io import BytesIO
 from typing import NamedTuple, List, Union, Tuple, Iterable
 
 import blosc

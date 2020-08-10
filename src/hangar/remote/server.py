@@ -19,7 +19,7 @@ from . import (
     chunks,
     hangar_service_pb2,
     hangar_service_pb2_grpc,
-    request_header_validator_interceptor
+    request_header_validator_interceptor,
 )
 from .content import ContentWriter, DataWriter
 from .. import constants as c
@@ -62,16 +62,24 @@ def server_config(server_dir, *, create: bool = True) -> configparser.ConfigPars
     return CFG
 
 
-def context_abort_with_traceback(
+def context_abort_with_exception_traceback(
         context: grpc.ServicerContext,
-        exc: Exception, status_code:
-        grpc.StatusCode
+        exc: Exception,
+        status_code: grpc.StatusCode
 ):
     context.abort(
         code=status_code,
         details=(f'Exception Type: {type(exc)} \n'
                  f'Exception Message: {exc} \n'
                  f'Traceback: \n {traceback.format_tb(exc.__traceback__)}'))
+
+
+def context_abort_with_handled_error(
+        context: grpc.ServicerContext,
+        message: str, status_code:
+        grpc.StatusCode
+):
+    context.abort(code=status_code, details=message)
 
 
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
@@ -153,13 +161,12 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             rec = hangar_service_pb2.BranchRecord(name=branch_name, commit=head)
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
             reply = hangar_service_pb2.FetchBranchRecordReply(rec=rec, error=err)
+            return reply
         except ValueError:
             msg = f'BRANCH: {branch_name} DOES NOT EXIST ON SERVER.'
-            context.set_details(msg)
-            context.set_code(grpc.StatusCode.NOT_FOUND)
-            err = hangar_service_pb2.ErrorProto(code=5, message=msg)
-            reply = hangar_service_pb2.FetchBranchRecordReply(error=err)
-        return reply
+            context_abort_with_handled_error(
+                context=context, message=msg, status_code=grpc.StatusCode.NOT_FOUND)
+            return
 
     def PushBranchRecord(self, request, context):
         """Update the HEAD commit of a branch, creating the record if not previously existing.
@@ -174,9 +181,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             current_head = heads.get_branch_head_commit(self.env.branchenv, branch_name)
             if current_head == commit:
                 msg = f'NO CHANGE TO BRANCH: {branch_name} WITH HEAD: {current_head}'
-                context.set_details(msg)
-                context.set_code(grpc.StatusCode.ALREADY_EXISTS)
-                err = hangar_service_pb2.ErrorProto(code=6, message=msg)
+                context_abort_with_handled_error(
+                    context=context, message=msg, status_code=grpc.StatusCode.ALREADY_EXISTS)
+                return
             else:
                 heads.set_branch_head_commit(self.env.branchenv, branch_name, commit)
                 err = hangar_service_pb2.ErrorProto(code=0, message='OK')
@@ -370,13 +377,13 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
                 hashVal = hashTxn.get(hashKey, default=False)
                 self.txnregister.abort_reader_txn(self.env.hashenv)
         except Exception as e:
-            context_abort_with_traceback(
+            context_abort_with_exception_traceback(
                 context=context, exc=e, status_code=grpc.StatusCode.INTERNAL)
             raise e
 
         if hashVal is False:
             exc = FileNotFoundError(f'request uri does not exist. URI: {uri}')
-            context_abort_with_traceback(
+            context_abort_with_exception_traceback(
                 context=context, exc=exc, status_code=grpc.StatusCode.NOT_FOUND)
 
         spec = backend_decoder(hashVal)

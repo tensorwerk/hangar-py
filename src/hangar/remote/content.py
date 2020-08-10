@@ -1,14 +1,14 @@
-from typing import NamedTuple, Union, Sequence, Tuple, List, Optional
+from typing import NamedTuple, Union, List, Optional
 
 import numpy as np
 
 from ..columns.constructors import open_file_handles, column_type_object_from_schema
 from ..context import Environments
-from ..records import parsing
 from ..records import (
+    parsing,
     schema_spec_from_db_val,
     hash_schema_db_key_from_raw_key,
-    hash_data_db_key_from_raw_key,
+    hash_data_db_key_from_raw_key
 )
 from ..txnctx import TxnRegister
 
