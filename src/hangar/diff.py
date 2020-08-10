@@ -403,20 +403,17 @@ class ReaderUserDiff(BaseUserDiff):
     it can only contain non-empty values in the cases where a three way merge
     would need to be performed.
 
-    ::
-
-       Fast Forward is Possible
-       ========================
+        Fast Forward is Possible
+        ========================
 
            (master)          (foo)
-       a ----- b ----- c ----- d
+        a ----- b ----- c ----- d
 
-
-       3-Way Merge Required
-       ====================
+        3-Way Merge Required
+        ====================
 
                             (master)
-       a ----- b ----- c ----- d
+        a ----- b ----- c ----- d
                \\
                 \\               (foo)
                  \\----- ee ----- ff
@@ -531,20 +528,18 @@ class WriterUserDiff(BaseUserDiff):
     it can only contain non-empty values in the cases where a three way merge
     would need to be performed.
 
-    ::
-
-       Fast Forward is Possible
-       ========================
+        Fast Forward is Possible
+        ========================
 
            (master)          (foo)
-       a ----- b ----- c ----- d
+        a ----- b ----- c ----- d
 
 
-       3-Way Merge Required
-       ====================
+        3-Way Merge Required
+        ====================
 
                             (master)
-       a ----- b ----- c ----- d
+        a ----- b ----- c ----- d
                \\
                 \\               (foo)
                  \\----- ee ----- ff

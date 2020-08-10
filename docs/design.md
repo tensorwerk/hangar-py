@@ -11,13 +11,13 @@ When designing a high performance data version control system, achieving
 performance goals while ensuring consistency is incredibly difficult.
 Memory is fast, disk is slow; not much we can do about it. But since
 Hangar should deal with any numeric data in an array of any size (with
-an enforced limit of 31 dimensions in a sample\...) we have to find ways
+an enforced limit of 31 dimensions in a sample...) we have to find ways
 to work *with* the disk, not against it.
 
 Upon coming to terms with this face, we are actually presented with a
 problem once we realize that we live in the real world, and real world
-is ugly. Computers crash, processes get killed, and people do \*
-*interesting* \* things. Because of this, It is a foundational design
+is ugly. Computers crash, processes get killed, and people do *
+*interesting* * things. Because of this, It is a foundational design
 principle for us to *guarantee that once Hangar says data has been
 successfully added to the repository, it is actually persisted.* This
 essentially means that any process which interacts with data records on
@@ -38,7 +38,7 @@ data and records are committed to disk.
     The atomicity of interactions is completely hidden from a normal user;
     they shouldn't have to care about this or even know this exists.
     However, this is also why using the context-manager style column
-    interaction scheme can result in \~2x times speedup on writes/reads. We
+    interaction scheme can result in ~2x times speedup on writes/reads. We
     can just pass on most of the work to the Python `contextlib` package
     instead of having to begin and commit/abort (depending on interaction
     mode) transactions with every call to an [add]{.title-ref} or
@@ -163,47 +163,50 @@ point in time.
     records", is semi inefficient, and will be changed in the future so
     that unchanged records are note duplicated across commits.
 
-An example is given below of the keys -\> values mapping which stores
+An example is given below of the keys -> values mapping which stores
 each of the staged records, and which are packed up / compressed on
 commit (and subsequently unpacked on checkout!).
 
-    Num asets                      'a.'               -> '2'
-    ---------------------------------------------------------------------------
-    Name of aset -> num samples || 'a.train_images'   -> '10'
-    Name of data -> hash        || 'a.train_images.0' -> BAR_HASH_1'
-    Name of data -> hash        || 'a.train_images.1' -> BAR_HASH_2'
-    Name of data -> hash        || 'a.train_images.2' -> BAR_HASH_3'
-    Name of data -> hash        || 'a.train_images.3' -> BAR_HASH_4'
-    Name of data -> hash        || 'a.train_images.4' -> BAR_HASH_5'
-    Name of data -> hash        || 'a.train_images.5' -> BAR_HASH_6'
-    Name of data -> hash        || 'a.train_images.6' -> BAR_HASH_7'
-    Name of data -> hash        || 'a.train_images.7' -> BAR_HASH_8'
-    Name of data -> hash        || 'a.train_images.8' -> BAR_HASH_9'
-    Name of data -> hash        || 'a.train_images.9' -> BAR_HASH_0'
-    ---------------------------------------------------------------------------
-    Name of aset -> num samples || 'a.train_labels'   -> '10'
-    Name of data -> hash        || 'a.train_labels.0' -> BAR_HASH_11'
-    Name of data -> hash        || 'a.train_labels.1' -> BAR_HASH_12'
-    Name of data -> hash        || 'a.train_labels.2' -> BAR_HASH_13'
-    Name of data -> hash        || 'a.train_labels.3' -> BAR_HASH_14'
-    Name of data -> hash        || 'a.train_labels.4' -> BAR_HASH_15'
-    Name of data -> hash        || 'a.train_labels.5' -> BAR_HASH_16'
-    Name of data -> hash        || 'a.train_labels.6' -> BAR_HASH_17'
-    Name of data -> hash        || 'a.train_labels.7' -> BAR_HASH_18'
-    Name of data -> hash        || 'a.train_labels.8' -> BAR_HASH_19'
-    Name of data -> hash        || 'a.train_labels.9' -> BAR_HASH_10'
-    ---------------------------------------------------------------------------
-    's.train_images'   -> '{"schema_hash": "RM4DefFsjRs=",
-                            "schema_dtype": 2,
-                            "schema_is_var": false,
-                            "schema_max_shape": [784],
-                            "schema_is_named": true}'
-    's.train_labels'   -> '{"schema_hash":
-                            "ncbHqE6Xldg=",
-                            "schema_dtype": 7,
-                            "schema_is_var": false,
-                            "schema_max_shape": [1],
-                            "schema_is_named": true}'
+```
+
+Num asets                      'a.'               -> '2'
+---------------------------------------------------------------------------
+Name of aset -> num samples || 'a.train_images'   -> '10'
+Name of data -> hash        || 'a.train_images.0' -> BAR_HASH_1'
+Name of data -> hash        || 'a.train_images.1' -> BAR_HASH_2'
+Name of data -> hash        || 'a.train_images.2' -> BAR_HASH_3'
+Name of data -> hash        || 'a.train_images.3' -> BAR_HASH_4'
+Name of data -> hash        || 'a.train_images.4' -> BAR_HASH_5'
+Name of data -> hash        || 'a.train_images.5' -> BAR_HASH_6'
+Name of data -> hash        || 'a.train_images.6' -> BAR_HASH_7'
+Name of data -> hash        || 'a.train_images.7' -> BAR_HASH_8'
+Name of data -> hash        || 'a.train_images.8' -> BAR_HASH_9'
+Name of data -> hash        || 'a.train_images.9' -> BAR_HASH_0'
+---------------------------------------------------------------------------
+Name of aset -> num samples || 'a.train_labels'   -> '10'
+Name of data -> hash        || 'a.train_labels.0' -> BAR_HASH_11'
+Name of data -> hash        || 'a.train_labels.1' -> BAR_HASH_12'
+Name of data -> hash        || 'a.train_labels.2' -> BAR_HASH_13'
+Name of data -> hash        || 'a.train_labels.3' -> BAR_HASH_14'
+Name of data -> hash        || 'a.train_labels.4' -> BAR_HASH_15'
+Name of data -> hash        || 'a.train_labels.5' -> BAR_HASH_16'
+Name of data -> hash        || 'a.train_labels.6' -> BAR_HASH_17'
+Name of data -> hash        || 'a.train_labels.7' -> BAR_HASH_18'
+Name of data -> hash        || 'a.train_labels.8' -> BAR_HASH_19'
+Name of data -> hash        || 'a.train_labels.9' -> BAR_HASH_10'
+---------------------------------------------------------------------------
+'s.train_images'   -> '{"schema_hash": "RM4DefFsjRs=",
+                        "schema_dtype": 2,
+                        "schema_is_var": false,
+                        "schema_max_shape": [784],
+                        "schema_is_named": true}'
+'s.train_labels'   -> '{"schema_hash":
+                        "ncbHqE6Xldg=",
+                        "schema_dtype": 7,
+                        "schema_is_var": false,
+                        "schema_max_shape": [1],
+                        "schema_is_named": true}'
+```
 
 ### History is Relative
 
@@ -240,16 +243,18 @@ created with the name [master]{.title-ref}, and which is the only commit
 in the entire repository which will have no parent. The record key/value
 pairs resemble the following:
 
-    'branch.master' -> ''                # No parent commit.
-    'head'          -> 'branch.master'   # Staging area head branch
+```
+'branch.master' -> ''                # No parent commit.
+'head'          -> 'branch.master'   # Staging area head branch
 
-    # Commit Hash  |  Parent Commit
-    -------------------------------------
+# Commit Hash  |  Parent Commit
+-------------------------------------
+```
 
 !!! warning
 
-    Much like git, odd things can happen before the ['initial
-    commit']{.title-ref} is made. We recommend creating the initial commit
+    Much like git, odd things can happen before the ``initial
+    commit`` is made. We recommend creating the initial commit
     as quickly as possible to prevent undefined behavior during repository
     setup. In the future, we may decide to create the "initial commit"
     automatically upon repository initialization.
@@ -259,12 +264,14 @@ specifies the records (not shown below) and the parent commit. The
 branch head pointer is then updated to point to that commit as it's
 base.
 
-    'branch.master' -> '479b4cfff6219e3d'
-    'head'          -> 'branch.master'
+```
+'branch.master' -> '479b4cfff6219e3d'
+'head'          -> 'branch.master'
 
-    # Commit Hash       |  Parent Commit
-    -------------------------------------
-    '479b4cfff6219e3d' ->  ''
+# Commit Hash       |  Parent Commit
+-------------------------------------
+'479b4cfff6219e3d' ->  ''
+```
 
 Branches can be created as cheaply as a single line of text can be
 written, and they simply require a "root" commit hash (or a branch
@@ -276,41 +283,41 @@ now).
 
 A more complex example which creates 4 different branches and merges
 them in a complicated order can be seen below. Please note that the `<<`
-symbol is used to indicate a merge commit where [X \<\< Y]{.title-ref}
+symbol is used to indicate a merge commit where ``X << Y`` 
 reads: `'merging dev branch Y into master branch X'`.
 
-    'branch.large_branch' -> '8eabd22a51c5818c'
-    'branch.master'       -> '2cd30b98d34f28f0'
-    'branch.test_branch'  -> '1241a36e89201f88'
-    'branch.trydelete'    -> '51bec9f355627596'
-    'head'                -> 'branch.master'
+```
+'branch.large_branch' -> '8eabd22a51c5818c'
+'branch.master'       -> '2cd30b98d34f28f0'
+'branch.test_branch'  -> '1241a36e89201f88'
+'branch.trydelete'    -> '51bec9f355627596'
+'head'                -> 'branch.master'
 
-     # Commit Hash       |  Parent Commit
-     -------------------------------------
-    '1241a36e89201f88'  -> '8a6004f205fd7169'
-    '2cd30b98d34f28f0'  -> '9ec29571d67fa95f << 51bec9f355627596'
-    '51bec9f355627596'  -> 'd683cbeded0c8a89'
-    '69a09d87ea946f43'  -> 'd683cbeded0c8a89'
-    '8a6004f205fd7169'  -> 'a320ae935fc3b91b'
-    '8eabd22a51c5818c'  -> 'c1d596ed78f95f8f'
-    '9ec29571d67fa95f'  -> '69a09d87ea946f43 << 8eabd22a51c5818c'
-    'a320ae935fc3b91b'  -> 'e3e79dd897c3b120'
-    'c1d596ed78f95f8f'  -> ''
-    'd683cbeded0c8a89'  -> 'fe0bcc6a427d5950 << 1241a36e89201f88'
-    'e3e79dd897c3b120'  -> 'c1d596ed78f95f8f'
-    'fe0bcc6a427d5950'  -> 'e3e79dd897c3b120'
+ # Commit Hash       |  Parent Commit
+ -------------------------------------
+'1241a36e89201f88'  -> '8a6004f205fd7169'
+'2cd30b98d34f28f0'  -> '9ec29571d67fa95f << 51bec9f355627596'
+'51bec9f355627596'  -> 'd683cbeded0c8a89'
+'69a09d87ea946f43'  -> 'd683cbeded0c8a89'
+'8a6004f205fd7169'  -> 'a320ae935fc3b91b'
+'8eabd22a51c5818c'  -> 'c1d596ed78f95f8f'
+'9ec29571d67fa95f'  -> '69a09d87ea946f43 << 8eabd22a51c5818c'
+'a320ae935fc3b91b'  -> 'e3e79dd897c3b120'
+'c1d596ed78f95f8f'  -> ''
+'d683cbeded0c8a89'  -> 'fe0bcc6a427d5950 << 1241a36e89201f88'
+'e3e79dd897c3b120'  -> 'c1d596ed78f95f8f'
+'fe0bcc6a427d5950'  -> 'e3e79dd897c3b120'
+```
 
 Because the raw commit hash logs can be quite dense to parse, a
 graphical logging utility is included as part of the repository. Running
 the `Repository.log()` method will pretty print a graph representation
 of the commit history:
 
-``` {.sourceCode .python}
+```python
 >>> from hangar import Repository
 >>> repo = Repository(path='/foo/bar/path/')
-
-... # make some commits
-
+# make some commits
 >>> repo.log()
 ```
 

@@ -203,7 +203,9 @@ class FlatSampleReader:
     def __getitem__(self, key: KeyType):
         """Retrieve data for some sample key via dict style access conventions.
 
-        .. seealso:: :meth:`get`
+        !!! seealso
+
+            :meth:`get`
 
         Parameters
         ----------
@@ -522,7 +524,7 @@ class FlatSampleWriter(FlatSampleReader):
     def __setitem__(self, key, value):
         """Store a piece of data in a column.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`update` for an implementation analogous to python's built in
             :meth:`dict.update` method which accepts a dict or iterable of
@@ -621,7 +623,7 @@ class FlatSampleWriter(FlatSampleReader):
     def __delitem__(self, key: KeyType) -> None:
         """Remove a sample from the column. Convenience method to :meth:`delete`.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`pop` to return a value and then delete it in the same operation
 
@@ -673,7 +675,7 @@ class FlatSampleWriter(FlatSampleReader):
     def change_backend(self, backend: str, backend_options: Optional[dict] = None):
         """Change the default backend and filters applied to future data writes.
 
-        .. warning::
+        !!! warning
 
            This method is meant for advanced users only. Please refer to the
            hangar backend codebase for information on accepted parameters and

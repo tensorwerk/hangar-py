@@ -3,7 +3,7 @@ from pathlib import Path
 import weakref
 from contextlib import suppress, ExitStack
 from uuid import uuid4
-from typing import Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
 
 import numpy as np
 import lmdb
@@ -32,6 +32,9 @@ from .records import (
     schema_record_db_val_from_digest,
 )
 
+if TYPE_CHECKING:
+    from .columns import ModifierTypes
+
 
 class ReaderCheckout(GetMixin, CheckoutDictIteration):
     """Checkout the repository as it exists at a particular branch.
@@ -57,24 +60,27 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         'someothercommithashhere'
         >>> co.close()
 
-    Unlike :class:`WriterCheckout`, any number of :class:`ReaderCheckout`
-    objects can exist on the repository independently. Like the
-    ``write-enabled`` variant, the :meth:`close` method should be called after
+    Unlike [Writer Checkout](#hangar.checkout.WriterCheckout), any number
+    of [Reader Checkout](#hangar.checkout.ReaderCheckout) objects can exist on
+    the repository independently. Like the ``write-enabled`` variant, the
+    [close()](#hangar.checkout.ReaderCheckout.close) method should be called after
     performing the necessary operations on the repo. However, as there is no
     concept of a ``lock`` for ``read-only`` checkouts, this is just to free up
     memory resources, rather than changing recorded access state.
 
     In order to reduce the chance that the python interpreter is shut down
-    without calling :meth:`close`,  - a common mistake during ipython / jupyter
-    sessions - an `atexit <https://docs.python.org/3/library/atexit.html>`_
-    hook is registered to :meth:`close`. If properly closed by the user, the
-    hook is unregistered after completion with no ill effects. So long as a the
-    process is NOT terminated via non-python ``SIGKILL``, fatal internal python
-    error, or or special ``os exit`` methods, cleanup will occur on interpreter
-    shutdown and resources will be freed. If a non-handled termination method
-    does occur, the implications of holding resources varies on a per-OS basis.
-    While no risk to data integrity is observed, repeated misuse may require a
-    system reboot in order to achieve expected performance characteristics.
+    without calling [close()](#hangar.checkout.ReaderCheckout.close),  - a
+    common mistake during ipython / jupyter sessions - an
+    [atexit](https://docs.python.org/3/library/atexit.html)
+    hook is registered to [close()](#hangar.checkout.ReaderCheckout.close).
+    If properly closed by the user, the hook is unregistered after completion
+    with no ill effects. So long as a the process is NOT terminated via non-python
+    ``SIGKILL``, fatal internal python error, or or special ``os exit`` methods,
+    cleanup will occur on interpreter shutdown and resources will be freed. If
+    a non-handled termination method does occur, the implications of holding resources
+    varies on a per-OS basis. While no risk to data integrity is observed,
+    repeated misuse may require a system reboot in order to achieve expected
+    performance characteristics..
     """
 
     def __init__(self,
@@ -178,33 +184,32 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         Can be used to either return the columns accessor for all elements or
         a single column instance by using dictionary style indexing.
 
-            >>> co = repo.checkout(write=False)
-            >>> len(co.columns)
-            1
-            >>> print(co.columns.keys())
-            ['foo']
-            >>> fooCol = co.columns['foo']
-            >>> fooCol.dtype
-            np.fooDtype
-            >>> cols = co.columns
-            >>> fooCol = cols['foo']
-            >>> fooCol.dtype
-            np.fooDtype
-            >>> fooCol = cols.get('foo')
-            >>> fooCol.dtype
-            np.fooDtype
+        >>> co = repo.checkout(write=False)
+        >>> len(co.columns)
+        1
+        >>> print(co.columns.keys())
+        ['foo']
+        >>> fooCol = co.columns['foo']
+        >>> fooCol.dtype
+        np.fooDtype
+        >>> cols = co.columns
+        >>> fooCol = cols['foo']
+        >>> fooCol.dtype
+        np.fooDtype
+        >>> fooCol = cols.get('foo')
+        >>> fooCol.dtype
+        np.fooDtype
 
-        .. seealso::
+        !!! seealso
 
-            The class :class:`~.columns.column.Columns` contains all methods
-            accessible by this property accessor
+            The class [Columns](#hangar.columns.column.Columns) contains
+            all methods accessible by this property accessor
 
         Returns
         -------
-        :class:`~.columns.column.Columns`
-            the columns object which behaves exactly like a
-            columns accessor class but which can be invalidated when the writer
-            lock is released.
+        Columns
+            the columns object which behaves exactly like a columns accessor class
+            but which can be invalidated when the writer lock is released.
         """
         self._verify_alive()
         return self._columns
@@ -213,7 +218,7 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
     def diff(self) -> ReaderUserDiff:
         """Access the differ methods for a read-only checkout.
 
-        .. seealso::
+        !!! seealso
 
             The class :class:`ReaderUserDiff` contains all methods accessible
             by this property accessor
@@ -233,9 +238,9 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
     def commit_hash(self) -> str:
         """Commit hash this read-only checkout's data is read from.
 
-            >>> co = repo.checkout()
-            >>> co.commit_hash
-            foohashdigesthere
+        >>> co = repo.checkout()
+        >>> co.commit_hash
+        foohashdigesthere
 
         Returns
         -------
@@ -254,14 +259,14 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
             show_user: bool = False) -> Optional[dict]:
         """Displays a pretty printed commit log graph to the terminal.
 
-        .. note::
+        If Neither `branch` nor `commit` arguments are supplied, the commit
+        digest of the currently reader checkout will be used as default.
+
+        !!! note
 
             For programatic access, the return_contents value can be set to true
             which will retrieve relevant commit specifications as dictionary
             elements.
-
-        if Neither `branch` nor `commit` arguments are supplied, the commit
-        digest of the currently reader checkout will be used as default.
 
         Parameters
         ----------
@@ -279,6 +284,7 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
         show_user
             If true and return_contents is False, show the committer of each
             commit on the printed log graph
+
         Returns
         -------
         Optional[dict]
@@ -335,25 +341,28 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
     At the moment, only one instance of this class can write data to the
     staging area at a time. After the desired operations have been completed,
-    it is crucial to call :meth:`close` to release the writer lock. In
-    addition, after any changes have been made to the staging area, the branch
-    ``HEAD`` cannot be changed. In order to checkout another branch ``HEAD``
-    for writing, you must either :meth:`commit` the changes, or perform a
+    it is crucial to call [close()](#hangar.checkout.WriterCheckout.close)
+    to release the writer lock. In addition, after any changes have been
+    made to the staging area, the branch ``HEAD`` cannot be changed. In
+    order to checkout another branch ``HEAD`` for writing, you must either
+    [commit()](#hangar.checkout.WriterCheckout.commit) the changes, or perform a
     hard-reset of the staging area to the last commit via
-    :meth:`reset_staging_area`.
+    [reset_staging_area()](#hangar.checkout.WriterCheckout.reset_staging_area).
 
     In order to reduce the chance that the python interpreter is shut down
-    without calling :meth:`close`, which releases the writer lock - a common
-    mistake during ipython / jupyter sessions - an `atexit
-    <https://docs.python.org/3/library/atexit.html>`_ hook is registered to
-    :meth:`close`. If properly closed by the user, the hook is unregistered
+    without calling [close()](#hangar.checkout.WriterCheckout.close), which
+    releases the writer lock - a common mistake during ipython / jupyter
+    sessions - an [atexit](https://docs.python.org/3/library/atexit.html)
+    hook is registered to [close()](#hangar.checkout.WriterCheckout.close).
+    If properly closed by the user, the hook is unregistered
     after completion with no ill effects. So long as a the process is NOT
     terminated via non-python SIGKILL, fatal internal python error, or or
     special os exit methods, cleanup will occur on interpreter shutdown and the
     writer lock will be released. If a non-handled termination method does
-    occur, the :meth:`~.Repository.force_release_writer_lock` method must be
-    called manually when a new python process wishes to open the writer
-    checkout.
+    occur, the
+    [force_release_writer_lock()](#hangar.repository.Repository.force_release_writer_lock)
+    method must be called manually when a new python process wishes to open
+    the writer checkout.
     """
 
     def __init__(self,
@@ -560,14 +569,14 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             >>> 'bar' in co.columns
             False
 
-        .. seealso::
+        !!! seealso
 
-            The class :class:`~.columns.column.Columns` contains all methods
+            The class [Columns](#hangar.columns.column.Columns) contains all methods
             accessible by this property accessor
 
         Returns
         -------
-        :class:`~.columns.column.Columns`
+        Columns
             the columns object which behaves exactly like a columns accessor
             class but which can be invalidated when the writer lock is
             released.
@@ -579,9 +588,9 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
     def diff(self) -> WriterUserDiff:
         """Access the differ methods which are aware of any staged changes.
 
-        .. seealso::
+        !!! seealso
 
-            The class :class:`hangar.diff.WriterUserDiff` contains all methods
+            The [Diff Class](#hangar.diff.WriterUserDiff) contains all methods
             accessible by this property accessor
 
         Returns
@@ -630,7 +639,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
             show_user: bool = False) -> Optional[dict]:
         """Displays a pretty printed commit log graph to the terminal.
 
-        .. note::
+        !!! note
 
             For programatic access, the return_contents value can be set to true
             which will retrieve relevant commit specifications as dictionary
@@ -677,11 +686,11 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                        contains_subsamples: bool = False,
                        *,
                        backend: Optional[str] = None,
-                       backend_options: Optional[dict] = None):
-        """Initializes a :class:`str` container column
+                       backend_options: Optional[dict] = None) -> 'ModifierTypes':
+        """Initializes a ``str`` class container column
 
         Columns are created in order to store some arbitrary collection of data
-        pieces. In this case, we store :class:`str` data. Items need not be
+        pieces. In this case, we store ``str`` data. Items need not be
         related to each-other in any direct capacity; the only criteria hangar
         requires is that all pieces of data stored in the column have a
         compatible schema with each-other (more on this below). Each piece of
@@ -692,7 +701,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         pointing to some piece of store data on disk) are supported.
 
         All data pieces within a column have the same data type. For
-        :class:`str` columns, there is no distinction between
+        ``str`` columns, there is no distinction between
         ``'variable_shape'`` and ``'fixed_shape'`` schema types. Values are
         allowed to take on a value of any size so long as the datatype and
         contents are valid for the schema definition.
@@ -718,7 +727,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Returns
         -------
-        :class:`~.columns.column.Columns`
+        'ModifierTypes'
             instance object of the initialized column.
         """
         self._verify_alive()
@@ -758,11 +767,11 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                          contains_subsamples: bool = False,
                          *,
                          backend: Optional[str] = None,
-                         backend_options: Optional[dict] = None):
-        """Initializes a :class:`bytes` container column
+                         backend_options: Optional[dict] = None) -> 'ModifierTypes':
+        """Initializes a``bytes`` container column
 
         Columns are created in order to store some arbitrary collection of data
-        pieces. In this case, we store :class:`bbytes` data. Items need not be
+        pieces. In this case, we store ``bytes`` data. Items need not be
         related to each-other in any direct capacity; the only criteria hangar
         requires is that all pieces of data stored in the column have a
         compatible schema with each-other (more on this below). Each piece of
@@ -773,7 +782,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         pointing to some piece of store data on disk) are supported.
 
         All data pieces within a column have the same data type. For
-        :class:`bytes` columns, there is no distinction between
+        ``bytes`` columns, there is no distinction between
         ``'variable_shape'`` and ``'fixed_shape'`` schema types. Values are
         allowed to take on a value of any size so long as the datatype and
         contents are valid for the schema definition.
@@ -799,7 +808,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Returns
         -------
-        :class:`~.columns.column.Columns`
+        'ModifierTypes'
             instance object of the initialized column.
         """
         self._verify_alive()
@@ -843,11 +852,11 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
                            contains_subsamples: bool = False,
                            *,
                            backend: Optional[str] = None,
-                           backend_options: Optional[dict] = None):
-        """Initializes a :class:`numpy.ndarray` container column.
+                           backend_options: Optional[dict] = None) -> 'ModifierTypes':
+        """Initializes a ``numpy.ndarray`` container column.
 
         Columns are created in order to store some arbitrary collection of data
-        pieces. In this case, we store :class:`numpy.ndarray` data. Items need
+        pieces. In this case, we store ``numpy.ndarray`` data. Items need
         not be related to each-other in any direct capacity; the only criteria
         hangar requires is that all pieces of data stored in the column have a
         compatible schema with each-other (more on this below). Each piece of
@@ -903,7 +912,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Returns
         -------
-        :class:`~.columns.column.Columns`
+        'ModifierTypes'
             instance object of the initialized column.
         """
         self._verify_alive()
@@ -959,7 +968,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
     def _initialize_new_column(self,
                                column_name: str,
                                column_layout: str,
-                               schema) -> Columns:
+                               schema) -> 'ModifierTypes':
         """Initialize a column and write spec to record db.
 
         Parameters
@@ -976,7 +985,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Returns
         -------
-        Columns
+        'ModifierTypes'
             initialized column class instance.
         """
         # -------- set vals in lmdb only after schema is sure to exist --------
@@ -1111,12 +1120,11 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
         """Perform a hard reset of the staging area to the last commit head.
 
         After this operation completes, the writer checkout will automatically
-        close in the typical fashion (any held references to :attr:``column``
-        or :attr:``metadata`` objects will finalize and destruct as normal), In
-        order to perform any further operation, a new checkout needs to be
-        opened.
+        close in the typical fashion (any held references to``column``
+        objects will finalize and destruct as normal), In order to perform any
+        further operation, a new checkout needs to be opened.
 
-        .. warning::
+        !!! danger
 
             This operation is IRREVERSIBLE. all records and data which are note
             stored in a previous commit will be permanently deleted.

@@ -145,7 +145,9 @@ class FlatSubsampleReader(object):
     def __getitem__(self, key: GetKeysType) -> Union[Any, Dict[KeyType, Any]]:
         """Retrieve data for some subsample key via dict style access conventions.
 
-        .. seealso:: :meth:`get`
+        !!! seealso
+
+            :meth:`get`
 
         Parameters
         ----------
@@ -468,7 +470,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
     def __setitem__(self, key, value):
         """Store data as a subsample. Convenience method to :meth:`add`.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`update` for an implementation analogous to python's built
             in :meth:`dict.update` method which accepts a dict or iterable of
@@ -497,7 +499,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         Think carefully before going this route, as this posit does not apply
         to many common use cases.
 
-        .. seealso::
+        !!! seealso
 
             In order to store the data with a user defined key, use
             :meth:`update` or :meth:`__setitem__`
@@ -565,7 +567,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
     def __delitem__(self, key: KeyType):
         """Remove a subsample from the column.`.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`pop` to simultaneously get a keys value and delete it.
 
@@ -1053,7 +1055,7 @@ class NestedSampleWriter(NestedSampleReader):
     def __setitem__(self, key, value) -> None:
         """Store some subsample key / subsample data map, overwriting existing keys.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`update` for alternative syntax for setting values.
         """
@@ -1107,7 +1109,7 @@ class NestedSampleWriter(NestedSampleReader):
     def __delitem__(self, key: KeyType):
         """Remove a sample (including all contained subsamples) from the column.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`pop` for alternative implementing a simultaneous get value
             and delete operation.
@@ -1146,7 +1148,7 @@ class NestedSampleWriter(NestedSampleReader):
     def change_backend(self, backend: str, backend_options: Optional[dict] = None):
         """Change the default backend and filters applied to future data writes.
 
-        .. warning::
+        !!! warning
 
            This method is meant for advanced users only. Please refer to the
            hangar backend codebase for information on accepted parameters and

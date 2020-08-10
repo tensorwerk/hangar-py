@@ -22,7 +22,7 @@ def make_torch_dataset(columns,
     Returns a :class:`torch.utils.data.Dataset` object which can be loaded into
     a :class:`torch.utils.data.DataLoader`.
 
-    .. warning::
+    !!! warning
 
        On Windows systems, setting the parameter ``num_workers`` in the
        resulting :class:`torch.utils.data.DataLoader` method will result in a
@@ -96,7 +96,7 @@ class TorchDataset(torchdata.Dataset):
     convenient arguments to wrap hangar columns to be used in
     :class:`torch.utils.data.DataLoaders`.
 
-    .. note::
+    !!! note
 
         From PyTorch 1.1 onwards, if Dataset returns dict, DataLoader also
         returns dict

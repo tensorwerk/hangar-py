@@ -20,16 +20,16 @@ At its core Hangar is designed to solve many of the same problems faced
 by traditional code version control system (ie. `Git`), just adapted for
 numerical data:
 
--   Time travel through the historical evolution of a dataset
--   Zero-cost Branching to enable exploratory analysis and collaboration
--   Cheap Merging to build datasets over time (with multiple
-    collaborators)
--   Completely abstracted organization and management of data files on
-    disk
--   Ability to only retrieve a small portion of the data (as needed)
-    while still maintaining complete historical record
--   Ability to push and pull changes directly to collaborators or a
-    central server (ie. a truly distributed version control system)
+- Time travel through the historical evolution of a dataset
+- Zero-cost Branching to enable exploratory analysis and collaboration
+- Cheap Merging to build datasets over time (with multiple
+  collaborators)
+- Completely abstracted organization and management of data files on
+  disk
+- Ability to only retrieve a small portion of the data (as needed)
+  while still maintaining complete historical record
+- Ability to push and pull changes directly to collaborators or a
+  central server (ie. a truly distributed version control system)
 
 The ability of version control systems to perform these tasks for
 codebases is largely taken for granted by almost every developer today;
@@ -48,14 +48,14 @@ The design of Hangar was heavily influenced by the
 Hangar user, many of the fundamental building blocks and commands can be
 thought of as interchangeable:
 
--   checkout
--   commit
--   branch
--   merge
--   diff
--   push
--   pull/fetch
--   log
+- checkout
+- commit
+- branch
+- merge
+- diff
+- push
+- pull/fetch
+- log
 
 Emulating the high level the git syntax has allowed us to create a user
 experience which should be familiar in many ways to Hangar users; a goal
@@ -66,19 +66,19 @@ There are, however, many fundamental differences in how humans/programs
 interpret and use text in source files vs. numerical data which raise
 many questions Hangar needs to uniquely solve:
 
--   How do we connect some piece of "Data" with a meaning in the real
-    world?
--   How do we diff and merge large collections of data samples?
--   How can we resolve conflicts?
--   How do we make data access (reading and writing) convenient for both
-    user-driven exploratory analyses and high performance production
-    systems operating without supervision?
--   How can we enable people to work on huge datasets in a local (laptop
-    grade) development environment?
+- How do we connect some piece of "Data" with a meaning in the real
+  world?
+- How do we diff and merge large collections of data samples?
+- How can we resolve conflicts?
+- How do we make data access (reading and writing) convenient for both
+  user-driven exploratory analyses and high performance production
+  systems operating without supervision?
+- How can we enable people to work on huge datasets in a local (laptop
+  grade) development environment?
 
 We will show how Hangar solves these questions in a high-level guide
 below. For a deep dive into the Hangar internals, we invite you to check
-out the `ref-hangar-under-the-hood`{.interpreted-text role="ref"} page.
+out the [Hangar Under the Hood](design.md) page.
 
 How Hangar Thinks About Data
 ----------------------------
@@ -121,30 +121,31 @@ phenomenon, a dataset may require multiple pieces of information, each
 of a particular format, for each instance/sample recorded in the
 dataset.*
 
-> **For Example**
->
-> a Hospital will typically have a *Dataset* containing all of the CT
-> scans performed over some period of time. A single CT scan is an
-> instance, a single sample; however, once many are grouped together
-> they form a *Dataset*. To expand on this simple view we realize that
-> each CT scan consists of hundreds of pieces of information:
->
-> > -   Some large `numeric array` (the image data).
-> > -   Some smaller `numeric tuples` (describing image spacing,
-> >     dimension scale, capture time, machine parameters, etc).
-> > -   Many pieces of `string` data (the patient name, doctor name,
-> >     scan type, results found, etc).
 
-When thinking about the group of CT scans in aggregate, we realize that
-though a single scan contains many disparate pieces of information stuck
-together, when thinking about the aggregation of every scan in the
-group, most of (if not all) of the same information fields are
-duplicated within each samples.
+!!! example
 
-*A single scan is a bunch of disparate information stuck together, many
-of those put together makes a Dataset, but looking down from the top, we
-identify pattern of common fields across all items. We call these
-groupings of similar typed information:* **Columns**.
+    A Hospital will typically have a *Dataset* containing all of the CT
+    scans performed over some period of time. A single CT scan is an
+    instance, a single sample; however, once many are grouped together
+    they form a *Dataset*. To expand on this simple view we realize that
+    each CT scan consists of hundreds of pieces of information:
+
+    - Some large `numeric array` (the image data).
+    - Some smaller `numeric tuples` (describing image spacing,
+      dimension scale, capture time, machine parameters, etc).
+    - Many pieces of `string` data (the patient name, doctor name,
+      scan type, results found, etc).
+
+    When thinking about the group of CT scans in aggregate (as described in 
+    the example above), we realize that though a single scan contains many 
+    disparate pieces of information stuck together, when thinking about the 
+    aggregation of every scan in the group, most of (if not all) of the same 
+    information fields are duplicated within each samples.
+    
+    *A single scan is a bunch of disparate information stuck together, many
+    of those put together makes a Dataset, but looking down from the top, we
+    identify pattern of common fields across all items. We call these
+    groupings of similar typed information:* **Columns**.
 
 ### Abstraction 2: What Makes up a Column?
 
@@ -155,9 +156,9 @@ data needed to fully describe a single `sample` in a `Dataset` may
 consist of information spread across any number of `Columns`. To define
 a `Column` in Hangar, we only need to provide:
 
--   a name
--   a type
--   a shape
+- a name
+- a type
+- a shape
 
 The individual pieces of information (`Data`) which fully describe some
 phenomenon via an aggregate mapping access across any number of
@@ -166,9 +167,9 @@ phenomenon via an aggregate mapping access across any number of
 above, all samples contained in a `Column` must be numeric arrays with
 each having:
 
-1)  Same data type (standard `numpy` data types are supported).
-2)  A shape with each dimension size <= the shape (`max shape`) set in
-    the `column` specification (more on this later).
+1) Same data type (standard `numpy` data types are supported).
+2) A shape with each dimension size <= the shape (`max shape`) set in
+   the `column` specification (more on this later).
 
 Additionally, samples in a `column` can either be named, or unnamed
 (depending on how you interpret what the information contained in the
@@ -198,7 +199,7 @@ abstractions and utilities to operate on it.
 
 ### Summary
 
-``` {.sourceCode .text}
+```
 A Dataset is thought of as containing Samples, but is actually defined by
 Columns, which store parts of fully defined Samples in structures common
 across the full aggregation of Dataset Samples.
@@ -234,18 +235,17 @@ store or track the data set, just the underlying columns.
 
     The technical crowd among the readers should note:
     
-    -   Hangar preserves all sample data bit-exactly.
-    -   Dense arrays are fully supported, Sparse array support is
-        currently under development and will be released soon.
-    -   Integrity checks are built in by default (explained in more detail
-        in `ref-hangar-under-the-hood`{.interpreted-text role="ref"}.)
-        using cryptographically secure algorithms.
-    -   Hangar is very much a young project, until penetration tests and
-        security reviews are performed, we will refrain from stating that
-        Hangar is fully "cryptographically secure". Security experts are
-        welcome to contact us privately at [hangar.info@tensorwerk.com
-        <hangar.info@tensorwerk.com>]{.title-ref}__ to disclose any
-        security issues.
+    - Hangar preserves all sample data bit-exactly.
+    - Dense arrays are fully supported, Sparse array support is
+      currently under development and will be released soon.
+    - Integrity checks are built in by default (explained in more detail
+      in `ref-hangar-under-the-hood`{.interpreted-text role="ref"}.)
+      using cryptographically secure algorithms.
+    - Hangar is very much a young project, until penetration tests and
+      security reviews are performed, we will refrain from stating that
+      Hangar is fully "cryptographically secure". Security experts are
+      welcome to contact us privately at <hangar.info@tensorwerk.com>
+      to disclose any security issues.
 
 
 Implications of the Hangar Data Philosophy
@@ -295,13 +295,13 @@ High Performance Computing community over the past few decades.
 
 In a sense, the backend of Hangar serves two functions:
 
-1)  Bookkeeping: recording information about about columns, samples,
-    commits, etc.
-2)  Data Storage: highly optimized interfaces which store and retrieve
-    data from from disk through its backend utility.
+1. Bookkeeping: recording information about about columns, samples,
+   commits, etc.
+2. Data Storage: highly optimized interfaces which store and retrieve
+   data from from disk through its backend utility.
 
 The details are explained much more thoroughly in
-`ref-hangar-under-the-hood`{.interpreted-text role="ref"}.
+[Hangar Under the Hoold](design.md)
 
 Because Hangar only considers data to be numbers, the choice of backend
 to store data is (in a sense) completely arbitrary so long as
@@ -323,10 +323,9 @@ configuration.
 At the time of writing, Hangar has the following backends implemented
 (with plans to potentially support more as needs arise):
 
-1)  [HDF5](https://www.hdfgroup.org/solutions/hdf5/)
-2)  [Memmapped
-    Arrays](https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html)
-3)  [TileDb](https://tiledb.io/) (in development)
+1. [HDF5](https://www.hdfgroup.org/solutions/hdf5/)
+2. [Memmapped Arrays](https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html)
+3. [TileDb](https://tiledb.io/) (in development)
 
 ### Open Source Software Style Collaboration in Dataset Curation
 
@@ -350,25 +349,28 @@ stay ahead of their competitors, and because this information is so
 difficult (and expensive) to generate, it's completely reasonable that
 they should be the ones to benefit from all that work.
 
-> **A Thought Experiment**
-> 
-> Imagine that `Git` and `GitHub` didn't take over the world. Imagine
-> that the `Diff` and `Patch` Unix tools never existed. Instead, imagine
-> we were to live in a world where every software project had very
-> different version control systems (largely homeade by non VCS experts,
-> & not validated by a community over many years of use). Even worse,
-> most of these tools don't allow users to easily branch, make changes,
-> and automatically merge them back. It shouldn't be difficult to
-> imagine how dramatically such a world would contrast to ours today.
-> Open source software as we know it would hardly exist, and any efforts
-> would probably be massively fragmented across the web (if there would
-> even be a 'web' that we would recognize in this strange world).
->
-> Without a way to collaborate in the open, open source software would
-> largely not exist, and we would all be worse off for it.
->
-> Doesn't this hypothetical sound quite a bit like the state of open
-> source data collaboration in todays world?
+
+!!! question
+
+    **A Thought Experiment**
+     
+    Imagine that `Git` and `GitHub` didn't take over the world. Imagine
+    that the `Diff` and `Patch` Unix tools never existed. Instead, imagine
+    we were to live in a world where every software project had very
+    different version control systems (largely homeade by non VCS experts,
+    & not validated by a community over many years of use). Even worse,
+    most of these tools don't allow users to easily branch, make changes,
+    and automatically merge them back. It shouldn't be difficult to
+    imagine how dramatically such a world would contrast to ours today.
+    Open source software as we know it would hardly exist, and any efforts
+    would probably be massively fragmented across the web (if there would
+    even be a 'web' that we would recognize in this strange world).
+    
+    Without a way to collaborate in the open, open source software would
+    largely not exist, and we would all be worse off for it.
+    
+    Doesn't this hypothetical sound quite a bit like the state of open
+    source data collaboration in todays world?
 
 The impetus for developing a tool like Hangar is the belief that if it
 is simple for anyone with domain knowledge to collaboratively curate
@@ -446,10 +448,12 @@ the future.
 
 !!! note
 
-    To try this out for yourself, please refer to the the API Docs
-    (:ref:`ref-api`) on working with Remotes, especially the ``fetch()`` and
-    ``fetch-data()`` methods. Otherwise look for through our tutorials &
-    examples for more practical info!
+    To try this out for yourself, please refer to the the 
+    [API Docs](api/repository.md) on working with Remotes, especially
+    the [fetch()](../api/repository#hangar.remotes.Remotes.fetch) and 
+    [fetch-data()](../api/repository#hangar.remotes.Remotes.fetch_data) 
+    methods. Otherwise look for through our tutorials & examples for 
+    more practical info!
 
 #### What Does it Mean to "Merge" Data?
 
@@ -478,24 +482,26 @@ indicate that your samples are larger than they should be).
 To understand merge logic, we first need to understand diffing, and the
 actors operations which can occur.
 
-Addition
+!!! summary
 
-    An operation which creates a column, sample, or some metadata which
-    did not previously exist in the relevant branch history.
-
-Removal
-
-    An operation which removes some column, a sample, or some metadata
-    which existed in the parent of the commit under consideration. (Note:
-    removing a column also removes all samples contained in it).
-
-Mutation
-
-    An operation which sets: data to a sample, the value of some metadata
-    key, or a column schema, to a different value than what it had
-    previously been created with (Note: a column schema mutation is
-    observed when a column is removed, and a new column with the same name
-    is created with a different dtype/shape, all in the same commit).
+    - **Addition**
+    
+        An operation which creates a column, sample, or some metadata which
+        did not previously exist in the relevant branch history.
+    
+    - **Removal**
+    
+        An operation which removes some column, a sample, or some metadata
+        which existed in the parent of the commit under consideration. (Note:
+        removing a column also removes all samples contained in it).
+    
+    - **Mutation**
+    
+        An operation which sets: data to a sample, the value of some metadata
+        key, or a column schema, to a different value than what it had
+        previously been created with (Note: a column schema mutation is
+        observed when a column is removed, and a new column with the same name
+        is created with a different dtype/shape, all in the same commit).
 
 ##### Merging Changes
 
@@ -511,18 +517,20 @@ as well. If these changes are identical, they are compatible, but what
 if they are not? In the following example, we diff and merge each
 element of the sample array like we would text:
 
-                                                   Merge ??
-      commit A          commit B            Does combining mean anything?
-    
-    [[0, 1, 2],        [[0, 1, 2],               [[1, 1, 1],
-     [0, 1, 2], ----->  [2, 2, 2], ------------>  [2, 2, 2],
-     [0, 1, 2]]         [3, 3, 3]]      /         [3, 3, 3]]
-          \                            /
-           \            commit C      /
-            \                        /
-             \          [[1, 1, 1], /
-              ------->   [0, 1, 2],
-                         [0, 1, 2]]
+```
+                                               Merge ??
+  commit A          commit B            Does combining mean anything?
+
+[[0, 1, 2],        [[0, 1, 2],               [[1, 1, 1],
+ [0, 1, 2], ----->  [2, 2, 2], ------------>  [2, 2, 2],
+ [0, 1, 2]]         [3, 3, 3]]      /         [3, 3, 3]]
+      \                            /
+       \            commit C      /
+        \                        /
+         \          [[1, 1, 1], /
+          ------->   [0, 1, 2],
+                     [0, 1, 2]]
+```
                          
 We see that a result can be generated, and can agree if this was a piece
 of text, the result would be correct. Don't be fooled, this is an
@@ -537,17 +545,19 @@ authors.
 
 This is the actual behavior of Hangar.
 
-      commit A          commit B
-    
-    [[0, 1, 2],        [[0, 1, 2],
-     [0, 1, 2], ----->  [2, 2, 2], ----- MERGE CONFLICT
-     [0, 1, 2]]         [3, 3, 3]]      /
-          \                            /
-           \            commit C      /
-            \                        /
-             \          [[1, 1, 1], /
-              ------->   [0, 1, 2],
-                         [0, 1, 2]]
+```
+  commit A          commit B
+
+[[0, 1, 2],        [[0, 1, 2],
+ [0, 1, 2], ----->  [2, 2, 2], ----- MERGE CONFLICT
+ [0, 1, 2]]         [3, 3, 3]]      /
+      \                            /
+       \            commit C      /
+        \                        /
+         \          [[1, 1, 1], /
+          ------->   [0, 1, 2],
+                     [0, 1, 2]]
+```
                      
 When a conflict is detected, the merge author must either pick a sample
 from one of the commits or make changes in one of the branches such that
@@ -560,21 +570,21 @@ Any merge conflicts can be identified and addressed ahead of running a
 commits, Hangar will provide a list of conflicts which it identifies. In
 general these fall into 4 categories:
 
-1)  **Additions** in both branches which created new keys (samples /
-    columns / metadata) with non-compatible values. For samples &
-    metadata, the hash of the data is compared, for columns, the schema
-    specification is checked for compatibility in a method custom to the
-    internal workings of Hangar.
-2)  **Removal** in `Master Commit / Branch` **& Mutation** in
-    `Dev Commit / Branch`. Applies for samples, columns, and metadata
-    identically.
-3)  **Mutation** in `Dev Commit / Branch` **& Removal** in
-    `Master Commit / Branch`. Applies for samples, columns, and metadata
-    identically.
-4)  **Mutations** on keys both branches to non-compatible values. For
-    samples & metadata, the hash of the data is compared, for columns,
-    the schema specification is checked for compatibility in a method
-    custom to the internal workings of Hangar.
+1. **Additions** in both branches which created new keys (samples /
+   columns / metadata) with non-compatible values. For samples &
+   metadata, the hash of the data is compared, for columns, the schema
+   specification is checked for compatibility in a method custom to the
+   internal workings of Hangar.
+2. **Removal** in `Master Commit / Branch` **& Mutation** in
+   `Dev Commit / Branch`. Applies for samples, columns, and metadata
+   identically.
+3. **Mutation** in `Dev Commit / Branch` **& Removal** in
+   `Master Commit / Branch`. Applies for samples, columns, and metadata
+   identically.
+4. **Mutations** on keys both branches to non-compatible values. For
+   samples & metadata, the hash of the data is compared, for columns,
+   the schema specification is checked for compatibility in a method
+   custom to the internal workings of Hangar.
 
 What's Next?
 -------------

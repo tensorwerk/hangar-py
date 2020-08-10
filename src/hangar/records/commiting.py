@@ -563,7 +563,7 @@ def commit_records(message, branchenv, stageenv, refenv, repo_path: Path,
 def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
     """DANGER ZONE: Delete the stage db and replace it with a copy of a commit environment.
 
-    .. warning::
+    !!! warning
 
         In the current implementation, this method will not validate that it is safe
         to do this operation. All validation logic must be handled upstream.
@@ -592,7 +592,7 @@ def replace_staging_area_with_commit(refenv, stageenv, commit_hash):
 def replace_staging_area_with_refs(stageenv, sorted_content):
     """DANGER ZONE: Delete all stage db records and replace it with specified data.
 
-    .. warning::
+    !!! warning
 
         In the current implementation, this method will not validate that it is safe
         to do this operation. All validation logic must be handled upstream.

@@ -50,7 +50,7 @@ class Columns:
                  txnctx: Optional[ColumnTxn] = None):
         """Developer documentation for init method.
 
-        .. warning::
+        !!! warning
 
             This class should not be instantiated directly. Instead use the factory
             functions :py:meth:`_from_commit` or :py:meth:`_from_staging` to return

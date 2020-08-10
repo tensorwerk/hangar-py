@@ -211,84 +211,84 @@ def run_bulk_import(
 
     Examples
     --------
-        >>> import os
-        >>> import numpy as np
-        >>> from PIL import Image
-        >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
-        >>> def image_loader(file_path):
-        ...     im = Image.open(file_name)
-        ...     arr = np.array(im.resize(512, 512))
-        ...     im_record = UDF_Return(column='image', key=(category, sample), data=arr)
-        ...     yield im_record
-        ...
-        ...     root, sample_file = os.path.split(file_path)
-        ...     category = os.path.dirname(root)
-        ...     sample_name, _ = os.path.splitext(sample_file)
-        ...     path_record = UDF_Return(column='file_str', key=(category, sample_name), data=file_path)
-        ...     yield path_record
-        ...
-        >>> udf_kwargs = [
-        ...     {'file_path': '/foo/cat/image_001.jpeg'},
-        ...     {'file_path': '/foo/cat/image_002.jpeg'},
-        ...     {'file_path': '/foo/dog/image_001.jpeg'},
-        ...     {'file_path': '/foo/bird/image_011.jpeg'},
-        ...     {'file_path': '/foo/bird/image_003.jpeg'}
-        ... ]
-        >>> repo = Repository('foo/path/to/repo')
-        >>> run_bulk_import(
-        ...     repo, branch_name='master', column_names=['file_str', 'image'],
-        ...     udf=image_loader, udf_kwargs=udf_kwargs)
+    >>> import os
+    >>> import numpy as np
+    >>> from PIL import Image
+    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
+    >>> def image_loader(file_path):
+    ...     im = Image.open(file_name)
+    ...     arr = np.array(im.resize(512, 512))
+    ...     im_record = UDF_Return(column='image', key=(category, sample), data=arr)
+    ...     yield im_record
+    ...
+    ...     root, sample_file = os.path.split(file_path)
+    ...     category = os.path.dirname(root)
+    ...     sample_name, _ = os.path.splitext(sample_file)
+    ...     path_record = UDF_Return(column='file_str', key=(category, sample_name), data=file_path)
+    ...     yield path_record
+    ...
+    >>> udf_kwargs = [
+    ...     {'file_path': '/foo/cat/image_001.jpeg'},
+    ...     {'file_path': '/foo/cat/image_002.jpeg'},
+    ...     {'file_path': '/foo/dog/image_001.jpeg'},
+    ...     {'file_path': '/foo/bird/image_011.jpeg'},
+    ...     {'file_path': '/foo/bird/image_003.jpeg'}
+    ... ]
+    >>> repo = Repository('foo/path/to/repo')
+    >>> run_bulk_import(
+    ...     repo, branch_name='master', column_names=['file_str', 'image'],
+    ...     udf=image_loader, udf_kwargs=udf_kwargs)
 
     However, the following will not work, since the output is non-deterministic.
 
-        >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
-        >>> def nondeterminstic(x, y):
-        ...     first = str(x * y)
-        ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=first)
-        ...
-        ...     second = str(x * y * random())
-        ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=second)
-        ...
-        >>> udf_kwargs = [
-        ...     {'x': 1, 'y': 2},
-        ...     {'x': 1, 'y': 3},
-        ...     {'x': 2, 'y': 4},
-        ... ]
-        >>> run_bulk_import(
-        ...     repo, branch_name='master', column_names=['valstr'],
-        ...     udf=image_loader, udf_kwargs=udf_kwargs)
-        Traceback (most recent call last):
-          `File "<stdin>", line 1, in <module>`
-        TypeError: contents returned in subbsequent calls to UDF with identical
-          kwargs yielded different results. UDFs MUST generate deterministic
-          results for the given inputs. Input kwargs generating this result:
-          {'x': 1, 'y': 2}.
+    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
+    >>> def nondeterminstic(x, y):
+    ...     first = str(x * y)
+    ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=first)
+    ...
+    ...     second = str(x * y * random())
+    ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=second)
+    ...
+    >>> udf_kwargs = [
+    ...     {'x': 1, 'y': 2},
+    ...     {'x': 1, 'y': 3},
+    ...     {'x': 2, 'y': 4},
+    ... ]
+    >>> run_bulk_import(
+    ...     repo, branch_name='master', column_names=['valstr'],
+    ...     udf=image_loader, udf_kwargs=udf_kwargs)
+    Traceback (most recent call last):
+      `File "<stdin>", line 1, in <module>`
+    TypeError: contents returned in subbsequent calls to UDF with identical
+      kwargs yielded different results. UDFs MUST generate deterministic
+      results for the given inputs. Input kwargs generating this result:
+      {'x': 1, 'y': 2}.
 
     Not all columns must be returned from every input to the UDF, the number of
     data pieces yielded can also vary arbitrarily (so long as the results are
     deterministic for a particular set of inputs)
 
-        >>> import numpy as np
-        >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
-        >>> def maybe_load(x_arr, y_arr, sample_name, columns=['default']):
-        ...     for column in columns:
-        ...         arr = np.multiply(x_arr, y_arr)
-        ...         yield UDF_Return(column=column, key=sample_name, data=arr)
-        ...     #
-        ...     # do some strange processing which only outputs another column sometimes
-        ...     if len(columns) == 1:
-        ...         other = np.array(x_arr.shape) * np.array(y_arr.shape)
-        ...         yield UDF_Return(column='strange_column', key=sample_name, data=other)
-        ...
-        >>> udf_kwargs = [
-        ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_1'},
-        ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_2', 'columns': ['foo', 'bar', 'default']},
-        ...     {'x_arr': np.arange(10) * 2, 'y_arr': np.arange(10), 'sample_name': 'sample_3'},
-        ... ]
-        >>> run_bulk_import(
-        ...     repo, branch_name='master',
-        ...     column_names=['default', 'foo', 'bar', 'strange_column'],
-        ...     udf=maybe_load, udf_kwargs=udf_kwargs)
+    >>> import numpy as np
+    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
+    >>> def maybe_load(x_arr, y_arr, sample_name, columns=['default']):
+    ...     for column in columns:
+    ...         arr = np.multiply(x_arr, y_arr)
+    ...         yield UDF_Return(column=column, key=sample_name, data=arr)
+    ...     #
+    ...     # do some strange processing which only outputs another column sometimes
+    ...     if len(columns) == 1:
+    ...         other = np.array(x_arr.shape) * np.array(y_arr.shape)
+    ...         yield UDF_Return(column='strange_column', key=sample_name, data=other)
+    ...
+    >>> udf_kwargs = [
+    ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_1'},
+    ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_2', 'columns': ['foo', 'bar', 'default']},
+    ...     {'x_arr': np.arange(10) * 2, 'y_arr': np.arange(10), 'sample_name': 'sample_3'},
+    ... ]
+    >>> run_bulk_import(
+    ...     repo, branch_name='master',
+    ...     column_names=['default', 'foo', 'bar', 'strange_column'],
+    ...     udf=maybe_load, udf_kwargs=udf_kwargs)
 
     Parameters
     ----------

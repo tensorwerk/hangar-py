@@ -3,103 +3,58 @@
 Backend Identifiers
 ===================
 
-*  Backend: ``0``
-*  Version: ``0``
-*  Format Code: ``00``
-*  Canonical Name: ``HDF5_00``
+* Backend: ``0``
+* Version: ``0``
+* Format Code: ``00``
+* Canonical Name: ``HDF5_00``
 
 Storage Method
 ==============
 
-*  Data is written to specific subarray indexes inside an HDF5 "dataset" in a
-   single HDF5 File.
+* Data is written to specific subarray indexes inside an HDF5 "dataset" in a
+  single HDF5 File.
 
-*  In each HDF5 File there are ``COLLECTION_COUNT`` "datasets" (named ``["0" :
+* In each HDF5 File there are ``COLLECTION_COUNT`` "datasets" (named ``["0" :
    "{COLLECTION_COUNT}"]``). These are referred to as ``"dataset number"``
 
-*  Each dataset is a zero-initialized array of:
+* Each dataset is a zero-initialized array of:
 
-   *  ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
+    * ``dtype: {schema_dtype}``; ie ``np.float32`` or ``np.uint8``
 
-   *  ``shape: (COLLECTION_SIZE, *{schema_shape.size})``; ie ``(500, 10)`` or
+    * ``shape: (COLLECTION_SIZE, *{schema_shape.size})``; ie ``(500, 10)`` or
       ``(500, 300)``. The first index in the dataset is referred to as a
       ``collection index``. See technical note below for detailed explanation
       on why the flatten operaiton is performed.
 
-*  Compression Filters, Chunking Configuration/Options are applied globally for
-   all ``datasets`` in a file at dataset creation time.
+* Compression Filters, Chunking Configuration/Options are applied globally for
+  all ``datasets`` in a file at dataset creation time.
 
-*  On read and write of all samples the xxhash64_hexdigest is calculated for
-   the raw array bytes. This is to ensure that all data in == data out of the
-   hdf5 files. That way even if a file is manually edited (bypassing fletcher32
-   filter check) we have a quick way to tell that things are not as they should
-   be.
+* On read and write of all samples the xxhash64_hexdigest is calculated for
+  the raw array bytes. This is to ensure that all data in == data out of the
+  hdf5 files. That way even if a file is manually edited (bypassing fletcher32
+  filter check) we have a quick way to tell that things are not as they should
+  be.
 
-Compression Options
-===================
-
-Accepts dictionary containing keys
-
-*  ``backend`` == ``"00"``
-*  ``complib``
-*  ``complevel``
-*  ``shuffle``
-
-Blosc-HDF5
-
-*  ``complib`` valid values:
-
-   *  ``'blosc:blosclz'``,
-   *  ``'blosc:lz4'``,
-   *  ``'blosc:lz4hc'``,
-   *  ``'blosc:zlib'``,
-   *  ``'blosc:zstd'``
-
-*  ``complevel`` valid values: [0, 9] where 0 is "no compression" and 9 is
-   "most compression"
-
-*  ``shuffle`` valid values:
-
-   *  ``None``
-   *  ``'none'``
-   *  ``'byte'``
-   *  ``'bit'``
-
-
-LZF Filter
-
-*  ``'complib' == 'lzf'``
-*  ``'shuffle'`` one of ``[False, None, 'none', True, 'byte']``
-*  ``'complevel'`` one of ``[False, None, 'none']``
-
-GZip Filter
-
-*  ``'complib' == 'gzip'``
-*  ``'shuffle'`` one of ``[False, None, 'none', True, 'byte']``
-*  ``complevel`` valid values: [0, 9] where 0 is "no compression" and 9 is
-   "most compression"
-
-
-Technical Details
------------------
-- Files are read only after initial creation/writes. Only a write-enabled
+Technical Notes
+---------------
+* Files are read only after initial creation/writes. Only a write-enabled
   checkout can open a HDF5 file in ``"w"`` or ``"a"`` mode, and writer
   checkouts create new files on every checkout, and make no attempt to fill in
   unset locations in previous files. This is not an issue as no disk space is
   used until data is written to the initially created "zero-initialized"
   collection datasets
 
-- On write: Single Writer Multiple Reader (``SWMR``) mode is set to ensure that
+* On write: Single Writer Multiple Reader (``SWMR``) mode is set to ensure that
   improper closing (not calling ``.close()``) method does not corrupt any data
   which had been previously flushed to the file.
 
-- On read: SWMR is set to allow multiple readers (in different threads /
+* On read: SWMR is set to allow multiple readers (in different threads /
   processes) to read from the same file. File handle serialization is handled
   via custom python ``pickle`` serialization/reduction logic which is
   implemented by the high level ``pickle`` reduction ``__set_state__()``,
   ``__get_state__()`` class methods.
 
-- An optimization is performed in order to increase the read / write
+* An optimization is performed in order to increase the read / write
   performance of variable shaped datasets. Due to the way that we initialize
   an entire HDF5 file with all datasets pre-created (to the size of the max
   subarray shape), we need to ensure that storing smaller sized arrays (in a
@@ -120,38 +75,84 @@ Technical Details
   operation). This is part of the reason that we only accept C ordered arrays
   as input to Hangar.
 
+
+Compression Options
+===================
+
+Accepts dictionary containing keys
+
+* ``backend`` == ``"00"``
+* ``complib``
+* ``complevel``
+* ``shuffle``
+
+Blosc-HDF5
+
+* ``complib`` valid values:
+
+    * ``'blosc:blosclz'``,
+    * ``'blosc:lz4'``,
+    * ``'blosc:lz4hc'``,
+    * ``'blosc:zlib'``,
+    * ``'blosc:zstd'``
+
+* ``complevel`` valid values: [0, 9] where 0 is "no compression" and 9 is
+  "most compression"
+
+* ``shuffle`` valid values:
+
+    * ``None``
+    * ``'none'``
+    * ``'byte'``
+    * ``'bit'``
+
+
+LZF Filter
+
+* ``'complib' == 'lzf'``
+* ``'shuffle'`` one of ``[False, None, 'none', True, 'byte']``
+* ``'complevel'`` one of ``[False, None, 'none']``
+
+GZip Filter
+
+* ``'complib' == 'gzip'``
+* ``'shuffle'`` one of ``[False, None, 'none', True, 'byte']``
+* ``complevel`` valid values: [0, 9] where 0 is "no compression" and 9 is
+  "most compression"
+
+
 Record Format
 =============
 
 Fields Recorded for Each Array
 ------------------------------
 
-*  Format Code
-*  File UID
-*  xxhash64_hexdigest (ie. checksum)
-*  Dataset Number (``0:COLLECTION_COUNT`` dataset selection)
-*  Dataset Index (``0:COLLECTION_SIZE`` dataset subarray selection)
-*  Subarray Shape
+* Format Code
+* File UID
+* xxhash64_hexdigest (ie. checksum)
+* Dataset Number (``0:COLLECTION_COUNT`` dataset selection)
+* Dataset Index (``0:COLLECTION_SIZE`` dataset subarray selection)
+* Subarray Shape
 
 Examples
 --------
 1)  Adding the first piece of data to a file:
 
-    *  Array shape (Subarray Shape): (10, 10)
-    *  File UID: "rlUK3C"
-    *  xxhash64_hexdigest: 8067007c0f05c359
-    *  Dataset Number: 16
-    *  Collection Index: 105
+    * Array shape (Subarray Shape): (10, 10)
+    * File UID: "rlUK3C"
+    * xxhash64_hexdigest: 8067007c0f05c359
+    * Dataset Number: 16
+    * Collection Index: 105
 
     ``Record Data => "00:rlUK3C:8067007c0f05c359:16:105:10 10"``
 
 2)  Adding to a piece of data to a the middle of a file:
 
-    *  Array shape (Subarray Shape): (20, 2, 3)
-    *  File UID: "rlUK3C"
-    *  xxhash64_hexdigest: b89f873d3d153a9c
-    *  Dataset Number: "3"
-    *  Collection Index: 199
+    * Array shape (Subarray Shape): (20, 2, 3)
+    * File UID: "rlUK3C"
+    * xxhash64_hexdigest: b89f873d3d153a9c
+    * Dataset Number: "3"
+    * Collection Index: 199
 
     ``Record Data => "00:rlUK3C:b89f873d3d153a9c:8:199:20 2 3"``
 
@@ -522,14 +523,13 @@ class HDF5_00_FileHandles(object):
     def _dataset_opts(complib: str, complevel: int, shuffle: Union[bool, str]) -> dict:
         """specify compression options for the hdf5 dataset.
 
-        .. seealso:: :function:`_blosc_opts`
+        To enable blosc compression, use the conda-forge `blosc-hdf5-plugin` package.
 
-        to enable blosc compression, use the conda-forge `blosc-hdf5-plugin` package.
+        !!! seealso
 
-        .. seealso::
-
-        * https://github.com/conda-forge/staged-recipes/pull/7650
-        * https://github.com/h5py/h5py/issues/611
+            * :function:`_blosc_opts`
+            * https://github.com/conda-forge/staged-recipes/pull/7650
+            * https://github.com/h5py/h5py/issues/611
 
         Parameters
         ----------
@@ -648,7 +648,7 @@ class HDF5_00_FileHandles(object):
           maximum performance, this value should be set approximately 100 times that
           number of chunks.
 
-        .. seealso::
+        !!! seealso
 
             http://docs.h5py.org/en/stable/high/file.html#chunk-cache
 

@@ -4,7 +4,7 @@ In the current implementation only fast-forward and a competent, but limited,
 three-way merge algorithm are implemented. All user facing API calls should be
 funneled through the :function:`select_merge_algorithm` function
 
-.. note::
+!!! note
 
     In the current implementation, it is not possible to stop a merge in progress or
     to revert a bad merge commit. All revert like operations should be made by

@@ -39,14 +39,13 @@ KeyType = Union[str, int]
 class Remotes(object):
     """Class which governs access to remote interactor objects.
 
-    .. note::
+    !!! note
 
-       The remote-server implementation is under heavy development, and is
-       likely to undergo changes in the Future. While we intend to ensure
-       compatability between software versions of Hangar repositories written
-       to disk, the API is likely to change. Please follow our process at:
-       https://www.github.com/tensorwerk/hangar-py
-
+        The remote-server implementation is under heavy development, and is
+        likely to undergo changes in the Future. While we intend to ensure
+        compatability between software versions of Hangar repositories written
+        to disk, the API is likely to change. Please follow our process at:
+        https://www.github.com/tensorwerk/hangar-py
     """
 
     def __init__(self, env: Environments):
@@ -70,6 +69,11 @@ class Remotes(object):
 
     def add(self, name: str, address: str) -> RemoteInfo:
         """Add a remote to the repository accessible by `name` at `address`.
+
+        >>> from hangar import Repository
+        >>> repo = Repository('foo/path')
+        >>> repo.remote.add('origin', 'localhost:50051')
+        RemoteInfo(name='origin', address='localhost:50051')
 
         Parameters
         ----------
@@ -110,6 +114,13 @@ class Remotes(object):
     def remove(self, name: str) -> RemoteInfo:
         """Remove a remote repository from the branch records
 
+        >>> from hangar import Repository
+        >>> repo = Repository('foo/path')
+        >>> repo.remote.add('origin', 'localhost:50051')
+        RemoteInfo(name='origin', address='localhost:50051')
+        >>> repo.remote.remove('origin')
+        RemoteInfo(name='origin', address='localhost:50051')
+
         Parameters
         ----------
         name
@@ -122,7 +133,7 @@ class Remotes(object):
 
         Returns
         -------
-        str
+        RemoteInfo
             The channel address which was removed at the given remote name
         """
         self.__verify_repo_initialized()
@@ -134,6 +145,16 @@ class Remotes(object):
 
     def list_all(self) -> List[RemoteInfo]:
         """List all remote names and addresses recorded in the client's repository.
+
+        >>> from hangar import Repository
+        >>> repo = Repository('foo/path')
+        >>> repo.remote.add('origin', 'localhost:50051')
+        RemoteInfo(name='origin', address='localhost:50051')
+        >>> repo.remote.add('upstream'. 'localhost:50052')
+        RemoteInfo(name='upstream', address='localhost:50052')
+        >>> repo.remote.list_all()
+        [RemoteInfo(name='origin', address='localhost:50051'),
+         RemoteInfo(name='upstream', address='localhost:50052')]
 
         Returns
         -------
@@ -151,6 +172,13 @@ class Remotes(object):
 
     def ping(self, name: str) -> float:
         """Ping remote server and check the round trip time.
+
+        >>> from hangar import Repository
+        >>> repo = Repository('foo/path')
+        >>> repo.remote.add('origin', 'localhost:50051')
+        RemoteInfo(name='origin', address='localhost:50051')
+        >>> repo.remote.ping('origin')
+        0.0523
 
         Parameters
         ----------
@@ -287,7 +315,7 @@ class Remotes(object):
                           commit: Optional[str] = None) -> str:
         """Granular fetch data operation allowing selection of individual samples.
 
-        .. warning::
+        !!! warning
 
             This is a specialized version of the :meth:`fetch_data` method for use
             in specilized situations where some prior knowledge is known about the data.
@@ -305,18 +333,18 @@ class Remotes(object):
             name of the remote server to pull data from
         column
             name of the column which data is being fetched from.
-        sample
+        samples
             Key, or sequence of sample keys to select.
 
-            *  Flat column layouts should provide just a single key, or flat sequence of
-               keys which will be fetched from the server. ie. `sample1` OR
-               [`sample1`, `sample2`, `sample3`, etc.]
+            - Flat column layouts should provide just a single key, or flat sequence of
+              keys which will be fetched from the server. ie. `sample1` OR
+              [`sample1`, `sample2`, `sample3`, etc.]
 
-            *  Nested column layouts can provide tuples specifying `(sample, subsample)`
-               records to retrieve, tuples with an `Ellipsis` character in the `subsample`
-               index `(sample, ...)` (which will fetch all subsamples for the given sample),
-               or can provide lone sample keys in the sequences `sample` (which will also fetch
-               all subsamples listed under the sample) OR ANY COMBINATION of the above.
+            - Nested column layouts can provide tuples specifying `(sample, subsample)`
+              records to retrieve, tuples with an `Ellipsis` character in the `subsample`
+              index `(sample, ...)` (which will fetch all subsamples for the given sample),
+              or can provide lone sample keys in the sequences `sample` (which will also fetch
+              all subsamples listed under the sample) OR ANY COMBINATION of the above.
         branch
             branch head to operate on, either ``branch`` or ``commit`` argument must be
             passed, but NOT both. Default is ``None``
@@ -401,15 +429,14 @@ class Remotes(object):
         """Map sample keys to data record digest
 
         Depending on column layout, the mapping of samples -> digests
-        is handled differently.
+        is handled differently:
 
-        "flat" columns:
-            There is a direct map of sample key -> digest. If a sample
-            does not exist in the column, it is a key error.
-        "nested" column:
-            There is a layered mapping of sample key -> subsamples -> digests
-            We take the approach that only specifying a sample key results
-            in fetching all subsamples contained under it.
+        * "flat" columns: There is a direct map of sample key -> digest. If a
+          sample does not exist in the column, it is a key error.
+
+        * "nested" column: There is a layered mapping of sample key ->
+          subsamples -> digests We take the approach that only specifying
+          a sample key results in fetching all subsamples contained under it.
 
         Parameters
         ----------
@@ -622,11 +649,6 @@ class Remotes(object):
     ) -> Dict[str, List[str]]:
         """Calculate mapping of schemas to data digests.
 
-        Parameters
-        ----------
-        selectedDataRecords
-        hashenv
-
         Returns
         -------
         Dict[str, List[str]]
@@ -685,7 +707,7 @@ class Remotes(object):
         This method is semantically identical to a ``git push`` operation.
         Any local updates will be sent to the remote repository.
 
-        .. note::
+        !!! note
 
             The current implementation is not capable of performing a
             ``force push`` operation. As such, remote branches with diverged

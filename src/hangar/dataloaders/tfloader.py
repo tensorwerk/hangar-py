@@ -35,7 +35,7 @@ def make_tf_dataset(columns,
     `make_tf_dataset` accepts a `shuffle` argument which will be used by the
     generator to shuffle each time it is being called.
 
-    .. warning::
+    !!! warning
 
         `tf.data.Dataset.from_generator` currently uses `tf.compat.v1.py_func()`
         internally. Hence the serialization function (`yield_data`) will not be
