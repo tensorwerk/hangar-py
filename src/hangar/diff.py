@@ -305,9 +305,9 @@ class BaseUserDiff(object):
 
         Parameters
         ----------
-        mHEAD : str
+        mHEAD
             full commit hash to use as the `master` branch head commit
-        dHEAD : str
+        dHEAD
             full commit hash to use as the `dev` branch head commit
 
         Returns
@@ -340,11 +340,11 @@ class BaseUserDiff(object):
 
         Parameters
         ----------
-        a_env : lmdb.Environment
+        a_env
             unpacked lmdb environment for the ancestor commit
-        m_env : lmdb.Environment
+        m_env
             unpacked lmdb environment for the master commit, current HEAD
-        d_env : lmdb.Environment
+        d_env
             unpacked lmdb environment for the dev commit, compare to HEAD
 
         Returns
@@ -368,9 +368,9 @@ class BaseUserDiff(object):
 
         Parameters
         ----------
-        a_env : lmdb.Environment
+        a_env
             unpacked lmdb environment for the ancestor commit
-        m_env : lmdb.Environment
+        m_env
             unpacked lmdb environment for the master commit
 
         Returns
@@ -432,7 +432,7 @@ class ReaderUserDiff(BaseUserDiff):
 
         Parameters
         ----------
-        dev_commit_hash : str
+        dev_commit_hash
             hash of the commit to be used as the comparison.
 
         Returns
@@ -456,7 +456,7 @@ class ReaderUserDiff(BaseUserDiff):
 
         Parameters
         ----------
-        dev_commit_hash : str
+        dev_commit_hash
             hash of the commit to be used as the comparison.
 
         Returns
@@ -483,7 +483,7 @@ class ReaderUserDiff(BaseUserDiff):
 
         Parameters
         ----------
-        dev_branch : str
+        dev_branch
             name of the branch whose HEAD will be used to calculate the diff of.
 
         Returns
@@ -561,7 +561,7 @@ class WriterUserDiff(BaseUserDiff):
 
         Parameters
         ----------
-        dev_commit_hash : str
+        dev_commit_hash
             hash of the commit to be used as the comparison.
 
         Returns
@@ -585,7 +585,7 @@ class WriterUserDiff(BaseUserDiff):
 
         Parameters
         ----------
-        dev_commit_hash : str
+        dev_commit_hash
             hash of the commit to be used as the comparison.
 
         Returns
@@ -612,7 +612,7 @@ class WriterUserDiff(BaseUserDiff):
 
         Parameters
         ----------
-        dev_branch : str
+        dev_branch
             name of the branch whose HEAD will be used to calculate the diff of.
 
         Returns

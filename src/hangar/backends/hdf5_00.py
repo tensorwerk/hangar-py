@@ -80,6 +80,46 @@ GZip Filter
    "most compression"
 
 
+Technical Details
+-----------------
+- Files are read only after initial creation/writes. Only a write-enabled
+  checkout can open a HDF5 file in ``"w"`` or ``"a"`` mode, and writer
+  checkouts create new files on every checkout, and make no attempt to fill in
+  unset locations in previous files. This is not an issue as no disk space is
+  used until data is written to the initially created "zero-initialized"
+  collection datasets
+
+- On write: Single Writer Multiple Reader (``SWMR``) mode is set to ensure that
+  improper closing (not calling ``.close()``) method does not corrupt any data
+  which had been previously flushed to the file.
+
+- On read: SWMR is set to allow multiple readers (in different threads /
+  processes) to read from the same file. File handle serialization is handled
+  via custom python ``pickle`` serialization/reduction logic which is
+  implemented by the high level ``pickle`` reduction ``__set_state__()``,
+  ``__get_state__()`` class methods.
+
+- An optimization is performed in order to increase the read / write
+  performance of variable shaped datasets. Due to the way that we initialize
+  an entire HDF5 file with all datasets pre-created (to the size of the max
+  subarray shape), we need to ensure that storing smaller sized arrays (in a
+  variable sized Hangar Column) would be effective. Because we use chunked
+  storage, certain dimensions which are incomplete could have potentially
+  required writes to chunks which do are primarily empty (worst case "C" index
+  ordering), increasing read / write speeds significantly.
+
+    To overcome this, we create HDF5 datasets which have ``COLLECTION_SIZE``
+  first dimension size, and only ONE second dimension of size
+  ``schema_shape.size()`` (ie. product of all dimensions). For example an
+  array schema with shape (10, 10, 3) would be stored in a HDF5 dataset of
+  shape (COLLECTION_SIZE, 300). Chunk sizes are chosen to align on the first
+  dimension with a second dimension of size which fits the total data into L2
+  CPU Cache (< 256 KB). On write, we use the ``np.ravel`` function to
+  construct a "view" (not copy) of the array as a 1D array, and then on read
+  we reshape the array to the recorded size (a copyless "view-only"
+  operation). This is part of the reason that we only accept C ordered arrays
+  as input to Hangar.
+
 Record Format
 =============
 
@@ -93,10 +133,8 @@ Fields Recorded for Each Array
 *  Dataset Index (``0:COLLECTION_SIZE`` dataset subarray selection)
 *  Subarray Shape
 
-
 Examples
 --------
-
 1)  Adding the first piece of data to a file:
 
     *  Array shape (Subarray Shape): (10, 10)
@@ -107,7 +145,7 @@ Examples
 
     ``Record Data => "00:rlUK3C:8067007c0f05c359:16:105:10 10"``
 
-1)  Adding to a piece of data to a the middle of a file:
+2)  Adding to a piece of data to a the middle of a file:
 
     *  Array shape (Subarray Shape): (20, 2, 3)
     *  File UID: "rlUK3C"
@@ -117,47 +155,6 @@ Examples
 
     ``Record Data => "00:rlUK3C:b89f873d3d153a9c:8:199:20 2 3"``
 
-
-Technical Notes
-===============
-
-*  Files are read only after initial creation/writes. Only a write-enabled
-   checkout can open a HDF5 file in ``"w"`` or ``"a"`` mode, and writer
-   checkouts create new files on every checkout, and make no attempt to fill in
-   unset locations in previous files. This is not an issue as no disk space is
-   used until data is written to the initially created "zero-initialized"
-   collection datasets
-
-*  On write: Single Writer Multiple Reader (``SWMR``) mode is set to ensure that
-   improper closing (not calling ``.close()``) method does not corrupt any data
-   which had been previously flushed to the file.
-
-*  On read: SWMR is set to allow multiple readers (in different threads /
-   processes) to read from the same file. File handle serialization is handled
-   via custom python ``pickle`` serialization/reduction logic which is
-   implemented by the high level ``pickle`` reduction ``__set_state__()``,
-   ``__get_state__()`` class methods.
-
-*  An optimization is performed in order to increase the read / write
-   performance of variable shaped datasets. Due to the way that we initialize
-   an entire HDF5 file with all datasets pre-created (to the size of the max
-   subarray shape), we need to ensure that storing smaller sized arrays (in a
-   variable sized Hangar Column) would be effective. Because we use chunked
-   storage, certain dimensions which are incomplete could have potentially
-   required writes to chunks which do are primarily empty (worst case "C" index
-   ordering), increasing read / write speeds significantly.
-
-   To overcome this, we create HDF5 datasets which have ``COLLECTION_SIZE``
-   first dimension size, and only ONE second dimension of size
-   ``schema_shape.size()`` (ie. product of all dimensions). For example an
-   array schema with shape (10, 10, 3) would be stored in a HDF5 dataset of
-   shape (COLLECTION_SIZE, 300). Chunk sizes are chosen to align on the first
-   dimension with a second dimension of size which fits the total data into L2
-   CPU Cache (< 256 KB). On write, we use the ``np.ravel`` function to
-   construct a "view" (not copy) of the array as a 1D array, and then on read
-   we reshape the array to the recorded size (a copyless "view-only"
-   operation). This is part of the reason that we only accept C ordered arrays
-   as input to Hangar.
 """
 import logging
 import os

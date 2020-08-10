@@ -1,54 +1,25 @@
 Overview
 ========
 
-+-----------------------------------+-----------------------------------+
-| docs                              |                                   |
-+-----------------------------------+-----------------------------------+
-| tests                             | | [![Build Status](https://github |
-|                                   | .com/tensorwerk/hangar-py/workflo |
-|                                   | ws/Run%20Test%20Suite/badge.svg?b |
-|                                   | ranch=master)](https://github.com |
-|                                   | /tensorwerk/hangar-py/actions?que |
-|                                   | ry=workflow%3A%22Run+Test+Suite%2 |
-|                                   | 2+branch%3Amaster+event%3Apush+is |
-|                                   | %3Acompleted)                     |
-|                                   |   [![Code Coverage](https://codec |
-|                                   | ov.io/gh/tensorwerk/hangar-py/bra |
-|                                   | nch/master/graph/badge.svg)](http |
-|                                   | s://codecov.io/gh/tensorwerk/hang |
-|                                   | ar-py)                            |
-|                                   | | [![Language grade: Python](http |
-|                                   | s://img.shields.io/lgtm/grade/pyt |
-|                                   | hon/g/tensorwerk/hangar-py.svg?lo |
-|                                   | go=lgtm&logoWidth=18)](https://lg |
-|                                   | tm.com/projects/g/tensorwerk/hang |
-|                                   | ar-py/context:python)             |
-+-----------------------------------+-----------------------------------+
-| package                           | | [![PyPI Package latest release] |
-|                                   | (https://img.shields.io/pypi/v/ha |
-|                                   | ngar.svg)](https://pypi.org/proje |
-|                                   | ct/hangar)                        |
-|                                   |   [![PyPI Wheel](https://img.shie |
-|                                   | lds.io/pypi/wheel/hangar.svg)](ht |
-|                                   | tps://pypi.org/project/hangar)    |
-|                                   |   [![Conda-Forge Latest Version]( |
-|                                   | https://img.shields.io/conda/vn/c |
-|                                   | onda-forge/hangar.svg)](https://a |
-|                                   | naconda.org/conda-forge/hangar)   |
-|                                   | | [![Supported versions](https:// |
-|                                   | img.shields.io/pypi/pyversions/ha |
-|                                   | ngar.svg)](https://pypi.org/proje |
-|                                   | ct/hangar)                        |
-|                                   |   [![Supported implementations](h |
-|                                   | ttps://img.shields.io/pypi/implem |
-|                                   | entation/hangar.svg)](https://pyp |
-|                                   | i.org/project/hangar)             |
-|                                   | | [![GitHub license](https://img. |
-|                                   | shields.io/github/license/tensorw |
-|                                   | erk/hangar-py)](https://github.co |
-|                                   | m/tensorwerk/hangar-py/blob/maste |
-|                                   | r/LICENSE)                        |
-+-----------------------------------+-----------------------------------+
+Build
+-----
+
+[![Build Status](https://github.com/tensorwerk/hangar-py/workflows/Run%20Test%20Suite/badge.svg?branch=master)](https://github.com/tensorwerk/hangar-py/actions?query=workflow%3A%22Run+Test+Suite%22+branch%3Amaster+event%3Apush+is%3Acompleted)
+[![Code Coverage](https://codecov.io/gh/tensorwerk/hangar-py/branch/master/graph/badge.svg)](https://codecov.io/gh/tensorwerk/hangar-py)
+[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/tensorwerk/hangar-py.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/tensorwerk/hangar-py/context:python)
+
+Package
+-------
+
+[![PyPI Package latest release](https://img.shields.io/pypi/v/hangar.svg)](https://pypi.org/project/hangar)
+[![PyPI Wheel](https://img.shields.io/pypi/wheel/hangar.svg)](https://pypi.org/project/hangar)
+[![Conda-Forge Latest Version](https://img.shields.io/conda/vn/conda-forge/hangar.svg)](https://anaconda.org/conda-forge/hangar)
+[![Supported versions](https://img.shields.io/pypi/pyversions/hangar.svg)](https://pypi.org/project/hangar)
+[![Supported implementations](https://img.shields.io/pypi/implementation/hangar.svg)](https://pypi.org/project/hangar)
+[![GitHub license](https://img.shields.io/github/license/tensorwerk/hangar-py)](https://github.com/tensorwerk/hangar-py/blob/master/LICENSE)                        
+
+About
+-----
 
 Hangar is version control for tensor data. Commit, branch, merge,
 revert, and collaborate in the data-defined software era.

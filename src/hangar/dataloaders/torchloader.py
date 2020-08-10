@@ -36,14 +36,14 @@ def make_torch_dataset(columns,
     columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column
         objects.
-    keys : Sequence[str]
+    keys
         An iterable collection of sample names. If given only those samples will
         fetched from the column
-    index_range : slice
+    index_range
         A python slice object which will be used to find the subset of column.
         Argument `keys` takes priority over `range` i.e. if both are given, keys
         will be used and `range` will be ignored
-    field_names : Sequence[str], optional
+    field_names
         An array of field names used as the `field_names` for the returned
         dict keys. If not given, column names will be used as the field_names.
 

@@ -73,10 +73,10 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
+        name
             the name which should be used to refer to the remote server (ie:
             'origin')
-        address : str
+        address
             the IP:PORT where the hangar server is running
 
         Returns
@@ -112,7 +112,7 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
+        name
             name of the remote to remove the reference to
 
         Raises
@@ -154,7 +154,7 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
+        name
             name of the remote server to ping
 
         Returns
@@ -190,9 +190,9 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote repository to fetch from (ie. ``origin``)
-        branch : str
+        branch
             name of the branch to fetch the commit references for.
 
         Returns
@@ -301,12 +301,11 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote server to pull data from
-        column : str
+        column
             name of the column which data is being fetched from.
-        samples : Union[KeyType, Sequence[KeyType],
-                        Sequence[Union[Tuple[KeyType, KeyType], Tuple[KeyType], KeyType]]]
+        sample
             Key, or sequence of sample keys to select.
 
             *  Flat column layouts should provide just a single key, or flat sequence of
@@ -318,10 +317,10 @@ class Remotes(object):
                index `(sample, ...)` (which will fetch all subsamples for the given sample),
                or can provide lone sample keys in the sequences `sample` (which will also fetch
                all subsamples listed under the sample) OR ANY COMBINATION of the above.
-        branch : Optional[str]
+        branch
             branch head to operate on, either ``branch`` or ``commit`` argument must be
             passed, but NOT both. Default is ``None``
-        commit : Optional[str]
+        commit
             commit to operate on, either `branch` or `commit` argument must be passed,
             but NOT both.
 
@@ -495,24 +494,24 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote to pull the data from
-        branch : str, optional
+        branch
             The name of a branch whose HEAD will be used as the data fetch
             point. If None, ``commit`` argument expected, by default None
-        commit : str, optional
+        commit
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
-        column_names : Optional[Sequence[str]]
+        column_names
             Names of the columns which should be retrieved for the particular
             commits, any columns not named will not have their data fetched
             from the server. Default behavior is to retrieve all columns
-        max_num_bytes : Optional[int]
+        max_num_bytes
             If you wish to limit the amount of data sent to the local machine,
             set a `max_num_bytes` parameter. This will retrieve only this
             amount of data from the server to be placed on the local disk.
             Default is to retrieve all data regardless of how large.
-        retrieve_all_history : Optional[bool]
+        retrieve_all_history
             if data should be retrieved for all history accessible by the parents
             of this commit HEAD. by default False
 
@@ -625,8 +624,8 @@ class Remotes(object):
 
         Parameters
         ----------
-        selectedDataRecords : Set[queries.DataRecordVal]
-        hashenv : lmdb.Environment
+        selectedDataRecords
+        hashenv
 
         Returns
         -------
@@ -657,9 +656,9 @@ class Remotes(object):
 
         Parameters
         ----------
-        column_names : Union[None, Sequence[str]]
+        column_names
             column names to fetch data for. If ``None``, download all column data.
-        recQuery : queries.RecordQuery
+        recQuery
             initialized record query object set up with appropriate ``dataenv``.
 
         Returns
@@ -695,15 +694,15 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote repository to make the push on.
-        branch : str
+        branch
             Name of the branch to push to the remote. If the branch name does
             not exist on the remote, the it will be created
-        username : str, optional, kwarg-only
+        username
             credentials to use for authentication if repository push restrictions
             are enabled, by default ''.
-        password : str, optional, kwarg-only
+        password
             credentials to use for authentication if repository push restrictions
             are enabled, by default ''.
 

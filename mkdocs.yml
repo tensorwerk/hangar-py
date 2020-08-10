@@ -18,19 +18,11 @@ theme:
 
 plugins:
   - search
-  - mkdocstrings:
-      default_handler: python
-      handlers:
-        python:
-          docstring_style: Numpy  # this is the default
-          rendering:
-            show_source: false
-      watch:
-        - src/hangar
   - markdownextradata:
       data: data
   - mkdocs-jupyter:
       execute: False
+  - mkapi
 
 markdown_extensions:
   - markdown.extensions.codehilite:

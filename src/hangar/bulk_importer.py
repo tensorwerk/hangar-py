@@ -116,11 +116,11 @@ class UDF_Return(NamedTuple):
 
     Attributes
     ----------
-    column: str
+    column
         column name to place data into
-    key: Union[KeyType, Tuple[KeyType, KeyType]]
+    key
         key to place flat sample into, or 2-tuple of keys for nested samples
-    data: Union[np.ndarray, str, bytes]
+    data
         piece of data to place in the column with the provided key.
     """
     column: str
@@ -169,146 +169,144 @@ def run_bulk_import(
     A list of input arguments to the UDF must be provided, this is formatted as a
     sequence  (list / tuple) of keyword-arg dictionaries, each of which must be
     valid when unpacked and bound to the UDF signature. Additionally, all columns
-    must be  specified up front. If any columns are named a :class:`UDF_Return`
+    must be  specified up front. If any columns are named a `UDF_Return`
     which were not pre-specified, the entire operation will fail.
 
-    Notes
-    -----
+    !!! note
 
-    *  This is an all-or-nothing operation, either all data is successfully
-       read, validated, and written to the storage backends, or none of it
-       is. A single maleformed key or data type/shape will cause the entire
-       import operation to abort.
+        - This is an all-or-nothing operation, either all data is successfully
+          read, validated, and written to the storage backends, or none of it
+          is. A single maleformed key or data type/shape will cause the entire
+          import operation to abort.
 
-    *  The input kwargs should be fairly small (of no consequence to load
-       into memory), data out should be large. The results of the UDF
-       will only be stored in memory for a very short period (just the time
-       it takes to be validated against the column schema and compressed /
-       flushed to disk).
+        - The input kwargs should be fairly small (of no consequence to load
+          into memory), data out should be large. The results of the UDF
+          will only be stored in memory for a very short period (just the time
+          it takes to be validated against the column schema and compressed /
+          flushed to disk).
 
-    *  Every step of the process is executed as a generator, lazily loading
-       data the entire way. If possible, we recomend writing the UDF such that
-       data is not allocated in memory before it is ready to be yielded.
+        - Every step of the process is executed as a generator, lazily loading
+          data the entire way. If possible, we recomend writing the UDF such that
+          data is not allocated in memory before it is ready to be yielded.
 
-    *  If it is possible, the task recipe will be pruned and optimized in such
-       a way that iteration over the UDF will be short circuted during the
-       second pass (writing data to the backend). As this can greatly reduce
-       processing time, we recomend trying to yield data pieces which are likely
-       to be unique first from the UDF.
+        - If it is possible, the task recipe will be pruned and optimized in such
+          a way that iteration over the UDF will be short circuted during the
+          second pass (writing data to the backend). As this can greatly reduce
+          processing time, we recomend trying to yield data pieces which are likely
+          to be unique first from the UDF.
 
-    .. warning::
+    !!! warning
 
-        *  Please be aware that these methods should not be executed within a
-           Jupyter Notebook / Jupyter Lab when running the bulk importer at scale.
-           The internal implemenation makes significant use of multiprocess Queues
-           for work distribution and recording. The heavy loads placed on the system
-           have been observed to place strain on Jupyters ZeroMQ implementation,
-           resulting in random failures which may or may not even display a traceback
-           to indicate failure mode.
+        Please be aware that these methods should not be executed within a
+        Jupyter Notebook / Jupyter Lab when running the bulk importer at scale.
+        The internal implemenation makes significant use of multiprocess Queues
+        for work distribution and recording. The heavy loads placed on the system
+        have been observed to place strain on Jupyters ZeroMQ implementation,
+        resulting in random failures which may or may not even display a traceback
+        to indicate failure mode.
 
-           A small sample set of data can be used within jupyter to test an
-           implementation without problems, but for full scale operations it is best
-           run in a script with the operations protected by a ``__main__`` block.
+        A small sample set of data can be used within jupyter to test an
+        implementation without problems, but for full scale operations it is best
+        run in a script with the operations protected by a ``__main__`` block.
 
     Examples
     --------
-
-    >>> import os
-    >>> import numpy as np
-    >>> from PIL import Image
-    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
-    >>> def image_loader(file_path):
-    ...     im = Image.open(file_name)
-    ...     arr = np.array(im.resize(512, 512))
-    ...     im_record = UDF_Return(column='image', key=(category, sample), data=arr)
-    ...     yield im_record
-    ...
-    ...     root, sample_file = os.path.split(file_path)
-    ...     category = os.path.dirname(root)
-    ...     sample_name, _ = os.path.splitext(sample_file)
-    ...     path_record = UDF_Return(column='file_str', key=(category, sample_name), data=file_path)
-    ...     yield path_record
-    ...
-    >>> udf_kwargs = [
-    ...     {'file_path': '/foo/cat/image_001.jpeg'},
-    ...     {'file_path': '/foo/cat/image_002.jpeg'},
-    ...     {'file_path': '/foo/dog/image_001.jpeg'},
-    ...     {'file_path': '/foo/bird/image_011.jpeg'},
-    ...     {'file_path': '/foo/bird/image_003.jpeg'}
-    ... ]
-    >>> repo = Repository('foo/path/to/repo')
-    >>> run_bulk_import(
-    ...     repo, branch_name='master', column_names=['file_str', 'image'],
-    ...     udf=image_loader, udf_kwargs=udf_kwargs)
+        >>> import os
+        >>> import numpy as np
+        >>> from PIL import Image
+        >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
+        >>> def image_loader(file_path):
+        ...     im = Image.open(file_name)
+        ...     arr = np.array(im.resize(512, 512))
+        ...     im_record = UDF_Return(column='image', key=(category, sample), data=arr)
+        ...     yield im_record
+        ...
+        ...     root, sample_file = os.path.split(file_path)
+        ...     category = os.path.dirname(root)
+        ...     sample_name, _ = os.path.splitext(sample_file)
+        ...     path_record = UDF_Return(column='file_str', key=(category, sample_name), data=file_path)
+        ...     yield path_record
+        ...
+        >>> udf_kwargs = [
+        ...     {'file_path': '/foo/cat/image_001.jpeg'},
+        ...     {'file_path': '/foo/cat/image_002.jpeg'},
+        ...     {'file_path': '/foo/dog/image_001.jpeg'},
+        ...     {'file_path': '/foo/bird/image_011.jpeg'},
+        ...     {'file_path': '/foo/bird/image_003.jpeg'}
+        ... ]
+        >>> repo = Repository('foo/path/to/repo')
+        >>> run_bulk_import(
+        ...     repo, branch_name='master', column_names=['file_str', 'image'],
+        ...     udf=image_loader, udf_kwargs=udf_kwargs)
 
     However, the following will not work, since the output is non-deterministic.
 
-    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
-    >>> def nondeterminstic(x, y):
-    ...     first = str(x * y)
-    ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=first)
-    ...
-    ...     second = str(x * y * random())
-    ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=second)
-    ...
-    >>> udf_kwargs = [
-    ...     {'x': 1, 'y': 2},
-    ...     {'x': 1, 'y': 3},
-    ...     {'x': 2, 'y': 4},
-    ... ]
-    >>> run_bulk_import(
-    ...     repo, branch_name='master', column_names=['valstr'],
-    ...     udf=image_loader, udf_kwargs=udf_kwargs)
-    Traceback (most recent call last):
-      `File "<stdin>", line 1, in <module>`
-    TypeError: contents returned in subbsequent calls to UDF with identical
-      kwargs yielded different results. UDFs MUST generate deterministic
-      results for the given inputs. Input kwargs generating this result:
-      {'x': 1, 'y': 2}.
+        >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
+        >>> def nondeterminstic(x, y):
+        ...     first = str(x * y)
+        ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=first)
+        ...
+        ...     second = str(x * y * random())
+        ...     yield UDF_Return(column='valstr', key=f'{x}_{y}', data=second)
+        ...
+        >>> udf_kwargs = [
+        ...     {'x': 1, 'y': 2},
+        ...     {'x': 1, 'y': 3},
+        ...     {'x': 2, 'y': 4},
+        ... ]
+        >>> run_bulk_import(
+        ...     repo, branch_name='master', column_names=['valstr'],
+        ...     udf=image_loader, udf_kwargs=udf_kwargs)
+        Traceback (most recent call last):
+          `File "<stdin>", line 1, in <module>`
+        TypeError: contents returned in subbsequent calls to UDF with identical
+          kwargs yielded different results. UDFs MUST generate deterministic
+          results for the given inputs. Input kwargs generating this result:
+          {'x': 1, 'y': 2}.
 
     Not all columns must be returned from every input to the UDF, the number of
     data pieces yielded can also vary arbitrarily (so long as the results are
     deterministic for a particular set of inputs)
 
-    >>> import numpy as np
-    >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
-    >>> def maybe_load(x_arr, y_arr, sample_name, columns=['default']):
-    ...     for column in columns:
-    ...         arr = np.multiply(x_arr, y_arr)
-    ...         yield UDF_Return(column=column, key=sample_name, data=arr)
-    ...     #
-    ...     # do some strange processing which only outputs another column sometimes
-    ...     if len(columns) == 1:
-    ...         other = np.array(x_arr.shape) * np.array(y_arr.shape)
-    ...         yield UDF_Return(column='strange_column', key=sample_name, data=other)
-    ...
-    >>> udf_kwargs = [
-    ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_1'},
-    ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_2', 'columns': ['foo', 'bar', 'default']},
-    ...     {'x_arr': np.arange(10) * 2, 'y_arr': np.arange(10), 'sample_name': 'sample_3'},
-    ... ]
-    >>> run_bulk_import(
-    ...     repo, branch_name='master',
-    ...     column_names=['default', 'foo', 'bar', 'strange_column'],
-    ...     udf=maybe_load, udf_kwargs=udf_kwargs)
+        >>> import numpy as np
+        >>> from hangar.bulk_importer import UDF_Return, run_bulk_import
+        >>> def maybe_load(x_arr, y_arr, sample_name, columns=['default']):
+        ...     for column in columns:
+        ...         arr = np.multiply(x_arr, y_arr)
+        ...         yield UDF_Return(column=column, key=sample_name, data=arr)
+        ...     #
+        ...     # do some strange processing which only outputs another column sometimes
+        ...     if len(columns) == 1:
+        ...         other = np.array(x_arr.shape) * np.array(y_arr.shape)
+        ...         yield UDF_Return(column='strange_column', key=sample_name, data=other)
+        ...
+        >>> udf_kwargs = [
+        ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_1'},
+        ...     {'x_arr': np.arange(10), 'y_arr': np.arange(10) + 1, 'sample_name': 'sample_2', 'columns': ['foo', 'bar', 'default']},
+        ...     {'x_arr': np.arange(10) * 2, 'y_arr': np.arange(10), 'sample_name': 'sample_3'},
+        ... ]
+        >>> run_bulk_import(
+        ...     repo, branch_name='master',
+        ...     column_names=['default', 'foo', 'bar', 'strange_column'],
+        ...     udf=maybe_load, udf_kwargs=udf_kwargs)
 
     Parameters
     ----------
-    repo : 'Repository'
+    repo
         Initialized repository object to import data into.
-    branch_name : str
+    branch_name
         Name of the branch to checkout and import data into.
-    column_names : List[str]
+    column_names
         Names of all columns which data should be saved to.
-    udf : UDF_T
+    udf
         User-Defined Function (generator style; yielding an arbitrary number
         of values when iterated on) which is passed an unpacked kwarg dict as input
         and yields a single :class:`~.UDF_Return` instance at a time when iterated over.
         Cannot contain
-    udf_kwargs : List[dict]
+    udf_kwargs
         A sequence of keyword argument dictionaries which are individually unpacked
         as inputs into the user-defined function (UDF). the keyword argument dictionaries
-    ncpus : int, optional, default=0
+    ncpus
         Number of Parallel processes to read data files & write to hangar backend stores
         in. If <= 0, then the default is set to ``num_cpus / 2``. The value of this
         parameter should never exceed the total CPU count of the system. Import time
@@ -316,7 +314,7 @@ def run_bulk_import(
         memory usage of the ``UDF`` function and backend storage writer processes against
         the total system memory.
         generally increase linearly up to
-    autocommit : bool, optional, default=True
+    autocommit
         Control whether a commit should be made after successfully importing the
         specified data to the staging area of the branch.
     """

@@ -11,5 +11,5 @@ Backend selection
     Any questions or comments can be directed to the [Hangar Github Issues
     Page](https://github.com/tensorwerk/hangar-py/issues)
 
-::: hangar.backends.__init__
+![mkapi](hangar.backends.__init__)
 

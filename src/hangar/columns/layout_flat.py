@@ -207,7 +207,7 @@ class FlatSampleReader:
 
         Parameters
         ----------
-        key : KeyType
+        key
             Sample key to retrieve from the column.
 
         Returns
@@ -228,10 +228,10 @@ class FlatSampleReader:
 
         Parameters
         ----------
-        key : KeyType
+        key
             The name of the subsample(s) to retrieve. Passing a single
             subsample key will return the stored data value.
-        default : Any
+        default
             if a `key` parameter is not found, then return this value instead.
             By default, None.
 
@@ -343,7 +343,7 @@ class FlatSampleReader:
 
         Parameters
         ----------
-        local : bool
+        local
             True if keys should be returned which only exist on the local machine.
             Fale if remote sample keys should be excluded.
 
@@ -368,7 +368,7 @@ class FlatSampleReader:
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned keys will only correspond to data which is
             available for reading on the local disk, by default False.
 
@@ -384,7 +384,7 @@ class FlatSampleReader:
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned values will only correspond to data which is
             available for reading on the local disk. No attempt will be made to
             read data existing on a remote server, by default False.
@@ -402,7 +402,7 @@ class FlatSampleReader:
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned keys/values will only correspond to data which is
             available for reading on the local disk, No attempt will be made to
             read data existing on a remote server, by default False.
@@ -627,7 +627,7 @@ class FlatSampleWriter(FlatSampleReader):
 
         Parameters
         ----------
-        key : KeyType
+        key
             Name of the sample to remove from the column.
         """
         with ExitStack() as stack:
@@ -653,7 +653,7 @@ class FlatSampleWriter(FlatSampleReader):
 
         Parameters
         ----------
-        key : KeysType
+        key
             Sample key to remove
 
         Returns
@@ -681,9 +681,9 @@ class FlatSampleWriter(FlatSampleReader):
 
         Parameters
         ----------
-        backend : str
+        backend
             Backend format code to swtich to.
-        backend_options : Optional[dict]
+        backend_options
             Backend option specification to use (if specified). If left to
             default value of None, then default options for backend are
             automatically used.

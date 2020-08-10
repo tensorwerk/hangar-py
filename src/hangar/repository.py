@@ -36,9 +36,9 @@ class Repository(object):
 
     Parameters
     ----------
-    path : Union[str, os.PathLike]
+    path
         local directory path where the Hangar repository exists (or initialized)
-    exists : bool, optional
+    exists
         True if a Hangar repository should exist at the given directory path.
         Should no Hangar repository exists at that location, a UserWarning will
         be raised indicating that the :meth:`init` method needs to be called.
@@ -238,13 +238,13 @@ class Repository(object):
 
         Parameters
         ----------
-        write : bool, optional
+        write
             Specify if the checkout is write capable, defaults to False
-        branch : str, optional
+        branch
             name of the branch to checkout. This utilizes the state of the repo
             as it existed at the branch ``HEAD`` commit when this checkout object
             was instantiated, defaults to ''
-        commit : str, optional
+        commit
             specific hash of a commit to use for the checkout (instead of a
             branch ``HEAD`` commit). This argument takes precedent over a branch
             name parameter if it is set. Note: this only will be used in
@@ -310,17 +310,17 @@ class Repository(object):
 
         Parameters
         ----------
-        user_name : str
+        user_name
             Name of the person who will make commits to the repository. This
             information is recorded permanently in the commit records.
-        user_email : str
+        user_email
             Email address of the repository user. This information is recorded
             permanently in any commits created.
-        remote_address : str
+        remote_address
             location where the
             :class:`hangar.remote.server.HangarServer` process is
             running and accessible by the clone user.
-        remove_old : bool, optional, kwarg only
+        remove_old
             DANGER! DEVELOPMENT USE ONLY! If enabled, a
             :class:`hangar.repository.Repository` existing on disk at the same
             path as the requested clone location will be completely removed and
@@ -356,11 +356,11 @@ class Repository(object):
 
         Parameters
         ----------
-        user_name : str
+        user_name
             Name of the repository user account.
-        user_email : str
+        user_email
             Email address of the repository user account.
-        remove_old : bool, kwarg-only
+        remove_old
             DEVELOPER USE ONLY -- remove and reinitialize a Hangar
             repository at the given path, Default = False
 
@@ -392,18 +392,18 @@ class Repository(object):
 
         Parameters
         ----------
-        branch : str, optional
+        branch
             The name of the branch to start the log process from. (Default value
             = None)
-        commit : str, optional
+        commit
             The commit hash to start the log process from. (Default value = None)
-        return_contents : bool, optional, kwarg only
+        return_contents
             If true, return the commit graph specifications in a dictionary
             suitable for programatic access/evaluation.
-        show_time : bool, optional, kwarg only
+        show_time
             If true and return_contents is False, show the time of each commit
             on the printed log graph
-        show_user : bool, optional, kwarg only
+        show_user
             If true and return_contents is False, show the committer of each
             commit on the printed log graph
         Returns
@@ -426,10 +426,10 @@ class Repository(object):
 
         Parameters
         ----------
-        branch : str, optional
+        branch
             A specific branch name whose head commit will be used as the summary
             point (Default value = '')
-        commit : str, optional
+        commit
             A specific commit hash which should be used as the summary point.
             (Default value = '')
         """
@@ -477,10 +477,10 @@ class Repository(object):
 
         Parameters
         ----------
-        master: str
+        master
             branch name or commit hash digest to use as the "master" which
             changes made in "dev" are compared to.
-        dev: str
+        dev
             branch name or commit hash digest to use as the "dev"
             (ie. "feature") branch which changes have been made to
             which are to be compared to the contents of "master".
@@ -528,11 +528,11 @@ class Repository(object):
 
         Parameters
         ----------
-        message: str
+        message
             Commit message to use for this merge.
-        master_branch : str
+        master_branch
             name of the master branch to merge into
-        dev_branch : str
+        dev_branch
             name of the dev/feature branch to merge
 
         Returns
@@ -581,9 +581,9 @@ class Repository(object):
 
         Parameters
         ----------
-        name : str
+        name
             name to assign to the new branch
-        base_commit : str, optional
+        base_commit
             commit hash to start the branch root at. if not specified, the
             writer branch ``HEAD`` commit at the time of execution will be used,
             defaults to None
@@ -697,12 +697,12 @@ class Repository(object):
 
         Parameters
         ----------
-        name : str
+        name
             name of the branch which should be deleted. This branch must exist, and
             cannot refer to a remote tracked branch (ie. origin/devbranch), please
             see exception descriptions for other parameters determining validity of
             argument
-        force_delete : bool, optional
+        force_delete
             If True, remove the branch pointer even if the changes are un-merged in
             other branch histories. May result in orphaned commits which may be
             time-consuming to recover if needed, by default False

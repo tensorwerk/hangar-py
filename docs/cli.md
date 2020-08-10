@@ -9,4 +9,4 @@ to be at the same level the repository was initially created in.
 Simply start by typing `$ hangar --help` in your terminal to get
 started!
 
-::: hangar.cli
+![mkapi](hangar.cli)

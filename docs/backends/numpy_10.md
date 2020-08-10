@@ -1,4 +1,4 @@
 Local NP Memmap Backend
 =======================
 
-::: hangar.backends.numpy_10
+![mkapi](hangar.backends.numpy_10)

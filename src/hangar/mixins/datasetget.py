@@ -128,12 +128,12 @@ class GetMixin:
             Please see detailed explanation in :meth:`__getitem__()` for full
             explanation of accepted argument format / result types.
 
-        default: Any, optional
+        default
             default value to insert in results for the case where some column
             name / sample key is not found, and the `except_missing` parameter
             is set to False.
 
-        except_missing: bool, optional
+        except_missing
             If False, will not throw exceptions on missing sample key value.
             Will raise KeyError if True and missing key found.
 
@@ -163,12 +163,12 @@ class GetMixin:
             Please see detailed explanation in :meth:`__getitem__()` for full
             explanation of accepted argument format / result types.
 
-        default: Any, optional
+        default
             default value to insert in results for the case where some column
             name / sample key is not found, and the `except_missing` parameter
             is set to False.
 
-        except_missing: bool, optional
+        except_missing
             If False, will not throw exceptions on missing sample key value.
             Will raise KeyError if True and missing key found.
 

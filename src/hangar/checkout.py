@@ -88,17 +88,17 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        base_path : Path
+        base_path
             directory path to the Hangar repository on disk
-        dataenv : lmdb.Environment
+        dataenv
             db where the checkout record data is unpacked and stored.
-        hashenv : lmdb.Environment
+        hashenv
             db where the hash records are stored.
-        branchenv : lmdb.Environment
+        branchenv
             db where the branch records are stored.
-        refenv : lmdb.Environment
+        refenv
             db where the commit references are stored.
-        commit : str
+        commit
             specific commit hash to checkout
         """
         self._commit_hash = commit
@@ -265,18 +265,18 @@ class ReaderCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        branch : str, optional
+        branch
             The name of the branch to start the log process from. (Default value
             = None)
-        commit : str, optional
+        commit
             The commit hash to start the log process from. (Default value = None)
-        return_contents : bool, optional, kwarg only
+        return_contents
             If true, return the commit graph specifications in a dictionary
             suitable for programatic access/evaluation.
-        show_time : bool, optional, kwarg only
+        show_time
             If true and return_contents is False, show the time of each commit
             on the printed log graph
-        show_user : bool, optional, kwarg only
+        show_user
             If true and return_contents is False, show the committer of each
             commit on the printed log graph
         Returns
@@ -369,22 +369,22 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        repo_pth : Path
+        repo_pth
             local file path of the repository.
-        branch_name : str
+        branch_name
             name of the branch whose ``HEAD`` commit will for the starting state
             of the staging area.
-        hashenv lmdb.Environment
+        hashen
             db where the hash records are stored.
-        refenv : lmdb.Environment
+        refenv
             db where the commit record data is unpacked and stored.
-        stageenv : lmdb.Environment
+        stageenv
             db where the stage record data is unpacked and stored.
-        branchenv : lmdb.Environment
+        branchenv
             db where the head record data is unpacked and stored.
-        stagehashenv: lmdb.Environment
+        stagehashenv
             db where the staged hash record data is stored.
-        mode : str, optional
+        mode
             open in write or read only mode, default is 'a' which is write-enabled.
         """
         self._enter_count = 0
@@ -641,18 +641,18 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        branch : str, optional
+        branch
             The name of the branch to start the log process from. (Default value
             = None)
-        commit : str, optional
+        commit
             The commit hash to start the log process from. (Default value = None)
-        return_contents : bool, optional, kwarg only
+        return_contents
             If true, return the commit graph specifications in a dictionary
             suitable for programatic access/evaluation.
-        show_time : bool, optional, kwarg only
+        show_time
             If true and return_contents is False, show the time of each commit
             on the printed log graph
-        show_user : bool, optional, kwarg only
+        show_user
             If true and return_contents is False, show the committer of each
             commit on the printed log graph
         Returns
@@ -699,19 +699,19 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        name : str
+        name
             Name assigned to the column
-        contains_subsamples : bool, optional
+        contains_subsamples
             True if the column column should store data in a nested structure.
             In this scheme, a sample key is used to index an arbitrary number
             of subsamples which map some (sub)key to a piece of data. If False,
             sample keys map directly to a single piece of data; essentially
             acting as a single level key/value store. By default, False.
-        backend : Optional[str], optional
+        backend
             ADVANCED USERS ONLY, backend format code to use for column data. If
             None, automatically inferred and set based on data shape and type.
             by default None
-        backend_options : Optional[dict], optional
+        backend_options
             ADVANCED USERS ONLY, filter opts to apply to column data. If None,
             automatically inferred and set based on data shape and type.
             by default None
@@ -780,19 +780,19 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        name : str
+        name
             Name assigned to the column
-        contains_subsamples : bool, optional
+        contains_subsamples
             True if the column column should store data in a nested structure.
             In this scheme, a sample key is used to index an arbitrary number
             of subsamples which map some (sub)key to a piece of data. If False,
             sample keys map directly to a single piece of data; essentially
             acting as a single level key/value store. By default, False.
-        backend : Optional[str], optional
+        backend
             ADVANCED USERS ONLY, backend format code to use for column data. If
             None, automatically inferred and set based on data shape and type.
             by default None
-        backend_options : Optional[dict], optional
+        backend_options
             ADVANCED USERS ONLY, filter opts to apply to column data. If None,
             automatically inferred and set based on data shape and type.
             by default None
@@ -867,36 +867,36 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        name : str
+        name
             The name assigned to this column.
-        shape : Optional[Union[int, Tuple[int]]]
+        shape
             The shape of the data samples which will be written in this column.
             This argument and the `dtype` argument are required if a `prototype`
             is not provided, defaults to None.
-        dtype : Optional[:class:`numpy.dtype`]
+        dtype
             The datatype of this column. This argument and the `shape` argument
             are required if a `prototype` is not provided., defaults to None.
-        prototype : Optional[:class:`numpy.ndarray`]
+        prototype
             A sample array of correct datatype and shape which will be used to
             initialize the column storage mechanisms. If this is provided, the
             `shape` and `dtype` arguments must not be set, defaults to None.
-        variable_shape : bool, optional
+        variable_shape
             If this is a variable sized column. If true, a the maximum shape is
             set from the provided ``shape`` or ``prototype`` argument. Any sample
             added to the column can then have dimension sizes <= to this
             initial specification (so long as they have the same rank as what
             was specified) defaults to False.
-        contains_subsamples : bool, optional
+        contains_subsamples
             True if the column column should store data in a nested structure.
             In this scheme, a sample key is used to index an arbitrary number of
             subsamples which map some (sub)key to some piece of data. If False,
             sample keys map directly to a single piece of data; essentially
             acting as a single level key/value store. By default, False.
-        backend : Optional[str], optional
+        backend
             ADVANCED USERS ONLY, backend format code to use for column data. If
             None, automatically inferred and set based on data shape and type.
             by default None
-        backend_options : Optional[dict], optional
+        backend_options
             ADVANCED USERS ONLY, filter opts to apply to column data. If None,
             automatically inferred and set based on data shape and type.
             by default None
@@ -964,12 +964,12 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        column_name: str
+        column_name
             name of the column
-        column_layout: str
+        column_layout
             One of ['flat', 'nested'] indicating column layout class to use
             during generation.
-        schema: ColumnBase
+        schema
             schema class instance providing column data spec, schema/column digest,
             data validator / hashing methods, and backend ID / options; all of which
             are needed to successfully create & save the column instance
@@ -1014,9 +1014,9 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        message : str
+        message
             commit message to attach to a three-way merge
-        dev_branch : str
+        dev_branch
             name of the branch which should be merge into this branch
             (ie `master`)
 
@@ -1060,7 +1060,7 @@ class WriterCheckout(GetMixin, CheckoutDictIteration):
 
         Parameters
         ----------
-        commit_message : str, optional
+        commit_message
             user proved message for a log of what was changed in this commit.
             Should a fast forward commit be possible, this will NOT be added to
             fast-forward ``HEAD``.
