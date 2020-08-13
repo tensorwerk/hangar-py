@@ -149,8 +149,11 @@ class GetMixin:
         """
         return self._get_in(keys, default, except_missing)
 
-    def _get_in(self, keys, default=None, except_missing=False,
-                *, _EXCEPTION_CLASSES = (KeyError, IndexError, TypeError)):
+    def _get_in(
+            self, keys, default=None, except_missing=False,
+            *,
+            _EXCEPTION_CLASSES = (KeyError, IndexError, TypeError)
+    ):
         """Internal method to get data from columns within a nested set of dicts.
 
         Parameters

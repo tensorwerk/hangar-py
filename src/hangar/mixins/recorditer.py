@@ -5,21 +5,25 @@ import lmdb
 class CursorRangeIterator:
 
     @staticmethod
-    def cursor_range_iterator(datatxn: lmdb.Transaction, startRangeKey: bytes, keys: bool, values: bool
-                              ) -> Iterable[Union[Tuple[bytes], Tuple[bytes, bytes]]]:
+    def cursor_range_iterator(
+            datatxn: lmdb.Transaction,
+            startRangeKey: bytes,
+            keys: bool,
+            values: bool
+    ) -> Iterable[Union[Tuple[bytes], Tuple[bytes, bytes]]]:
         """Common method used to implement cursor range iterators
 
         Parameters
         ----------
-        datatxn : lmdb.Transaction
+        datatxn
             open database transaction to read values from
-        startRangeKey : bytes
+        startRangeKey
             range in which to iterate cursor over until end of db or out of
             lexicographic range.
-        keys : bool, optional
+        keys
             If True, yield metadata keys encountered, if False only values
             are returned. By default, True.
-        values : bool, optional
+        values
             If True, yield metadata hash values encountered, if False only
             keys are returned. By default, True.
 

@@ -11,6 +11,8 @@ started!
 
 ::: mkdocs-click
     :module: hangar.cli.cli
-    :command: hangar
+    :command: init
+    :depth: 1
+
     
 # 
