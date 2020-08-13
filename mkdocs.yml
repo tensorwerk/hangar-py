@@ -31,6 +31,7 @@ markdown_extensions:
   - admonition
   - pymdownx.details
   - pymdownx.superfences
+  - mkdocs-click
   - pymdownx.highlight:
       use_pygments: true
 
@@ -63,7 +64,7 @@ nav:
       - Dataloaders for Machine Learning (Tensorflow & PyTorch): Tutorial-Dataloader.ipynb
       - Real World Quick Start Tutorial: Tutorial-RealQuickStart.ipynb
   - Design: design.md
-  #- CLI: cli.md
+  - CLI: cli.md
   - Externals: externals.md
   - FAQ: faq.md
   - Backends:

@@ -9,4 +9,8 @@ to be at the same level the repository was initially created in.
 Simply start by typing `$ hangar --help` in your terminal to get
 started!
 
-![mkapi](hangar.cli)
+::: mkdocs-click
+    :module: hangar.cli.cli
+    :command: hangar
+    
+# 
