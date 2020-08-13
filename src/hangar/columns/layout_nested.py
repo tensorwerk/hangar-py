@@ -145,11 +145,13 @@ class FlatSubsampleReader(object):
     def __getitem__(self, key: GetKeysType) -> Union[Any, Dict[KeyType, Any]]:
         """Retrieve data for some subsample key via dict style access conventions.
 
-        .. seealso:: :meth:`get`
+        !!! seealso
+
+            :meth:`get`
 
         Parameters
         ----------
-        key : GetKeysType
+        key
             Sample key to retrieve from the column. Alternatively, ``slice``
             syntax can be used to retrieve a selection of subsample
             keys/values. An empty slice (``: == slice(None)``) or ``Ellipsis``
@@ -239,7 +241,7 @@ class FlatSubsampleReader(object):
 
         Parameters
         ----------
-        local : bool
+        local
             True if keys should be returned which only exist on the local
             machine. False if remote sample keys should be excluded.
 
@@ -293,7 +295,7 @@ class FlatSubsampleReader(object):
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned keys will only correspond to data which is
             available for reading on the local disk, by default False.
 
@@ -309,7 +311,7 @@ class FlatSubsampleReader(object):
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned values will only correspond to data which is
             available for reading on the local disk. No attempt will be made to
             read data existing on a remote server, by default False.
@@ -327,7 +329,7 @@ class FlatSubsampleReader(object):
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned keys/values will only correspond to data which is
             available for reading on the local disk, No attempt will be made to
             read data existing on a remote server, by default False.
@@ -345,7 +347,7 @@ class FlatSubsampleReader(object):
 
         Parameters
         ----------
-        key : GetKeysType
+        key
             The name of the subsample(s) to retrieve. Passing a single
             subsample key will return the stored :class:`numpy.ndarray`
         default
@@ -468,7 +470,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
     def __setitem__(self, key, value):
         """Store data as a subsample. Convenience method to :meth:`add`.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`update` for an implementation analogous to python's built
             in :meth:`dict.update` method which accepts a dict or iterable of
@@ -497,7 +499,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         Think carefully before going this route, as this posit does not apply
         to many common use cases.
 
-        .. seealso::
+        !!! seealso
 
             In order to store the data with a user defined key, use
             :meth:`update` or :meth:`__setitem__`
@@ -565,13 +567,13 @@ class FlatSubsampleWriter(FlatSubsampleReader):
     def __delitem__(self, key: KeyType):
         """Remove a subsample from the column.`.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`pop` to simultaneously get a keys value and delete it.
 
         Parameters
         ----------
-        key : KeyType
+        key
             Name of the sample to remove from the column.
         """
         with ExitStack() as stack:
@@ -597,7 +599,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
 
         Parameters
         ----------
-        key : KeysType
+        key
             Sample key to remove
 
         Returns
@@ -722,7 +724,7 @@ class NestedSampleReader:
 
         Parameters
         ----------
-        key : KeyType
+        key
             Name of sample to retrieve
 
         Returns
@@ -851,7 +853,7 @@ class NestedSampleReader:
 
         Parameters
         ----------
-        local : bool
+        local
             True if keys should be returned which only exist on the local
             machine. False if remote sample keys should be excluded.
 
@@ -920,7 +922,7 @@ class NestedSampleReader:
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned keys will only correspond to data which is
             available for reading on the local disk, by default False.
 
@@ -936,7 +938,7 @@ class NestedSampleReader:
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned values will only correspond to data which is
             available for reading on the local disk. No attempt will be made to
             read data existing on a remote server, by default False.
@@ -954,7 +956,7 @@ class NestedSampleReader:
 
         Parameters
         ----------
-        local : bool, optional
+        local
             If True, returned keys/values will only correspond to data which is
             available for reading on the local disk, No attempt will be made to
             read data existing on a remote server, by default False.
@@ -972,9 +974,9 @@ class NestedSampleReader:
 
         Parameters
         ----------
-        key : GetKeysType
+        key
             The name of the subsample(s) to retrieve
-        default : Any
+        default
             if a `key` parameter is not found, then return this value instead.
             By default, None.
 
@@ -1053,7 +1055,7 @@ class NestedSampleWriter(NestedSampleReader):
     def __setitem__(self, key, value) -> None:
         """Store some subsample key / subsample data map, overwriting existing keys.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`update` for alternative syntax for setting values.
         """
@@ -1107,7 +1109,7 @@ class NestedSampleWriter(NestedSampleReader):
     def __delitem__(self, key: KeyType):
         """Remove a sample (including all contained subsamples) from the column.
 
-        .. seealso::
+        !!! seealso
 
             :meth:`pop` for alternative implementing a simultaneous get value
             and delete operation.
@@ -1129,7 +1131,7 @@ class NestedSampleWriter(NestedSampleReader):
 
         Parameters
         ----------
-        key : KeysType
+        key
             sample key to remove
 
         Returns
@@ -1146,7 +1148,7 @@ class NestedSampleWriter(NestedSampleReader):
     def change_backend(self, backend: str, backend_options: Optional[dict] = None):
         """Change the default backend and filters applied to future data writes.
 
-        .. warning::
+        !!! warning
 
            This method is meant for advanced users only. Please refer to the
            hangar backend codebase for information on accepted parameters and
@@ -1154,7 +1156,7 @@ class NestedSampleWriter(NestedSampleReader):
 
         Parameters
         ----------
-        backend : str
+        backend
             Backend format code to swtich to.
         backend_options
             Backend option specification to use (if specified). If left to

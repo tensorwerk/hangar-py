@@ -146,7 +146,7 @@ for source in CYTHON_SOURCES:
                     language="c")
     __extensions.append(ext)
 
-with open('README.rst') as f:
+with open('README.md') as f:
     README_RST = f.read()
 
 SHORT_DESCRIPTION = (

@@ -1,0 +1,83 @@
+site_name: hangar
+site_description: Version control for software 2.0
+site_url: https://hangar-py.readthedocs.io
+repo_name: tensorwerk/hangar-py
+repo_url: https://github.com/tensorwerk/hangar-py
+edit_uri: ''
+
+extra_css:
+  - stylesheets/termynal.css
+  - stylesheets/extra.css
+extra_javascript:
+  - js/termynal.js
+  - js/custom.js
+
+theme:
+  name: material
+  language: en
+
+plugins:
+  - search
+  - markdownextradata:
+      data: data
+  - mkdocs-jupyter:
+      execute: False
+  - mkapi
+
+markdown_extensions:
+  - markdown.extensions.codehilite:
+      guess_lang: false
+  - codehilite
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - mkdocs-click
+  - pymdownx.highlight:
+      use_pygments: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github-alt
+      link: https://github.com/tensorwerk/hangar-py
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/hangardata
+    - icon: fontawesome/brands/medium
+      link: https://medium.com/@tensorwerk
+    - icon: fontawesome/solid/globe
+      link: https://tensorwerk.com
+
+nav:
+  - Home: README.md
+  - Quickstart: quickstart.md
+  - Installation: installation.md
+  - Concepts: concepts.md
+  - API:
+      - Repository & Remotes: api/repository.md
+      - Write-Enabled Checkout: api/writer_checkout.md
+      - Read-Only Checkout: api/reader_checkout.md
+      - Machine Learning Dataloaders: api/dataloaders.md
+  - Tutorials:
+      - Quick Start Tutorial: Tutorial-QuickStart.ipynb
+      - Part 1 - Creating A Repository And Working With Data: Tutorial-001.ipynb
+      - Part 2 - Checkouts, Branching, & Merging: Tutorial-002.ipynb
+      - Part 3 - Working With Remote Servers: Tutorial-003.ipynb
+      - Dataloaders for Machine Learning (Tensorflow & PyTorch): Tutorial-Dataloader.ipynb
+      - Real World Quick Start Tutorial: Tutorial-RealQuickStart.ipynb
+  - Design: design.md
+  - CLI: cli.md
+  - Externals: externals.md
+  - FAQ: faq.md
+  - Backends:
+    - Backend Selection: backends/backends.md
+    - HDF5_00: backends/hdf5_00.md
+    - HDF5_01: backends/hdf5_01.md
+    - NUMPY_10: backends/numpy_10.md
+    - LMDB_30: backends/lmdb_30.md
+    - LMDB_31: backends/lmdb_31.md
+    - REMOTE_50: backends/remote_50.md
+  - Contributing:
+      Contributing: contributing.md
+      Code Of Conduct: codeofconduct.md
+      Benchmarking: benchmarking.md
+  - Authors: authors.md
+  - Changelog: changelog.md

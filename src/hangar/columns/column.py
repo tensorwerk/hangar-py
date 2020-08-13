@@ -50,7 +50,7 @@ class Columns:
                  txnctx: Optional[ColumnTxn] = None):
         """Developer documentation for init method.
 
-        .. warning::
+        !!! warning
 
             This class should not be instantiated directly. Instead use the factory
             functions :py:meth:`_from_commit` or :py:meth:`_from_staging` to return
@@ -59,21 +59,21 @@ class Columns:
 
         Parameters
         ----------
-        mode : str
+        mode
             one of 'r' or 'a' to indicate read or write mode
-        repo_pth : Path
+        repo_pth
             path to the repository on disk
-        columns : Mapping[str, Union[ArraysetDataReader, ArraysetDataWriter]]
+        columns
             dictionary of ArraysetData objects
-        hashenv : Optional[lmdb.Environment]
+        hashenv
             environment handle for hash records
-        dataenv : Optional[lmdb.Environment]
+        dataenv
             environment handle for the unpacked records. `data` is means to refer to
             the fact that the stageenv is passed in for for write-enabled, and a
             cmtrefenv for read-only checkouts.
-        stagehashenv : Optional[lmdb.Environment]
+        stagehashenv
             environment handle for newly added staged data hash records.
-        txnctx: Optional[ColumnTxn]
+        txnctx
             class implementing context managers to handle lmdb transactions
         """
         self._stack: Optional[ExitStack] = None
@@ -156,7 +156,7 @@ class Columns:
 
         Parameters
         ----------
-        key : string
+        key
             name of the column object to get.
 
         Returns
@@ -176,7 +176,7 @@ class Columns:
 
         Parameters
         ----------
-        key : str
+        key
             name of the column to check for
 
         Returns
@@ -301,7 +301,7 @@ class Columns:
 
         Parameters
         ----------
-        name : str
+        name
             name of the column to return
 
         Returns
@@ -320,7 +320,7 @@ class Columns:
 
         Parameters
         ----------
-        key : str
+        key
             Name of the column to remove from the repository. This will remove
             all records from the staging area (though the actual data and all
             records are still accessible) if they were previously committed.
@@ -346,7 +346,7 @@ class Columns:
 
         Parameters
         ----------
-        column : str
+        column
             name of the column to remove
 
         Returns
@@ -404,13 +404,13 @@ class Columns:
 
         Parameters
         ----------
-        repo_pth : Path
+        repo_pth
             directory path to the hangar repository on disk
-        hashenv : lmdb.Environment
+        hashenv
             environment where tensor data hash records are open in write mode.
-        stageenv : lmdb.Environment
+        stageenv
             environment where staging records (dataenv) are opened in write mode.
-        stagehashenv : lmdb.Environment
+        stagehashenv
             environment where the staged hash records are stored in write mode
 
         Returns
@@ -465,11 +465,11 @@ class Columns:
 
         Parameters
         ----------
-        repo_pth : Path
+        repo_pth
             directory path to the hangar repository on disk
-        hashenv : lmdb.Environment
+        hashenv
             environment where tensor data hash records are open in read-only mode.
-        cmtrefenv : lmdb.Environment
+        cmtrefenv
             environment where staging checkout records are opened in read-only mode.
 
         Returns

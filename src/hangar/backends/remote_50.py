@@ -3,20 +3,27 @@
 Backend Identifiers
 ===================
 
-*  Backend: ``5``
-*  Version: ``0``
-*  Format Code: ``50``
-*  Canonical Name: ``REMOTE_50``
+* Backend: ``5``
+* Version: ``0``
+* Format Code: ``50``
+* Canonical Name: ``REMOTE_50``
 
 Storage Method
 ==============
 
-*  This backend merely acts to record that there is some data sample with some
-   ``hash`` and ``schema_shape`` present in the repository. It does not store the
-   actual data on the local disk, but indicates that if it should be retrieved,
-   you need to ask the remote hangar server for it. Once present on the local
-   disk, the backend locating info will be updated with one of the `local` data
-   backend specifications.
+* This backend merely acts to record that there is some data sample with some
+  ``hash`` and ``schema_shape`` present in the repository. It does not store the
+  actual data on the local disk, but indicates that if it should be retrieved,
+  you need to ask the remote hangar server for it. Once present on the local
+  disk, the backend locating info will be updated with one of the `local` data
+  backend specifications.
+
+Technical Notes
+---------------
+
+* The schema_hash field is required in order to allow effective placement of
+  actual retrieved data into suitable sized collections on a ``fetch-data()``
+  operation
 
 Record Format
 =============
@@ -24,8 +31,8 @@ Record Format
 Fields Recorded for Each Array
 ------------------------------
 
-*  Format Code
-*  Schema Hash
+* Format Code
+* Schema Hash
 
 Separators used
 ---------------
@@ -34,25 +41,17 @@ Separators used
 
 Examples
 --------
+1) Adding the first piece of data to a file:
 
-1)  Adding the first piece of data to a file:
-
-    *  Schema Hash: "ae43A21a"
-
-    ``Record Data => '50:ae43A21a'``
-
-1)  Adding to a piece of data to a the middle of a file:
-
-    *  Schema Hash: "ae43A21a"
+    * Schema Hash: "ae43A21a"
 
     ``Record Data => '50:ae43A21a'``
 
-Technical Notes
-===============
+2) Adding to a piece of data to a the middle of a file:
 
-*  The schema_hash field is required in order to allow effective placement of
-   actual retrieved data into suitable sized collections on a ``fetch-data()``
-   operation
+    * Schema Hash: "ae43A21a"
+
+    ``Record Data => '50:ae43A21a'``
 """
 from pathlib import Path
 from typing import Optional

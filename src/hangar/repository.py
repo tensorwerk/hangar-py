@@ -31,17 +31,18 @@ class Repository(object):
     repository, or to a directory one should be initialized, and all required
     data for starting your work on the repo will automatically be populated.
 
-        >>> from hangar import Repository
-        >>> repo = Repository('foo/path/to/dir')
+    >>> from hangar import Repository
+    >>> repo = Repository('foo/path/to/dir')
 
     Parameters
     ----------
-    path : Union[str, os.PathLike]
+    path
         local directory path where the Hangar repository exists (or initialized)
-    exists : bool, optional
+    exists
         True if a Hangar repository should exist at the given directory path.
         Should no Hangar repository exists at that location, a UserWarning will
-        be raised indicating that the :meth:`init` method needs to be called.
+        be raised indicating that the [init()](#hangar.repository.Repository.init)
+        method needs to be called.
 
         False if the provided path does not need to (but optionally can) contain a
         Hangar repository.  if a Hangar repository does not exist at that path, the
@@ -128,9 +129,10 @@ class Repository(object):
     def remote(self) -> Remotes:
         """Accessor to the methods controlling remote interactions.
 
-        .. seealso::
+        !!! seealso
 
-           :class:`Remotes` for available methods of this property
+            Class [Remotes](#hangar.remotes.Remotes) for available
+            methods of this property
 
         Returns
         -------
@@ -166,7 +168,7 @@ class Repository(object):
 
     @property
     def version(self) -> str:
-        """Find the version of Hangar software the repository is written with
+        """Find the version of Hangar software the repository is written with.
 
         Returns
         -------
@@ -193,10 +195,10 @@ class Repository(object):
     def size_nbytes(self) -> int:
         """Disk space used by the repository returned in number of bytes.
 
-            >>> repo.size_nbytes
-            1234567890
-            >>> print(type(repo.size_nbytes))
-            <class 'int'>
+        >>> repo.size_nbytes
+        1234567890
+        >>> print(type(repo.size_nbytes))
+        <class 'int'>
 
         Returns
         -------
@@ -210,10 +212,10 @@ class Repository(object):
     def size_human(self) -> str:
         """Disk space used by the repository returned in human readable string.
 
-            >>> repo.size_human
-            '1.23 GB'
-            >>> print(type(repo.size_human))
-            <class 'str'>
+        >>> repo.size_human
+        '1.23 GB'
+        >>> print(type(repo.size_human))
+        <class 'str'>
 
         Returns
         -------
@@ -238,13 +240,13 @@ class Repository(object):
 
         Parameters
         ----------
-        write : bool, optional
+        write
             Specify if the checkout is write capable, defaults to False
-        branch : str, optional
+        branch
             name of the branch to checkout. This utilizes the state of the repo
             as it existed at the branch ``HEAD`` commit when this checkout object
             was instantiated, defaults to ''
-        commit : str, optional
+        commit
             specific hash of a commit to use for the checkout (instead of a
             branch ``HEAD`` commit). This argument takes precedent over a branch
             name parameter if it is set. Note: this only will be used in
@@ -298,35 +300,42 @@ class Repository(object):
         except (RuntimeError, ValueError) as e:
             raise e from None
 
-    def clone(self, user_name: str, user_email: str, remote_address: str,
-              *, remove_old: bool = False) -> str:
+    def clone(self,
+              user_name: str,
+              user_email: str,
+              remote_address: str,
+              *,
+              remove_old: bool = False) -> str:
         """Download a remote repository to the local disk.
 
         The clone method implemented here is very similar to a `git clone`
         operation. This method will pull all commit records, history, and data
         which are parents of the remote's `master` branch head commit. If a
-        :class:`Repository` exists at the specified directory,
+        [Repository](#hangar.repository.Repository) exists at the specified directory,
         the operation will fail.
 
         Parameters
         ----------
-        user_name : str
+        user_name
             Name of the person who will make commits to the repository. This
             information is recorded permanently in the commit records.
-        user_email : str
+        user_email
             Email address of the repository user. This information is recorded
             permanently in any commits created.
-        remote_address : str
-            location where the
-            :class:`hangar.remote.server.HangarServer` process is
-            running and accessible by the clone user.
-        remove_old : bool, optional, kwarg only
-            DANGER! DEVELOPMENT USE ONLY! If enabled, a
-            :class:`hangar.repository.Repository` existing on disk at the same
-            path as the requested clone location will be completely removed and
-            replaced with the newly cloned repo. (the default is False, which
-            will not modify any contents on disk and which will refuse to create
-            a repository at a given location if one already exists there.)
+        remote_address
+            location where the [Hangar Server](#hangar.remote.server.HangarServer)
+            process is running and accessible by the clone user.
+        remove_old
+            Development Use Only!
+
+            !!! danger
+
+                If enabled, a [Repository](#hangar.repository.Repository) existing
+                on disk at the same path as the requested clone location will be
+                completely removed and replaced with the newly cloned repo. (the
+                default is False, which will not modify any contents on disk and
+                which will refuse to create a repository at a given location if
+                one already exists there.)
 
         Returns
         -------
@@ -356,13 +365,21 @@ class Repository(object):
 
         Parameters
         ----------
-        user_name : str
+        user_name
             Name of the repository user account.
-        user_email : str
+        user_email
             Email address of the repository user account.
-        remove_old : bool, kwarg-only
-            DEVELOPER USE ONLY -- remove and reinitialize a Hangar
-            repository at the given path, Default = False
+        remove_old
+            Development Use Only!
+
+            !!! danger
+
+                If enabled, a [Repository](#hangar.repository.Repository) existing
+                on disk at the same path as the requested init location will be
+                completely removed and replaced with an empty repo. (the
+                default is False, which will not modify any contents on disk and
+                which will refuse to create a repository at a given location if
+                one already exists there.)
 
         Returns
         -------
@@ -384,28 +401,29 @@ class Repository(object):
             show_user: bool = False) -> Optional[dict]:
         """Displays a pretty printed commit log graph to the terminal.
 
-        .. note::
+        !!! note
 
-            For programatic access, the return_contents value can be set to true
-            which will retrieve relevant commit specifications as dictionary
+            For programatic access, the ``return_contents`` value can be set to
+            ``True`` which will retrieve relevant commit specifications as dictionary
             elements.
 
         Parameters
         ----------
-        branch : str, optional
+        branch
             The name of the branch to start the log process from. (Default value
             = None)
-        commit : str, optional
+        commit
             The commit hash to start the log process from. (Default value = None)
-        return_contents : bool, optional, kwarg only
+        return_contents
             If true, return the commit graph specifications in a dictionary
             suitable for programatic access/evaluation.
-        show_time : bool, optional, kwarg only
+        show_time
             If true and return_contents is False, show the time of each commit
             on the printed log graph
-        show_user : bool, optional, kwarg only
+        show_user
             If true and return_contents is False, show the committer of each
             commit on the printed log graph
+
         Returns
         -------
         Optional[dict]
@@ -426,10 +444,10 @@ class Repository(object):
 
         Parameters
         ----------
-        branch : str, optional
+        branch
             A specific branch name whose head commit will be used as the summary
             point (Default value = '')
-        commit : str, optional
+        commit
             A specific commit hash which should be used as the summary point.
             (Default value = '')
         """
@@ -477,10 +495,10 @@ class Repository(object):
 
         Parameters
         ----------
-        master: str
+        master
             branch name or commit hash digest to use as the "master" which
             changes made in "dev" are compared to.
-        dev: str
+        dev
             branch name or commit hash digest to use as the "dev"
             (ie. "feature") branch which changes have been made to
             which are to be compared to the contents of "master".
@@ -522,17 +540,16 @@ class Repository(object):
         res = diff.commit(dev_commit_hash=devHEAD)
         return res
 
-
     def merge(self, message: str, master_branch: str, dev_branch: str) -> str:
         """Perform a merge of the changes made on two branches.
 
         Parameters
         ----------
-        message: str
+        message
             Commit message to use for this merge.
-        master_branch : str
+        master_branch
             name of the master branch to merge into
-        dev_branch : str
+        dev_branch
             name of the dev/feature branch to merge
 
         Returns
@@ -563,34 +580,34 @@ class Repository(object):
         checkout method to properly initialize a read (or write) enabled
         checkout object.
 
-            >>> from hangar import Repository
-            >>> repo = Repository('foo/path/to/dir')
-
-            >>> repo.create_branch('testbranch')
-                BranchHead(name='testbranch', digest='b66b...a8cc')
-            >>> repo.list_branches()
-                ['master', 'testbranch']
-            >>> co = repo.checkout(write=True, branch='testbranch')
-            >>> # add data ...
-            >>> newDigest = co.commit('added some stuff')
-
-            >>> repo.create_branch('new-changes', base_commit=newDigest)
-                BranchHead(name='new-changes', digest='35kd...3254')
-            >>> repo.list_branches()
-                ['master', 'new-changes', 'testbranch']
+        Examples
+        --------
+        >>> from hangar import Repository
+        >>> repo = Repository('foo/path/to/dir')
+        >>> repo.create_branch('testbranch')
+        BranchHead(name='testbranch', digest='b66b...a8cc')
+        >>> repo.list_branches()
+        ['master', 'testbranch']
+        >>> co = repo.checkout(write=True, branch='testbranch')
+        >>> # add data ...
+        >>> newDigest = co.commit('added some stuff')
+        >>> repo.create_branch('new-changes', base_commit=newDigest)
+        BranchHead(name='new-changes', digest='35kd...3254')
+        >>> repo.list_branches()
+        ['master', 'new-changes', 'testbranch']
 
         Parameters
         ----------
-        name : str
+        name
             name to assign to the new branch
-        base_commit : str, optional
+        base_commit
             commit hash to start the branch root at. if not specified, the
             writer branch ``HEAD`` commit at the time of execution will be used,
             defaults to None
 
         Returns
         -------
-        :class:`~.heads.BranchHead`
+        heads.BranchHead
             NamedTuple[str, str] with fields for ``name`` and ``digest`` of the
             branch created (if the operation was successful)
 
@@ -631,7 +648,6 @@ class Repository(object):
 
             >>> from hangar import Repository
             >>> repo = Repository('foo/path/to/dir')
-
             >>> repo.create_branch('first-testbranch')
             BranchHead(name='first-testbranch', digest='9785...56da')
             >>> repo.create_branch('second-testbranch')
@@ -644,7 +660,6 @@ class Repository(object):
             >>> co.commit('added some stuff')
             '3l253la5hna3k3a553256nak35hq5q534kq35532'
             >>> co.close()
-
             >>> repo.remove_branch('second-testbranch')
             BranchHead(name='second-testbranch', digest='9785...56da')
 
@@ -655,7 +670,6 @@ class Repository(object):
             >>> # check out master and try to remove 'first-testbranch'
             >>> co = repo.checkout(write=True, branch='master')
             >>> co.close()
-
             >>> repo.remove_branch('first-testbranch')
             Traceback (most recent call last):
                 ...
@@ -666,50 +680,52 @@ class Repository(object):
             >>> repo.remove_branch('first-testbranch', force_delete=True)
             BranchHead(name='first-testbranch', digest='9785...56da')
 
-        It is important to note that *while this method will handle all safety
-        checks, argument validation, and performs the operation to permanently
-        delete a branch name/digest pointer, **no commit refs along the history
-        will be deleted from the Hangar database**.* Most of the history contains
-        commit refs which must be safe in other branch histories, and recent
-        commits may have been used as the base for some new history. As such, even
-        if some of the latest commits leading up to a deleted branch ``HEAD`` are
-        orphaned (unreachable), the records (and all data added in those commits)
-        will remain on the disk.
+        !!! note
 
-        In the future, we intend to implement a garbage collector which will remove
-        orphan commits which have not been modified for some set amount of time
-        (probably on the order of a few months), but this is not implemented at the
-        moment.
+            It is important to note that *while this method will handle all safety
+            checks, argument validation, and performs the operation to permanently
+            delete a branch name/digest pointer, no commit refs along the history
+            will be deleted from the Hangar database.* Most of the history contains
+            commit refs which must be safe in other branch histories, and recent
+            commits may have been used as the base for some new history. As such, even
+            if some of the latest commits leading up to a deleted branch ``HEAD`` are
+            orphaned (unreachable), the records (and all data added in those commits)
+            will remain on the disk.
 
-        Should an accidental forced branch deletion occur, *it is possible to
-        recover* and create a new branch head pointing to the same commit. If
-        the commit digest of the removed branch ``HEAD`` is known, its as simple as
-        specifying a name and the ``base_digest`` in the normal
-        :meth:`create_branch` method. If the digest is unknown, it will be a
-        bit more work, but some of the developer facing introspection tools /
-        routines could be used to either manually or (with minimal effort)
-        programmatically find the orphan commit candidates. If you find
-        yourself having accidentally deleted a branch, and must get it back,
-        please reach out on the `Github Issues
-        <https://github.com/tensorwerk/hangar-py/issues>`__ page. We'll gladly
-        explain more in depth and walk you through the process in any way we
-        can help!
+            In the future, we intend to implement a garbage collector which will remove
+            orphan commits which have not been modified for some set amount of time
+            (probably on the order of a few months), but this is not implemented at the
+            moment.
+
+            Should an accidental forced branch deletion occur, *it is possible to
+            recover* and create a new branch head pointing to the same commit. If
+            the commit digest of the removed branch ``HEAD`` is known, its as simple as
+            specifying a name and the ``base_digest`` in the normal
+            [create_branch](#hangar.repository.Repository.create_branch) method.
+            If the digest is unknown, it will be a bit more work, but
+            some of the developer facing introspection tools / routines could be
+            used to either manually or (with minimal effort) programmatically find
+            the orphan commit candidates. If you find yourself having accidentally
+            deleted a branch, and must get it back, please reach out on the
+            [Github Issues](https://github.com/tensorwerk/hangar-py/issues) page.
+            We'll gladly explain more in depth and walk you through the process
+            in any way we can help!
 
         Parameters
         ----------
-        name : str
+        name
             name of the branch which should be deleted. This branch must exist, and
             cannot refer to a remote tracked branch (ie. origin/devbranch), please
             see exception descriptions for other parameters determining validity of
             argument
-        force_delete : bool, optional
+        force_delete
             If True, remove the branch pointer even if the changes are un-merged in
             other branch histories. May result in orphaned commits which may be
             time-consuming to recover if needed, by default False
 
         Returns
         -------
-        :class:`~.heads.BranchHead`
+        heads.BranchHead
             NamedTuple[str, str] with fields for `name` and `digest` of the branch
             pointer deleted.
 
@@ -740,6 +756,15 @@ class Repository(object):
     def list_branches(self) -> List[str]:
         """list all branch names created in the repository.
 
+            >>> from hangar import Repository
+            >>> repo = Repository('foo/path/to/dir')
+            >>> repo.create_branch('first-testbranch')
+            BranchHead(name='first-testbranch', digest='9785...56da')
+            >>> repo.create_branch('second-testbranch')
+            BranchHead(name='second-testbranch', digest='9785...56da')
+            >>> repo.list_branches()
+            ['master', 'first-testbranch', 'second-testbranch']
+
         Returns
         -------
         List[str]
@@ -755,7 +780,7 @@ class Repository(object):
         Runs a full cryptographic verification of repository contents in order
         to ensure the integrity of all data and history recorded on disk.
 
-        .. note::
+        !!! info
 
             This proof may take a significant amount of time to run for
             repositories which:
@@ -775,7 +800,7 @@ class Repository(object):
                validated if it - and all earlier data pieces - are proven to be intact
                and unchanged.
 
-               Note: This does not mean that the verification is repeatedly
+                Note: This does not mean that the verification is repeatedly
                performed for every commit some piece of data is stored in. Each
                data piece is read from disk and verified only once, regardless of
                how many commits some piece of data is referenced in.
@@ -791,9 +816,9 @@ class Repository(object):
                commit in the repository history, and may take a non-trivial amount of
                time for repositories with thousands of commits.
 
-        While the two points above are the most time consuming operations,
-        there are many more checks which are performed alongside them as part
-        of the full verification run.
+            While the two points above are the most time consuming operations,
+            there are many more checks which are performed alongside them as part
+            of the full verification run.
 
         Returns
         -------
@@ -817,7 +842,7 @@ class Repository(object):
     def force_release_writer_lock(self) -> bool:
         """Force release the lock left behind by an unclosed writer-checkout
 
-        .. warning::
+        !!! danger
 
             *NEVER USE THIS METHOD IF WRITER PROCESS IS CURRENTLY ACTIVE.* At the time
             of writing, the implications of improper/malicious use of this are not
@@ -829,9 +854,9 @@ class Repository(object):
             before the program terminates, a new checkout with write=True will fail.
             The lock can only be released via a call to this method.
 
-        .. note::
+            !!! note
 
-            This entire mechanism is subject to review/replacement in the future.
+                This entire mechanism is subject to review/replacement in the future.
 
         Returns
         -------

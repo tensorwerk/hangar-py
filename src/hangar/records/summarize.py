@@ -32,7 +32,7 @@ def log(branchenv: lmdb.Environment,
         show_user: bool = False):
     """Displays a pretty printed commit log graph to the terminal.
 
-    .. note::
+    !!! note
 
         For programatic access, the return_contents value can be set to true
         which will retrieve relevant commit specifications as dictionary

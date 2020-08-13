@@ -292,9 +292,9 @@ def fetch_records(repo: Repository, remote, branch):
 @main.command(name='fetch-data')
 @click.argument('remote', nargs=1, required=True)
 @click.argument('startpoint', nargs=1, required=True)
-@click.option('--column', '-d', multiple=True, required=False, default=None,
+@click.option('--column', '-d', multiple=True, required=False, default='',
               help='specify any number of column keys to fetch data for.')
-@click.option('--nbytes', '-n', default=None, required=False,
+@click.option('--nbytes', '-n', default='', required=False,
               help='total amount of data to retrieve in MB/GB.')
 @click.option('--all-history', '-a', 'all_', is_flag=True, default=False, required=False,
               help='Retrieve data referenced in every parent commit accessible to the STARTPOINT')
@@ -310,7 +310,7 @@ def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
     from hangar.records.heads import get_staging_branch_head
     from hangar.utils import parse_bytes
 
-    if startpoint is None:
+    if startpoint == '':
         branch = get_staging_branch_head(repo._env.branchenv)
         commit = get_branch_head_commit(repo._env.branchenv, branch)
     elif startpoint in repo.list_branches():
@@ -319,9 +319,12 @@ def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
         commit = expand_short_commit_digest(repo._env.refenv, startpoint)
     click.echo(f'Fetching data for commit: {commit}')
 
-    try:
-        max_nbytes = parse_bytes(nbytes)
-    except AttributeError:
+    if nbytes != '':
+        try:
+            max_nbytes = parse_bytes(nbytes)
+        except AttributeError:
+            max_nbytes = None
+    else:
         max_nbytes = None
     if len(column) == 0:
         column = None
@@ -393,7 +396,7 @@ def remove_remote(repo: Repository, name):
 
 @main.command()
 @click.argument('dev', nargs=1, required=True)
-@click.argument('master', nargs=1, required=False, default=None)
+@click.argument('master', nargs=1, required=False, default='')
 @pass_repo
 def diff(repo: Repository, dev, master):
     """Display diff of DEV commit/branch to MASTER commit/branch.
@@ -412,7 +415,7 @@ def diff(repo: Repository, dev, master):
     if dev not in repo.list_branches():
         dev = expand_short_commit_digest(repo._env.refenv, dev)
 
-    if master is None:
+    if master == '':
         master = get_staging_branch_head(repo._env.branchenv)
     elif master not in repo.list_branches():
         master = expand_short_commit_digest(repo._env.refenv, master)
@@ -422,7 +425,7 @@ def diff(repo: Repository, dev, master):
     click.echo(buf.getvalue())
 
 @main.command()
-@click.argument('startpoint', nargs=1, required=False)
+@click.argument('startpoint', nargs=1, required=False, default='')
 @pass_repo
 def summary(repo: Repository, startpoint):
     """Display content summary at STARTPOINT (short-digest or branch).
@@ -434,7 +437,7 @@ def summary(repo: Repository, startpoint):
     """
     from hangar.records.commiting import expand_short_commit_digest
 
-    if startpoint is None:
+    if startpoint == '':
         click.echo(repo.summary())
     elif startpoint in repo.list_branches():
         click.echo(repo.summary(branch=startpoint))
@@ -444,7 +447,7 @@ def summary(repo: Repository, startpoint):
 
 
 @main.command()
-@click.argument('startpoint', required=False, default=None)
+@click.argument('startpoint', required=False, default='')
 @pass_repo
 def log(repo: Repository, startpoint):
     """Display commit graph starting at STARTPOINT (short-digest or name)
@@ -454,7 +457,7 @@ def log(repo: Repository, startpoint):
     """
     from hangar.records.commiting import expand_short_commit_digest
 
-    if startpoint is None:
+    if startpoint == '':
         click.echo(repo.log())
     elif startpoint in repo.list_branches():
         click.echo(repo.log(branch=startpoint))
@@ -500,7 +503,7 @@ def branch_list(repo: Repository):
 
 @branch.command(name='create')
 @click.argument('name', nargs=1, required=True)
-@click.argument('startpoint', nargs=1, default=None, required=False)
+@click.argument('startpoint', nargs=1, default='', required=False)
 @pass_repo
 def branch_create(repo: Repository, name, startpoint):
     """Create a branch with NAME at STARTPOINT (short-digest or branch)
@@ -518,7 +521,7 @@ def branch_create(repo: Repository, name, startpoint):
         raise click.ClickException(e)
 
     try:
-        if startpoint is None:
+        if startpoint == '':
             branch = get_staging_branch_head(repo._env.branchenv)
             base_commit = get_branch_head_commit(repo._env.branchenv, branch)
         elif startpoint in branch_names:
@@ -612,8 +615,8 @@ def server(overwrite, ip, port, timeout):
                 required=True,
                 type=click.Path(exists=True, dir_okay=True, file_okay=True, readable=True,
                                 resolve_path=True))
-@click.option('--branch', default=None, help='branch to import data')
-@click.option('--plugin', default=None, help='override auto-infered plugin')
+@click.option('--branch', default='', help='branch to import data')
+@click.option('--plugin', default='', help='override auto-infered plugin')
 @click.option('--overwrite', is_flag=True,
               help='overwrite data samples with the same name as the imported data file ')
 @pass_repo
@@ -630,7 +633,7 @@ def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
     from hangar.records.heads import get_staging_branch_head
 
     kwargs = parse_custom_arguments(ctx.args)
-    if branch is None:
+    if branch == '':
         branch = get_staging_branch_head(repo._env.branchenv)
     elif branch not in repo.list_branches():
         raise click.ClickException(f'Branch name: {branch} does not exist, Exiting.')
@@ -644,7 +647,8 @@ def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
         with active_aset as aset, click.progressbar(files) as filesBar:
             for f in filesBar:
                 ext = ''.join(f.suffixes).strip('.')  # multi-suffix files (tar.bz2)
-                loaded = external.load(f, plugin=plugin, extension=ext, **kwargs)
+                _plugin = None if plugin == '' else plugin
+                loaded = external.load(f, plugin=_plugin, extension=ext, **kwargs)
                 if not isinstance(loaded, GeneratorType):
                     loaded = [loaded]
                 for arr, fname in loaded:
@@ -663,7 +667,7 @@ def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
 @main.command(name='export',
               context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
 @click.argument('column', nargs=1, required=True)
-@click.argument('startpoint', nargs=1, default=None, required=False)
+@click.argument('startpoint', nargs=1, default='', required=False)
 @click.option('-o', '--out', 'outdir',
               nargs=1,
               required=False,
@@ -673,7 +677,7 @@ def import_data(ctx, repo: Repository, column, path, branch, plugin, overwrite):
               help="Directory to export data")
 @click.option('-s', '--sample',
               nargs=1,
-              default=None,
+              default='',
               type=StrOrIntType(),
               help=('Sample name to export. Default implementation is to interpret all input '
                     'names as string type. As a column can contain samples with both ``str`` '
@@ -713,7 +717,7 @@ def export_data(ctx, repo: Repository, column, outdir, startpoint, sample, forma
 
     if startpoint in repo.list_branches():
         base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
-    elif startpoint:
+    elif startpoint != '':
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
     else:
         branch_name = get_staging_branch_head(repo._env.branchenv)
@@ -722,7 +726,7 @@ def export_data(ctx, repo: Repository, column, outdir, startpoint, sample, forma
     co = repo.checkout(commit=base_commit)
     try:
         aset = co.columns.get(column)
-        sampleNames = [sample] if sample is not None else list(aset.keys())
+        sampleNames = [sample] if sample != '' else list(aset.keys())
         extension = format_.lstrip('.') if format_ else None
         with aset, click.progressbar(sampleNames) as sNamesBar:
             for sampleN in sNamesBar:
@@ -742,9 +746,9 @@ def export_data(ctx, repo: Repository, column, outdir, startpoint, sample, forma
               context_settings=dict(allow_extra_args=True, ignore_unknown_options=True, ))
 @click.argument('column', nargs=1, type=str, required=True)
 @click.argument('sample', nargs=1, type=StrOrIntType(), required=True)
-@click.argument('startpoint', nargs=1, default=None, required=False)
+@click.argument('startpoint', nargs=1, default='', required=False)
 @click.option('-f', '--format', 'format_', required=False, help='File format of output file')
-@click.option('--plugin', default=None, help='Plugin name to use instead of auto-inferred plugin')
+@click.option('--plugin', default='', help='Plugin name to use instead of auto-inferred plugin')
 @pass_repo
 @click.pass_context
 def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin):
@@ -757,7 +761,7 @@ def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin
     kwargs = parse_custom_arguments(ctx.args)
     if startpoint in repo.list_branches():
         base_commit = get_branch_head_commit(repo._env.branchenv, startpoint)
-    elif startpoint:
+    elif startpoint != '':
         base_commit = expand_short_commit_digest(repo._env.refenv, startpoint)
     else:
         branch_name = get_staging_branch_head(repo._env.branchenv)
@@ -769,7 +773,8 @@ def view_data(ctx, repo: Repository, column, sample, startpoint, format_, plugin
         extension = format_.lstrip('.') if format_ else None
         data = aset[sample]
         try:
-            external.show(data, plugin=plugin, extension=extension, **kwargs)
+            _plugin = None if plugin == '' else plugin
+            external.show(data, plugin=_plugin, extension=extension, **kwargs)
         except Exception as e:
             raise click.ClickException(e)
     except KeyError as e:

@@ -35,7 +35,7 @@ def make_tf_dataset(columns,
     `make_tf_dataset` accepts a `shuffle` argument which will be used by the
     generator to shuffle each time it is being called.
 
-    .. warning::
+    !!! warning
 
         `tf.data.Dataset.from_generator` currently uses `tf.compat.v1.py_func()`
         internally. Hence the serialization function (`yield_data`) will not be
@@ -53,14 +53,14 @@ def make_tf_dataset(columns,
     columns : :class:`~hangar.columns.column.Columns` or Sequence
         A column object, a tuple of column object or a list of column
         objects`
-    keys : Sequence[str]
+    keys
         An iterable of sample names. If given only those samples will fetched from
         the column
-    index_range : slice
+    index_range
         A python slice object which will be used to find the subset of column.
         Argument `keys` takes priority over `index_range` i.e. if both are given,
         keys will be used and `index_range` will be ignored
-    shuffle : bool
+    shuffle
         generator uses this to decide a global shuffle accross all the samples is
         required or not. But user doesn't have any restriction on
         doing`column.shuffle()` on the returned column
