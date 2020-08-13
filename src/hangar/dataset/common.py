@@ -1,6 +1,7 @@
 import typing
 from contextlib import ExitStack
 from typing import Union, Sequence, Tuple, List, Any, Dict
+from collections import OrderedDict
 
 from ..columns import is_column, is_writer_column
 from ..mixins.datasetget import GetMixin
@@ -35,7 +36,7 @@ class HangarDataset(GetMixin):
                  columns: Union['Columns', Sequence['Columns']],
                  keys: 'KeyType' = None):
 
-        self._columns: Dict[str, 'Columns'] = {}
+        self._columns: Dict[str, 'Columns'] = OrderedDict()
         self._is_conman_counter = 0
 
         if is_ordered_sequence(columns):
@@ -107,9 +108,20 @@ class HangarDataset(GetMixin):
         self._is_conman_counter -= 1
         self._stack.close()
 
-    def index_get(self, index: int) -> Tuple[Any]:
+    def index_get(self, index: int):
         """It takes one sample index and returns a tuple of items from each column for
         the given sample name for the given index.
         """
         keys = self._keys[index]
-        return self[keys]
+        if len(self._columns) == 1:
+            for col in self.columns.values():
+                return col[keys]
+        else:
+            if len(self.columns) != len(keys):
+                raise RuntimeError(
+                    f'Internal error setting up columns/keys. '
+                    f'columns: {self.columns} keys: {keys}'
+                )
+            assert len(self.columns) == len(keys)  # TODO: Remove Assert
+            res = (column[key] for column, key in zip(self.columns.values(), keys))
+            return tuple(res)
