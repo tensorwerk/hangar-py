@@ -61,7 +61,7 @@ function setupTermynal() {
                         });
                     } else if (line.startsWith("// ")) {
                         saveBuffer();
-                        const value = "💬 " + line.replace("// ", "").trimEnd();
+                        const value = " " + line.replace("// ", "").trimEnd();
                         useLines.push({
                             value: value,
                             class: "termynal-comment",
@@ -90,7 +90,7 @@ function setupTermynal() {
                 const termynal = new Termynal(div, {
                     lineData: useLines,
                     noInit: true,
-                    lineDelay: 500
+                    lineDelay: 2000
                 });
                 termynals.push(termynal);
             });
@@ -111,4 +111,4 @@ function setupTermynal() {
 }
 
 setupTermynal()
-document.getElementsByClassName('gitter-open-chat-button')[0].style.backgroundColor="#7f85c0"
+document.getElementsByClassName('gitter-open-chat-button')[0].style.backgroundColor = "#7f85c0"

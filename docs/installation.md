@@ -26,15 +26,17 @@ conda channel](https://anaconda.org/conda-forge/hangar)):
 $ conda install -c conda-forge hangar
 
 Collecting package metadata (current_repodata.json): done
-Solving environment: done
+// Solving environment: done
 
+<span data-ty></span>
 ## Package Plan ##
 
   environment location: /Users/rick/miniconda3/envs/new-install
 
   added / updated specs:
     - hangar
-
+<span data-ty></span>
+// 
 The following NEW packages will be INSTALLED:
 
   blosc              pkgs/main/osx-64::blosc-1.19.0-hab81aa3_0
@@ -43,7 +45,8 @@ The following NEW packages will be INSTALLED:
   ...
   zstd               conda-forge/osx-64::zstd-1.4.5-h0384e3a_1
 
-Proceed ([y]/n)? <span data-ty="input">y</span>
+// 
+<span data-ty="input" data-ty-typeDelay="1000" data-ty-prompt="Proceed ([y]/n)? ">y</span>
  
 Preparing transaction:
 ---> 100%
