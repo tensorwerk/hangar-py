@@ -25,17 +25,20 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __init__(self, hangar_dataset: HangarDataset, as_dict: bool = False):
         self.dataset = hangar_dataset
-        self.column_names = [col._column_name for col in hangar_dataset.columns]
+        self.column_names = list(hangar_dataset.columns.keys())
         self._as_dict = as_dict
 
     def __len__(self) -> int:
         return len(self.dataset)
 
     def __getitem__(self, index: int):
-        if self._as_dict:
-            return OrderedDict(zip(self.column_names, self.dataset.index_get(index)))
+        data = self.dataset.index_get(index)
+        if not self._as_dict:
+            return data
+        if len(self.column_names) == 1:
+            return {self.column_names[0]: data}
         else:
-            return self.dataset.index_get(index)
+            return OrderedDict(zip(self.column_names, data))
 
 
 def _make_torch_dataset(columns: Sequence['Columns'],

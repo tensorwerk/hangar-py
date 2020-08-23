@@ -11,15 +11,18 @@ if TYPE_CHECKING:
     KeyType = Union[str, int, List, Tuple]
 
 
-def default_collate_fn(col_functions):
-    def wrapper(data_arr):
-        # data_arr -> array of data samples from each column
-        collated = []
-        for fn in col_functions:
-            grouped = fn(data_arr)
-            collated.append(grouped)
-        return tuple(collated)
-    return wrapper
+def default_collate_fn(batch):
+    elem = batch[0]
+    if isinstance(elem, np.ndarray):
+        # TODO: stack to numpy array (out=) for performance
+        return np.stack(batch)
+    elif isinstance(elem, str):
+        return batch
+    elif isinstance(elem, dict):  # nested
+        return batch
+    elif isinstance(elem, tuple): # multiple columns
+        out = (default_collate_fn(dt) for dt in zip(*batch))
+        return tuple(out)
 
 
 class NumpyDataset:
@@ -66,18 +69,7 @@ class NumpyDataset:
         self._num_batches = None
         self._batch_size = None
         if batch_size:
-            if not collate_fn:
-                collate_colfn = []
-                for col in dataset.columns.values():
-                    print(col.column_type)
-                    if col.column_type == 'ndarray' and col.column_layout == 'flat':
-                        collate_colfn.append(np.stack)
-                    else:
-                        collate_colfn.append(lambda x: x)
-
-                self.collate_fn = default_collate_fn(collate_colfn)
-            else:
-                self.collate_fn = collate_fn
+            self.collate_fn = collate_fn if collate_fn else default_collate_fn
             self._batch(batch_size, drop_last)
         else:
             if collate_fn:
@@ -153,7 +145,6 @@ class NumpyDataset:
             for i in range(self._num_batches):
                 batch = self._indices[start:end]
                 out = [self._dataset.index_get(i) for i in batch]
-
                 start = end
                 end = end + self._batch_size
                 yield self.collate_fn(out)

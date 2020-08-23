@@ -26,7 +26,8 @@ def yield_data(dataset: HangarDataset, indices: list,
     if shuffle:
         random.shuffle(indices)
     for i in indices:
-        yield dataset.index_get(i)
+        out = dataset.index_get(i)
+        yield out if isinstance(out, tuple) else (out,)
 
 
 def _make_tensorflow_dataset(columns: Sequence['Columns'],
@@ -108,7 +109,7 @@ def _make_tensorflow_dataset(columns: Sequence['Columns'],
     shapes: List[tf_TensorShape] = []
     types: List[tf_TensorType] = []
 
-    for col in dataset.columns:
+    for col in dataset.columns.values():
         if col.schema_type == 'variable_shape':
             shape = (None,) * len(col.shape)
         else:

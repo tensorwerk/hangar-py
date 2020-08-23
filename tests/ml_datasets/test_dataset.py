@@ -22,8 +22,9 @@ class TestInternalDatasetClass:
         first_col = co.columns['writtenaset']
         second_col = co.columns['second_aset']
         dataset = HangarDataset((first_col, second_col))
-        key = dataset._keys[0]
-        target = array5by7[:] = int(key)
+        key1, key2 = dataset._keys[0]
+        assert key1 == key2
+        target = array5by7[:] = int(key1)
         assert np.allclose(dataset.index_get(0), target)
         co.close()
 
@@ -35,7 +36,7 @@ class TestInternalDatasetClass:
         repo = repo_20_filled_samples
         co = repo.checkout(write=True)
         first_aset = co.columns['writtenaset']
-        with pytest.raises(TypeError):
+        with pytest.raises(PermissionError):
             HangarDataset((first_aset,))
         co.close()
 
@@ -76,7 +77,7 @@ class TestInternalDatasetClass:
         co = repo_20_filled_samples.checkout()
         first_col = co.columns['writtenaset']
         second_col = co.columns['second_aset']
-        with pytest.raises(RuntimeError):
+        with pytest.raises(KeyError):
             HangarDataset((first_col, second_col))
         co.close()
 
@@ -137,7 +138,6 @@ class TestInternalDatasetClass:
             dataset.index_get(1)
         co.close()
 
-
 # ====================================   Numpy    ====================================
 
 
@@ -162,8 +162,8 @@ class TestNumpyDataset:
         aset = co.columns['aset']
         np_dset = make_numpy_dataset([aset], batch_size=10, drop_last=True)
         for data in np_dset:
-            assert isinstance(data, tuple)
-            assert data[0].shape == (10, 5, 7)
+            assert isinstance(data, np.ndarray)
+            assert data.shape == (10, 5, 7)
         co.close()
 
     def test_shuffle(self, repo_20_filled_samples):
@@ -177,7 +177,7 @@ class TestNumpyDataset:
         expected_unshuffled_content = [i for i in range(15)]
         recieved_unshuffled_content = []
         for data in unshuffled_dataset:
-            recieved_unshuffled_content.append(int(data[0][0][0]))
+            recieved_unshuffled_content.append(int(data[0][0]))
         assert expected_unshuffled_content == recieved_unshuffled_content
 
         shuffled_dataset = make_numpy_dataset((first_aset,),
@@ -185,7 +185,7 @@ class TestNumpyDataset:
                                               shuffle=True)
         recieved_shuffled_content = []
         for data in shuffled_dataset:
-            recieved_shuffled_content.append(int(data[0][0][0]))
+            recieved_shuffled_content.append(int(data[0][0]))
         assert recieved_shuffled_content != expected_unshuffled_content
         co.close()
 
@@ -199,10 +199,10 @@ class TestNumpyDataset:
                                      shuffle=False, batch_size=2)
         col1data, col2data = next(iter(dataset))
         assert isinstance(col1data, tuple)
-        assert isinstance(col2data, tuple)
+        assert isinstance(col2data, np.ndarray)
         assert list(col1data[0].keys()) == [1, 2, 3]
         assert list(col1data[1].keys()) == [4, 5, 6]
-        assert np.allclose(np.stack(col2data), np.stack((col2[0][1], col2[1][4])))
+        assert np.allclose(col2data, np.stack((col2[0][1], col2[1][4])))
 
         def collate_fn(data_arr):
             arr1 = []
@@ -276,7 +276,7 @@ class TestTorchDataset(object):
         torch_dset = make_torch_dataset([aset])
         loader = DataLoader(torch_dset, batch_size=10, drop_last=True, num_workers=2)
         for data in loader:
-            assert data[0].shape == (10, 5, 7)
+            assert data.shape == (10, 5, 7)
         co.close()
 
     @pytest.mark.skipif(sys.platform == "win32",

@@ -1,10 +1,8 @@
 import typing
-from contextlib import ExitStack
-from typing import Union, Sequence, Tuple, List, Any, Dict
+from typing import Union, Sequence, Tuple, List, Dict
 from collections import OrderedDict
 
 from ..columns import is_column, is_writer_column
-from ..mixins.datasetget import GetMixin
 from ..optimized_utils import is_ordered_sequence
 
 if typing.TYPE_CHECKING:
@@ -12,7 +10,7 @@ if typing.TYPE_CHECKING:
     KeyType = Union[str, int, List, Tuple]
 
 
-class HangarDataset(GetMixin):
+class HangarDataset:
     """Dataset class that does the initial checks to verify whether the provided
     columns can be arranged together as a dataset. These verifications are done on the
     keys of each column. If ``keys`` argument is ``None``, initializer of this class
@@ -57,11 +55,14 @@ class HangarDataset(GetMixin):
             column_name = obj.column
             self._columns[column_name] = obj
 
-        if not keys:
+        if keys:
+            self._keys = keys
+        else:
             if len(set((col.column_layout for col in self._columns.values()))) != 1:  # all same type
                 raise ValueError(f"keys must be passed when all columns are not same type")
 
             keys = []
+            standard_keys = set()
             for idx, col in enumerate(self._columns.values()):
                 # only match top level keys, even for nested columns
                 if idx == 0:
@@ -69,47 +70,32 @@ class HangarDataset(GetMixin):
                     if len(standard_keys) == 0:
                         raise RuntimeError("No local data found")
                 else:
-                    keys = set(col.keys(local=True))
-                    if len(standard_keys.symmetric_difference(keys)) != 0:
+                    key_set = set(col.keys(local=True))
+                    if len(standard_keys.symmetric_difference(key_set)) != 0:
                         raise KeyError("Keys from multiple columns couldn't be matched. "
                                        "Pass keys explicitly while creating dataset")
-                column_name = col.column
                 if col.column_layout == 'flat':
-                    column_keys = ((column_name, sample) for sample in col.keys(local=True))
+                    column_keys = (sample for sample in col.keys(local=True))
                 elif col.column_layout == 'nested':
-                    column_keys = ((column_name, sample, ...) for sample in col.keys(local=True))
+                    column_keys = ((sample, ...) for sample in col.keys(local=True))
                 else:
                     raise RuntimeError(f'unknown column layout: {col}')
 
-                keys.extend(column_keys)
-
-        self._keys = keys
+                keys.append(column_keys)
+            if len(keys) == 1:
+                self._keys = tuple(keys[0])
+            else:
+                self._keys = tuple(zip(*keys))
 
     @property
     def columns(self):
         return self._columns
 
-    @property
-    def _is_conman(self):
-        return bool(self._is_conman_counter)
-
     def __len__(self):
         return len(self._keys)
 
-    def __enter__(self):
-        with ExitStack() as stack:
-            for asetN in list(self._columns.keys()):
-                stack.enter_context(self._columns[asetN])
-            self._is_conman_counter += 1
-            self._stack = stack.pop_all()
-        return self
-
-    def __exit__(self, *exc):
-        self._is_conman_counter -= 1
-        self._stack.close()
-
     def index_get(self, index: int):
-        """It takes one sample index and returns a tuple of items from each column for
+        """It takes one sample index and returns a the items from each column for
         the given sample name for the given index.
         """
         keys = self._keys[index]
@@ -122,6 +108,5 @@ class HangarDataset(GetMixin):
                     f'Internal error setting up columns/keys. '
                     f'columns: {self.columns} keys: {keys}'
                 )
-            assert len(self.columns) == len(keys)  # TODO: Remove Assert
             res = (column[key] for column, key in zip(self.columns.values(), keys))
             return tuple(res)
