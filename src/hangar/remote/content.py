@@ -1,4 +1,4 @@
-from typing import NamedTuple, Union, List, Optional
+from typing import NamedTuple, Union, Optional
 
 import numpy as np
 
@@ -22,11 +22,11 @@ class ContentWriter(object):
 
     Parameters
     ----------
-    envs : context.Environments
+    envs
         main hangar environment context object.
     """
 
-    def __init__(self, envs):
+    def __init__(self, envs: Environments):
 
         self.env: Environments = envs
         self.txnctx: TxnRegister = TxnRegister()
@@ -37,13 +37,13 @@ class ContentWriter(object):
 
         Parameters
         ----------
-        commit : str
+        commit
             commit hash to write
-        parentVal : bytes
+        parentVal
             db formatted representation of commit parents
-        specVal : bytes
+        specVal
             db formatted representation of the commit specs
-        refVal : bytes
+        refVal
             db formated representation of commit record contents
 
         Returns
@@ -73,9 +73,9 @@ class ContentWriter(object):
 
         Parameters
         ----------
-        schema_hash : str
+        schema_hash
             schema hash being written
-        schemaVal : bytes
+        schemaVal
             db formatted representation of schema specification
 
         Returns
@@ -167,17 +167,23 @@ class DataWriter:
 
         Parameters
         ----------
-        schema_hash : str
+        schema_hash
             schema_hash currently being written
-        backend : str, optional
+        data_digest
+            digest to write
+        data
+            actual piece of data to write
+        backend
             Manually specified backend code which will be used to record the
             data records. If not specified (``None``), the default backend
             recorded in the schema spec will be used, by default None
+        backend_options
+            dict specifying backend options to use
 
         Returns
         -------
-        List[str]
-            list of str of all data digests written by this method.
+        str
+            data digest written by this method.
         """
         if schema_hash not in self._schema_hash_objects:
             self._get_schema_object(schema_hash)
@@ -225,7 +231,7 @@ class ContentReader(object):
 
         Parameters
         ----------
-        commit : str
+        commit
             commit hash to read from the ref db
 
         Returns
@@ -260,7 +266,7 @@ class ContentReader(object):
 
         Parameters
         ----------
-        schema_hash : str
+        schema_hash
             schema hash to look up
 
         Returns

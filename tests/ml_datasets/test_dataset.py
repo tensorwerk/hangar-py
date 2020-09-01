@@ -99,6 +99,7 @@ class TestInternalDatasetClass:
             data = dataset.index_get(i)
             assert np.allclose(data[0], first_col[key[0]])
             assert np.allclose(data[1], second_col[key[1]])
+        co.close()
 
     def test_keys_nested_column_success(self, repo_20_filled_subsamples):
         co = repo_20_filled_subsamples.checkout()
@@ -109,6 +110,7 @@ class TestInternalDatasetClass:
         data = dataset.index_get(1)
         assert tuple(data[0].keys()) == (4, 5, 6)
         assert np.allclose(data[1], col2[1][4])
+        co.close()
 
     def test_keys_not_valid(self, repo_20_filled_samples):
         co = repo_20_filled_samples.checkout()
@@ -221,6 +223,7 @@ class TestNumpyDataset:
         col1data, col2data = next(iter(dataset))
         assert np.allclose(col1data, np.stack((col1[0][3], col1[1][6])))
         assert np.allclose(col2data, np.stack((col2[0][1], col2[1][4])))
+        co.close()
 
 
 # ====================================   PyTorch  ====================================
