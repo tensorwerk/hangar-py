@@ -522,7 +522,6 @@ class Repository(object):
         res = diff.commit(dev_commit_hash=devHEAD)
         return res
 
-
     def merge(self, message: str, master_branch: str, dev_branch: str) -> str:
         """Perform a merge of the changes made on two branches.
 

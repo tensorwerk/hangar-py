@@ -5,7 +5,10 @@ from pathlib import Path
 from typing import (
     Tuple, Union, Dict, Iterable, Any, Optional
 )
+from operator import attrgetter as op_attrgetter
+from operator import getitem as op_getitem
 from weakref import proxy
+from functools import reduce
 
 from .common import open_file_handles
 from ..records import (
@@ -21,12 +24,14 @@ from ..records import (
 from ..records.parsing import generate_sample_name
 from ..backends import backend_decoder, BACKEND_ACCESSOR_MAP
 from ..op_state import reader_checkout_only
-from ..utils import is_suitable_user_key, valfilter, valfilterfalse
+from ..utils import is_suitable_user_key
+from ..optimized_utils import valfilter, valfilterfalse
 
 
 KeyType = Union[str, int]
 EllipsisType = type(Ellipsis)
-GetKeysType = Union[KeyType, EllipsisType, slice]
+SubsampleGetKeysType = Union[KeyType, EllipsisType, slice]
+SampleGetKeysType = Union[KeyType, Tuple[KeyType, SubsampleGetKeysType]]
 
 
 class FlatSubsampleReader(object):
@@ -142,14 +147,14 @@ class FlatSubsampleReader(object):
     def __iter__(self) -> Iterable[KeyType]:
         yield from self.keys()
 
-    def __getitem__(self, key: GetKeysType) -> Union[Any, Dict[KeyType, Any]]:
+    def __getitem__(self, key: SubsampleGetKeysType) -> Union[Any, Dict[KeyType, Any]]:
         """Retrieve data for some subsample key via dict style access conventions.
 
         .. seealso:: :meth:`get`
 
         Parameters
         ----------
-        key : GetKeysType
+        key : SubsampleGetKeysType
             Sample key to retrieve from the column. Alternatively, ``slice``
             syntax can be used to retrieve a selection of subsample
             keys/values. An empty slice (``: == slice(None)``) or ``Ellipsis``
@@ -248,11 +253,12 @@ class FlatSubsampleReader(object):
         Iterable[KeyType]
             Sample keys conforming to the `local` argument spec.
         """
+        _islocal_func = op_attrgetter('islocal')
         if local:
             if self._mode == 'r':
-                yield from valfilter(lambda x: x.islocal, self._subsamples).keys()
+                yield from valfilter(_islocal_func, self._subsamples).keys()
             else:
-                yield from tuple(valfilter(lambda x: x.islocal, self._subsamples).keys())
+                yield from tuple(valfilter(_islocal_func, self._subsamples).keys())
         else:
             if self._mode == 'r':
                 yield from self._subsamples.keys()
@@ -274,7 +280,8 @@ class FlatSubsampleReader(object):
             stored on some remote server. True if all sample data is available
             on the machine's local disk.
         """
-        return not all(map(lambda x: x.islocal, self._subsamples.values()))
+        _islocal_func = op_attrgetter('islocal')
+        return not all(map(_islocal_func, self._subsamples.values()))
 
     @property
     def remote_reference_keys(self) -> Tuple[KeyType]:
@@ -286,7 +293,8 @@ class FlatSubsampleReader(object):
             list of subsample keys in the column whose data references indicate
             they are stored on a remote server.
         """
-        return tuple(valfilterfalse(lambda x: x.islocal, self._subsamples).keys())
+        _islocal_func = op_attrgetter('islocal')
+        return tuple(valfilterfalse(_islocal_func, self._subsamples).keys())
 
     def keys(self, local: bool = False) -> Iterable[KeyType]:
         """Generator yielding the name (key) of every subsample.
@@ -345,7 +353,7 @@ class FlatSubsampleReader(object):
 
         Parameters
         ----------
-        key : GetKeysType
+        key : SubsampleGetKeysType
             The name of the subsample(s) to retrieve. Passing a single
             subsample key will return the stored :class:`numpy.ndarray`
         default
@@ -491,7 +499,7 @@ class FlatSubsampleWriter(FlatSubsampleReader):
         """Store some data in a subsample with an automatically generated key.
 
         This method should only be used if the context some piece of data is
-        used in is independent from its value (ie. when reading data back,
+        used in is independent from it's value (ie. when reading data back,
         there is no useful information which needs to be conveyed between the
         data source's name/id and the value of that piece of information.)
         Think carefully before going this route, as this posit does not apply
@@ -717,17 +725,19 @@ class NestedSampleReader:
         for slot, value in state.items():
             setattr(self, slot, value)
 
-    def __getitem__(self, key: KeyType) -> FlatSubsampleReader:
+    def __getitem__(
+            self, key: SampleGetKeysType
+    ) -> Union[FlatSubsampleReader, Union[Any, Dict[KeyType, Any]]]:
         """Get the sample access class for some sample key.
 
         Parameters
         ----------
-        key : KeyType
+        key
             Name of sample to retrieve
 
         Returns
         -------
-        FlatSubsampleReader
+        Union[FlatSubsampleReader, Union[Any, Dict[KeyType, Any]]]
             Sample accessor corresponding to the given key
 
         Raises
@@ -735,7 +745,11 @@ class NestedSampleReader:
         KeyError
             If no sample with the provided key exists.
         """
-        return self._samples[key]
+        if isinstance(key, (list, tuple)):
+            return reduce(op_getitem, key, self._samples)
+        else:
+            res = self._samples[key]
+        return res
 
     def __iter__(self) -> Iterable[KeyType]:
         """Create iterator yielding an column sample keys.
@@ -851,7 +865,7 @@ class NestedSampleReader:
 
         Parameters
         ----------
-        local : bool
+        local
             True if keys should be returned which only exist on the local
             machine. False if remote sample keys should be excluded.
 
@@ -860,11 +874,12 @@ class NestedSampleReader:
         Iterable[KeyType]
             Sample keys conforming to the `local` argument spec.
         """
+        _contains_remote_func = op_attrgetter('contains_remote_references')
         if local:
             if self._mode == 'r':
-                yield from valfilterfalse(lambda x: x.contains_remote_references, self._samples).keys()
+                yield from valfilterfalse(_contains_remote_func, self._samples).keys()
             else:
-                yield from tuple(valfilterfalse(lambda x: x.contains_remote_references, self._samples).keys())
+                yield from tuple(valfilterfalse(_contains_remote_func, self._samples).keys())
         else:
             if self._mode == 'r':
                 yield from self._samples.keys()
@@ -886,7 +901,8 @@ class NestedSampleReader:
             stored on some remote server. True if all sample data is available
             on the machine's local disk.
         """
-        return all(map(lambda x: x.contains_remote_references, self._samples.values()))
+        _contains_remote_func = op_attrgetter('contains_remote_references')
+        return any(map(_contains_remote_func, self._samples.values()))
 
     @property
     def remote_reference_keys(self) -> Tuple[KeyType]:
@@ -898,7 +914,8 @@ class NestedSampleReader:
             list of subsample keys in the column whose data references indicate
             they are stored on a remote server.
         """
-        return tuple(valfilter(lambda x: x.contains_remote_references, self._samples).keys())
+        _remote_keys_func = op_attrgetter('remote_reference_keys')
+        return tuple(valfilter(_remote_keys_func, self._samples).keys())
 
     @property
     def contains_subsamples(self) -> bool:
@@ -967,20 +984,22 @@ class NestedSampleReader:
         for key in self._mode_local_aware_key_looper(local):
             yield (key, self[key])
 
-    def get(self, key: GetKeysType, default: Any = None) -> FlatSubsampleReader:
+    def get(
+            self, key: SampleGetKeysType, default: Any = None
+    ) -> Union[FlatSubsampleReader, Union[Any, Dict[KeyType, Any]]]:
         """Retrieve data for some sample key(s) in the column.
 
         Parameters
         ----------
-        key : GetKeysType
+        key
             The name of the subsample(s) to retrieve
-        default : Any
+        default
             if a `key` parameter is not found, then return this value instead.
             By default, None.
 
         Returns
         -------
-        FlatSubsampleReader:
+        Union[FlatSubsampleReader, Union[Any, Dict[KeyType, Any]]]
             Sample accessor class given by name ``key`` which can be used to
             access subsample data.
         """

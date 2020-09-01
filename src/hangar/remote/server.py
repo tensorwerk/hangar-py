@@ -627,7 +627,7 @@ def serve(hangar_path: str,
     port = server.add_insecure_port(channel_address)
     if port == 0:
         server.stop(0.1)
-        server.wait_for_termination(timeout=10)
+        server.wait_for_termination(timeout=2)
         raise OSError(f'Unable to bind port, adddress {channel_address} already in use.')
     return (server, hangserv, channel_address)
 

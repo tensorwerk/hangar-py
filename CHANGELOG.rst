@@ -3,6 +3,15 @@ Change Log
 ==========
 
 
+_`In-Progress`
+==============
+
+Improvements
+------------
+
+* New API design for datasets (previously dataloaders) for machine learning libraries.
+  (`#187 <https://github.com/tensorwerk/hangar-py/pull/187>`__) `@hhsecond <<https://github.com/hhsecond>>`__
+
 `v0.5.2`_ (2020-05-08)
 ======================
 

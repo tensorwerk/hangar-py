@@ -138,6 +138,23 @@ def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) ->
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
+def repo_20_filled_subsamples(request, aset_subsamples_initialized_repo, array5by7) -> Repository:
+    co = aset_subsamples_initialized_repo.checkout(write=True)
+    second_aset = co.add_ndarray_column('second_aset', prototype=array5by7,
+                                        backend=request.param, contains_subsamples=True)
+    firstaset = co['writtenaset']
+    secondaset = co['second_aset']
+    array5by7[:] = 1
+    firstaset[0] = {1: array5by7 * 1, 2: array5by7 * 2, 3: array5by7 * 3}
+    firstaset[1] = {4: array5by7 * 4, 5: array5by7 * 5, 6: array5by7 * 6}
+    secondaset[0] = {1: array5by7 * 10, 2: array5by7 * 20, 3: array5by7 * 30}
+    secondaset[1] = {4: array5by7 * 40, 5: array5by7 * 50, 6: array5by7 * 60}
+    co.commit('added data')
+    co.close()
+    yield aset_subsamples_initialized_repo
+
+
+@pytest.fixture(params=fixed_shape_backend_params)
 def repo_300_filled_samples(request, aset_samples_initialized_repo, array5by7) -> Repository:
     co = aset_samples_initialized_repo.checkout(write=True)
     aset = co.add_ndarray_column('aset', prototype=array5by7, backend=request.param)
