@@ -1,30 +1,28 @@
+import concurrent.futures
 import logging
 import os
 import tempfile
 import time
-from typing import Tuple, Sequence, List
+from threading import Lock
+from typing import Tuple, Sequence, List, Iterable, TYPE_CHECKING
 
 import blosc
 import grpc
 import lmdb
-import numpy as np
 from tqdm import tqdm
 
-from . import chunks
-from . import hangar_service_pb2
-from . import hangar_service_pb2_grpc
+from . import chunks, hangar_service_pb2, hangar_service_pb2_grpc
 from .header_manipulator_client_interceptor import header_adder_interceptor
 from .. import constants as c
-from ..context import Environments
-from ..txnctx import TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
-from ..records import commiting
-from ..records import hashs
-from ..records.hashmachine import hash_type_code_from_digest, hash_func_from_tcode
-from ..records import hash_data_db_key_from_raw_key
-from ..records import queries
-from ..records import summarize
-from ..utils import set_blosc_nthreads
+from ..context import Environments
+from ..records import commiting, hashs, hash_data_db_key_from_raw_key, queries, summarize
+from ..records.hashmachine import hash_func_from_tcode
+from ..txnctx import TxnRegister
+from ..utils import set_blosc_nthreads, calc_num_threadpool_workers
+
+if TYPE_CHECKING:
+    from .content import DataWriter
 
 
 set_blosc_nthreads()
@@ -68,6 +66,7 @@ class HangarClient(object):
         self.address: str = address
         self.wait_ready: bool = wait_for_ready
         self.wait_ready_timeout: float = abs(wait_for_ready_timeout + 0.001)
+        self.data_writer_lock = Lock()
 
         self.channel: grpc.Channel = None
         self.stub: hangar_service_pb2_grpc.HangarServiceStub = None
@@ -304,8 +303,12 @@ class HangarClient(object):
         return response
 
     def fetch_data(
-            self, schema_hash: str, digests: Sequence[str]
-    ) -> Sequence[Tuple[str, np.ndarray]]:
+            self,
+            origins: Sequence[hangar_service_pb2.DataOriginReply],
+            datawriter_cm: 'DataWriter',
+            schema: str,
+            pbar: 'tqdm'
+    ) -> Sequence[str]:
         """Fetch data hash digests for a particular schema.
 
         As the total size of the data to be transferred isn't known before this
@@ -317,74 +320,111 @@ class HangarClient(object):
 
         Parameters
         ----------
-        schema_hash : str
-            hash of the schema each of the digests is associated with
-        digests : Sequence[str]
-            iterable of data digests to receive
+        origins : Sequence[hangar_service_pb2.DataOriginReply],
+        datawriter_cm : 'DataWriter',
+        schema : str,
+        pbar : 'tqdm'
 
         Returns
         -------
-        Sequence[Tuple[str, np.ndarray]]
-            iterable containing 2-tuples' of the hash digest and np.ndarray data.
+        Sequence[str]
 
         Raises
         ------
         RuntimeError
             if received digest != requested or what was reported to be sent.
-        """
-        try:
-            raw_digests = c.SEP_LST.join(digests).encode()
-            cIter = chunks.tensorChunkedIterator(buf=raw_digests, uncomp_nbytes=len(raw_digests),
-                                                 pb2_request=hangar_service_pb2.FetchDataRequest)
 
-            replies = self.stub.FetchData(cIter)
+         client.fetch_data(origins, DW_CM, schema, pbar):
+            _ = DW_CM.data(schema, data_digest=returned_digest, data=returned_data)
+        """
+
+        def fetch_write_data_parallel(
+                pb: 'hangar_service_pb2.DataOriginReply',
+                dw_cm: 'DataWriter',
+                schema: str,
+                lock: 'Lock'
+        ) -> str:
+            requested_uri = pb.uri
+            request = hangar_service_pb2.FetchDataRequest(uri=requested_uri)
+            replies = self.stub.FetchData(request)
             for idx, reply in enumerate(replies):
                 if idx == 0:
-                    uncomp_nbytes, comp_nbytes = reply.uncomp_nbytes, reply.comp_nbytes
-                    dBytes, offset = bytearray(comp_nbytes), 0
+                    dBytes = bytearray(reply.nbytes)
+                    offset = 0
+                    if reply.uri != requested_uri:
+                        raise ValueError(f'requested uri: {requested_uri}, returned: {reply.uri}')
                 size = len(reply.raw_data)
                 if size > 0:
                     dBytes[offset:offset + size] = reply.raw_data
                     offset += size
-        except grpc.RpcError as rpc_error:
-            if rpc_error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
-                logger.info(rpc_error.details())
+
+            if pb.compression is True:
+                codex = pb.compression_opts['id']
+                if codex == 'blosc':
+                    returned_raw = blosc.decompress(dBytes)
+                else:
+                    raise ValueError(f'compression id: {codex}')
             else:
-                logger.error(rpc_error.details())
-                raise rpc_error
+                returned_raw = dBytes
 
-        uncompBytes = blosc.decompress(dBytes)
-        if uncomp_nbytes != len(uncompBytes):
-            raise RuntimeError(f'uncomp_nbytes: {uncomp_nbytes} != received {comp_nbytes}')
-        received_data = []
-        unpacked_records = chunks.deserialize_record_pack(uncompBytes)
-        for idx, record in enumerate(unpacked_records):
-            data = chunks.deserialize_record(record)
-            expected_hasher_tcode = hash_type_code_from_digest(data.digest)
-            hash_func = hash_func_from_tcode(expected_hasher_tcode)
-            received_hash = hash_func(data.data)
-            if received_hash != data.digest:
-                # failure case
-                # TODO: not sure why but sometimes on the last value we do not recieve
-                #       valid data which was requested. Just throw an exception here to
-                #       observe this behavior at runtime.
-                logger.debug(f'MANGLED! got: {received_hash} != requested: {data.digest}')
-            else:
-                # success case.
-                received_data.append((received_hash, data.data))
-        return received_data
+            dtype_code = pb.data_type
+            returned_data = chunks.deserialize_data(dtype_code, returned_raw)
+            hash_func = hash_func_from_tcode(str(dtype_code))
+            received_hash = hash_func(returned_data)
+            if received_hash != pb.digest:
+                raise RuntimeError(f'MANGLED! got: {received_hash} != requested: {pb.digest}')
+            with lock:
+                written_digest = dw_cm.data(
+                    schema, data_digest=received_hash, data=returned_data)
+            return written_digest
 
-    def _transfer_push_data(
-            self,
-            records: List[bytes],
-            pbar: 'tqdm') -> 'hangar_service_pb2.PushDataReply':
+        saved_digests = []
+        nWorkers = calc_num_threadpool_workers()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
+            futures = [executor.submit(fetch_write_data_parallel,
+                pb, datawriter_cm, schema, self.data_writer_lock) for pb in origins]
+            for future in concurrent.futures.as_completed(futures):
+                saved_digests.append(future.result())
+                pbar.update(1)
+        return saved_digests
 
-        pbar.update(len(records))
-        pack = chunks.serialize_record_pack(records)
-        cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
-                                             pb2_request=hangar_service_pb2.PushDataRequest)
-        response = self.stub.PushData(cIter)
-        return response
+    def fetch_data_origin(self, digests: Sequence[str]) -> List[hangar_service_pb2.DataOriginReply]:
+
+        def origin_request_iter(digests: Sequence[str]):
+            for digest in digests:
+                yield hangar_service_pb2.DataOriginRequest(digest=digest)
+
+        requestIter = origin_request_iter(digests)
+        replies = self.stub.FetchFindDataOrigin(requestIter)
+
+        output = []
+        for reply in replies:
+            output.append(reply)
+        return output
+
+    def push_find_data_origin(self, digests):
+        try:
+            specs = []
+            hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
+            for digest in digests:
+                hashKey = hash_data_db_key_from_raw_key(digest)
+                hashVal = hashTxn.get(hashKey, default=False)
+                if not hashVal:
+                    raise KeyError(f'No hash record with key: {hashKey}')
+                be_loc = backend_decoder(hashVal)
+                specs.append((digest, be_loc))
+        finally:
+            TxnRegister().abort_reader_txn(self.env.hashenv)
+
+    def push_data_begin_context(self):
+        request = hangar_service_pb2.PushBeginContextRequest()
+        reply = self.stub.PushBeginContext(request)
+        return reply
+
+    def push_data_end_context(self):
+        request = hangar_service_pb2.PushEndContextRequest()
+        reply = self.stub.PushEndContext(request)
+        return reply
 
     def push_data(self, schema_hash: str, digests: Sequence[str],
                   pbar: tqdm = None) -> hangar_service_pb2.PushDataReply:
@@ -411,44 +451,97 @@ class HangarClient(object):
         rpc_error
             if the server received corrupt data
         """
+        CONFIG_COMPRESSION_IS_DESIRED = True
         try:
-            specs = []
+            specs = {}
+            request_stack = []
             hashTxn = TxnRegister().begin_reader_txn(self.env.hashenv)
             for digest in digests:
                 hashKey = hash_data_db_key_from_raw_key(digest)
                 hashVal = hashTxn.get(hashKey, default=False)
                 if not hashVal:
                     raise KeyError(f'No hash record with key: {hashKey}')
+
                 be_loc = backend_decoder(hashVal)
-                specs.append((digest, be_loc))
+                specs[digest] = be_loc  # saving for later so no recompute cost
+
+                if be_loc.backend in ['01', '00', '10']:
+                    dtype = hangar_service_pb2.DataType.NP_ARRAY
+                elif be_loc.backend == '30':
+                    dtype = hangar_service_pb2.DataType.STR
+                elif be_loc.backend == '31':
+                    dtype = hangar_service_pb2.DataType.BYTES
+                else:
+                    raise TypeError(be_loc)
+
+                _request = hangar_service_pb2.PushFindDataOriginRequest(
+                    data_type=dtype,
+                    digest=digest,
+                    compression_is_desired=CONFIG_COMPRESSION_IS_DESIRED)
+                request_stack.append(_request)
         finally:
             TxnRegister().abort_reader_txn(self.env.hashenv)
+
+        def request_stack_iterator(request_stack):
+            for request in request_stack:
+                yield request
+
+        requestIter = request_stack_iterator(request_stack)
+        replies: Iterable[hangar_service_pb2.PushFindDataOriginReply]
+        replies = self.stub.PushFindDataOrigin(requestIter)
 
         try:
             for k in self._rFs.keys():
                 self._rFs[k].__enter__()
-            try:
-                records = []
-                totalSize = 0
-                for digest, spec in specs:
-                    data = self._rFs[spec.backend].read_data(spec)
-                    record = chunks.serialize_record(data, digest, schema_hash)
-                    records.append(record)
-                    totalSize += len(record)
-                    if (totalSize >= self.cfg['push_max_nbytes']) or (len(records) >= 2_000):
-                        # send tensor pack when >= configured max nbytes occupied in memory
-                        response = self._transfer_push_data(records=records, pbar=pbar)
-                        totalSize, records = 0, []
-                if len(records) > 0:
-                    response = self._transfer_push_data(records=records, pbar=pbar)
-            except grpc.RpcError as rpc_error:
-                logger.error(rpc_error.with_traceback())
-                raise rpc_error
+
+            def push_request_iterator(raw, uri, data_type, schema_hash):
+                push_request = hangar_service_pb2.PushDataRequest(
+                    uri=uri,
+                    nbytes=len(raw),
+                    data_type=data_type,
+                    schema_hash=schema_hash)
+                for raw_chunk in chunks.chunk_bytes(raw):
+                    push_request.raw_data = raw_chunk
+                    yield push_request
+
+            def push_data_parallel(reply):
+                be_loc = specs[reply.digest]
+                data = self._rFs[be_loc.backend].read_data(be_loc)
+                _, raw_data = chunks.serialize_data(data)
+
+                if reply.compression_expected is True:
+                    compressed_record = blosc.compress(
+                        raw_data, clevel=3, cname='blosclz', shuffle=blosc.NOSHUFFLE)
+                else:
+                    compressed_record = raw_data
+
+                if be_loc.backend in ['01', '00', '10']:
+                    dtype = hangar_service_pb2.DataType.NP_ARRAY
+                elif be_loc.backend == '30':
+                    dtype = hangar_service_pb2.DataType.STR
+                elif be_loc.backend == '31':
+                    dtype = hangar_service_pb2.DataType.BYTES
+                else:
+                    raise TypeError(be_loc)
+
+                pushDataIter = push_request_iterator(compressed_record, reply.uri, dtype, schema_hash)
+                push_data_response = self.stub.PushData(pushDataIter)
+                return push_data_response
+
+            nWorkers = calc_num_threadpool_workers()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
+                push_futures = tuple((executor.submit(push_data_parallel, reply) for reply in replies))
+                for future in concurrent.futures.as_completed(push_futures):
+                    _ = future.result()
+                    pbar.update(1)
+
+        except grpc.RpcError as rpc_error:
+            logger.error(rpc_error)
+            raise rpc_error
+
         finally:
             for k in self._rFs.keys():
                 self._rFs[k].__exit__()
-
-        return response
 
     def fetch_find_missing_commits(self, branch_name):
 

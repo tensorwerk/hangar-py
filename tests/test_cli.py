@@ -329,7 +329,6 @@ def test_push_fetch_records(server_instance, backend):
     ['origin', 'testbranch', '--column', 'data', '--all-history'],
     ['origin', 'master', '--column', 'data', '--all-history'],
     ['origin', 'testbranch', '--column', 'data', '--all-history'],
-    ['origin', 'master', '--nbytes', '3Kb'],
 ])
 def test_fetch_records_and_data(server_instance, backend, options):
     runner = CliRunner()

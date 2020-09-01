@@ -294,12 +294,10 @@ def fetch_records(repo: Repository, remote, branch):
 @click.argument('startpoint', nargs=1, required=True)
 @click.option('--column', '-d', multiple=True, required=False, default=None,
               help='specify any number of column keys to fetch data for.')
-@click.option('--nbytes', '-n', default=None, required=False,
-              help='total amount of data to retrieve in MB/GB.')
 @click.option('--all-history', '-a', 'all_', is_flag=True, default=False, required=False,
               help='Retrieve data referenced in every parent commit accessible to the STARTPOINT')
 @pass_repo
-def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
+def fetch_data(repo: Repository, remote, startpoint, column, all_):
     """Get data from REMOTE referenced by STARTPOINT (short-commit or branch).
 
     The default behavior is to only download a single commit's data or the HEAD
@@ -308,7 +306,6 @@ def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
     from hangar.records.commiting import expand_short_commit_digest
     from hangar.records.heads import get_branch_head_commit
     from hangar.records.heads import get_staging_branch_head
-    from hangar.utils import parse_bytes
 
     if startpoint is None:
         branch = get_staging_branch_head(repo._env.branchenv)
@@ -319,17 +316,12 @@ def fetch_data(repo: Repository, remote, startpoint, column, nbytes, all_):
         commit = expand_short_commit_digest(repo._env.refenv, startpoint)
     click.echo(f'Fetching data for commit: {commit}')
 
-    try:
-        max_nbytes = parse_bytes(nbytes)
-    except AttributeError:
-        max_nbytes = None
     if len(column) == 0:
         column = None
 
     commits = repo.remote.fetch_data(remote=remote,
                                      commit=commit,
                                      column_names=column,
-                                     max_num_bytes=max_nbytes,
                                      retrieve_all_history=all_)
     click.echo(f'completed data for commits: {commits}')
 

@@ -398,10 +398,9 @@ class TestLargeRemoteServer:
     @pytest.mark.parametrize('fetchBranch', [None, 'testbranch'])
     @pytest.mark.parametrize('fetchCommit', [None, 'ma'])
     @pytest.mark.parametrize('fetchAll_history', [False, True])
-    @pytest.mark.parametrize('fetchNbytes', [None, 1000])
     def test_server_push_two_branch_then_clone_fetch_data_options(
             self, two_branch_multi_commit_repo_class, managed_tmpdir_class, array5by7_class,
-            fetchBranch, fetchCommit, fetchAsetns, fetchNbytes, fetchAll_history, tmp_path_factory):
+            fetchBranch, fetchCommit, fetchAsetns, fetchAll_history, tmp_path_factory):
         from hangar import Repository
         from operator import eq
 
@@ -420,7 +419,6 @@ class TestLargeRemoteServer:
 
         kwargs = {
             'column_names': fetchAsetns,
-            'max_num_bytes': fetchNbytes,
             'retrieve_all_history': fetchAll_history,
         }
         if fetchBranch is not None:
@@ -439,14 +437,6 @@ class TestLargeRemoteServer:
 
         # ----------------------- retrieve data with desired options --------------
 
-        # This case should fail
-        if (fetchAll_history is True) and isinstance(fetchNbytes, int):
-            try:
-                with pytest.raises(ValueError):
-                    fetch_commits = newRepo.remote.fetch_data(remote='origin', **kwargs)
-            finally:
-                newRepo._env._close_environments()
-            return True
         # get data
         fetch_commits = newRepo.remote.fetch_data(remote='origin', **kwargs)
         assert commits_to_check == fetch_commits
@@ -461,7 +451,6 @@ class TestLargeRemoteServer:
             if isinstance(fetchAsetns, tuple):
                 d = co.columns[fetchAsetns[0]]
                 # ensure we didn't fetch the other data simultaneously
-
                 ds1SampList, ds2SampList, ds3SampList, ds4SampList = devCmts[fCmt]
                 if fetchAsetns[0] == 'writtenaset':
                     compare = ds1SampList
@@ -476,21 +465,8 @@ class TestLargeRemoteServer:
                     compare = ds4SampList
                     cmp_func = eq
 
-                totalSeen = 0
                 for idx, samp in enumerate(compare):
-                    if fetchNbytes is None:
-                        assert cmp_func(samp, d[str(idx)])
-                    else:
-                        try:
-                            arr = d[str(idx)]
-                            assert cmp_func(samp, arr)
-                            try:
-                                totalSeen += arr.nbytes
-                            except AttributeError:
-                                totalSeen += len(arr)
-                        except FileNotFoundError:
-                            pass
-                        assert totalSeen <= fetchNbytes
+                    assert cmp_func(samp, d[str(idx)])
 
             # compare both asets at the same time
             else:
@@ -499,40 +475,12 @@ class TestLargeRemoteServer:
                 str_col = co.columns['str_col']
                 bytes_col = co.columns['bytes_col']
                 ds1List, ds2List, ds3List, ds4List = devCmts[fCmt]
-                totalSeen = 0
                 for idx, ds1ds2ds3ds4 in enumerate(zip(ds1List, ds2List, ds3List, ds4List)):
                     ds1, ds2, ds3, ds4 = ds1ds2ds3ds4
-                    if fetchNbytes is None:
-                        assert np.allclose(ds1, d[str(idx)])
-                        assert np.allclose(ds2, dd[str(idx)])
-                        assert ds3 == str_col[str(idx)]
-                        assert ds4 == bytes_col[str(idx)]
-                    else:
-                        try:
-                            arr1 = d[str(idx)]
-                            assert np.allclose(ds1, arr1)
-                            totalSeen += arr1.nbytes
-                        except FileNotFoundError:
-                            pass
-                        try:
-                            arr2 = dd[str(idx)]
-                            assert np.allclose(ds2, arr2)
-                            totalSeen += arr2.nbytes
-                        except FileNotFoundError:
-                            pass
-                        try:
-                            sval = str_col[str(idx)]
-                            assert ds3 == sval
-                            totalSeen += len(sval.encode())
-                        except FileNotFoundError:
-                            pass
-                        try:
-                            bval = bytes_col[str(idx)]
-                            assert ds4 == bval
-                            totalSeen += len(bval)
-                        except FileNotFoundError:
-                            pass
-                        assert totalSeen <= fetchNbytes
+                    assert np.allclose(ds1, d[str(idx)])
+                    assert np.allclose(ds2, dd[str(idx)])
+                    assert ds3 == str_col[str(idx)]
+                    assert ds4 == bytes_col[str(idx)]
             co.close()
         newRepo._env._close_environments()
 

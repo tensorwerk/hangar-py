@@ -6,13 +6,12 @@ from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
 from typing import (
-    List, NamedTuple, Optional, Sequence, Union, Tuple, Set, Dict, TYPE_CHECKING
+    List, NamedTuple, Optional, Sequence, Union, Tuple, Set, Dict
 )
 
 import grpc
 import lmdb
 from tqdm import tqdm
-import numpy as np
 
 from .backends import backend_decoder
 from .constants import LMDB_SETTINGS
@@ -25,7 +24,7 @@ from .records.commiting import (
     unpack_commit_ref,
 )
 from .remote.client import HangarClient
-from .remote.content import ContentWriter, ContentReader
+from .remote.content import ContentWriter, ContentReader, DataWriter
 from .txnctx import TxnRegister
 from .utils import is_suitable_user_key
 
@@ -73,10 +72,10 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
-            the name which should be used to refer to the remote server (ie:
-            'origin')
-        address : str
+        name
+            the name which should be used to refer to the remote server
+            (i.e. 'origin')
+        address
             the IP:PORT where the hangar server is running
 
         Returns
@@ -112,7 +111,7 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
+        name
             name of the remote to remove the reference to
 
         Raises
@@ -122,7 +121,7 @@ class Remotes(object):
 
         Returns
         -------
-        str
+        RemoteInfo
             The channel address which was removed at the given remote name
         """
         self.__verify_repo_initialized()
@@ -154,7 +153,7 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
+        name
             name of the remote server to ping
 
         Returns
@@ -190,9 +189,9 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote repository to fetch from (ie. ``origin``)
-        branch : str
+        branch
             name of the branch to fetch the commit references for.
 
         Returns
@@ -257,8 +256,15 @@ class Remotes(object):
                 m_schema_hash_map = defaultdict(list)
                 for digest, schema_hash in m_hashes:
                     m_schema_hash_map[schema_hash].append((digest, schema_hash))
-                for schema_hash, received_data in m_schema_hash_map.items():
-                    CW.data(schema_hash, received_data, backend='50')
+
+                DW = DataWriter(self._env)
+                with DW as DW_CM:
+                    for schema_hash, m_digests_schemas in m_schema_hash_map.items():
+                        for data_digest, data_schema_hash in m_digests_schemas:
+                            DW_CM.data(schema_hash,
+                                       data_digest=data_digest,
+                                       data=data_schema_hash,
+                                       backend='50')
 
             # Get missing commit reference specification
             for commit in tqdm(m_cmts, desc='fetching commit spec'):
@@ -301,12 +307,11 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote server to pull data from
-        column : str
+        column
             name of the column which data is being fetched from.
-        samples : Union[KeyType, Sequence[KeyType],
-                        Sequence[Union[Tuple[KeyType, KeyType], Tuple[KeyType], KeyType]]]
+        samples
             Key, or sequence of sample keys to select.
 
             *  Flat column layouts should provide just a single key, or flat sequence of
@@ -318,10 +323,10 @@ class Remotes(object):
                index `(sample, ...)` (which will fetch all subsamples for the given sample),
                or can provide lone sample keys in the sequences `sample` (which will also fetch
                all subsamples listed under the sample) OR ANY COMBINATION of the above.
-        branch : Optional[str]
+        branch
             branch head to operate on, either ``branch`` or ``commit`` argument must be
             passed, but NOT both. Default is ``None``
-        commit : Optional[str]
+        commit
             commit to operate on, either `branch` or `commit` argument must be passed,
             but NOT both.
 
@@ -333,7 +338,6 @@ class Remotes(object):
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
         self._client = HangarClient(envs=self._env, address=address)
-        CW = ContentWriter(self._env)
 
         # ----------------- setup / validate operations -----------------------
 
@@ -376,17 +380,18 @@ class Remotes(object):
 
             # -------------------- download missing data --------------------------
 
+            DW = DataWriter(self._env)
             total_data = sum(len(v) for v in m_schema_hash_map.values())
-            with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar:
+            with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar,  DW as DW_CM:
                 client: HangarClient  # type hint
-                stop = False
                 for schema in m_schema_hash_map.keys():
                     hashes = set(m_schema_hash_map[schema])
-                    while (len(hashes) > 0) and (not stop):
-                        ret = client.fetch_data(schema, hashes)
-                        saved_digests = CW.data(schema, ret)
-                        pbar.update(len(saved_digests))
-                        hashes = hashes.difference(set(saved_digests))
+                    origins = client.fetch_data_origin(hashes)
+                    client.fetch_data(
+                        origins=origins,
+                        datawriter_cm=DW_CM,
+                        schema=schema,
+                        pbar=pbar)
 
             move_process_data_to_store(self._repo_path, remote_operation=True)
             return cmt
@@ -489,30 +494,24 @@ class Remotes(object):
                    commit: str = None,
                    *,
                    column_names: Optional[Sequence[str]] = None,
-                   max_num_bytes: int = None,
                    retrieve_all_history: bool = False) -> List[str]:
         """Retrieve the data for some commit which exists in a `partial` state.
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote to pull the data from
-        branch : str, optional
+        branch
             The name of a branch whose HEAD will be used as the data fetch
             point. If None, ``commit`` argument expected, by default None
-        commit : str, optional
+        commit
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
-        column_names : Optional[Sequence[str]]
+        column_names
             Names of the columns which should be retrieved for the particular
             commits, any columns not named will not have their data fetched
             from the server. Default behavior is to retrieve all columns
-        max_num_bytes : Optional[int]
-            If you wish to limit the amount of data sent to the local machine,
-            set a `max_num_bytes` parameter. This will retrieve only this
-            amount of data from the server to be placed on the local disk.
-            Default is to retrieve all data regardless of how large.
-        retrieve_all_history : Optional[bool]
+        retrieve_all_history
             if data should be retrieved for all history accessible by the parents
             of this commit HEAD. by default False
 
@@ -523,17 +522,16 @@ class Remotes(object):
 
         Raises
         ------
-            ValueError
-                if branch and commit args are set simultaneously.
-            ValueError
-                if specified commit does not exist in the repository.
-            ValueError
-                if branch name does not exist in the repository.
+        ValueError
+            if branch and commit args are set simultaneously.
+        ValueError
+            if specified commit does not exist in the repository.
+        ValueError
+            if branch name does not exist in the repository.
         """
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
         self._client = HangarClient(envs=self._env, address=address)
-        CW = ContentWriter(self._env)
 
         # ----------------- setup / validate operations -----------------------
 
@@ -550,13 +548,8 @@ class Remotes(object):
         # --------------- negotiate missing data to get -----------------------
 
         if retrieve_all_history is True:
-            if isinstance(max_num_bytes, int):
-                raise ValueError(
-                    f'setting the maximum number of bytes transferred and requesting '
-                    f'all history are incompatible arguments.')
-            else:
-                hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)
-                commits = hist['order']
+            hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)
+            commits = hist['order']
         else:
             commits = [cmt]
 
@@ -589,29 +582,21 @@ class Remotes(object):
 
         # -------------------- download missing data --------------------------
 
-        total_nbytes_seen = 0
+        DW = DataWriter(self._env)
         total_data = sum(len(v) for v in m_schema_hash_map.values())
-        with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar:
+
+        with closing(self._client) as client, \
+                tqdm(total=total_data, desc='fetching data') as pbar, \
+                DW as DW_CM:
             client: HangarClient  # type hint
-            stop = False
             for schema in m_schema_hash_map.keys():
                 hashes = set(m_schema_hash_map[schema])
-                while (len(hashes) > 0) and (not stop):
-                    ret = client.fetch_data(schema, hashes)
-                    # max_num_bytes option
-                    if isinstance(max_num_bytes, int):
-                        for idx, r_kv in enumerate(ret):
-                            try:
-                                total_nbytes_seen += r_kv[1].nbytes
-                            except AttributeError:
-                                total_nbytes_seen += len(r_kv[1])
-                            if total_nbytes_seen >= max_num_bytes:
-                                ret = ret[0:idx]
-                                stop = True
-                                break
-                    saved_digests = CW.data(schema, ret)
-                    pbar.update(len(saved_digests))
-                    hashes = hashes.difference(set(saved_digests))
+                origins = client.fetch_data_origin(hashes)
+                client.fetch_data(
+                    origins=origins,
+                    datawriter_cm=DW_CM,
+                    schema=schema,
+                    pbar=pbar)
 
         move_process_data_to_store(self._repo_path, remote_operation=True)
         return commits
@@ -625,8 +610,8 @@ class Remotes(object):
 
         Parameters
         ----------
-        selectedDataRecords : Set[queries.DataRecordVal]
-        hashenv : lmdb.Environment
+        selectedDataRecords
+        hashenv
 
         Returns
         -------
@@ -657,9 +642,9 @@ class Remotes(object):
 
         Parameters
         ----------
-        column_names : Union[None, Sequence[str]]
+        column_names
             column names to fetch data for. If ``None``, download all column data.
-        recQuery : queries.RecordQuery
+        recQuery
             initialized record query object set up with appropriate ``dataenv``.
 
         Returns
@@ -695,15 +680,15 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote repository to make the push on.
-        branch : str
+        branch
             Name of the branch to push to the remote. If the branch name does
             not exist on the remote, the it will be created
-        username : str, optional, kwarg-only
+        username
             credentials to use for authentication if repository push restrictions
             are enabled, by default ''.
-        password : str, optional, kwarg-only
+        password
             credentials to use for authentication if repository push restrictions
             are enabled, by default ''.
 
@@ -798,9 +783,13 @@ class Remotes(object):
             # data
             total_data = sum([len(v) for v in m_schema_hashs.values()])
             with tqdm(total=total_data, desc='pushing data') as p:
-                for dataSchema, dataHashes in m_schema_hashs.items():
-                    client.push_data(dataSchema, dataHashes, pbar=p)
-                    p.update(1)
+                client.push_data_begin_context()
+                try:
+                    for dataSchema, dataHashes in m_schema_hashs.items():
+                        client.push_data(dataSchema, dataHashes, pbar=p)
+                        p.update(1)
+                finally:
+                    client.push_data_end_context()
             # commit refs
             for commit in tqdm(m_commits, desc='pushing commit refs'):
                 cmtContent = CR.commit(commit)

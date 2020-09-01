@@ -31,7 +31,7 @@ SERVICE_METHOD_TYPES = {
     'PING': 'uu',
     'GetClientConfig': 'uu',
     'FetchBranchRecord': 'uu',
-    'FetchData': 'ss',
+    'FetchData': 'us',
     'FetchCommit': 'us',
     'FetchSchema': 'uu',
     'PushBranchRecord': 'uu',
@@ -44,6 +44,10 @@ SERVICE_METHOD_TYPES = {
     'PushFindMissingCommits': 'uu',
     'PushFindMissingHashRecords': 'ss',
     'PushFindMissingSchemas': 'uu',
+    'FetchFindDataOrigin': 'ss',
+    'PushFindDataOrigin': 'ss',
+    'PushBeginContext': 'uu',
+    'PushEndContext': 'uu',
 }
 
 

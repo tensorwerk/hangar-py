@@ -1,14 +1,14 @@
-from typing import NamedTuple, Union, Sequence, Tuple, List, Optional
+from typing import NamedTuple, Union, Optional
 
 import numpy as np
 
 from ..columns.constructors import open_file_handles, column_type_object_from_schema
 from ..context import Environments
-from ..records import parsing
 from ..records import (
+    parsing,
     schema_spec_from_db_val,
     hash_schema_db_key_from_raw_key,
-    hash_data_db_key_from_raw_key,
+    hash_data_db_key_from_raw_key
 )
 from ..txnctx import TxnRegister
 
@@ -22,11 +22,11 @@ class ContentWriter(object):
 
     Parameters
     ----------
-    envs : context.Environments
+    envs
         main hangar environment context object.
     """
 
-    def __init__(self, envs):
+    def __init__(self, envs: Environments):
 
         self.env: Environments = envs
         self.txnctx: TxnRegister = TxnRegister()
@@ -37,13 +37,13 @@ class ContentWriter(object):
 
         Parameters
         ----------
-        commit : str
+        commit
             commit hash to write
-        parentVal : bytes
+        parentVal
             db formatted representation of commit parents
-        specVal : bytes
+        specVal
             db formatted representation of the commit specs
-        refVal : bytes
+        refVal
             db formated representation of commit record contents
 
         Returns
@@ -73,9 +73,9 @@ class ContentWriter(object):
 
         Parameters
         ----------
-        schema_hash : str
+        schema_hash
             schema hash being written
-        schemaVal : bytes
+        schemaVal
             db formatted representation of schema specification
 
         Returns
@@ -95,66 +95,112 @@ class ContentWriter(object):
         ret = False if not schemaExists else schema_hash
         return ret
 
-    def data(self,
-             schema_hash: str,
-             received_data: Sequence[Tuple[str, np.ndarray]],
-             backend: Optional[str] = None,
-             backend_options: Optional[dict] = None) -> List[str]:
-        """Write data content to the hash records database
 
-        Parameters
-        ----------
-        schema_hash : str
-            schema_hash currently being written
-        received_data : Sequence[Tuple[str, np.ndarray]]
-            list of tuples, each specifying (digest, tensor) for data retrieved
-            from the server. However, if a backend is manually specified which
-            requires different input to the ``write_data`` method than a tensor,
-            the second element can be replaced with what is appropriate for that
-            situation.
-        backend : str, optional
-            Manually specified backend code which will be used to record the
-            data records. If not specified (``None``), the default backend
-            recorded in the schema spec will be used, by default None
+class DataWriter:
 
-        Returns
-        -------
-        List[str]
-            list of str of all data digests written by this method.
-        """
-        schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
-        hashTxn = self.txnctx.begin_reader_txn(self.env.hashenv)
-        try:
-            schemaVal = hashTxn.get(schemaKey)
-        finally:
-            self.txnctx.abort_reader_txn(self.env.hashenv)
-        schema_val = schema_spec_from_db_val(schemaVal)
-        schema = column_type_object_from_schema(schema_val)
+    def __init__(self, envs):
 
-        if (backend is not None) and ((backend != schema.backend) or (backend_options is not None)):
-            schema.change_backend(backend, backend_options=backend_options)
+        self.env: Environments = envs
+        self.txnctx: TxnRegister = TxnRegister()
 
+        self._schema_hash_be_accessors = {}
+        self._schema_hash_objects = {}
+        self._is_cm = False
+
+    def __enter__(self):
+        self._is_cm = True
+        self.hashTxn = self.txnctx.begin_writer_txn(self.env.hashenv)
+        return self
+
+    def __exit__(self, *exc):
+        for be in self._schema_hash_be_accessors.values():
+            be.close()
+        self.txnctx.commit_writer_txn(self.env.hashenv)
+        self._schema_hash_be_accessors.clear()
+        self._schema_hash_objects.clear()
+        self._is_cm = False
+        self.hashTxn = None
+
+    @property
+    def is_cm(self):
+        return self._is_cm
+
+    def _open_new_backend(self, schema):
         be_accessor = open_file_handles(backends=[schema.backend],
                                         path=self.env.repo_path,
                                         mode='a',
                                         schema=schema,
                                         remote_operation=True)[schema.backend]
-        try:
-            saved_digests, hashKVs = [], []
-            for hdigest, tensor in received_data:
-                hashVal = be_accessor.write_data(tensor, remote_operation=True)
-                hashKey = hash_data_db_key_from_raw_key(hdigest)
-                saved_digests.append(hdigest)
-                hashKVs.append((hashKey, hashVal))
-        finally:
-            be_accessor.close()
-        try:
-            hashTxn = self.txnctx.begin_writer_txn(self.env.hashenv)
-            for k, v in hashKVs:
-                hashTxn.put(k, v)
-        finally:
-            self.txnctx.commit_writer_txn(self.env.hashenv)
-        return saved_digests
+        self._schema_hash_be_accessors[schema.schema_hash_digest()] = be_accessor
+
+    def _get_schema_object(self, schema_hash):
+        schemaKey = hash_schema_db_key_from_raw_key(schema_hash)
+        schemaVal = self.hashTxn.get(schemaKey)
+
+        schema_val = schema_spec_from_db_val(schemaVal)
+        schema = column_type_object_from_schema(schema_val)
+
+        if schema_hash != schema.schema_hash_digest():
+            raise RuntimeError(schema.__dict__)
+
+        self._schema_hash_objects[schema_hash] = schema
+        return schema
+
+    def _get_changed_schema_object(self, schema_hash, backend, backend_options):
+        import copy
+        if schema_hash in self._schema_hash_objects:
+            base_schema = copy.deepcopy(self._schema_hash_objects[schema_hash])
+        else:
+            base_schema = copy.deepcopy(self._get_schema_object(schema_hash))
+
+        base_schema.change_backend(backend, backend_options=backend_options)
+        changed_schema = self._schema_hash_objects.setdefault(base_schema.schema_hash_digest(), base_schema)
+        return changed_schema
+
+    def data(self,
+             schema_hash: str,
+             data_digest: str,
+             data: Union[str, int, np.ndarray],
+             backend: Optional[str] = None,
+             backend_options: Optional[dict] = None) -> str:
+        """Write data content to the hash records database
+
+        Parameters
+        ----------
+        schema_hash
+            schema_hash currently being written
+        data_digest
+            digest to write
+        data
+            actual piece of data to write
+        backend
+            Manually specified backend code which will be used to record the
+            data records. If not specified (``None``), the default backend
+            recorded in the schema spec will be used, by default None
+        backend_options
+            dict specifying backend options to use
+
+        Returns
+        -------
+        str
+            data digest written by this method.
+        """
+        if schema_hash not in self._schema_hash_objects:
+            self._get_schema_object(schema_hash)
+        schema = self._schema_hash_objects[schema_hash]
+        if (backend is not None) and ((backend != schema.backend) or (backend_options is not None)):
+            schema = self._get_changed_schema_object(schema_hash, backend, backend_options)
+
+        # Need because after changing, the schema_hash of the backend changes
+        final_schema_hash = schema.schema_hash_digest()
+        if final_schema_hash not in self._schema_hash_be_accessors:
+            self._open_new_backend(schema)
+
+        be_accessor = self._schema_hash_be_accessors[final_schema_hash]
+        hashVal = be_accessor.write_data(data, remote_operation=True)
+        hashKey = hash_data_db_key_from_raw_key(data_digest)
+        self.hashTxn.put(hashKey, hashVal)
+        return data_digest
 
 
 RawCommitContent = NamedTuple('RawCommitContent', [('commit', str),
@@ -185,7 +231,7 @@ class ContentReader(object):
 
         Parameters
         ----------
-        commit : str
+        commit
             commit hash to read from the ref db
 
         Returns
@@ -220,7 +266,7 @@ class ContentReader(object):
 
         Parameters
         ----------
-        schema_hash : str
+        schema_hash
             schema hash to look up
 
         Returns

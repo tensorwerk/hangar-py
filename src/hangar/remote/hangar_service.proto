@@ -10,7 +10,7 @@ service HangarService {
     rpc GetClientConfig (GetClientConfigRequest) returns (GetClientConfigReply) {}
 
     rpc FetchBranchRecord (FetchBranchRecordRequest) returns (FetchBranchRecordReply) {}
-    rpc FetchData (stream FetchDataRequest) returns (stream FetchDataReply) {}
+    rpc FetchData (FetchDataRequest) returns (stream FetchDataReply) {}
     rpc FetchCommit (FetchCommitRequest) returns (stream FetchCommitReply) {}
     rpc FetchSchema (FetchSchemaRequest) returns (FetchSchemaReply) {}
 
@@ -27,6 +27,10 @@ service HangarService {
     rpc PushFindMissingHashRecords (stream FindMissingHashRecordsRequest) returns (stream FindMissingHashRecordsReply) {}
     rpc PushFindMissingSchemas (FindMissingSchemasRequest) returns (FindMissingSchemasReply) {}
 
+    rpc FetchFindDataOrigin (stream DataOriginRequest) returns (stream DataOriginReply) {}
+    rpc PushFindDataOrigin (stream PushFindDataOriginRequest) returns (stream PushFindDataOriginReply) {}
+    rpc PushBeginContext (PushBeginContextRequest) returns (PushBeginContextReply) {}
+    rpc PushEndContext (PushEndContextRequest) returns (PushEndContextReply) {}
 }
 
 
@@ -35,6 +39,25 @@ service HangarService {
 | Common Formats for Data and Records
 -------------------------------------------------------------------------------
 */
+
+
+message PushBeginContextRequest {
+    // TODO: make this field actually do something
+    string client_uuid = 1;
+}
+message PushBeginContextReply {
+    ErrorProto err = 1;
+}
+
+
+message PushEndContextRequest {
+    // TODO: make this field actually do something
+    string client_uuid = 1;
+}
+message PushEndContextReply {
+    ErrorProto err = 1;
+}
+
 
 
 message ErrorProto {
@@ -76,11 +99,56 @@ message SchemaRecord {
     bytes blob = 2;
 }
 
-
-message NdArray {
-    // shape of the array
-
+message DataOriginRequest {
+    string digest = 1;
 }
+
+
+enum DataLocation {
+    // Server Side Local Disk
+    REMOTE_SERVER = 0;
+    // Minio Instance
+    MINIO = 1;
+    // AWS S3
+    S3 = 2;
+    // Google Cloud Store
+    GCS = 3;
+    // Azure Blob Store
+    ABS = 4;
+}
+
+enum DataType {
+    NP_ARRAY = 0;
+    SCHEMA = 1;  // Do not know if intend to share this or not.
+    STR = 2;
+    BYTES = 3;
+}
+
+
+message DataOriginReply {
+    DataLocation location = 1;
+    DataType data_type = 2;
+    string digest = 3;
+    string uri = 4;
+    bool compression = 5;
+    map<string, string> compression_opts = 6;
+}
+
+
+message PushFindDataOriginRequest {
+    DataType data_type = 1;
+    string digest = 2;
+    bool compression_is_desired = 3;
+}
+
+message PushFindDataOriginReply {
+    string digest = 1;
+    DataLocation location = 2;
+    string uri = 3;
+    bool compression_expected = 5;
+    map<string, string> compression_opts_expected = 6;
+}
+
 
 
 /*
@@ -126,21 +194,27 @@ message FetchBranchRecordReply {
 
 
 message FetchDataRequest {
-    bytes raw_data = 1;
-    // total size of the split tensorprotos
-    int64 comp_nbytes = 2;
-    // total size of the uncompressed raw data
-    int64 uncomp_nbytes = 3;
-    // string schema_hash = 4;
-    ErrorProto error = 4;
+    string uri = 1;
+//    bytes raw_data = 1;
+//    // total size of the split tensorprotos
+//    int64 comp_nbytes = 2;
+//    // total size of the uncompressed raw data
+//    int64 uncomp_nbytes = 3;
+//    // string schema_hash = 4;
+//    ErrorProto error = 4;
 }
+
+
 message FetchDataReply {
+    string uri = 1;
     // data container for the tensor
-    bytes raw_data = 1;
-    // total size of the split tensorprotos
-    int64 comp_nbytes = 2;
-    // total size of the uncompressed raw data
-    int64 uncomp_nbytes = 3;
+    bytes raw_data = 2;
+    // total number of bytes
+    int64 nbytes = 3;
+//    // total size of the split tensorprotos
+//    int64 comp_nbytes = 2;
+//    // total size of the uncompressed raw data
+//    int64 uncomp_nbytes = 3;
     // success or not
     ErrorProto error = 4;
 }
@@ -192,14 +266,15 @@ message PushBranchRecordReply {
 }
 
 message PushDataRequest {
+    string uri = 1;
     // data container for the tensor
-    bytes raw_data = 1;
-    // total size of the split tensorprotos
-    int64 comp_nbytes = 2;
-    // total size of the uncompressed raw data
-    int64 uncomp_nbytes = 3;
-    // success or not
-    ErrorProto error = 4;
+    bytes raw_data = 2;
+    // total number of bytes
+    int64 nbytes = 3;
+    // data type of the contents
+    DataType data_type = 4;
+    // TODO: Remove need for schema hash
+    string schema_hash = 5;
 }
 message PushDataReply {
     // success or not

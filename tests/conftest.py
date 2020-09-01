@@ -33,11 +33,11 @@ def classrepo(tmp_path_factory) -> Repository:
     old10_size = hangar.backends.numpy_10.COLLECTION_SIZE
     old30_lmdb_settings = hangar.backends.lmdb_30.LMDB_SETTINGS
     old31_lmdb_settings = hangar.backends.lmdb_31.LMDB_SETTINGS
-    hangar.backends.hdf5_00.COLLECTION_COUNT = 5
+    hangar.backends.hdf5_00.COLLECTION_COUNT = 20
     hangar.backends.hdf5_00.COLLECTION_SIZE = 20
-    hangar.backends.hdf5_01.COLLECTION_COUNT = 5
+    hangar.backends.hdf5_01.COLLECTION_COUNT = 20
     hangar.backends.hdf5_01.COLLECTION_SIZE = 20
-    hangar.backends.numpy_10.COLLECTION_SIZE = 50
+    hangar.backends.numpy_10.COLLECTION_SIZE = 100
     hangar.backends.lmdb_30.LMDB_SETTINGS['map_size'] = 1_000_000
     hangar.backends.lmdb_31.LMDB_SETTINGS['map_size'] = 1_000_000
 
@@ -65,11 +65,11 @@ def managed_tmpdir(monkeypatch, tmp_path):
     monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
     monkeypatch.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
     monkeypatch.setitem(hangar.backends.lmdb_31.LMDB_SETTINGS, 'map_size', 1_000_000)
-    monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 5)
+    monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 20)
     monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 20)
-    monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 5)
+    monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 20)
     monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
-    monkeypatch.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 50)
+    monkeypatch.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 100)
     hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
@@ -83,11 +83,11 @@ def managed_tmpdir_class(monkeysession, tmp_path_factory):
     monkeysession.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
     monkeysession.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
     monkeysession.setitem(hangar.backends.lmdb_31.LMDB_SETTINGS, 'map_size', 1_000_000)
-    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 5)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 20)
     monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 20)
-    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 5)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 20)
     monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
-    monkeysession.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 50)
+    monkeysession.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 100)
     hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
@@ -311,11 +311,11 @@ def server_instance_class(monkeysession, tmp_path_factory, worker_id):
     monkeysession.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
     monkeysession.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
     monkeysession.setitem(hangar.backends.lmdb_31.LMDB_SETTINGS, 'map_size', 1_000_000)
-    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 5)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 20)
     monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 20)
-    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 5)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 20)
     monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
-    monkeysession.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 50)
+    monkeysession.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 100)
 
     possibble_addresses = [x for x in range(50000, 59999)]
     chosen_address = choice(possibble_addresses)
