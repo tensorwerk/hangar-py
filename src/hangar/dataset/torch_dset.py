@@ -77,13 +77,13 @@ def _make_torch_dataset(columns: Sequence['Columns'],
 
     Parameters
     ----------
-    columns : :class:`~hangar.columns.column.Columns` or Sequence
+    columns
         A column object, a tuple of column object or a list of column
         objects.
-    keys : Union[str, int, List, Tuple]
+    keys
         An sequence collection of sample names. If given only those samples will
         fetched from the column
-    as_dict : bool
+    as_dict
         Return the data as an OrderedDict with column names as keys. If False, it returns
         a tuple of arrays
 

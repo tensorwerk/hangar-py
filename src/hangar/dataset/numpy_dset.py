@@ -36,16 +36,16 @@ class NumpyDataset:
 
     Parameters
     ----------
-    dataset : :class:`~hangar.dataset.common.Dataset` object
+    dataset
         Hangar's Dataset object that groups columns for downstream processing
-    batch_size : int
+    batch_size
         Size of the individual batch. If specified batches of this size will be returned
         on each iteration
-    drop_last : bool
+    drop_last
         Should drop the last incomplete batch
-    shuffle : bool
+    shuffle
         Should shuffle the batch on each epoch
-    collate_fn : Callable
+    collate_fn
         A function to collate samples together in a batch. In case this option is absent,
         the heuristics to collate the batch is
             1. If the column is an ndarray flat column, then `np.stack` will be used

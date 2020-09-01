@@ -66,12 +66,12 @@ def _make_tensorflow_dataset(columns: Sequence['Columns'],
 
     Parameters
     ----------
-    columns : :class:`~hangar.columns.column.Columns` or Sequence
+    columns
         A column object, a tuple of column object or a list of column objects`
-    keys : Union[str, int, List, Tuple]
+    keys
         An sequence of sample names. If given only those samples will fetched from
         the column
-    shuffle : bool
+    shuffle
         The generator uses this to decide a global shuffle across all the samples is
         required or not. But user doesn't have any restriction on doing`column.shuffle()`
         on the returned column

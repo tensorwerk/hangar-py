@@ -23,9 +23,9 @@ class HangarDataset:
 
     Parameters
     ----------
-    columns : :class:`~hangar.columns.column.Columns` or a Sequence['Columns']
+    columns
         A single column object of a sequence the column objects
-    keys : Sequence['KeyType']
+    keys
         An sequence collection of sample names. If given only those samples will
         fetched from the column
     """

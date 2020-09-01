@@ -28,21 +28,21 @@ def make_numpy_dataset(
 
     Parameters
     ----------
-    columns : :class:`~hangar.columns.column.Columns` or Sequence
+    columns
         A column object, a tuple of column object or a list of column
         objects.
-    keys : Union[str, int, List, Tuple]
+    keys
         An sequence collection of sample names. If given only those samples will
         fetched from the column
-    batch_size : int
+    batch_size
         Size of the batch. This will batch the dataset on the zeroth dimension. For
         example, if the data is of the shape (H x W x C) the batched data will be shaped
         as (B x H x W x C) where B is the batch size
-    drop_last : bool
+    drop_last
         Should the last uncompleted batch be dropped
-    shuffle : bool
+    shuffle
         Should the data be shuffled on each epoch
-    collate_fn : Callable
+    collate_fn
         A function to collate samples together in a batch. In case this option is absent,
         the heuristics to collate the batch is
             1. If the column is an ndarray flat column, then `np.stack` will be used
@@ -112,15 +112,15 @@ def make_torch_dataset(
 
     Parameters
     ----------
-    columns : :class:`~hangar.columns.column.Columns` or Sequence
+    columns
         A column object, a tuple of column object or a list of column
         objects.
-    keys : Union[str, int, List, Tuple]
+    keys
         An sequence collection of sample names. If given only those samples will
         fetched from the column
-    as_dict : bool
-        Return the data as an OrderedDict with column names as keys. If False, it returns
-        a tuple of arrays
+    as_dict
+        Return the data as an OrderedDict with column names as keys. If False,
+        it returns a tuple of arrays
 
     Examples
     --------
@@ -171,12 +171,12 @@ def make_tensorflow_dataset(
 
     Parameters
     ----------
-    columns : :class:`~hangar.columns.column.Columns` or Sequence
+    columns
         A column object, a tuple of column object or a list of column objects`
-    keys : Union[str, int, List, Tuple]
+    keys
         An sequence of sample names. If given only those samples will fetched from
         the column
-    shuffle : bool
+    shuffle
         The generator uses this to decide a global shuffle across all the samples is
         required or not. But user doesn't have any restriction on doing`column.shuffle()`
         on the returned column
