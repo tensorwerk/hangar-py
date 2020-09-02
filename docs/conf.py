@@ -74,6 +74,8 @@ linkcheck_ignore = [
     r'http://localhost:\d+/?', 'http://localhost/',
     'https://github.com/tensorwerk/hangar-py',
     r'https://github.com/tensorwerk/hangar-py/.*',
+    r'http://tensorwerk.com/hangar-benchmarks/',
+    r'https://tensorwerk.com/hangar-benchmarks',
 ]
 linkcheck_retries = 3
 
@@ -81,14 +83,13 @@ linkcheck_retries = 3
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
 # if not on_rtd:  # only set the theme if we're building docs locally
-html_theme = 'sphinx_rtd_theme'
+# html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_material'
 
-html_use_smartypants = True
-html_last_updated_fmt = '%b %d, %Y'
-html_split_index = False
 html_sidebars = {
-   '**': ['searchbox.html', 'globaltoc.html', 'sourcelink.html'],
+    "**": ["logo-text.html", "globaltoc.html", "localtoc.html", "searchbox.html"]
 }
+
 html_short_title = '%s-%s' % (project, version)
 
 napoleon_use_ivar = True
@@ -100,6 +101,26 @@ add_module_names = False
 doctest_test_doctest_blocks = None
 autoclass_content = 'class'
 
+# Material theme options (see theme.conf for more information)
 html_theme_options = {
-    'style_nav_header_background': 'orange'
+
+    # Set the name of the project to appear in the navigation.
+    'nav_title': 'Hangar',
+
+    # Set the color and the accent color
+    'color_primary': 'deep-purple',
+    'color_accent': 'blue',
+
+    # Set the repo location to get a badge with stats
+    'repo_url': 'https://github.com/tensorwerk/hangar-py/',
+    'repo_name': 'Hangar',
+    'repo_type': 'github',
+
+
+    # Visible levels of the global TOC; -1 means unlimited
+    'globaltoc_depth': -1,
+    # If False, expand all TOC entries
+    'globaltoc_collapse': True,
+    # If True, show hidden TOC entries
+    'globaltoc_includehidden': True,
 }

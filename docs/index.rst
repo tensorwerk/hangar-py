@@ -2,7 +2,6 @@
 
 .. toctree::
    :maxdepth: 3
-   :hidden:
 
    readme
    quickstart

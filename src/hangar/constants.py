@@ -48,7 +48,7 @@ LMDB_SETTINGS = {
     'meminit': False,
     'subdir': False,
     'lock': False,
-    'max_spare_txns': 4,
+    'max_spare_txns': 10,
 }
 
 LMDB_REF_NAME = 'ref.lmdb'
@@ -57,7 +57,8 @@ LMDB_BRANCH_NAME = 'branch.lmdb'
 LMDB_STAGE_REF_NAME = 'stage_ref.lmdb'
 LMDB_STAGE_HASH_NAME = 'stage_hash.lmdb'
 
-
 # readme file
 
 README_FILE_NAME = 'README.txt'
+
+

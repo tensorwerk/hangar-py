@@ -29,28 +29,31 @@ jobs:
           # build time with limited macos jobs
           - platform: macos-latest
             python-version: 3.7
+          - platform: windows-latest
+            python-version: 3.7
+            testml: yes
 
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade setuptools pip wheel
+        python -m pip install --upgrade setuptools wheel
         # Use the latest published version for myself :)
         python -m pip install tox-gh-actions
     - name: Run Tests Without Coverage Report
       if: matrix.testcover == 'no'
-      run: tox -- -p no:sugar
+      run: tox
       env:
         PYTEST_XDIST_PROC_NR: 2
         TESTCOVER: ${{ matrix.testcover }}
         TESTML: ${{ matrix.testml }}
     - name: Run Tests With Coverage Report
       if: matrix.testcover == 'yes'
-      run: tox -- --cov-report xml -p no:sugar
+      run: tox -- --cov-report xml
       env:
         PYTEST_XDIST_PROC_NR: 2
         TESTCOVER: ${{ matrix.testcover }}

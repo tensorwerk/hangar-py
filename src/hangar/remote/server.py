@@ -1,33 +1,42 @@
+import configparser
 import os
-from pathlib import Path
-from typing import Union
+import shutil
 import tempfile
+import traceback
 import warnings
 from concurrent import futures
 from os.path import join as pjoin
-import shutil
-import configparser
+from pathlib import Path
 from pprint import pprint as pp
+from threading import Lock
+from typing import Union, Iterable
 
 import blosc
 import grpc
 import lmdb
 
-from . import chunks
-from . import hangar_service_pb2
-from . import hangar_service_pb2_grpc
-from . import request_header_validator_interceptor
-from .content import ContentWriter
+from . import (
+    chunks,
+    hangar_service_pb2,
+    hangar_service_pb2_grpc,
+    request_header_validator_interceptor,
+)
+from .content import ContentWriter, DataWriter
 from .. import constants as c
-from ..context import Environments
-from ..txnctx import TxnRegister
 from ..backends import BACKEND_ACCESSOR_MAP, backend_decoder
-from ..records import commiting, hashs, heads, parsing, queries, summarize
+from ..context import Environments
 from ..records import (
+    commiting,
+    hashs,
+    heads,
+    parsing,
+    queries,
+    summarize,
     hash_schema_db_key_from_raw_key,
     hash_data_db_key_from_raw_key,
 )
-from ..records.hashmachine import hash_type_code_from_digest, hash_func_from_tcode
+from ..records.hashmachine import hash_func_from_tcode
+from ..txnctx import TxnRegister
 from ..utils import set_blosc_nthreads
 
 set_blosc_nthreads()
@@ -53,6 +62,26 @@ def server_config(server_dir, *, create: bool = True) -> configparser.ConfigPars
     return CFG
 
 
+def context_abort_with_exception_traceback(
+        context: grpc.ServicerContext,
+        exc: Exception,
+        status_code: grpc.StatusCode
+):
+    context.abort(
+        code=status_code,
+        details=(f'Exception Type: {type(exc)} \n'
+                 f'Exception Message: {exc} \n'
+                 f'Traceback: \n {traceback.format_tb(exc.__traceback__)}'))
+
+
+def context_abort_with_handled_error(
+        context: grpc.ServicerContext,
+        message: str, status_code:
+        grpc.StatusCode
+):
+    context.abort(code=status_code, details=message)
+
+
 class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
     def __init__(self, repo_path: Union[str, bytes, Path], overwrite=False):
@@ -64,6 +93,8 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             warnings.simplefilter('ignore', UserWarning)
             envs = Environments(pth=repo_path)
         self.env: Environments = envs
+        self.data_writer_lock = Lock()
+        self.hash_reader_lock = Lock()
 
         try:
             self.env.init_repo(
@@ -89,6 +120,7 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         self.repo_path = self.env.repo_path
         self.data_dir = pjoin(self.repo_path, c.DIR_DATA)
         self.CW = ContentWriter(self.env)
+        self.DW = DataWriter(self.env)
 
     def close(self):
         for backend_accessor in self._rFs.values():
@@ -129,13 +161,12 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             rec = hangar_service_pb2.BranchRecord(name=branch_name, commit=head)
             err = hangar_service_pb2.ErrorProto(code=0, message='OK')
             reply = hangar_service_pb2.FetchBranchRecordReply(rec=rec, error=err)
+            return reply
         except ValueError:
             msg = f'BRANCH: {branch_name} DOES NOT EXIST ON SERVER.'
-            context.set_details(msg)
-            context.set_code(grpc.StatusCode.NOT_FOUND)
-            err = hangar_service_pb2.ErrorProto(code=5, message=msg)
-            reply = hangar_service_pb2.FetchBranchRecordReply(error=err)
-        return reply
+            context_abort_with_handled_error(
+                context=context, message=msg, status_code=grpc.StatusCode.NOT_FOUND)
+            return
 
     def PushBranchRecord(self, request, context):
         """Update the HEAD commit of a branch, creating the record if not previously existing.
@@ -150,9 +181,9 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
             current_head = heads.get_branch_head_commit(self.env.branchenv, branch_name)
             if current_head == commit:
                 msg = f'NO CHANGE TO BRANCH: {branch_name} WITH HEAD: {current_head}'
-                context.set_details(msg)
-                context.set_code(grpc.StatusCode.ALREADY_EXISTS)
-                err = hangar_service_pb2.ErrorProto(code=6, message=msg)
+                context_abort_with_handled_error(
+                    context=context, message=msg, status_code=grpc.StatusCode.ALREADY_EXISTS)
+                return
             else:
                 heads.set_branch_head_commit(self.env.branchenv, branch_name, commit)
                 err = hangar_service_pb2.ErrorProto(code=0, message='OK')
@@ -276,7 +307,51 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
 
     # ---------------------------- Data ---------------------------------------
 
-    def FetchData(self, request_iterator, context):
+    def FetchFindDataOrigin(self, request_iterator, context):
+        digests = []
+        for request in request_iterator:
+            digests.append(request.digest)
+
+        hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
+        try:
+            for digest in digests:
+                hashKey = hash_data_db_key_from_raw_key(digest)
+                hashVal = hashTxn.get(hashKey, default=False)
+                if hashVal is False:
+                    msg = f'HASH DOES NOT EXIST: {hashKey}'
+                    context.set_details(msg)
+                    context.set_code(grpc.StatusCode.NOT_FOUND)
+                    err = hangar_service_pb2.ErrorProto(code=5, message=msg)
+                    reply = hangar_service_pb2.FetchDataReply(error=err)
+                    yield reply
+                    raise StopIteration()
+                else:
+                    spec = backend_decoder(hashVal)
+                    if spec.backend in ['01', '00', '10']:
+                        dtype = hangar_service_pb2.DataType.NP_ARRAY
+                    elif spec.backend == '30':
+                        dtype = hangar_service_pb2.DataType.STR
+                    elif spec.backend == '31':
+                        dtype = hangar_service_pb2.DataType.BYTES
+                    else:
+                        raise TypeError(spec)
+
+                    response = hangar_service_pb2.DataOriginReply(
+                        location=hangar_service_pb2.DataLocation.REMOTE_SERVER,
+                        data_type=dtype,
+                        digest=digest,
+                        uri=digest,
+                        compression=True,
+                    )
+                    response.compression_opts['id'] = 'blosc'
+                    response.compression_opts['cname'] = 'blosclz'
+                    response.compression_opts['clevel'] = '3'
+                    yield response
+
+        finally:
+            self.txnregister.abort_reader_txn(self.env.hashenv)
+
+    def FetchData(self, request, context):
         """Return a packed byte representation of samples corresponding to a digest.
 
         Please see comments below which explain why not all requests are
@@ -294,76 +369,125 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         of digests/tensors off to them as is (incomplete), and request that
         the client figure out what it still needs and ask us again.
         """
-        for idx, request in enumerate(request_iterator):
-            if idx == 0:
-                uncomp_nbytes = request.uncomp_nbytes
-                comp_nbytes = request.comp_nbytes
-                dBytes, offset = bytearray(comp_nbytes), 0
-            size = len(request.raw_data)
-            dBytes[offset: offset + size] = request.raw_data
-            offset += size
-
-        uncompBytes = blosc.decompress(dBytes)
-        if uncomp_nbytes != len(uncompBytes):
-            msg = f'Expected nbytes data sent: {uncomp_nbytes} != received {comp_nbytes}'
-            context.set_details(msg)
-            context.set_code(grpc.StatusCode.DATA_LOSS)
-            err = hangar_service_pb2.ErrorProto(code=15, message=msg)
-            reply = hangar_service_pb2.FetchDataReply(error=err)
-            yield reply
-            raise StopIteration()
-
-        totalSize, records = 0, []
-        unpacked_digests = uncompBytes.decode().split(c.SEP_LST)
-        hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
-
+        uri = request.uri
+        hashKey = hash_data_db_key_from_raw_key(uri)
         try:
-            fetch_max_nbytes = int(self.CFG['SERVER_GRPC']['fetch_max_nbytes'])
-            for digest in unpacked_digests:
-                hashKey = hash_data_db_key_from_raw_key(digest)
+            with self.hash_reader_lock:
+                hashTxn = self.txnregister.begin_reader_txn(self.env.hashenv)
                 hashVal = hashTxn.get(hashKey, default=False)
-                if hashVal is False:
-                    msg = f'HASH DOES NOT EXIST: {hashKey}'
-                    context.set_details(msg)
-                    context.set_code(grpc.StatusCode.NOT_FOUND)
-                    err = hangar_service_pb2.ErrorProto(code=5, message=msg)
-                    reply = hangar_service_pb2.FetchDataReply(error=err)
-                    yield reply
-                    raise StopIteration()
+                self.txnregister.abort_reader_txn(self.env.hashenv)
+        except Exception as e:
+            context_abort_with_exception_traceback(
+                context=context, exc=e, status_code=grpc.StatusCode.INTERNAL)
+            raise e
+
+        if hashVal is False:
+            exc = FileNotFoundError(f'request uri does not exist. URI: {uri}')
+            context_abort_with_exception_traceback(
+                context=context, exc=exc, status_code=grpc.StatusCode.NOT_FOUND)
+
+        spec = backend_decoder(hashVal)
+        data = self._rFs[spec.backend].read_data(spec)
+        dtype_code, raw_record = chunks.serialize_data(data)
+        compressed_record = blosc.compress(
+            raw_record, clevel=3, cname='blosclz', shuffle=blosc.NOSHUFFLE)
+
+        def replies_iterator(raw, uri, error_proto):
+            reply = hangar_service_pb2.FetchDataReply(
+                uri=uri,
+                nbytes=len(raw),
+                error=error_proto)
+            for raw_chunk in chunks.chunk_bytes(raw):
+                reply.raw_data = raw_chunk
+                yield reply
+
+        err = hangar_service_pb2.ErrorProto(code=0, message='OK')
+        repliesIter = replies_iterator(compressed_record, uri, err)
+        yield from repliesIter
+
+    def PushFindDataOrigin(
+            self,
+            request_iterator: Iterable[hangar_service_pb2.PushFindDataOriginRequest],
+            context
+    ) -> hangar_service_pb2.PushFindDataOriginReply:
+
+        CONFIG_SEND_LOCATION = hangar_service_pb2.DataLocation.REMOTE_SERVER
+
+        all_requests = [req for req in request_iterator]
+        for request in all_requests:
+            if request.compression_is_desired is True:
+                reply_compression_expected = True
+                if request.data_type == hangar_service_pb2.DataType.NP_ARRAY:
+                    reply_compression_opts_expected = {
+                        'id': 'blosc',
+                        'cname': 'blosclz',
+                        'clevel': '3'
+                    }
+                elif request.data_type == hangar_service_pb2.DataType.STR:
+                    reply_compression_opts_expected = {
+                        'id': 'blosc',
+                        'cname': 'zstd',
+                        'clevel': '3'
+                    }
+                elif request.data_type == hangar_service_pb2.DataType.BYTES:
+                    reply_compression_opts_expected = {
+                        'id': 'blosc',
+                        'cname': 'blosclz',
+                        'clevel': '3'
+                    }
                 else:
-                    spec = backend_decoder(hashVal)
-                    data = self._rFs[spec.backend].read_data(spec)
+                    raise TypeError(request)
+            else:
+                reply_compression_expected = False
+                reply_compression_opts_expected = {}
 
-                record = chunks.serialize_record(data, digest, '')
-                records.append(record)
-                totalSize += len(record)
-                if totalSize >= fetch_max_nbytes:
-                    pack = chunks.serialize_record_pack(records)
-                    err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-                    cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
-                                                         pb2_request=hangar_service_pb2.FetchDataReply, err=err)
-                    yield from cIter
-                    msg = 'HANGAR REQUESTED RETRY: developer enforced limit on returned '\
-                          'raw data size to prevent memory overload of user system.'
-                    context.set_details(msg)
-                    context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
-                    err = hangar_service_pb2.ErrorProto(code=8, message=msg)
-                    totalSize, records = 0, []
-                    yield hangar_service_pb2.FetchDataReply(error=err, raw_data=b'')
-                    raise StopIteration()
-        except StopIteration:
-            totalSize, records = 0, []
-        finally:
-            # finish sending all remaining tensors if max size hash not been hit.
-            if totalSize > 0:
-                pack = chunks.serialize_record_pack(records)
-                err = hangar_service_pb2.ErrorProto(code=0, message='OK')
-                cIter = chunks.tensorChunkedIterator(buf=pack, uncomp_nbytes=len(pack),
-                                                     pb2_request=hangar_service_pb2.FetchDataReply, err=err)
-                yield from cIter
-            self.txnregister.abort_reader_txn(self.env.hashenv)
+            if CONFIG_SEND_LOCATION == hangar_service_pb2.DataLocation.REMOTE_SERVER:
+                reply_uri = request.digest
+            else:
+                raise RuntimeError(f'CONFIG_SEND_LOCATION: {CONFIG_SEND_LOCATION}')
 
-    def PushData(self, request_iterator, context):
+            reply = hangar_service_pb2.PushFindDataOriginReply(
+                digest=request.digest,
+                location=CONFIG_SEND_LOCATION,
+                uri=reply_uri,
+                compression_expected=reply_compression_expected,
+                compression_opts_expected=reply_compression_opts_expected,
+            )
+            yield reply
+
+    def PushBeginContext(self, request, context):
+        try:
+            self.DW.__enter__()
+        except Exception as e:
+            context.abort(
+                code=grpc.StatusCode.INTERNAL,
+                details=(f'Exception Type: {type(e)} \n'
+                         f'Exception Message: {e} \n'
+                         f'Traceback: \n {traceback.format_tb(e.__traceback__)}')
+            )
+        err = hangar_service_pb2.ErrorProto(code=0, message='OK')
+        reply = hangar_service_pb2.PushBeginContextReply(err=err)
+        return reply
+
+    def PushEndContext(self, request, context):
+        try:
+            self.DW.__exit__()
+        except Exception as e:
+            context.abort(
+                code=grpc.StatusCode.INTERNAL,
+                details=(f'Exception Type: {type(e)} \n'
+                         f'Exception Message: {e} \n'
+                         f'Traceback: \n {traceback.format_tb(e.__traceback__)}')
+            )
+        err = hangar_service_pb2.ErrorProto(code=0, message='OK')
+        reply = hangar_service_pb2.PushEndContextReply(err=err)
+        return reply
+
+    def PushData(
+            self,
+            request_iterator: Iterable[hangar_service_pb2.PushDataRequest],
+            context: grpc.ServicerContext
+    ) -> hangar_service_pb2.PushDataReply:
         """Receive compressed streams of binary data from the client.
 
         In order to prevent errors or malicious behavior, the cryptographic hash
@@ -371,41 +495,46 @@ class HangarServer(hangar_service_pb2_grpc.HangarServiceServicer):
         is. If an error is detected, no sample in the entire stream will be
         saved to disk.
         """
+
         for idx, request in enumerate(request_iterator):
             if idx == 0:
-                uncomp_nbytes = request.uncomp_nbytes
-                comp_nbytes = request.comp_nbytes
-                dBytes, offset = bytearray(comp_nbytes), 0
+                if not self.DW.is_cm:
+                    context.abort(
+                        code=grpc.StatusCode.FAILED_PRECONDITION,
+                        details=f'Attept to push without opening context'
+                    )
+                uri = request.uri
+                dtype_code = request.data_type
+                schema_hash = request.schema_hash
+                dBytes = bytearray(request.nbytes)
+                offset = 0
             size = len(request.raw_data)
             dBytes[offset: offset + size] = request.raw_data
             offset += size
 
+        # TODO: Handle expected vs required
         uncompBytes = blosc.decompress(dBytes)
-        if uncomp_nbytes != len(uncompBytes):
-            msg = f'ERROR: uncomp_nbytes sent: {uncomp_nbytes} != received {comp_nbytes}'
-            context.set_details(msg)
-            context.set_code(grpc.StatusCode.DATA_LOSS)
-            err = hangar_service_pb2.ErrorProto(code=15, message=msg)
-            reply = hangar_service_pb2.PushDataReply(error=err)
-            return reply
 
-        unpacked_records = chunks.deserialize_record_pack(uncompBytes)
-        received_data = []
-        for record in unpacked_records:
-            data = chunks.deserialize_record(record)
-            schema_hash = data.schema
-            expected_hasher_tcode = hash_type_code_from_digest(data.digest)
-            hash_func = hash_func_from_tcode(expected_hasher_tcode)
-            received_hash = hash_func(data.data)
-            if received_hash != data.digest:
-                msg = f'HASH MANGLED, received: {received_hash} != expected digest: {data.digest}'
-                context.set_details(msg)
-                context.set_code(grpc.StatusCode.DATA_LOSS)
-                err = hangar_service_pb2.ErrorProto(code=15, message=msg)
-                reply = hangar_service_pb2.PushDataReply(error=err)
-                return reply
-            received_data.append((received_hash, data.data))
-        _ = self.CW.data(schema_hash, received_data)  # returns saved)_digests
+        recieved_data = chunks.deserialize_data(dtype_code, uncompBytes)
+        hash_func = hash_func_from_tcode(str(dtype_code))
+        recieved_hash = hash_func(recieved_data)
+
+        # TODO: uri is not the correct name for this
+        if recieved_hash != uri:
+            context.abort(
+                code=grpc.StatusCode.DATA_LOSS,
+                details=f'HASH MANGLED, received: {recieved_hash} != expected digest: {uri}'
+            )
+        try:
+            with self.data_writer_lock:
+                _ = self.DW.data(schema_hash, data_digest=recieved_hash, data=recieved_data)  # returns saved)_digests
+        except Exception as e:
+            context.abort(
+                code=grpc.StatusCode.INTERNAL,
+                details=(f'Exception Type: {type(e)} \n'
+                         f'Exception Message: {e} \n'
+                         f'Traceback: \n {traceback.format_tb(e.__traceback__)}')
+            )
         err = hangar_service_pb2.ErrorProto(code=0, message='OK')
         reply = hangar_service_pb2.PushDataReply(error=err)
         return reply
@@ -624,7 +753,7 @@ def serve(hangar_path: str,
     port = server.add_insecure_port(channel_address)
     if port == 0:
         server.stop(0.1)
-        server.wait_for_termination(timeout=10)
+        server.wait_for_termination(timeout=2)
         raise OSError(f'Unable to bind port, adddress {channel_address} already in use.')
     return (server, hangserv, channel_address)
 

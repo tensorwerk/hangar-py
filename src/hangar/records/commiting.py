@@ -695,3 +695,10 @@ def list_all_commits(refenv):
         TxnRegister().abort_reader_txn(refenv)
 
     return list(commits)
+
+
+def number_commits_recorded(refenv) -> int:
+    """Returns the total number of commits made across all history.
+    """
+    return len(list_all_commits(refenv))
+

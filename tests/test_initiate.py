@@ -184,6 +184,16 @@ def test_force_release_writer_lock_works(managed_tmpdir):
     repo._env._close_environments()
 
 
+def test_repo_summary_does_not_error_before_any_commit_made(capfd, managed_tmpdir):
+    repo = Repository(path=managed_tmpdir, exists=False)
+    repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)
+
+    assert repo.summary() is None
+    out, _ = capfd.readouterr()
+    assert 'No commits have been made in the repository' in out
+    repo._env._close_environments()
+
+
 def test_get_ecosystem_details(managed_tmpdir):
     repo = Repository(path=managed_tmpdir, exists=False)
     repo.init(user_name='tester', user_email='foo@test.bar', remove_old=True)

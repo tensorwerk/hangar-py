@@ -16,6 +16,14 @@ variable_shape_backend_params = ['00', '10']
 fixed_shape_backend_params = ['00', '01', '10']
 
 
+@pytest.fixture(scope="session")
+def monkeysession(request):
+    from _pytest.monkeypatch import MonkeyPatch
+    mpatch = MonkeyPatch()
+    yield mpatch
+    mpatch.undo()
+
+
 @pytest.fixture(scope='class')
 def classrepo(tmp_path_factory) -> Repository:
     old00_count = hangar.backends.hdf5_00.COLLECTION_COUNT
@@ -25,11 +33,11 @@ def classrepo(tmp_path_factory) -> Repository:
     old10_size = hangar.backends.numpy_10.COLLECTION_SIZE
     old30_lmdb_settings = hangar.backends.lmdb_30.LMDB_SETTINGS
     old31_lmdb_settings = hangar.backends.lmdb_31.LMDB_SETTINGS
-    hangar.backends.hdf5_00.COLLECTION_COUNT = 5
+    hangar.backends.hdf5_00.COLLECTION_COUNT = 20
     hangar.backends.hdf5_00.COLLECTION_SIZE = 20
-    hangar.backends.hdf5_01.COLLECTION_COUNT = 5
+    hangar.backends.hdf5_01.COLLECTION_COUNT = 20
     hangar.backends.hdf5_01.COLLECTION_SIZE = 20
-    hangar.backends.numpy_10.COLLECTION_SIZE = 50
+    hangar.backends.numpy_10.COLLECTION_SIZE = 100
     hangar.backends.lmdb_30.LMDB_SETTINGS['map_size'] = 1_000_000
     hangar.backends.lmdb_31.LMDB_SETTINGS['map_size'] = 1_000_000
 
@@ -57,14 +65,34 @@ def managed_tmpdir(monkeypatch, tmp_path):
     monkeypatch.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
     monkeypatch.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
     monkeypatch.setitem(hangar.backends.lmdb_31.LMDB_SETTINGS, 'map_size', 1_000_000)
-    monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 5)
+    monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 20)
     monkeypatch.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 20)
-    monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 5)
+    monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 20)
     monkeypatch.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
-    monkeypatch.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 50)
+    monkeypatch.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 100)
     hangar.txnctx.TxnRegisterSingleton._instances = {}
     yield tmp_path
     shutil.rmtree(tmp_path)
+
+
+
+@pytest.fixture(scope='class')
+def managed_tmpdir_class(monkeysession, tmp_path_factory):
+    pth = tmp_path_factory.mktemp('classrepo2', numbered=True)
+    tmp_path = str(pth)
+    monkeysession.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
+    monkeysession.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeysession.setitem(hangar.backends.lmdb_31.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 20)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 20)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 20)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
+    monkeysession.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 100)
+    hangar.txnctx.TxnRegisterSingleton._instances = {}
+    yield tmp_path
+    shutil.rmtree(tmp_path)
+
+
 
 
 @pytest.fixture()
@@ -107,6 +135,23 @@ def repo_20_filled_samples(request, aset_samples_initialized_repo, array5by7) ->
     co.commit('20 samples')
     co.close()
     yield aset_samples_initialized_repo
+
+
+@pytest.fixture(params=fixed_shape_backend_params)
+def repo_20_filled_subsamples(request, aset_subsamples_initialized_repo, array5by7) -> Repository:
+    co = aset_subsamples_initialized_repo.checkout(write=True)
+    second_aset = co.add_ndarray_column('second_aset', prototype=array5by7,
+                                        backend=request.param, contains_subsamples=True)
+    firstaset = co['writtenaset']
+    secondaset = co['second_aset']
+    array5by7[:] = 1
+    firstaset[0] = {1: array5by7 * 1, 2: array5by7 * 2, 3: array5by7 * 3}
+    firstaset[1] = {4: array5by7 * 4, 5: array5by7 * 5, 6: array5by7 * 6}
+    secondaset[0] = {1: array5by7 * 10, 2: array5by7 * 20, 3: array5by7 * 30}
+    secondaset[1] = {4: array5by7 * 40, 5: array5by7 * 50, 6: array5by7 * 60}
+    co.commit('added data')
+    co.close()
+    yield aset_subsamples_initialized_repo
 
 
 @pytest.fixture(params=fixed_shape_backend_params)
@@ -250,6 +295,33 @@ def server_instance(monkeypatch, managed_tmpdir, worker_id):
     base_tmpdir = pjoin(managed_tmpdir, f'{worker_id[-1]}')
     mkdir(base_tmpdir)
     server, hangserver, _ = server.serve(base_tmpdir, overwrite=True, channel_address=address)
+    server.start()
+    yield address
+
+    hangserver.close()
+    server.stop(0.1)
+    server.wait_for_termination(timeout=2)
+
+
+@pytest.fixture(scope='class')
+def server_instance_class(monkeysession, tmp_path_factory, worker_id):
+    from secrets import choice
+    from hangar.remote import server
+    monkeysession.setattr(server, 'server_config', mock_server_config)
+    monkeysession.setitem(hangar.constants.LMDB_SETTINGS, 'map_size', 2_000_000)
+    monkeysession.setitem(hangar.backends.lmdb_30.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeysession.setitem(hangar.backends.lmdb_31.LMDB_SETTINGS, 'map_size', 1_000_000)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_COUNT', 20)
+    monkeysession.setattr(hangar.backends.hdf5_00, 'COLLECTION_SIZE', 20)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_COUNT', 20)
+    monkeysession.setattr(hangar.backends.hdf5_01, 'COLLECTION_SIZE', 20)
+    monkeysession.setattr(hangar.backends.numpy_10, 'COLLECTION_SIZE', 100)
+
+    possibble_addresses = [x for x in range(50000, 59999)]
+    chosen_address = choice(possibble_addresses)
+    address = f'localhost:{chosen_address}'
+    base_tmpdir = tmp_path_factory.mktemp(f'{worker_id[-1]}')
+    server, hangserver, _ = server.serve(str(base_tmpdir), overwrite=True, channel_address=address)
     server.start()
     yield address
 

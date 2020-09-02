@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Iterator, List, Set, Tuple, Union
+from typing import Dict, Iterable, Iterator, List, Set, Tuple, Union, Sequence
 
 import lmdb
 
@@ -6,6 +6,7 @@ from .column_parsers import (
     data_record_digest_val_from_db_val,
     dynamic_layout_data_record_db_start_range_key,
     dynamic_layout_data_record_from_db_key,
+    dynamic_layout_data_record_db_key_from_names,
     schema_column_record_from_db_key,
     schema_db_range_key_from_column_unknown_layout,
     schema_record_count_start_range_key,
@@ -20,7 +21,7 @@ from ..utils import ilen
 from ..mixins import CursorRangeIterator
 
 RawDataTuple = Tuple[Union[FlatColumnDataKey, NestedColumnDataKey], DataRecordVal]
-
+KeyType = Union[str, int]
 
 class RecordQuery(CursorRangeIterator):
 
@@ -265,3 +266,21 @@ class RecordQuery(CursorRangeIterator):
             for aset_hash_val in aset_hash_vals:
                 odict[aset_hash_val.digest] = aset_schema_hash
         return odict
+
+    def column_schema_layout(self, column: str) -> str:
+        """Return the column schema layout for a column name
+
+        Parameters
+        ----------
+        column: str
+            name of the column to query
+
+        Returns
+        -------
+        str
+            One of the valid colum layout types (ie. `flat`, `nested`, etc.)
+        """
+        for schema_key in self._traverse_column_schema_records(values=False):
+            schema_record = schema_column_record_from_db_key(schema_key)
+            if schema_record.column == column:
+                return schema_record.layout

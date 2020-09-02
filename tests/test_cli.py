@@ -329,7 +329,6 @@ def test_push_fetch_records(server_instance, backend):
     ['origin', 'testbranch', '--column', 'data', '--all-history'],
     ['origin', 'master', '--column', 'data', '--all-history'],
     ['origin', 'testbranch', '--column', 'data', '--all-history'],
-    ['origin', 'master', '--nbytes', '3Kb'],
 ])
 def test_fetch_records_and_data(server_instance, backend, options):
     runner = CliRunner()
@@ -481,6 +480,20 @@ def test_summary(written_two_cmt_server_repo, capsys):
             with capsys.disabled():
                 res = runner.invoke(cli.summary, obj=new_repo)
                 assert res.stdout == f"{capsys.readouterr().out}\n"
+        finally:
+            new_repo._env._close_environments
+
+
+def test_summary_before_commit_made(managed_tmpdir):
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        P = getcwd()
+        new_repo = Repository(P, exists=False)
+        new_repo.init('Test User', 'Test@test.com')
+        try:
+            res = runner.invoke(cli.summary, obj=new_repo)
+            assert res.exit_code == 0
+            assert 'No commits have been made in the repository' in res.stdout
         finally:
             new_repo._env._close_environments
 

@@ -13,7 +13,9 @@ include CODE_OF_CONDUCT.rst
 include LICENSE
 include README.rst
 
-include tox.ini .travis.yml mypy.ini
+include tox.ini
+include mypy.ini
+include setup.py
 
 global-exclude *.py[cod] *.so *.DS_Store
 global-exclude __pycache__ .mypy_cache .pytest_cache .hypothesis

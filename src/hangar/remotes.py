@@ -5,12 +5,13 @@ import warnings
 from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
-from typing import List, NamedTuple, Optional, Sequence
+from typing import (
+    List, NamedTuple, Optional, Sequence, Union, Tuple, Set, Dict
+)
 
 import grpc
 import lmdb
 from tqdm import tqdm
-import numpy as np
 
 from .backends import backend_decoder
 from .constants import LMDB_SETTINGS
@@ -23,13 +24,15 @@ from .records.commiting import (
     unpack_commit_ref,
 )
 from .remote.client import HangarClient
-from .remote.content import ContentWriter, ContentReader
+from .remote.content import ContentWriter, ContentReader, DataWriter
 from .txnctx import TxnRegister
 from .utils import is_suitable_user_key
 
 logger = logging.getLogger(__name__)
 
 RemoteInfo = NamedTuple('RemoteInfo', [('name', str), ('address', str)])
+
+KeyType = Union[str, int]
 
 
 class Remotes(object):
@@ -69,10 +72,10 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
-            the name which should be used to refer to the remote server (ie:
-            'origin')
-        address : str
+        name
+            the name which should be used to refer to the remote server
+            (i.e. 'origin')
+        address
             the IP:PORT where the hangar server is running
 
         Returns
@@ -108,7 +111,7 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
+        name
             name of the remote to remove the reference to
 
         Raises
@@ -118,7 +121,7 @@ class Remotes(object):
 
         Returns
         -------
-        str
+        RemoteInfo
             The channel address which was removed at the given remote name
         """
         self.__verify_repo_initialized()
@@ -150,7 +153,7 @@ class Remotes(object):
 
         Parameters
         ----------
-        name : str
+        name
             name of the remote server to ping
 
         Returns
@@ -186,9 +189,9 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote repository to fetch from (ie. ``origin``)
-        branch : str
+        branch
             name of the branch to fetch the commit references for.
 
         Returns
@@ -253,8 +256,15 @@ class Remotes(object):
                 m_schema_hash_map = defaultdict(list)
                 for digest, schema_hash in m_hashes:
                     m_schema_hash_map[schema_hash].append((digest, schema_hash))
-                for schema_hash, received_data in m_schema_hash_map.items():
-                    CW.data(schema_hash, received_data, backend='50')
+
+                DW = DataWriter(self._env)
+                with DW as DW_CM:
+                    for schema_hash, m_digests_schemas in m_schema_hash_map.items():
+                        for data_digest, data_schema_hash in m_digests_schemas:
+                            DW_CM.data(schema_hash,
+                                       data_digest=data_digest,
+                                       data=data_schema_hash,
+                                       backend='50')
 
             # Get missing commit reference specification
             for commit in tqdm(m_cmts, desc='fetching commit spec'):
@@ -274,36 +284,234 @@ class Remotes(object):
 
             return fetchBranchName
 
+    def fetch_data_sample(self,
+                          remote: str,
+                          column: str,
+                          samples: Union[KeyType, Sequence[KeyType],
+                                         Sequence[Union[Tuple[KeyType, KeyType], Tuple[KeyType], KeyType]]],
+                          branch: Optional[str] = None,
+                          commit: Optional[str] = None) -> str:
+        """Granular fetch data operation allowing selection of individual samples.
+
+        .. warning::
+
+            This is a specialized version of the :meth:`fetch_data` method for use
+            in specilized situations where some prior knowledge is known about the data.
+            Most users should prefer :meth:`fetch_data` over this version.
+
+        In some cases, it may be desireable to only perform a fetch data operation
+        for some particular samples within a column (without needing to download any
+        other data contained in the column). This method allows for the granular
+        specification of keys to fetch in a certain column at the selected `branch` /
+        `commit` time point.
+
+        Parameters
+        ----------
+        remote
+            name of the remote server to pull data from
+        column
+            name of the column which data is being fetched from.
+        samples
+            Key, or sequence of sample keys to select.
+
+            *  Flat column layouts should provide just a single key, or flat sequence of
+               keys which will be fetched from the server. ie. `sample1` OR
+               [`sample1`, `sample2`, `sample3`, etc.]
+
+            *  Nested column layouts can provide tuples specifying `(sample, subsample)`
+               records to retrieve, tuples with an `Ellipsis` character in the `subsample`
+               index `(sample, ...)` (which will fetch all subsamples for the given sample),
+               or can provide lone sample keys in the sequences `sample` (which will also fetch
+               all subsamples listed under the sample) OR ANY COMBINATION of the above.
+        branch
+            branch head to operate on, either ``branch`` or ``commit`` argument must be
+            passed, but NOT both. Default is ``None``
+        commit
+            commit to operate on, either `branch` or `commit` argument must be passed,
+            but NOT both.
+
+        Returns
+        -------
+        str
+            On success, the commit hash which data was fetched into.
+        """
+        self.__verify_repo_initialized()
+        address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
+        self._client = HangarClient(envs=self._env, address=address)
+
+        # ----------------- setup / validate operations -----------------------
+
+        if all([branch, commit]):
+            raise ValueError(f'``branch`` and ``commit`` args cannot be set simultaneously')
+        if branch is not None:
+            cmt = heads.get_branch_head_commit(self._env.branchenv, branch_name=branch)
+        else:
+            cmt = commit
+            cmtExist = check_commit_hash_in_history(self._env.refenv, commit)
+            if not cmtExist:
+                raise ValueError(f'specified commit: {commit} does not exist in the repo.')
+
+        if not isinstance(samples, (list, tuple)):
+            samples = (samples,)
+
+        # ------------------ Determine which data to fetch --------------------
+
+        with tempfile.TemporaryDirectory() as tempD:
+            # share unpacked ref db between dependent methods
+            tmpDF = Path(tempD, 'test.lmdb')
+            tmpDB = lmdb.open(path=str(tmpDF), **LMDB_SETTINGS)
+            try:
+                with tmpDB.begin(write=True) as txn:
+                    with txn.cursor() as curs:
+                        notEmpty = curs.first()
+                        while notEmpty:
+                            notEmpty = curs.delete()
+                unpack_commit_ref(self._env.refenv, tmpDB, cmt)
+                recQuery = queries.RecordQuery(tmpDB)
+                selectedDataRecords = self._select_digests_fetch_data_sample(
+                    cmt=cmt, column=column, recQuery=recQuery, samples=samples
+                )
+            finally:
+                tmpDB.close()
+
+            m_schema_hash_map = self._form_missing_schema_digest_map(
+                selectedDataRecords=selectedDataRecords, hashenv=self._env.hashenv
+            )
+
+            # -------------------- download missing data --------------------------
+
+            DW = DataWriter(self._env)
+            total_data = sum(len(v) for v in m_schema_hash_map.values())
+            with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar,  DW as DW_CM:
+                client: HangarClient  # type hint
+                for schema in m_schema_hash_map.keys():
+                    hashes = set(m_schema_hash_map[schema])
+                    origins = client.fetch_data_origin(hashes)
+                    client.fetch_data(
+                        origins=origins,
+                        datawriter_cm=DW_CM,
+                        schema=schema,
+                        pbar=pbar)
+
+            move_process_data_to_store(self._repo_path, remote_operation=True)
+            return cmt
+
+    @staticmethod
+    def _select_digests_fetch_data_sample(
+            cmt: str,
+            column: str,
+            recQuery: queries.RecordQuery,
+            samples: Union[KeyType, Sequence[KeyType],
+                           Sequence[Union[Tuple[KeyType, KeyType], Tuple[KeyType], KeyType]]]
+    ) -> Set[queries.DataRecordVal]:
+        """Map sample keys to data record digest
+
+        Depending on column layout, the mapping of samples -> digests
+        is handled differently.
+
+        "flat" columns:
+            There is a direct map of sample key -> digest. If a sample
+            does not exist in the column, it is a key error.
+        "nested" column:
+            There is a layered mapping of sample key -> subsamples -> digests
+            We take the approach that only specifying a sample key results
+            in fetching all subsamples contained under it.
+
+        Parameters
+        ----------
+        cmt
+            commit which is being operated on
+        column
+            column name
+        recQuery
+            record query object set up with necessary `dataenv`
+        samples
+            specified samples to query
+
+        Returns
+        -------
+        Set[queries.DataRecordVal]
+            data records which should be fetched (includes digests)
+        """
+        # handle column_names option
+        cmt_column_names = recQuery.column_names()
+        if column not in cmt_column_names:
+            raise KeyError(f'column name {column} does not exist in repo at commit {cmt}')
+
+        selectedDataRecords = set()
+        column_layout = recQuery.column_schema_layout(column=column)
+        if column_layout == 'flat':
+            sampleRecords = {}
+            for keyRecord, dataRecord in recQuery.column_data_records(column):
+                sampleRecords[keyRecord.sample] = dataRecord
+            for _key in samples:
+                if isinstance(_key, (str, int)):
+                    selectedDataRecords.add(sampleRecords[_key])
+                else:
+                    raise TypeError(_key)
+
+        elif column_layout == 'nested':
+            sampleRecords = defaultdict(dict)
+            for keyRecord, dataRecord in recQuery.column_data_records(column):
+                sampleRecords[keyRecord.sample].update(
+                    {keyRecord.subsample: dataRecord}
+                )
+
+            for _key in samples:
+                if isinstance(_key, (list, tuple)):
+                    if len(_key) == 2:
+                        # sequence specifying `(sample, subsample)`
+                        if _key[1] == Ellipsis:
+                            # Ellipsis indicator ``...`` is intepreted as:
+                            # "get all subsamples under this sample key"
+                            for _spec in sampleRecords[_key[0]].values():
+                                selectedDataRecords.add(_spec)
+                        else:
+                            # otherwise "get sample + subsample named as specified"
+                            selectedDataRecords.add(sampleRecords[_key[0]][_key[1]])
+                    elif len(_key) == 1:
+                        # sequence specifying `(sample,)` interpreted as:
+                        # "get all subsamples under this key"
+                        for _spec in sampleRecords[_key[0]].values():
+                            selectedDataRecords.add(_spec)
+                    else:
+                        raise ValueError(
+                            f'nested column specifier sequence len() must be '
+                            f'either length ``1`` or ``2``. key {_key} has length '
+                            f'{len(_key)}.')
+                elif isinstance(_key, (str, int)):
+                    # if not sequence, then `key` == `sample`; interpreted as:
+                    # "get all subsamples under this key"
+                    for _spec in sampleRecords[_key].values():
+                        selectedDataRecords.add(_spec)
+                else:
+                    raise TypeError(_key)
+        return selectedDataRecords
+
     def fetch_data(self,
                    remote: str,
                    branch: str = None,
                    commit: str = None,
                    *,
                    column_names: Optional[Sequence[str]] = None,
-                   max_num_bytes: int = None,
                    retrieve_all_history: bool = False) -> List[str]:
         """Retrieve the data for some commit which exists in a `partial` state.
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote to pull the data from
-        branch : str, optional
+        branch
             The name of a branch whose HEAD will be used as the data fetch
             point. If None, ``commit`` argument expected, by default None
-        commit : str, optional
+        commit
             Commit hash to retrieve data for, If None, ``branch`` argument
             expected, by default None
-        column_names : Optional[Sequence[str]]
+        column_names
             Names of the columns which should be retrieved for the particular
             commits, any columns not named will not have their data fetched
             from the server. Default behavior is to retrieve all columns
-        max_num_bytes : Optional[int]
-            If you wish to limit the amount of data sent to the local machine,
-            set a `max_num_bytes` parameter. This will retrieve only this
-            amount of data from the server to be placed on the local disk.
-            Default is to retrieve all data regardless of how large.
-        retrieve_all_history : Optional[bool]
+        retrieve_all_history
             if data should be retrieved for all history accessible by the parents
             of this commit HEAD. by default False
 
@@ -314,17 +522,16 @@ class Remotes(object):
 
         Raises
         ------
-            ValueError
-                if branch and commit args are set simultaneously.
-            ValueError
-                if specified commit does not exist in the repository.
-            ValueError
-                if branch name does not exist in the repository.
+        ValueError
+            if branch and commit args are set simultaneously.
+        ValueError
+            if specified commit does not exist in the repository.
+        ValueError
+            if branch name does not exist in the repository.
         """
         self.__verify_repo_initialized()
         address = heads.get_remote_address(branchenv=self._env.branchenv, name=remote)
         self._client = HangarClient(envs=self._env, address=address)
-        CW = ContentWriter(self._env)
 
         # ----------------- setup / validate operations -----------------------
 
@@ -341,13 +548,8 @@ class Remotes(object):
         # --------------- negotiate missing data to get -----------------------
 
         if retrieve_all_history is True:
-            if isinstance(max_num_bytes, int):
-                raise ValueError(
-                    f'setting the maximum number of bytes transferred and requesting '
-                    f'all history are incompatible arguments.')
-            else:
-                hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)
-                commits = hist['order']
+            hist = summarize.list_history(self._env.refenv, self._env.branchenv, commit_hash=cmt)
+            commits = hist['order']
         else:
             commits = [cmt]
 
@@ -355,9 +557,10 @@ class Remotes(object):
             # share unpacked ref db between dependent methods
             tmpDF = Path(tempD, 'test.lmdb')
             tmpDB = lmdb.open(path=str(tmpDF), **LMDB_SETTINGS)
+
             try:
-                allHashs = set()
                 # all history argument
+                selectedDataRecords = set()
                 for commit in tqdm(commits, desc='counting objects'):
                     with tmpDB.begin(write=True) as txn:
                         with txn.cursor() as curs:
@@ -366,59 +569,100 @@ class Remotes(object):
                                 notEmpty = curs.delete()
                     unpack_commit_ref(self._env.refenv, tmpDB, commit)
                     recQuery = queries.RecordQuery(tmpDB)
-
-                    # handle column_names option
-                    cmt_column_names = recQuery.column_names()
-                    if column_names is None:
-                        cmt_columns = cmt_column_names
-                    else:
-                        cmt_columns = [col for col in column_names if col in cmt_column_names]
-                    for col in cmt_columns:
-                        cmtData_hashs = recQuery.column_data_hashes(col)
-                        allHashs.update(cmtData_hashs)
+                    commitDataRecords = self._select_digest_fetch_data(
+                        column_names=column_names, recQuery=recQuery
+                    )
+                    selectedDataRecords.update(commitDataRecords)
             finally:
                 tmpDB.close()
 
+        m_schema_hash_map = self._form_missing_schema_digest_map(
+            selectedDataRecords=selectedDataRecords, hashenv=self._env.hashenv
+        )
+
+        # -------------------- download missing data --------------------------
+
+        DW = DataWriter(self._env)
+        total_data = sum(len(v) for v in m_schema_hash_map.values())
+
+        with closing(self._client) as client, \
+                tqdm(total=total_data, desc='fetching data') as pbar, \
+                DW as DW_CM:
+            client: HangarClient  # type hint
+            for schema in m_schema_hash_map.keys():
+                hashes = set(m_schema_hash_map[schema])
+                origins = client.fetch_data_origin(hashes)
+                client.fetch_data(
+                    origins=origins,
+                    datawriter_cm=DW_CM,
+                    schema=schema,
+                    pbar=pbar)
+
+        move_process_data_to_store(self._repo_path, remote_operation=True)
+        return commits
+
+    @staticmethod
+    def _form_missing_schema_digest_map(
+            selectedDataRecords: Set[queries.DataRecordVal],
+            hashenv: lmdb.Environment
+    ) -> Dict[str, List[str]]:
+        """Calculate mapping of schemas to data digests.
+
+        Parameters
+        ----------
+        selectedDataRecords
+        hashenv
+
+        Returns
+        -------
+        Dict[str, List[str]]
+            map of all schema digests -> sequence of all data hash digests
+            registered under that schema.
+        """
+
         try:
-            hashTxn = TxnRegister().begin_reader_txn(self._env.hashenv)
+            hashTxn = TxnRegister().begin_reader_txn(hashenv)
             m_schema_hash_map = defaultdict(list)
-            for hashVal in allHashs:
+            for hashVal in selectedDataRecords:
                 hashKey = hash_data_db_key_from_raw_key(hashVal.digest)
                 hashRef = hashTxn.get(hashKey)
                 be_loc = backend_decoder(hashRef)
                 if be_loc.backend == '50':
                     m_schema_hash_map[be_loc.schema_hash].append(hashVal.digest)
         finally:
-            TxnRegister().abort_reader_txn(self._env.hashenv)
+            TxnRegister().abort_reader_txn(hashenv)
+        return m_schema_hash_map
 
-        # -------------------- download missing data --------------------------
+    @staticmethod
+    def _select_digest_fetch_data(
+            column_names: Union[None, Sequence[str]],
+            recQuery: queries.RecordQuery
+    ) -> Set[queries.DataRecordVal]:
+        """Map column names to data digests.
 
-        total_nbytes_seen = 0
-        total_data = sum(len(v) for v in m_schema_hash_map.values())
-        with closing(self._client) as client, tqdm(total=total_data, desc='fetching data') as pbar:
-            client: HangarClient  # type hint
-            stop = False
-            for schema in m_schema_hash_map.keys():
-                hashes = set(m_schema_hash_map[schema])
-                while (len(hashes) > 0) and (not stop):
-                    ret = client.fetch_data(schema, hashes)
-                    # max_num_bytes option
-                    if isinstance(max_num_bytes, int):
-                        for idx, r_kv in enumerate(ret):
-                            try:
-                                total_nbytes_seen += r_kv[1].nbytes
-                            except AttributeError:
-                                total_nbytes_seen += len(r_kv[1])
-                            if total_nbytes_seen >= max_num_bytes:
-                                ret = ret[0:idx]
-                                stop = True
-                                break
-                    saved_digests = CW.data(schema, ret)
-                    pbar.update(len(saved_digests))
-                    hashes = hashes.difference(set(saved_digests))
+        Parameters
+        ----------
+        column_names
+            column names to fetch data for. If ``None``, download all column data.
+        recQuery
+            initialized record query object set up with appropriate ``dataenv``.
 
-        move_process_data_to_store(self._repo_path, remote_operation=True)
-        return commits
+        Returns
+        -------
+        Set[queries.DataRecordVal]
+            data records which should be fetched (includes digests)
+        """
+        selectedDataRecords = set()
+        cmt_column_names = recQuery.column_names()
+        if column_names is None:
+            # handle column_names option
+            cmt_columns = cmt_column_names
+        else:
+            cmt_columns = [col for col in column_names if col in cmt_column_names]
+        for col in cmt_columns:
+            cmtData_hashs = recQuery.column_data_hashes(col)
+            selectedDataRecords.update(cmtData_hashs)
+        return selectedDataRecords
 
     def push(self, remote: str, branch: str,
              *, username: str = '', password: str = '') -> str:
@@ -436,15 +680,15 @@ class Remotes(object):
 
         Parameters
         ----------
-        remote : str
+        remote
             name of the remote repository to make the push on.
-        branch : str
+        branch
             Name of the branch to push to the remote. If the branch name does
             not exist on the remote, the it will be created
-        username : str, optional, kwarg-only
+        username
             credentials to use for authentication if repository push restrictions
             are enabled, by default ''.
-        password : str, optional, kwarg-only
+        password
             credentials to use for authentication if repository push restrictions
             are enabled, by default ''.
 
@@ -539,9 +783,13 @@ class Remotes(object):
             # data
             total_data = sum([len(v) for v in m_schema_hashs.values()])
             with tqdm(total=total_data, desc='pushing data') as p:
-                for dataSchema, dataHashes in m_schema_hashs.items():
-                    client.push_data(dataSchema, dataHashes, pbar=p)
-                    p.update(1)
+                client.push_data_begin_context()
+                try:
+                    for dataSchema, dataHashes in m_schema_hashs.items():
+                        client.push_data(dataSchema, dataHashes, pbar=p)
+                        p.update(1)
+                finally:
+                    client.push_data_end_context()
             # commit refs
             for commit in tqdm(m_commits, desc='pushing commit refs'):
                 cmtContent = CR.commit(commit)

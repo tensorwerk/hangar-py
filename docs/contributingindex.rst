@@ -5,8 +5,7 @@ Contributing to Hangar
 ######################
 
 .. toctree::
-   :maxdepth: 3
-   :titlesonly:
+   :maxdepth: 2
 
    contributing
    codeofconduct
