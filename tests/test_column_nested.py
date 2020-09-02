@@ -1018,9 +1018,50 @@ class TestGetDataMethods:
                 res = sample[subsample_name]
                 assert_equal(res, subsample_value)
 
+    def test_getitem_subsample_from_column(self, initialized_arrayset, subsample_data_map):
+        from hangar.columns.layout_nested import FlatSubsampleReader
+
+        aset = initialized_arrayset
+        for sample_name, subsample_data in subsample_data_map.items():
+            sample = aset[sample_name]
+            assert isinstance(sample, FlatSubsampleReader)
+            res = aset[sample_name, ...]
+            assert res.keys() == subsample_data.keys()
+            for subsample_name, subsample_value in subsample_data.items():
+                res = aset[sample_name, subsample_name]
+                assert_equal(res, subsample_value)
+
+    def test_recursive_subsample_getitem_from_column(self, initialized_arrayset, subsample_data_map):
+        aset = initialized_arrayset
+        for sample_name, subsample_data in subsample_data_map.items():
+            for subsample_name, subsample_value in subsample_data.items():
+                assert isinstance(aset[sample_name, subsample_name, 0, 0], np.uint16)
+                assert aset[sample_name, subsample_name, 0, 0] == subsample_value[0][0]
+
+    def test_get_subsample_from_column(self, initialized_arrayset, subsample_data_map):
+        from hangar.columns.layout_nested import FlatSubsampleReader
+
+        aset = initialized_arrayset
+        for sample_name, subsample_data in subsample_data_map.items():
+            sample = aset.get(sample_name)
+            assert isinstance(sample, FlatSubsampleReader)
+            res = aset.get((sample_name, ...))
+            assert res.keys() == subsample_data.keys()
+            for subsample_name, subsample_value in subsample_data.items():
+                res = aset.get((sample_name, subsample_name))
+                assert_equal(res, subsample_value)
+
     def test_get_sample_get_subsample_missing_key(self, initialized_arrayset, subsample_data_map):
         aset = initialized_arrayset
         for sample_name in subsample_data_map.keys():
+
+            with pytest.raises(KeyError):
+                aset[sample_name, 'doesnotexist']
+            returned = aset.get((sample_name, "doesnotexist"))
+            assert returned is None
+            default_returned = aset.get((sample_name, 9999), default=True)
+            assert default_returned is True
+
             sample = aset.get(sample_name)
             returned = sample.get('doesnotexist')
             assert returned is None
@@ -1101,6 +1142,15 @@ class TestGetDataMethods:
         for sample_name, subsample_data in subsample_data_map.items():
             sample = aset.get(sample_name)
             res = sample[0:2]
+            assert isinstance(res, dict)
+            assert len(res) == 2
+            for k, v in res.items():
+                assert_equal(v, subsample_data[k])
+
+    def test_subsample_getitem_with_bounded_slice_from_column(self, initialized_arrayset, subsample_data_map):
+        aset = initialized_arrayset
+        for sample_name, subsample_data in subsample_data_map.items():
+            res = aset[sample_name, 0:2]
             assert isinstance(res, dict)
             assert len(res) == 2
             for k, v in res.items():

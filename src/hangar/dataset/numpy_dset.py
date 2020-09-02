@@ -20,7 +20,7 @@ def default_collate_fn(batch):
         return batch
     elif isinstance(elem, dict):  # nested
         return batch
-    elif isinstance(elem, tuple): # multiple columns
+    elif isinstance(elem, tuple):  # multiple columns
         out = (default_collate_fn(dt) for dt in zip(*batch))
         return tuple(out)
 
@@ -75,6 +75,8 @@ class NumpyDataset:
             if collate_fn:
                 raise RuntimeError("Found `collate_fn` in the argument which is a no-op "
                                    "since batching is not enabled")
+            if drop_last:
+                raise RuntimeError("Setting `drop_last` is a no-op when batching is not enabled")
         self._shuffle = shuffle
         self._indices = list(range(len(self._dataset)))
 
@@ -224,6 +226,3 @@ def _make_numpy_dataset(columns: Sequence['Columns'],
     dataset = HangarDataset(columns, keys)
     dataset = NumpyDataset(dataset, batch_size, drop_last, shuffle, collate_fn)
     return dataset
-
-
-

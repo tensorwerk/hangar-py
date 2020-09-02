@@ -105,6 +105,13 @@ class TestInternalDatasetClass:
         co = repo_20_filled_subsamples.checkout()
         col1 = co['writtenaset']
         col2 = co['second_aset']
+
+        dataset = HangarDataset([col1, col2])
+        data = dataset.index_get(1)
+        assert tuple(data[0].keys()) == tuple(data[1].keys()) == (4, 5, 6)
+        assert isinstance(data[0], dict)
+        assert isinstance(data[1], dict)
+
         keys = (((0, ...), (0, 1)), ((1, ...), (1, 4)))
         dataset = HangarDataset([col1, col2], keys=keys)
         data = dataset.index_get(1)
@@ -156,6 +163,48 @@ class TestNumpyDataset:
             assert dset1.shape == (6, 5, 7)
             assert dset2.shape == (6, 5, 7)
         assert total_samples == 18  # drop last is True
+
+        # testing with batch_size = 1
+        dset = make_numpy_dataset([first_aset, second_aset], batch_size=1, drop_last=True)
+        total_samples = 0
+        for dset1, dset2 in dset:
+            total_samples += dset1.shape[0]
+            assert dset1.shape == (1, 5, 7)
+            assert dset2.shape == (1, 5, 7)
+        assert total_samples == 20  # drop last is True will not have any effect
+
+        with pytest.raises(RuntimeError, match="Setting `drop_last` is a no-op when "
+                                               "batching is not enabled"):
+            # Setting drop_last without batching
+            dset = make_numpy_dataset([first_aset, second_aset], batch_size=0, drop_last=True)
+        dset = make_numpy_dataset([first_aset, second_aset], batch_size=0)
+        total_samples = 0
+        for dset1, dset2 in dset:
+            total_samples += 1
+            assert dset1.shape == (5, 7)
+            assert dset2.shape == (5, 7)
+        assert total_samples == 20
+        co.close()
+
+    def test_nested_column(self, repo_20_filled_subsamples):
+        co = repo_20_filled_subsamples.checkout()
+        col1 = co['writtenaset']
+        col2 = co['second_aset']
+        dset = make_numpy_dataset([col1, col2])
+        for data1, data2 in dset:
+            assert isinstance(data1, dict)
+            assert isinstance(data2, dict)
+            assert tuple(data1.keys()) == tuple(data2.keys())
+
+        dset = make_numpy_dataset([col1, col2], batch_size=1, drop_last=True)
+        for data1, data2 in dset:
+            assert type(data1) is type(data2) is tuple
+            assert len(data1) == len(data2) == 1
+            assert tuple(data1[0].keys()) == tuple(data2[0].keys())
+
+        dset = make_numpy_dataset([col1, col2], batch_size=2, drop_last=True)
+        for data1, data2 in dset:
+            assert len(data1) == len(data2) == 2
         co.close()
 
     def test_lots_of_data_with_multiple_backend(self, repo_300_filled_samples):
